@@ -155,28 +155,6 @@ def find_plane(points):
     seg.set_distance_threshold(0.2)
     seg.set_normal_distance_weight(.1)
 
-    #seg.set_normal_distance_weight(1-0.0001)
-
-
-
- # 'get_axis',
- # 'get_eps_angle',
- # 'get_min_max_opening_angle',
- # 'segment',
- # 'set_axis',
- # 'set_distance_threshold',
- # 'set_eps_angle',
- # 'set_max_iterations',
- # 'set_method_type',
- # 'set_min_max_opening_angle',
- # 'set_model_type',
- # 'set_normal_distance_weight',
- # 'set_optimize_coefficients',
- # 'set_radius_limits']
-
-
-
-
     idx_plane, coefficients = seg.segment()
 
     return idx_plane
