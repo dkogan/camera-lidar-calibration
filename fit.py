@@ -42,11 +42,6 @@ def parse_args():
                         type = str,
                         help='''vnl with timestamps for each image. Columns "t imagepath"''')
 
-    parser.add_argument('lidar',
-                        type = str,
-                        help='''vnl with lidar returns. This contains a single
-                        revolution of the lidar''')
-
     parser.add_argument('reference-geometry',
                         type = str,
                         help='''json with the reference geometry of the cameras,
@@ -66,6 +61,7 @@ import gnuplotlib as gp
 import vnlog
 import json
 import pcl
+import scipy.optimize
 
 sys.path[:0] = '/home/dima/projects/mrcal',
 import mrcal
@@ -403,6 +399,7 @@ if len(imagepaths) != len(rt_camera_frame) or \
    optimization_inputs['extrinsics_rt_fromref'].size > 0:
     raise Exception("I'm assuming a monocular camera calibration, with the camera at the origin")
 
+# shape (NchessboardObservations,6)
 rt_lidar_frame__estimate = \
     mrcal.compose_rt(estimate__rt_lidar_camera(args.reference_lidar,
                                                args.reference_camera),
@@ -433,9 +430,185 @@ if np.any(np.diff(t) <= 0):
     raise Exception("Images in the optical calibration set are not in order")
 
 
-i = find_stationary_frame(t, rt_camera_frame)
+iobservation_calibration = find_stationary_frame(t, rt_camera_frame)
 
-p = find_chessboard_in_view(rt_lidar_frame__estimate[i],
+p = find_chessboard_in_view(rt_lidar_frame__estimate[iobservation_calibration],
                             args.lidar,
                             mrcal.ref_calibration_object(optimization_inputs =
                                                          optimization_inputs))
+
+
+
+##### initially fit a single camera-lidar combination. There are many joint
+
+
+
+
+
+
+
+
+# ##############
+
+
+
+# if True:
+#     model = mrcal.cameramodel('camera-0.cameramodel')
+#     optimization_inputs = model.optimization_inputs()
+#     rt_cam0_frames = optimization_inputs['frames_rt_toref']
+#     frame_ids = [int(re.sub("frame0*([0-9]+?)\.png",r"\1",s)) \
+#                  for s in optimization_inputs['imagepaths']]
+
+#     ## I now have corresponding frame_ids,rt_cam0_frames
+
+# if True:
+#     # each row of p is (frame_id,x,y,z)
+#     pl = np.loadtxt("points.vnl")
+
+#     dl = nps.mag(pl[:,1:])
+#     vl = pl[:,1:] / nps.dummy(dl,-1)
+
+# Nframes = len(frame_ids)
+
+# data_per_frame = [None] * Nframes
+# pl_center      = np.zeros((Nframes,3), dtype=float)
+# pcam_center    = np.zeros((Nframes,3), dtype=float)
+
+# for i in range(Nframes):
+
+#     frame_id      = frame_ids[i]
+#     rt_cam0_frame = rt_cam0_frames[i]
+
+#     # I have a chessboard pose I represent its plane as all x where nt x = d in
+#     # camera0 coords. n is the normal to the plane from the camera0 origin. d is
+#     # the distance to the plane along this normal.
+#     Rt_cam0_frame = mrcal.Rt_from_rt(rt_cam0_frame)
+#     R_cam0_frame = Rt_cam0_frame[:3,:]
+#     t_cam0_frame = Rt_cam0_frame[ 3,:]
+
+#     # The normal is [0,0,1] in board coords. Here I convert it to camera
+#     # coordinates
+#     n = R_cam0_frame[:,2]
+
+#     # The point [0,0,0] in board coords is on the plane. I convert to camera
+#     # coordinates
+#     d = nps.inner(t_cam0_frame, n)
+#     if d < 0:
+#         d *= -1
+#         n *= -1
+
+#     i_points = (pl[:,0] == frame_id)
+#     pl_here = pl[i_points,1:]
+#     vl_here = vl[i_points,1:]
+#     dl_here = dl[i_points,1:]
+#     data_per_frame[i] = d,n,pl_here,vl_here,dl_here
+
+#     pl_center  [i] = np.mean(pl_here, axis=-2)
+#     pcam_center[i] = xxxx
+#     # and procrustes to fit
+
+
+
+
+
+
+
+# def fit(Nmeas, data_per_frame):
+#     r'''Align the LIDAR and camera geometry
+
+# A plane in camera coordinates: all x where
+
+#   nt xc = d
+
+# In lidar coords:
+
+#   xc = Rcl xl + tcl
+#   nt Rcl xl + nt tcl = d
+#   (nt Rcl) xl = d - nt tcl
+
+# Lidar measurements are distances along a vector vl. xl = dl vl. I have a
+# measurement dl. Along the lidar vector vl, the distance should satisfy
+
+#   (nt Rcl) vl dl = d - nt tcl
+
+# So dl = (d - nt tcl) / ( nt Rcl vl )
+
+# And the error is
+
+#   dl - dl_observed
+#     '''
+
+#     def cost(rt_cam0_lidar, *,
+#              simple):
+
+#         Rt_cl = mrcal.Rt_from_rt(rt_cam0_lidar)
+#         R_cl = Rt_cl[:3,:]
+#         t_cl = Rt_cl[ 3,:]
+
+#         x     = np.zeros((Nmeas,), dtype=float)
+#         imeas = 0
+
+#         for d,n,pl,vl,dl in data_per_frame:
+
+#             Nmeas_here = len(dl)
+
+#             if simple:
+#                 x[imeas:imeas+Nmeas_here] = \
+#                     nps.inner(n,
+#                               mrcal.transform_point_Rt(Rt_cl,pl)) \
+#                     - d
+#             else:
+#                 dp = ( d - nps.inner(n,t_cl)) / nps.inner(vl, nps.inner(n,R_cl.T))
+#                 x[imeas:imeas+Nmeas_here] = dp - dl
+
+#             imeas += Nmeas_here
+
+#         return x
+
+
+#     res = scipy.optimize.least_squares(cost,
+
+#                                        # I don't bother to seed
+#                                        mrcal.identity_rt(),
+#                                        method  = 'dogbox',
+#                                        verbose = 2,
+#                                        kwargs = dict(simple = True))
+
+#     rt_cam0_lidar__seed = res.x
+#     res = scipy.optimize.least_squares(cost,
+
+#                                        rt_cam0_lidar__seed,
+#                                        method  = 'dogbox',
+#                                        verbose = 2,
+#                                        kwargs = dict(simple = False))
+
+#     rt_cam0_lidar = res.x
+
+#     return rt_cam0_lidar
+
+
+
+
+# rt_cam0_lidar = fit(Nmeas, data_per_frame)
+
+
+
+# # Done. I want to plot the whole thing
+# data_tuples, plot_options = \
+#     mrcal.show_geometry((model,
+#                          mrcal.invert_rt(rt_cam0_lidar)),
+#                         cameranames = ('camera', 'lidar'),
+#                         axis_scale       = 1.0,
+#                         return_plot_args = True)
+
+
+# points = [ mrcal.transform_point_rt(rt_cam0_lidar, pl) \
+#            for d,n,pl,vl,dl in data_per_frame ]
+
+# gp.plot(*data_tuples,
+#         *[ (points[i], dict(_with     = 'points',
+#                             legend    = f"Points from frame {frame_ids[i]}",
+#                             tuplesize = -3)) \
+#            for i in range(len(points)) ],
+#         **plot_options,
+#         hardcopy = '/tmp/tst.gp')
