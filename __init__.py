@@ -682,18 +682,18 @@ def get_topic_class(topic, blocking=False):
 
 def _str_plot_fields(val, f, field_filter):
     """
-    get CSV representation of fields used by _str_plot
-    :returns: list of fields as a CSV string, ``str``
+    get vnl representation of fields used by _str_plot
+    :returns: list of fields as a vnl string, ``str``
     """
     s = _sub_str_plot_fields(val, f, field_filter)
     if s is not None:
-        return "time,"+s
+        return "time "+s
     else:
-        return 'time,'
+        return 'time '
 
 def _sub_str_plot_fields(val, f, field_filter):
     """recursive helper function for _str_plot_fields"""
-    # CSV
+    # vnl
     type_ = type(val)
     if type_ in (bool, int, long, float) or \
            isinstance(val, genpy.TVal):
@@ -707,7 +707,7 @@ def _sub_str_plot_fields(val, f, field_filter):
         sub = (_sub_str_plot_fields(_convert_getattr(val, a, t), f+"."+a, field_filter) for a,t in zip(val.__slots__, val._slot_types) if a in fields)
         sub = [s for s in sub if s is not None]
         if sub:
-            return ','.join([s for s in sub])
+            return ' '.join([s for s in sub])
     elif _isstring_type(type_):
         return f
     elif type_ in (list, tuple):
@@ -718,21 +718,21 @@ def _sub_str_plot_fields(val, f, field_filter):
         # no arrays of arrays
         if type0 in (bool, int, long, float) or \
                isinstance(val0, genpy.TVal):
-            return ','.join(["%s%s"%(f,x) for x in range(0,len(val))])
+            return ' '.join(["%s%s"%(f,x) for x in range(0,len(val))])
         elif _isstring_type(type0):
             
-            return ','.join(["%s%s"%(f,x) for x in range(0,len(val))])
+            return ' '.join(["%s%s"%(f,x) for x in range(0,len(val))])
         elif hasattr(val0, "_slot_types"):
             labels = ["%s%s"%(f,x) for x in range(0,len(val))]
             sub = [s for s in [_sub_str_plot_fields(v, sf, field_filter) for v,sf in zip(val, labels)] if s]
             if sub:
-                return ','.join([s for s in sub])
+                return ' '.join([s for s in sub])
     return None
 
 
 def _str_plot(val, time_offset=None, current_time=None, field_filter=None, type_information=None, fixed_numeric_width=None, value_transform=None):
     """
-    Convert value to matlab/octave-friendly CSV string representation.
+    Convert value to matlab/octave-friendly vnl string representation.
 
     :param val: message
     :param current_time: current :class:`genpy.Time` to use if message does not contain its own timestamp.
@@ -752,15 +752,15 @@ def _str_plot(val, time_offset=None, current_time=None, field_filter=None, type_
         time_offset = 0            
         
     if current_time is not None:
-        return "%s,%s"%(current_time.to_nsec()-time_offset, s)
+        return "%s %s"%(current_time.to_nsec()-time_offset, s)
     elif getattr(val, "_has_header", False):
-        return "%s,%s"%(val.header.stamp.to_nsec()-time_offset, s)
+        return "%s %s"%(val.header.stamp.to_nsec()-time_offset, s)
     else:
-        return "%s,%s"%(rospy.get_rostime().to_nsec()-time_offset, s)
+        return "%s %s"%(rospy.get_rostime().to_nsec()-time_offset, s)
     
 def _sub_str_plot(val, time_offset, field_filter):
     """Helper routine for _str_plot."""
-    # CSV
+    # vnl
     type_ = type(val)
     
     if type_ == bool:
@@ -780,7 +780,7 @@ def _sub_str_plot(val, time_offset, field_filter):
         sub = (_sub_str_plot(_convert_getattr(val, f, t), time_offset, field_filter) for f,t in zip(val.__slots__, val._slot_types) if f in fields)
         sub = [s for s in sub if s is not None]
         if sub:
-            return ','.join(sub)
+            return ' '.join(sub)
     elif _isstring_type(type_):
         return val
     elif type_ in (list, tuple):
@@ -790,16 +790,16 @@ def _sub_str_plot(val, time_offset, field_filter):
         # no arrays of arrays
         type0 = type(val0)
         if type0 == bool:
-            return ','.join([('1' if v else '0') for v in val])
+            return ' '.join([('1' if v else '0') for v in val])
         elif type0 in (int, long, float) or \
                isinstance(val0, genpy.TVal):
-            return ','.join([str(v) for v in val])
+            return ' '.join([str(v) for v in val])
         elif _isstring_type(type0):
-            return ','.join([v for v in val])            
+            return ' '.join([v for v in val])            
         elif hasattr(val0, "_slot_types"):
             sub = [s for s in [_sub_str_plot(v, time_offset, field_filter) for v in val] if s is not None]
             if sub:
-                return ','.join([s for s in sub])
+                return ' '.join([s for s in sub])
     return None
         
 # copied from roslib.message
@@ -826,7 +826,7 @@ class CallbackEcho(object):
                  field_filter_fn=None, fixed_numeric_width=None,
                  value_transform_fn=None):
         """
-        :param plot: if ``True``, echo in plotting-friendly format (csv), ``bool``
+        :param plot: if ``True``, echo in plotting-friendly format (vnl), ``bool``
         :param filter_fn: function that evaluates to ``True`` if message is to be echo'd, ``fn(topic, msg)``
         :param echo_all_topics: (optional) if ``True``, echo all messages in bag, ``bool``
         :param offset_time: (optional) if ``True``, display time as offset from current time, ``bool``
@@ -929,7 +929,7 @@ class CallbackEcho(object):
                 
                 # print fields header for plot
                 if self.plot and self.first:
-                    sys.stdout.write("%"+_str_plot_fields(data, 'field', self.field_filter)+'\n')
+                    sys.stdout.write("# "+_str_plot_fields(data, 'field', self.field_filter)+'\n')
                     self.first = False
 
                 if self.offset_time:
