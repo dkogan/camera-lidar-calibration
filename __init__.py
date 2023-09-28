@@ -701,7 +701,22 @@ def _sub_str_plot_fields(val, f, field_filter):
     # duck-type check for messages
     elif hasattr(val, "_slot_types"):
         if field_filter is not None:
-            fields = list(field_filter(val))
+            if type(val).__name__ == '_sensor_msgs__Image':
+                fields = [ 'field.header.seq',
+                           'field.header.stamp',
+                           'field.header.frame_id',
+                           'image' ]
+                return ' '.join(fields)
+            elif type(val).__name__ == '_sensor_msgs__PointCloud2':
+                fields = [ 'field.header.seq',
+                           'field.header.stamp',
+                           'field.header.frame_id',
+                           'points' ]
+                return ' '.join(fields)
+
+            else:
+                fields = list(field_filter(val))
+
         else:
             fields = val.__slots__
         sub = (_sub_str_plot_fields(_convert_getattr(val, a, t), f+"."+a, field_filter) for a,t in zip(val.__slots__, val._slot_types) if a in fields)
@@ -730,7 +745,7 @@ def _sub_str_plot_fields(val, f, field_filter):
     return None
 
 
-def _str_plot(val, time_offset=None, current_time=None, field_filter=None, type_information=None, fixed_numeric_width=None, value_transform=None):
+def _str_plot(val, time_offset=None, current_time=None, field_filter=None, type_information=None, fixed_numeric_width=None, value_transform=None, output_directory = None):
     """
     Convert value to matlab/octave-friendly vnl string representation.
 
@@ -742,7 +757,7 @@ def _str_plot(val, time_offset=None, current_time=None, field_filter=None, type_
     :returns: comma-separated list of field values in val, ``str``
     """
         
-    s = _sub_str_plot(val, time_offset, field_filter)
+    s = _sub_str_plot(val, time_offset, field_filter, output_directory)
     if s is None:
         s = ''
 
@@ -758,7 +773,7 @@ def _str_plot(val, time_offset=None, current_time=None, field_filter=None, type_
     else:
         return "%s %s"%(rospy.get_rostime().to_nsec()-time_offset, s)
     
-def _sub_str_plot(val, time_offset, field_filter):
+def _sub_str_plot(val, time_offset, field_filter, output_directory):
     """Helper routine for _str_plot."""
     # vnl
     type_ = type(val)
@@ -773,11 +788,132 @@ def _sub_str_plot(val, time_offset, field_filter):
             return str(val)    
     elif hasattr(val, "_slot_types"):
         if field_filter is not None:
-            fields = list(field_filter(val))
+
+            if type(val).__name__ == '_sensor_msgs__Image':
+
+                if output_directory is None:
+                    raise Exception("Need valid --output-directory to write out the image vnl")
+
+                import numpy as np
+                import mrcal
+
+                if val.encoding == 'mono8':
+                    if val.step != val.width:
+                        raise Exception(f"Got _sensor_msgs__Image.encoding == mono8. Expecting dense storage, but step != width: {val.step} != {val.width}")
+                    if len(val.data) != val.width*val.height:
+                        raise Exception(f"Got _sensor_msgs__Image.encoding == mono8. Expecting dense storage, but len(data) != width*height: {len(val.data)} != {val.width}*{val.height}")
+
+                    image = \
+                        np.frombuffer(val.data,
+                                      dtype = np.uint8).reshape((val.height, val.width),)
+                    directory      = f"{output_directory}/{val.header.frame_id}"
+                    os.makedirs(directory, exist_ok = True)
+
+                    try:    i_image = _sub_str_plot.i_image
+                    except: i_image = 0
+                    filename = f"{directory}/image{i_image:05d}.png"
+                    mrcal.save_image(filename, image)
+                    _sub_str_plot.i_image = i_image + 1
+
+                    fields = ['header', 'image']
+
+                    return \
+                        _sub_str_plot(_convert_getattr(val, 'header', 'std_msgs/Header'), time_offset, field_filter, output_directory) + \
+                        ' ' + filename
+
+                else:
+                    raise Exception(f"I only support mono8 images for now. Got {val.encoding=}")
+            elif type(val).__name__ == '_sensor_msgs__PointCloud2':
+
+                if output_directory is None:
+                    raise Exception("Need valid --output-directory to write out the lidar points vnl")
+
+
+                import numpy as np
+
+                # I have
+                #
+                #   $ rosmsg info sensor_msgs/PointCloud2
+                #   std_msgs/Header header
+                #     uint32 seq
+                #     time stamp
+                #     string frame_id
+                #   uint32 height
+                #   uint32 width
+                #   sensor_msgs/PointField[] fields
+                #     uint8 INT8=1
+                #     uint8 UINT8=2
+                #     uint8 INT16=3
+                #     uint8 UINT16=4
+                #     uint8 INT32=5
+                #     uint8 UINT32=6
+                #     uint8 FLOAT32=7
+                #     uint8 FLOAT64=8
+                #     string name
+                #     uint32 offset
+                #     uint8 datatype
+                #     uint32 count
+                #   bool is_bigendian
+                #   uint32 point_step
+                #   uint32 row_step
+                #   uint8[] data
+                #   bool is_dense
+                #
+                # I assume the above type IDs are always the ones being used. No
+                # obvious way to pull them out of the "val" object
+                types = { 1: np.int8,
+                          2: np.uint8,
+                          3: np.int16,
+                          4: np.uint16,
+                          5: np.int32,
+                          6: np.uint32,
+                          7: np.float32,
+                          8: np.float64 };
+
+                fmts = { np.int8:    '%d',
+                         np.uint8:   '%d',
+                         np.int16:   '%d',
+                         np.uint16:  '%d',
+                         np.int32:   '%d',
+                         np.uint32:  '%d',
+                         np.float32: '%.6f',
+                         np.float64: '%.6f' };
+
+
+                # This is needed because numpy complains if I give it a one-element array
+                def dtype_element(f):
+                    if f.count == 1: return (f.name, types[f.datatype])
+                    return (f.name, types[f.datatype], f.count)
+                dtype = np.dtype([dtype_element(f) for f in val.fields])
+
+                points = \
+                    np.frombuffer(val.data, dtype = dtype)
+
+                directory      = f"{output_directory}/{val.header.frame_id}"
+                os.makedirs(directory, exist_ok = True)
+
+                try:    i_points = _sub_str_plot.i_points
+                except: i_points = 0
+                filename = f"{directory}/points{i_points:05d}.vnl"
+
+                np.savetxt(filename, points,
+                           header = ' '.join(dtype.names),
+                           fmt    = [fmts[types[f.datatype]] for f in val.fields])
+
+                _sub_str_plot.i_points = i_points + 1
+
+                fields = ['header', 'points']
+
+                return \
+                    _sub_str_plot(_convert_getattr(val, 'header', 'std_msgs/Header'), time_offset, field_filter, output_directory) + \
+                    ' ' + filename
+
+            else:
+                fields = list(field_filter(val))
         else:
             fields = val.__slots__            
 
-        sub = (_sub_str_plot(_convert_getattr(val, f, t), time_offset, field_filter) for f,t in zip(val.__slots__, val._slot_types) if f in fields)
+        sub = (_sub_str_plot(_convert_getattr(val, f, t), time_offset, field_filter, output_directory) for f,t in zip(val.__slots__, val._slot_types) if f in fields)
         sub = [s for s in sub if s is not None]
         if sub:
             return ' '.join(sub)
@@ -797,7 +933,7 @@ def _sub_str_plot(val, time_offset, field_filter):
         elif _isstring_type(type0):
             return ' '.join([v for v in val])            
         elif hasattr(val0, "_slot_types"):
-            sub = [s for s in [_sub_str_plot(v, time_offset, field_filter) for v in val] if s is not None]
+            sub = [s for s in [_sub_str_plot(v, time_offset, field_filter, output_directory) for v in val] if s is not None]
             if sub:
                 return ' '.join([s for s in sub])
     return None
@@ -824,7 +960,8 @@ class CallbackEcho(object):
                  echo_clear=False, echo_all_topics=False,
                  offset_time=False, count=None,
                  field_filter_fn=None, fixed_numeric_width=None,
-                 value_transform_fn=None):
+                 value_transform_fn=None,
+                 output_directory = None):
         """
         :param plot: if ``True``, echo in plotting-friendly format (vnl), ``bool``
         :param filter_fn: function that evaluates to ``True`` if message is to be echo'd, ``fn(topic, msg)``
@@ -840,6 +977,7 @@ class CallbackEcho(object):
         self.topic = topic
         self.msg_eval = msg_eval
         self.plot = plot
+        self.output_directory = output_directory
         self.filter_fn = filter_fn
         self.fixed_numeric_width = fixed_numeric_width
 
@@ -876,7 +1014,8 @@ class CallbackEcho(object):
         self.last_msg_eval = None
 
     def custom_strify_message(self, val, indent='', time_offset=None, current_time=None, field_filter=None,
-                              type_information=None, fixed_numeric_width=None, value_transform=None):
+                              type_information=None, fixed_numeric_width=None, value_transform=None,
+                              output_directory = None):
 
         # Don't print split bytes I can also patch value_transform, since that's
         # what I get with "rostopic echo" without -p
@@ -937,14 +1076,16 @@ class CallbackEcho(object):
                                      self.str_fn(data, time_offset=rospy.get_rostime(),
                                                  current_time=current_time, field_filter=self.field_filter,
                                                  type_information=type_information, fixed_numeric_width=self.fixed_numeric_width,
-                                                 value_transform=self.value_transform) + \
+                                                 value_transform=self.value_transform,
+                                                 output_directory=self.output_directory) + \
                                      self.suffix + '\n')
                 else:
                     sys.stdout.write(self.prefix+\
                                      self.str_fn(data,
                                                  current_time=current_time, field_filter=self.field_filter,
                                                  type_information=type_information, fixed_numeric_width=self.fixed_numeric_width,
-                                                 value_transform=self.value_transform) + \
+                                                 value_transform=self.value_transform,
+                                                 output_directory=self.output_directory) + \
                                      self.suffix + '\n')
 
                 # we have to flush in order before piping to work
@@ -1354,6 +1495,10 @@ def _rostopic_cmd_echo(argv):
                       dest="offset_time", default=False,
                       action="store_true",
                       help="display time as offsets from current time (in seconds)")
+    parser.add_option("--output-directory",
+                      help="""The output directory to store the extracted data.
+                      Currently this is used (and required) only for images and
+                      LIDAR scans""")
 
     (options, args) = parser.parse_args(args)
     if len(args) > 1:
@@ -1401,7 +1546,8 @@ def _rostopic_cmd_echo(argv):
                                  offset_time=options.offset_time, count=msg_count,
                                  field_filter_fn=field_filter_fn,
                                  value_transform_fn=value_transform_fn,
-                                 fixed_numeric_width=fixed_numeric_width)
+                                 fixed_numeric_width=fixed_numeric_width,
+                                 output_directory=options.output_directory)
     try:
         _rostopic_echo(topic, callback_echo, bag_file=options.bag)
     except socket.error:
