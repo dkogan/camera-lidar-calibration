@@ -383,22 +383,32 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
             mask_plane[idx_plane] = True
 
             hardcopy = f'/tmp/tst{i_cluster}.gp'
+            plot_tuples = \
+                [
+                  ( points_cluster[~mask_plane],
+                    dict(_with  = 'points pt 1 ps 1',
+                         legend = 'In cluster, not in plane') ),
+                  ( points_plane[~mask_plane_keep],
+                    dict(_with  = 'points pt 2 ps 1',
+                         legend = 'In cluster, in plane, does not match estimate') ),
+                  ( points_plane[mask_plane_keep],
+                    dict(_with  = 'points pt 7 ps 2 lc "red"',
+                         legend = 'In cluster, in plane, matches estimate. Using these') ),
+                  (p__estimate,
+                   dict(_with  = 'points pt 3 ps 1',
+                        legend = 'Assuming old calibration')),
+                ]
+            if False:
+                plot_tuples = \
+                    [
+                        ( points[ ~mask_cluster ],
+                          dict(_with  = 'dots',
+                               legend = 'Not in cluster') ),
+                        *plot_tuples
+                    ]
+
             gp.plot(
-                ( points[ ~mask_cluster ],
-                  dict(_with  = 'dots',
-                       legend = 'Not in cluster') ),
-                ( points_cluster[~mask_plane],
-                  dict(_with  = 'points pt 1 ps 1',
-                       legend = 'In cluster, not in plane') ),
-                ( points_plane[~mask_plane_keep],
-                  dict(_with  = 'points pt 2 ps 1',
-                       legend = 'In cluster, in plane, discard') ),
-                ( points_plane[mask_plane_keep],
-                  dict(_with  = 'points pt 7 ps 1',
-                       legend = 'In cluster, in plane, keep') ),
-                (p__estimate,
-                 dict(_with  = 'points pt 7 ps 1',
-                      legend = 'Assuming old calibration')),
+                *plot_tuples,
                 cbmin     = 0,
                 cbmax     = 5,
                 tuplesize = -3,
