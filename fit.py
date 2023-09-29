@@ -652,6 +652,12 @@ for i in iobservation_stationary:
                                    ncam   = ncam,
                                    dcam   = dcam))
 
+if len(joint_observations) < 3:
+    print(f"I need at least 3 joint camera/lidar observations (the set of all plane normals must span R^3). Got only {len(joint_observations)}",
+          file=sys.stderr)
+    sys.exit(1)
+
+
 rt_camera_lidar = fit_camera_lidar(joint_observations,
                                    rt_camera_lidar__seed = mrcal.invert_rt(rt_lidar_camera__estimate))
 
