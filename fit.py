@@ -325,7 +325,8 @@ def find_chessboard_in_plane_fit(points_plane,
 
 def find_chessboard_in_view(rt_lidar_board__estimate,
                             lidar_points_vnl,
-                            ref_chessboard):
+                            ref_chessboard,
+                            i_observation):
     # shape (N,3)
     p__estimate = \
         nps.clump( \
@@ -382,7 +383,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
             mask_plane = np.zeros( (len(points_cluster),), dtype=bool)
             mask_plane[idx_plane] = True
 
-            hardcopy = f'/tmp/tst{i_cluster}.gp'
+            hardcopy = f'/tmp/lidar-{i_observation}-{i_cluster}.gp'
             plot_tuples = \
                 [
                   ( points_cluster[~mask_plane],
@@ -627,7 +628,8 @@ for i in iobservation_stationary:
             find_chessboard_in_view(rt_lidar_board__estimate,
                                     lidar_points_filename,
                                     mrcal.ref_calibration_object(optimization_inputs =
-                                                                 optimization_inputs))
+                                                                 optimization_inputs),
+                                    i)
     except:
         print(f"No board observation found for stationary observation {i} (t={t_stationary})")
         continue
