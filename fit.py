@@ -20,15 +20,30 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('--reference-lidar',
+    parser.add_argument('--camera-frame',
                         type=str,
                         required = True,
-                        help = '''Which lidar we're looking at, as specified in the reference-geometry file''')
+                        help = '''The frame of the camera we're looking at''')
 
-    parser.add_argument('--reference-camera',
+    parser.add_argument('--lidar-topic',
                         type=str,
                         required = True,
-                        help = '''Which camera we're looking at, as specified in the reference-geometry file''')
+                        help = '''Which lidar we're talking to''')
+
+    parser.add_argument('--bag',
+                        type=str,
+                        required = True,
+                        help = '''The rosbag that contains the lidar and camera data''')
+
+    parser.add_argument('--t0',
+                        type=float,
+                        required = True,
+                        help = '''Reference time value. Usually obtained with a
+                        shell command like t0=$(<
+                        multisense-metadata-front-left.vnl vnl-filter --eval
+                        '{print field.header.stamp; exit;}'). Must match the t0
+                        used when computing the image-timestamps.vnl table
+                        passed in the "timestamp" argument''')
 
     parser.add_argument('--viz',
                         action='store_true',
@@ -36,7 +51,8 @@ def parse_args():
 
     parser.add_argument('model',
                         type = str,
-                        help='''Camera model from the optical calibration''')
+                        help='''Camera model from the optical calibration.
+                        Assumed to have been compute by the bag in --bag''')
 
     parser.add_argument('timestamps',
                         type = str,
@@ -62,6 +78,8 @@ import vnlog
 import json
 import pcl
 import scipy.optimize
+import subprocess
+import io
 
 sys.path[:0] = '/home/dima/projects/mrcal',
 import mrcal
@@ -80,27 +98,47 @@ def find_stationary_frame(t, rt_rf):
         mrcal.compose_rt( mrcal.invert_rt(rt_rf0),
                           rt_rf1 )
 
-    tmid = (t[:-1] + t[1:]) / 2.
-    dr = nps.mag(rt_f0f1[..., :3])
-    dt = nps.mag(rt_f0f1[..., 3:])
+    # differences between successive poses. The domain is (tmid01, tmid12, tmid23, ....)
+    dr   = nps.mag(rt_f0f1[..., :3])
+    dxyz = nps.mag(rt_f0f1[..., 3:])
+    dt   = t[1:] - t[:-1]
+
+    # worst-case of two neighbor successive poses. The domain is (t1,t2,t3,...)
+    dr   = np.max(nps.cat(dr[1:],   dr[:-1]),   axis=-2)
+    dxyz = np.max(nps.cat(dxyz[1:], dxyz[:-1]), axis=-2)
+    dt   = np.max(nps.cat(dt[1:],   dt[:-1]),   axis=-2)
 
 
-    # I look at chunks of time where dr,dt are consistently low. I can visualize
-    # like this:
+    threshold_dxyz   = 2e-3
+    threshold_dr_deg = 0.1
+    threshold_dt     = 1.5
 
-    # gp.plot(tmid,
-    #         nps.cat(dr,dt),
-    #         xlabel = "Time (s)",
-    #         ylabel = 'Frame-frame shift in position (m) and orientation (rad)',
-    #         wait = True)
+    if False:
+        # I look at chunks of time where dr,dxyz are consistently low
+        gp.plot((t[1:-1], dxyz,            dict(legend = "diff(translation)")),
+                (t[1:-1], dr*180./np.pi, dict(legend = "diff(rotation)", y2=1)),
+                ymin = 0,
+                y2min = 0,
+                xlabel  = "Time (s)",
+                ylabel  = 'Frame-frame shift in position (m)',
+                y2label = 'Frame-frame shift in orientation (deg)',
+                equation = (f"{threshold_dxyz} title \"threshold_dxyz\"",
+                            f"{threshold_dr_deg} title \"threshold_dr_deg\" axis x1y2",))
 
-    # Need to look at t, not just tmid: might be in a big jump
+    # indexes t[1:-1]
+    idx = np.nonzero((dxyz < threshold_dxyz)*(dr < threshold_dr_deg * np.pi/180.))[0]
 
-    twant = 272
-    return np.argmin(np.abs(t - twant))
+    # Accept only points that are not within a large time jump
+    idx = idx[ dt[idx] < threshold_dt ]
 
-def estimate__rt_lidar_camera(reference_lidar,
-                              reference_camera):
+    # index on t, not t[1:-1]
+    idx += 1
+
+    return idx
+
+
+def estimate__rt_lidar_camera(lidar_frame,
+                              camera_frame):
 
     with open(getattr(args,'reference-geometry')) as f:
         extrinsics_estimate_dict = json.load(f)
@@ -112,8 +150,8 @@ def estimate__rt_lidar_camera(reference_lidar,
             np.array(( d['angle_axis_x'], d['angle_axis_y'], d['angle_axis_z'],
                        d['x'],            d['y'],            d['z'] ))
 
-    rt_lidar_ref  = extrinsics_from_reference(reference_lidar)
-    rt_camera_ref = extrinsics_from_reference(reference_camera)
+    rt_lidar_ref  = extrinsics_from_reference(lidar_frame)
+    rt_camera_ref = extrinsics_from_reference(camera_frame)
 
     return mrcal.compose_rt( rt_lidar_ref,
                              mrcal.invert_rt(rt_camera_ref) )
@@ -371,18 +409,11 @@ model = mrcal.cameramodel(args.model)
 optimization_inputs = model.optimization_inputs()
 
 imagepaths      = optimization_inputs['imagepaths']
-rt_camera_frame = optimization_inputs['frames_rt_toref']
+rt_camera_board = optimization_inputs['frames_rt_toref']
 
-if len(imagepaths) != len(rt_camera_frame) or \
+if len(imagepaths) != len(rt_camera_board) or \
    optimization_inputs['extrinsics_rt_fromref'].size > 0:
     raise Exception("I'm assuming a monocular camera calibration, with the camera at the origin")
-
-# shape (NchessboardObservations,6)
-rt_lidar_frame__estimate = \
-    mrcal.compose_rt(estimate__rt_lidar_camera(args.reference_lidar,
-                                               args.reference_camera),
-                     rt_camera_frame)
-
 
 # Read the timestamps, and get a t array to timestamp each board pose
 if True:
@@ -403,21 +434,77 @@ if np.any(np.diff(t) <= 0):
 
     # idx   = t.argsort()
     # t     = t[idx]
-    # rt_camera_frame = rt_camera_frame[idx]
+    # rt_camera_board = rt_camera_board[idx]
 
     raise Exception("Images in the optical calibration set are not in order")
 
 
-iobservation_calibration = find_stationary_frame(t, rt_camera_frame)
+iobservation_stationary = find_stationary_frame(t, rt_camera_board)
 
-p = find_chessboard_in_view(rt_lidar_frame__estimate[iobservation_calibration],
-                            args.lidar,
-                            mrcal.ref_calibration_object(optimization_inputs =
-                                                         optimization_inputs))
+if len(iobservation_stationary) == 0:
+    raise Exception("No stationary image frames found")
+
+for i in iobservation_stationary:
+
+    t_stationary = t[i]
+
+    tmargin = 0.1
+
+    filter_string = \
+        f"m.header.stamp.to_sec() > {args.t0/1e9+t_stationary-tmargin} and " + \
+        f"m.header.stamp.to_sec() < {args.t0/1e9+t_stationary+tmargin}"
+
+    cmd = ( 'rostopic', 'echo',
+            f'--filter={filter_string}',
+            '-p',
+            '-b', args.bag,
+            '-n', '1',
+            '--output-directory', '/tmp',
+            args.lidar_topic )
+    metadata_string = \
+        subprocess.check_output( cmd )
+    lidar_metadata = list(vnlog.vnlog(io.StringIO(metadata_string.decode())))
+    if len(lidar_metadata) == 0:
+        raise Exception(f"Couldn't find lidar scan near stationary image frame. Command: {cmd}")
+    if len(lidar_metadata) != 1:
+        raise Exception(f"Found multiple lidar scans near stationary image frame. I asked for exactly 1. Command: {cmd}")
+
+    lidar_metadata = lidar_metadata[0]
+
+    lidar_frame           = lidar_metadata['field.header.frame_id']
+    lidar_points_filename = lidar_metadata['points']
+
+
+    rt_lidar_board__estimate = \
+        mrcal.compose_rt(estimate__rt_lidar_camera(lidar_frame,
+                                                   args.camera_frame),
+                         rt_camera_board[i])
+
+    p = find_chessboard_in_view(rt_lidar_board__estimate,
+                                lidar_points_filename,
+                                mrcal.ref_calibration_object(optimization_inputs =
+                                                             optimization_inputs))
+
+    import IPython
+    IPython.embed()
+
+sys.exit()
 
 
 
-##### initially fit a single camera-lidar combination. There are many joint
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
