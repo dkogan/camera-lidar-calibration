@@ -109,8 +109,8 @@ def find_stationary_frame(t, rt_rf):
     dt   = np.max(nps.cat(dt[1:],   dt[:-1]),   axis=-2)
 
 
-    threshold_dxyz   = 2e-3
-    threshold_dr_deg = 0.1
+    threshold_dxyz   = 3e-3
+    threshold_dr_deg = 0.2
     threshold_dt     = 1.5
 
     if False:
