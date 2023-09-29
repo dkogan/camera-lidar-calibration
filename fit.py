@@ -184,7 +184,7 @@ def cluster_points(cloud):
 
 def find_plane(points):
 
-    seg = pcl.PointCloud(points).make_segmenter_normals(ksearch=50)
+    seg = pcl.PointCloud(points.astype(np.float32)).make_segmenter_normals(ksearch=50)
 
     seg.set_optimize_coefficients(True)
     seg.set_model_type(pcl.SACMODEL_NORMAL_PLANE)
@@ -228,20 +228,108 @@ are found, the first one is returned (we use np.argmax internally)
     i = np.argmax(N)
     return i_start_run[i],i_end_run[i]
 
-def find_chessboard_in_view(rt_lidar_frame__estimate,
+def find_chessboard_in_plane_fit(points_plane,
+                                 rings_plane,
+                                 p_center__estimate,
+                                 n__estimate):
+
+    mask_plane_keep = np.zeros( (len(points_plane),), dtype=bool)
+
+    # For each ring I find the longest contiguous section on my plane
+    th_plane = np.arctan2(points_plane[:,1],
+                          points_plane[:,0])
+
+    rings_plane_min = np.min(rings_plane)
+    rings_plane_max = np.max(rings_plane)
+
+    Nrings = rings_plane_max+1 - rings_plane_min
+
+    for ring_plane in range(rings_plane_min,rings_plane_max+1):
+        # shape (Npoints_plane,)
+        mask_ring = rings_plane == ring_plane
+
+        # Throw out all points that are too far from where we expect the
+        # chessboard to be
+
+        # shape (Npoints_ring,)
+        p_ring = points_plane[mask_ring]
+        if len(p_ring) == 0:
+            continue
+
+        distance_threshold = 1.0
+        offplane_threshold = 0.5
+        # shape (Npoints_ring,)
+        mask_near_estimate = \
+            ( np.abs(nps.inner(points_plane[mask_ring] - p_center__estimate,
+                               n__estimate)) < offplane_threshold ) * \
+            (nps.norm2(points_plane[mask_ring] - p_center__estimate) < distance_threshold*distance_threshold)
+
+        # shape (Npoints_ring,); indexes xxx_plane
+        idx_ring = np.nonzero(mask_ring)[0]
+        idx_ring = idx_ring[mask_near_estimate]
+
+        if len(idx_ring) == 0:
+            continue
+
+        th_ring = th_plane[idx_ring]
+
+        # This is now invalid, so I get rid of it. Use idx_ring
+        del mask_ring
+
+        # I examined the data to confirm that the points come regularly at an
+        # even interval of:
+        dth = 0.2 * np.pi/180.
+        # Validated by making this plot, observing that with this dth I get
+        # integers with this plot:
+        #   gp.plot(np.diff(np.sort(th_ring/dth)))
+        # So I make my dth, and any gap of > 1*dth means there was a gap in the
+        # plane scan. I look for the biggest interval with no gaps
+        idx_sort = np.argsort(th_ring)
+        diff_ring_plane_gap = np.diff(th_ring[idx_sort]/dth) > 1.5
+
+        # I look for the largest run of False in diff_ring_plane_gap
+        # These are inclusive indices into diff(th)
+        if len(diff_ring_plane_gap) == 0:
+            continue
+        if np.all(diff_ring_plane_gap):
+            continue
+
+        i0,i1 = longest_run_of_0(diff_ring_plane_gap)
+
+        # I want to index th, not diff(th). Still inclusive indices
+        i1 += 1
+
+        # If the selected segment is too short, I throw it out as noise
+        len_segment = \
+            nps.mag(points_plane[idx_ring[idx_sort[i1]]] - points_plane[idx_ring[idx_sort[i0]]])
+        if len_segment < 0.85:
+            continue
+
+        ########## TODO: only contiguous chunks of rings should be accepted
+
+        # indexes th_ring
+        idx_longest_run = idx_sort[i0:i1+1]
+
+        mask_plane_keep[idx_ring[idx_longest_run]] = True
+
+    return mask_plane_keep
+
+
+
+def find_chessboard_in_view(rt_lidar_board__estimate,
                             lidar_points_vnl,
                             ref_chessboard):
     # shape (N,3)
     p__estimate = \
         nps.clump( \
-            mrcal.transform_point_rt(rt_lidar_frame__estimate,
+            mrcal.transform_point_rt(rt_lidar_board__estimate,
                                      ref_chessboard),
             n = 2 )
 
     # The center point and normal vector where we expect the chessboard to be
     # observed. In the lidar frame. Assuming our geometry is correct
     p_center__estimate = np.mean(p__estimate, axis=-2)
-    n__estimate = mrcal.rotate_point_r(rt_lidar_frame__estimate[:3], np.array((0,0,1.),))
+    n__estimate = mrcal.rotate_point_r(rt_lidar_board__estimate[:3], np.array((0,0,1.),))
 
 
 
@@ -257,108 +345,37 @@ def find_chessboard_in_view(rt_lidar_frame__estimate,
 
     p_accepted = None
 
+    i_cluster = -1
+    i_cluster_accepted = None
     for idx_cluster in cluster_points(cloud):
 
-        points_cluster = cloud.to_array()[idx_cluster]
+        i_cluster += 1
 
-        idx_plane    = find_plane(points_cluster)
+        points_cluster = points[idx_cluster]
+        ring_cluster   = ring[idx_cluster]
+
+        idx_plane = find_plane(points_cluster)
         if len(idx_plane) == 0:
             continue
 
         points_plane = points_cluster[idx_plane]
+        rings_plane  = ring_cluster[idx_plane]
 
-
-        mask_cluster = np.zeros( (len(points),), dtype=bool)
-        mask_cluster[idx_cluster] = True
-
-        mask_plane = np.zeros( (len(points_cluster),), dtype=bool)
-        mask_plane[idx_plane] = True
-
-        mask_plane_keep = np.zeros( (len(points_plane),), dtype=bool)
-
-
-
-
-        # For each ring I find the longest contiguous section on my plane
-        th_plane = np.arctan2(points_plane[:,1],
-                              points_plane[:,0])
-
-        rings_plane = ring[idx_cluster][idx_plane]
-        rings_plane_min = np.min(rings_plane)
-        rings_plane_max = np.max(rings_plane)
-
-        Nrings = rings_plane_max+1 - rings_plane_min
-
-        for ring_plane in range(rings_plane_min,rings_plane_max+1):
-            # shape (Npoints_plane,)
-            mask_ring = rings_plane == ring_plane
-
-            # Throw out all points that are too far from where we expect the
-            # chessboard to be
-
-            # shape (Npoints_ring,)
-            p_ring = points_plane[mask_ring]
-            if len(p_ring) == 0:
-                continue
-
-            distance_threshold = 1.0
-            offplane_threshold = 0.5
-            # shape (Npoints_ring,)
-            mask_near_estimate = \
-                ( np.abs(nps.inner(points_plane[mask_ring] - p_center__estimate,
-                                   n__estimate)) < offplane_threshold ) * \
-                (nps.norm2(points_plane[mask_ring] - p_center__estimate) < distance_threshold*distance_threshold)
-
-            # shape (Npoints_ring,); indexes xxx_plane
-            idx_ring = np.nonzero(mask_ring)[0]
-            idx_ring = idx_ring[mask_near_estimate]
-
-            if len(idx_ring) == 0:
-                continue
-
-            th_ring = th_plane[idx_ring]
-
-            # This is now invalid, so I get rid of it. Use idx_ring
-            del mask_ring
-
-            # I examined the data to confirm that the points come regularly at an
-            # even interval of:
-            dth = 0.2 * np.pi/180.
-            # Validated by making this plot, observing that with this dth I get
-            # integers with this plot:
-            #   gp.plot(np.diff(np.sort(th_ring/dth)))
-            # So I make my dth, and any gap of > 1*dth means there was a gap in the
-            # plane scan. I look for the biggest interval with no gaps
-            idx_sort = np.argsort(th_ring)
-            diff_ring_plane_gap = np.diff(th_ring[idx_sort]/dth) > 1.5
-
-            # I look for the largest run of False in diff_ring_plane_gap
-            # These are inclusive indices into diff(th)
-            if len(diff_ring_plane_gap) == 0:
-                continue
-            if np.all(diff_ring_plane_gap):
-                continue
-
-            i0,i1 = longest_run_of_0(diff_ring_plane_gap)
-
-            # I want to index th, not diff(th). Still inclusive indices
-            i1 += 1
-
-            # If the selected segment is too short, I throw it out as noise
-            len_segment = \
-                nps.mag(points_plane[idx_ring[idx_sort[i1]]] - points_plane[idx_ring[idx_sort[i0]]])
-            if len_segment < 0.85:
-                continue
-
-            ########## TODO: only contiguous chunks of rings should be accepted
-
-            # indexes th_ring
-            idx_longest_run = idx_sort[i0:i1+1]
-
-            mask_plane_keep[idx_ring[idx_longest_run]] = True
-
+        mask_plane_keep = \
+            find_chessboard_in_plane_fit(points_plane,
+                                         rings_plane,
+                                         p_center__estimate,
+                                         n__estimate)
 
         if args.viz:
+
+            mask_cluster = np.zeros( (len(points),), dtype=bool)
+            mask_cluster[idx_cluster] = True
+
+            mask_plane = np.zeros( (len(points_cluster),), dtype=bool)
+            mask_plane[idx_plane] = True
+
+            hardcopy = f'/tmp/tst{i_cluster}.gp'
             gp.plot(
                 ( points[ ~mask_cluster ],
                   dict(_with  = 'dots',
@@ -366,10 +383,10 @@ def find_chessboard_in_view(rt_lidar_frame__estimate,
                 ( points_cluster[~mask_plane],
                   dict(_with  = 'points pt 1 ps 1',
                        legend = 'In cluster, not in plane') ),
-                ( points_cluster[ mask_plane][~mask_plane_keep],
+                ( points_plane[~mask_plane_keep],
                   dict(_with  = 'points pt 2 ps 1',
                        legend = 'In cluster, in plane, discard') ),
-                ( points_cluster[ mask_plane][mask_plane_keep],
+                ( points_plane[mask_plane_keep],
                   dict(_with  = 'points pt 7 ps 1',
                        legend = 'In cluster, in plane, keep') ),
                 (p__estimate,
@@ -381,10 +398,13 @@ def find_chessboard_in_view(rt_lidar_frame__estimate,
                 xlabel = 'x',
                 ylabel = 'y',
                 zlabel = 'z',
-                title = f"Cluster ",
+                title = f"Cluster {i_cluster}",
                 _3d       = True,
                 square    = True,
-                wait      = True)
+                wait      = True,
+                hardcopy  = hardcopy,
+                )
+            print(f"Wrote '{hardcopy}'")
 
         if not np.any(mask_plane_keep):
             continue
@@ -395,11 +415,106 @@ def find_chessboard_in_view(rt_lidar_frame__estimate,
             raise Exception("More than one cluster found that observes a board")
 
         p_accepted = points_cluster[ mask_plane][mask_plane_keep]
+        i_cluster_accepted = i_cluster
+
+
+
+
+
+
+
 
     if p_accepted is None:
         raise Exception("No chessboard found in view")
 
+    print(f"Accepted cluster={i_cluster_accepted}")
     return p_accepted
+
+
+def fit_camera_lidar(joint_observations,
+                     rt_camera_lidar__seed = mrcal.identity_rt()):
+    r'''Align the LIDAR and camera geometry
+
+A plane in camera coordinates: all pcam where
+
+  nt pcam = d
+
+In lidar coords:
+
+  pcam = Rcl xlidar + tcl
+  nt Rcl xlidar + nt tcl = d
+  (nt Rcl) xlidar = d - nt tcl
+
+Lidar measurements are distances along a vector vlidar. xlidar = dlidar vlidar.
+I have a measurement dlidar. Along the lidar vector vlidar, the distance should
+satisfy
+
+  (nt Rcl) vlidar dlidar = d - nt tcl
+
+So dlidar = (d - nt tcl) / ( nt Rcl vlidar )
+
+And the error is
+
+  dlidar - dlidar_observed
+
+    '''
+
+    Nmeasurements = sum(len(o['dlidar']) for o in joint_observations)
+
+    def cost(rt_camera_lidar, *,
+
+             # simplified computation for seeding
+             use_distance_to_plane = False):
+
+        Rt_cl = mrcal.Rt_from_rt(rt_camera_lidar)
+        R_cl = Rt_cl[:3,:]
+        t_cl = Rt_cl[ 3,:]
+
+        x     = np.zeros((Nmeasurements,), dtype=float)
+        imeas = 0
+
+        for o in joint_observations:
+            Nmeas_here = len(o['dlidar'])
+
+            if use_distance_to_plane:
+                x[imeas:imeas+Nmeas_here] = \
+                    nps.inner(o['ncam'],
+                              mrcal.transform_point_Rt(Rt_cl,o['plidar'])) \
+                    - o['dcam']
+            else:
+                dp = ( o['dcam'] - nps.inner(o['ncam'],t_cl)) / \
+                    nps.inner(o['vlidar'], \
+                              nps.inner(o['ncam'],R_cl.T))
+                x[imeas:imeas+Nmeas_here] = dp - o['dlidar']
+
+            imeas += Nmeas_here
+
+        return x
+
+
+    res = scipy.optimize.least_squares(cost,
+
+                                       rt_camera_lidar__seed,
+                                       method  = 'dogbox',
+                                       verbose = 2,
+                                       kwargs = dict(use_distance_to_plane = True))
+
+    rt_camera_lidar__presolve = res.x
+    res = scipy.optimize.least_squares(cost,
+
+                                       rt_camera_lidar__presolve,
+                                       method  = 'dogbox',
+                                       verbose = 2,
+                                       kwargs = dict(use_distance_to_plane = False))
+
+    rt_camera_lidar = res.x
+
+    import IPython
+    IPython.embed()
+    sys.exit()
+
+
+    return rt_camera_lidar
 
 
 
@@ -444,6 +559,10 @@ iobservation_stationary = find_stationary_frame(t, rt_camera_board)
 if len(iobservation_stationary) == 0:
     raise Exception("No stationary image frames found")
 
+
+joint_observations = list()
+
+lidar_frame = None
 for i in iobservation_stationary:
 
     t_stationary = t[i]
@@ -471,209 +590,80 @@ for i in iobservation_stationary:
 
     lidar_metadata = lidar_metadata[0]
 
-    lidar_frame           = lidar_metadata['field.header.frame_id']
     lidar_points_filename = lidar_metadata['points']
 
+    if lidar_frame is None:
+        lidar_frame = lidar_metadata['field.header.frame_id']
+        rt_lidar_camera__estimate = \
+            estimate__rt_lidar_camera(lidar_frame,
+                                      args.camera_frame)
+
+    elif lidar_frame != lidar_metadata['field.header.frame_id']:
+        raise Exception(f"LIDAR points aren't all from in the same frame. Saw {lidar_frame} and {lidar_metadata['field.header.frame_id']}")
 
     rt_lidar_board__estimate = \
-        mrcal.compose_rt(estimate__rt_lidar_camera(lidar_frame,
-                                                   args.camera_frame),
+        mrcal.compose_rt(rt_lidar_camera__estimate,
                          rt_camera_board[i])
 
-    p = find_chessboard_in_view(rt_lidar_board__estimate,
-                                lidar_points_filename,
-                                mrcal.ref_calibration_object(optimization_inputs =
-                                                             optimization_inputs))
-
-    import IPython
-    IPython.embed()
-
-sys.exit()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ##############
-
-
-
-# if True:
-#     model = mrcal.cameramodel('camera-0.cameramodel')
-#     optimization_inputs = model.optimization_inputs()
-#     rt_cam0_frames = optimization_inputs['frames_rt_toref']
-#     frame_ids = [int(re.sub("frame0*([0-9]+?)\.png",r"\1",s)) \
-#                  for s in optimization_inputs['imagepaths']]
-
-#     ## I now have corresponding frame_ids,rt_cam0_frames
-
-# if True:
-#     # each row of p is (frame_id,x,y,z)
-#     pl = np.loadtxt("points.vnl")
-
-#     dl = nps.mag(pl[:,1:])
-#     vl = pl[:,1:] / nps.dummy(dl,-1)
-
-# Nframes = len(frame_ids)
-
-# data_per_frame = [None] * Nframes
-# pl_center      = np.zeros((Nframes,3), dtype=float)
-# pcam_center    = np.zeros((Nframes,3), dtype=float)
-
-# for i in range(Nframes):
-
-#     frame_id      = frame_ids[i]
-#     rt_cam0_frame = rt_cam0_frames[i]
-
-#     # I have a chessboard pose I represent its plane as all x where nt x = d in
-#     # camera0 coords. n is the normal to the plane from the camera0 origin. d is
-#     # the distance to the plane along this normal.
-#     Rt_cam0_frame = mrcal.Rt_from_rt(rt_cam0_frame)
-#     R_cam0_frame = Rt_cam0_frame[:3,:]
-#     t_cam0_frame = Rt_cam0_frame[ 3,:]
-
-#     # The normal is [0,0,1] in board coords. Here I convert it to camera
-#     # coordinates
-#     n = R_cam0_frame[:,2]
-
-#     # The point [0,0,0] in board coords is on the plane. I convert to camera
-#     # coordinates
-#     d = nps.inner(t_cam0_frame, n)
-#     if d < 0:
-#         d *= -1
-#         n *= -1
-
-#     i_points = (pl[:,0] == frame_id)
-#     pl_here = pl[i_points,1:]
-#     vl_here = vl[i_points,1:]
-#     dl_here = dl[i_points,1:]
-#     data_per_frame[i] = d,n,pl_here,vl_here,dl_here
-
-#     pl_center  [i] = np.mean(pl_here, axis=-2)
-#     pcam_center[i] = xxxx
-#     # and procrustes to fit
-
-
-
-
-
-
-
-# def fit(Nmeas, data_per_frame):
-#     r'''Align the LIDAR and camera geometry
-
-# A plane in camera coordinates: all x where
-
-#   nt xc = d
-
-# In lidar coords:
-
-#   xc = Rcl xl + tcl
-#   nt Rcl xl + nt tcl = d
-#   (nt Rcl) xl = d - nt tcl
-
-# Lidar measurements are distances along a vector vl. xl = dl vl. I have a
-# measurement dl. Along the lidar vector vl, the distance should satisfy
-
-#   (nt Rcl) vl dl = d - nt tcl
-
-# So dl = (d - nt tcl) / ( nt Rcl vl )
-
-# And the error is
-
-#   dl - dl_observed
-#     '''
-
-#     def cost(rt_cam0_lidar, *,
-#              simple):
-
-#         Rt_cl = mrcal.Rt_from_rt(rt_cam0_lidar)
-#         R_cl = Rt_cl[:3,:]
-#         t_cl = Rt_cl[ 3,:]
-
-#         x     = np.zeros((Nmeas,), dtype=float)
-#         imeas = 0
-
-#         for d,n,pl,vl,dl in data_per_frame:
-
-#             Nmeas_here = len(dl)
-
-#             if simple:
-#                 x[imeas:imeas+Nmeas_here] = \
-#                     nps.inner(n,
-#                               mrcal.transform_point_Rt(Rt_cl,pl)) \
-#                     - d
-#             else:
-#                 dp = ( d - nps.inner(n,t_cl)) / nps.inner(vl, nps.inner(n,R_cl.T))
-#                 x[imeas:imeas+Nmeas_here] = dp - dl
-
-#             imeas += Nmeas_here
-
-#         return x
-
-
-#     res = scipy.optimize.least_squares(cost,
-
-#                                        # I don't bother to seed
-#                                        mrcal.identity_rt(),
-#                                        method  = 'dogbox',
-#                                        verbose = 2,
-#                                        kwargs = dict(simple = True))
-
-#     rt_cam0_lidar__seed = res.x
-#     res = scipy.optimize.least_squares(cost,
-
-#                                        rt_cam0_lidar__seed,
-#                                        method  = 'dogbox',
-#                                        verbose = 2,
-#                                        kwargs = dict(simple = False))
-
-#     rt_cam0_lidar = res.x
-
-#     return rt_cam0_lidar
-
-
-
-
-# rt_cam0_lidar = fit(Nmeas, data_per_frame)
-
-
-
-# # Done. I want to plot the whole thing
-# data_tuples, plot_options = \
-#     mrcal.show_geometry((model,
-#                          mrcal.invert_rt(rt_cam0_lidar)),
-#                         cameranames = ('camera', 'lidar'),
-#                         axis_scale       = 1.0,
-#                         return_plot_args = True)
-
-
-# points = [ mrcal.transform_point_rt(rt_cam0_lidar, pl) \
-#            for d,n,pl,vl,dl in data_per_frame ]
-
-# gp.plot(*data_tuples,
-#         *[ (points[i], dict(_with     = 'points',
-#                             legend    = f"Points from frame {frame_ids[i]}",
-#                             tuplesize = -3)) \
-#            for i in range(len(points)) ],
-#         **plot_options,
-#         hardcopy = '/tmp/tst.gp')
+    try:
+        plidar = \
+            find_chessboard_in_view(rt_lidar_board__estimate,
+                                    lidar_points_filename,
+                                    mrcal.ref_calibration_object(optimization_inputs =
+                                                                 optimization_inputs))
+    except:
+        print(f"No board observation found for stationary observation {i} (t={t_stationary})")
+        continue
+
+
+    # I have a chessboard pose. I represent its plane as all x where nt x = d. n
+    # is the normal to the plane from the origin. d is the distance to the plane
+    # along this normal.
+    #
+    # I find n,d in the camera coordinate system
+    Rt_camera_board = mrcal.Rt_from_rt(rt_camera_board[i])
+    R_camera_board = Rt_camera_board[:3,:]
+    t_camera_board = Rt_camera_board[ 3,:]
+    # The normal is [0,0,1] in board coords. Here I convert it to camera
+    # coordinates
+    ncam = R_camera_board[:,2]
+    # The point [0,0,0] in board coords is on the plane. I convert to camera
+    # coordinates
+    dcam = nps.inner(t_camera_board, ncam)
+    if dcam < 0:
+        dcam *= -1
+        ncam *= -1
+
+
+    # I convert the lidar points to direction, magnitude
+    dlidar = nps.mag(plidar)
+    vlidar = plidar / nps.dummy(dlidar,-1)
+
+    joint_observations.append(dict(plidar = plidar,
+                                   dlidar = dlidar,
+                                   vlidar = vlidar,
+                                   ncam   = ncam,
+                                   dcam   = dcam))
+
+rt_camera_lidar = fit_camera_lidar(joint_observations,
+                                   rt_camera_lidar__seed = mrcal.invert_rt(rt_lidar_camera__estimate))
+
+# Done. I want to plot the whole thing
+data_tuples, plot_options = \
+    mrcal.show_geometry((model,
+                         mrcal.invert_rt(rt_camera_lidar)),
+                        cameranames = ('camera', 'lidar'),
+                        axis_scale       = 1.0,
+                        return_plot_args = True)
+
+
+points = [ mrcal.transform_point_rt(rt_camera_lidar, o['plidar']) \
+           for o in joint_observations]
+
+gp.plot(*data_tuples,
+        *[ (points[i], dict(_with     = 'points',
+                            legend    = f"Points from frame {i}",
+                            tuplesize = -3)) \
+           for i in range(len(points)) ],
+        **plot_options,
+        hardcopy = '/tmp/tst.gp')
