@@ -140,12 +140,19 @@ def find_stationary_frame(t, rt_rf):
 def estimate__rt_lidar_camera(lidar_frame,
                               camera_frame):
 
-    with open(getattr(args,'reference-geometry')) as f:
+    reference_geometry_filename = getattr(args,'reference-geometry')
+    with open(reference_geometry_filename) as f:
         extrinsics_estimate_dict = json.load(f)
 
 
     def extrinsics_from_reference(what):
-        d = extrinsics_estimate_dict['extrinsics'][what]
+        try:
+            d = extrinsics_estimate_dict['extrinsics'][what]
+        except KeyError:
+            print(f"'{what}' not found in '{reference_geometry_filename}'. Giving up",
+                  file=sys.stderr)
+            sys.exit(1)
+
         return \
             np.array(( d['angle_axis_x'], d['angle_axis_y'], d['angle_axis_z'],
                        d['x'],            d['y'],            d['z'] ))
