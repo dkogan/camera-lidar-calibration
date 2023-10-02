@@ -260,7 +260,7 @@ def find_chessboard_in_plane_fit(points_plane,
 
         # shape (Npoints_ring,)
         points_ring = points_plane[mask_ring]
-        if len(points_ring) == 0:
+        if len(points_ring) < 20:
             continue
 
         distance_threshold = 1.0
