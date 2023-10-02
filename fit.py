@@ -238,7 +238,9 @@ are found, the first one is returned (we use np.argmax internally)
 def find_chessboard_in_plane_fit(points_plane,
                                  rings_plane,
                                  p_center__estimate,
-                                 n__estimate):
+                                 n__estimate,
+                                 *,
+                                 debug = False):
 
     mask_plane_keep = np.zeros( (len(points_plane),), dtype=bool)
 
@@ -318,6 +320,12 @@ def find_chessboard_in_plane_fit(points_plane,
         idx_longest_run = idx_sort[i0:i1+1]
 
         mask_plane_keep[idx_ring[idx_longest_run]] = True
+
+    if debug:
+        import IPython
+        IPython.embed()
+
+
 
     return mask_plane_keep
 
