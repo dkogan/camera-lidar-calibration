@@ -45,6 +45,11 @@ def parse_args():
                         used when computing the image-timestamps.vnl table
                         passed in the "timestamp" argument''')
 
+    parser.add_argument('--reference-geometry',
+                        type = str,
+                        help='''json with the reference geometry of the cameras,
+                        lidar units''')
+
     parser.add_argument('--viz',
                         action='store_true',
                         help = '''Visualize the points''')
@@ -57,12 +62,6 @@ def parse_args():
     parser.add_argument('timestamps',
                         type = str,
                         help='''vnl with timestamps for each image. Columns "t imagepath"''')
-
-    parser.add_argument('reference-geometry',
-                        type = str,
-                        help='''json with the reference geometry of the cameras,
-                        lidar units''')
-
 
     return parser.parse_args()
 
@@ -138,10 +137,10 @@ def find_stationary_frame(t, rt_rf):
 
 
 def estimate__rt_lidar_camera(lidar_frame,
-                              camera_frame):
+                              camera_frame,
+                              reference_geometry):
 
-    reference_geometry_filename = getattr(args,'reference-geometry')
-    with open(reference_geometry_filename) as f:
+    with open(reference_geometry) as f:
         extrinsics_estimate_dict = json.load(f)
 
 
@@ -149,7 +148,7 @@ def estimate__rt_lidar_camera(lidar_frame,
         try:
             d = extrinsics_estimate_dict['extrinsics'][what]
         except KeyError:
-            print(f"'{what}' not found in '{reference_geometry_filename}'. Giving up",
+            print(f"'{what}' not found in '{reference_geometry}'. Giving up",
                   file=sys.stderr)
             sys.exit(1)
 
@@ -265,25 +264,26 @@ def find_chessboard_in_plane_fit(points_plane,
         if len(points_ring) < 20:
             continue
 
-        distance_threshold = 1.0
-        offplane_threshold = 0.5
-        # shape (Npoints_ring,)
-        mask_near_estimate = \
-            ( np.abs(nps.inner(points_ring - p_center__estimate,
-                               n__estimate)) < offplane_threshold ) * \
-            (nps.norm2(points_ring - p_center__estimate) < distance_threshold*distance_threshold)
-
         # shape (Npoints_ring,); indexes xxx_plane
         idx_ring = np.nonzero(mask_ring)[0]
-        idx_ring = idx_ring[mask_near_estimate]
+        # This is about to become invalid, so I get rid of it. Use idx_ring
+        del mask_ring
 
-        if len(idx_ring) == 0:
-            continue
+        if p_center__estimate is not None and \
+           n__estimate is not None:
+            distance_threshold = 1.0
+            offplane_threshold = 0.5
+            # shape (Npoints_ring,)
+            mask_near_estimate = \
+                ( np.abs(nps.inner(points_ring - p_center__estimate,
+                                   n__estimate)) < offplane_threshold ) * \
+                (nps.norm2(points_ring - p_center__estimate) < distance_threshold*distance_threshold)
+
+            idx_ring = idx_ring[mask_near_estimate]
+            if len(idx_ring) == 0:
+                continue
 
         th_ring = th_plane[idx_ring]
-
-        # This is now invalid, so I get rid of it. Use idx_ring
-        del mask_ring
 
         # I examined the data to confirm that the points come regularly at an
         # even interval of:
@@ -335,18 +335,23 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                             lidar_points_vnl,
                             ref_chessboard,
                             i_observation):
-    # shape (N,3)
-    p__estimate = \
-        nps.clump( \
-            mrcal.transform_point_rt(rt_lidar_board__estimate,
-                                     ref_chessboard),
-            n = 2 )
 
-    # The center point and normal vector where we expect the chessboard to be
-    # observed. In the lidar frame. Assuming our geometry is correct
-    p_center__estimate = np.mean(p__estimate, axis=-2)
-    n__estimate = mrcal.rotate_point_r(rt_lidar_board__estimate[:3], np.array((0,0,1.),))
+    if rt_lidar_board__estimate is not None:
+        # shape (N,3)
+        p__estimate = \
+            nps.clump( \
+                mrcal.transform_point_rt(rt_lidar_board__estimate,
+                                         ref_chessboard),
+                n = 2 )
 
+        # The center point and normal vector where we expect the chessboard to be
+        # observed. In the lidar frame. Assuming our geometry is correct
+        p_center__estimate = np.mean(p__estimate, axis=-2)
+        n__estimate = mrcal.rotate_point_r(rt_lidar_board__estimate[:3], np.array((0,0,1.),))
+    else:
+        p__estimate        = None
+        p_center__estimate = None
+        n__estimate        = None
 
 
     points, ring = load_lidar_points(lidar_points_vnl)
@@ -406,10 +411,13 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                   ( points_plane[mask_plane_keep],
                     dict(_with  = 'points pt 7 ps 2 lc "red"',
                          legend = 'In cluster, in plane, matches estimate. Using these') ),
-                  (p__estimate,
-                   dict(_with  = 'points pt 3 ps 1',
-                        legend = 'Assuming old calibration')),
                 ]
+            if p__estimate is not None:
+                plot_tuples.append( (p__estimate,
+                                     dict(_with  = 'points pt 3 ps 1',
+                                          legend = 'Assuming old calibration')),
+                                   )
+
             plot_options = \
                 dict(cbmin     = 0,
                      cbmax     = 5,
@@ -594,7 +602,8 @@ if len(iobservation_stationary) == 0:
 
 joint_observations = list()
 
-lidar_frame = None
+lidar_frame               = None
+rt_lidar_camera__estimate = None
 for i in iobservation_stationary:
 
     t_stationary = t[i]
@@ -624,18 +633,22 @@ for i in iobservation_stationary:
 
     lidar_points_filename = lidar_metadata['points']
 
-    if lidar_frame is None:
-        lidar_frame = lidar_metadata['field.header.frame_id']
-        rt_lidar_camera__estimate = \
-            estimate__rt_lidar_camera(lidar_frame,
-                                      args.camera_frame)
+    if args.reference_geometry is not None:
+        if lidar_frame is None:
+            lidar_frame = lidar_metadata['field.header.frame_id']
+            rt_lidar_camera__estimate = \
+                estimate__rt_lidar_camera(lidar_frame,
+                                          args.camera_frame,
+                                          args.reference_geometry)
 
-    elif lidar_frame != lidar_metadata['field.header.frame_id']:
-        raise Exception(f"LIDAR points aren't all from in the same frame. Saw {lidar_frame} and {lidar_metadata['field.header.frame_id']}")
+        elif lidar_frame != lidar_metadata['field.header.frame_id']:
+            raise Exception(f"LIDAR points aren't all from in the same frame. Saw {lidar_frame} and {lidar_metadata['field.header.frame_id']}")
 
-    rt_lidar_board__estimate = \
-        mrcal.compose_rt(rt_lidar_camera__estimate,
-                         rt_camera_board[i])
+        rt_lidar_board__estimate = \
+            mrcal.compose_rt(rt_lidar_camera__estimate,
+                             rt_camera_board[i])
+    else:
+        rt_lidar_camera__estimate = None
 
     try:
         plidar = \
@@ -685,7 +698,10 @@ if len(joint_observations) < 3:
 
 
 rt_camera_lidar = fit_camera_lidar(joint_observations,
-                                   rt_camera_lidar__seed = mrcal.invert_rt(rt_lidar_camera__estimate))
+                                   rt_camera_lidar__seed = \
+                                   mrcal.invert_rt(rt_lidar_camera__estimate) \
+                                   if rt_lidar_camera__estimate is not None \
+                                   else mrcal.identity_rt())
 
 # Done. I want to plot the whole thing
 data_tuples, plot_options = \
