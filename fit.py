@@ -22,8 +22,8 @@ def parse_args():
 
     parser.add_argument('--camera-frame',
                         type=str,
-                        required = True,
-                        help = '''The frame of the camera we're looking at''')
+                        help = '''The frame of the camera we're looking at. Used
+                        to index the --reference-geometry file''')
 
     parser.add_argument('--lidar-topic',
                         type=str,
@@ -50,14 +50,23 @@ def parse_args():
                         help='''json with the reference geometry of the cameras,
                         lidar units''')
 
+    parser.add_argument('--optical-calibration-from-bag',
+                        action='store_true',
+                        help = '''If given, we asusme the calibration data used
+                        to computed the optical model appears in the --bag; and
+                        thus the rt_camera_board pose is already computed''')
+
     parser.add_argument('--viz',
                         action='store_true',
                         help = '''Visualize the points''')
 
     parser.add_argument('model',
                         type = str,
-                        help='''Camera model from the optical calibration.
-                        Assumed to have been compute by the bag in --bag''')
+                        help='''Camera model from the optical calibration. If
+                        --optical-calibration-from-bag we grab the
+                        alreadycomputed rt_camera_board from the
+                        optimization_inputs. Otherwise we estimate it from the
+                        intrinsics in this model''')
 
     parser.add_argument('timestamps',
                         type = str,
@@ -135,6 +144,42 @@ def find_stationary_frame(t, rt_rf):
 
     return idx
 
+def find_stationary_image_poses(optimization_inputs):
+    imagepaths      = optimization_inputs['imagepaths']
+    rt_camera_board = optimization_inputs['frames_rt_toref']
+
+    if len(imagepaths) != len(rt_camera_board) or \
+       optimization_inputs['extrinsics_rt_fromref'].size > 0:
+        raise Exception("I'm assuming a monocular camera calibration, with the camera at the origin")
+
+    # Read the timestamps, and get a t array to timestamp each board pose
+    timestamps = \
+        np.loadtxt(args.timestamps,
+                   dtype = np.dtype([('t',float), ('imagepath','S200')]))
+    t_from_imagepath = dict()
+    for t,imagepath in timestamps:
+        t_from_imagepath[imagepath.decode()] = t
+
+    t = np.zeros(imagepaths.shape)
+    for i in range(len(imagepaths)):
+        t[i] = t_from_imagepath[imagepaths[i]]
+
+    if np.any(np.diff(t) <= 0):
+        # The timestamps aren't sorted. This is probably OK, but more logic maybe is
+        # needed, and this case needs more testing. Here's the code I had to deal
+        # with it. It might be enough
+
+        # idx   = t.argsort()
+        # t     = t[idx]
+        # rt_camera_board = rt_camera_board[idx]
+
+        raise Exception("Images in the optical calibration set are not in order")
+
+    iobservation_stationary = find_stationary_frame(t, rt_camera_board)
+    if len(iobservation_stationary) == 0:
+        raise Exception("No stationary image frames found")
+
+    return [ (t[i],rt_camera_board[i]) for i in iobservation_stationary]
 
 def estimate__rt_lidar_camera(lidar_frame,
                               camera_frame,
@@ -334,7 +379,8 @@ def find_chessboard_in_plane_fit(points_plane,
 def find_chessboard_in_view(rt_lidar_board__estimate,
                             lidar_points_vnl,
                             ref_chessboard,
-                            i_observation):
+                            # identifying string
+                            what):
 
     if rt_lidar_board__estimate is not None:
         # shape (N,3)
@@ -396,7 +442,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
             mask_plane = np.zeros( (len(points_cluster),), dtype=bool)
             mask_plane[idx_plane] = True
 
-            hardcopy = f'/tmp/lidar-{i_observation}-{i_cluster}.gp'
+            hardcopy = f'/tmp/lidar-{what}-{i_cluster}.gp'
             show_full_point_cloud = True
 
 
@@ -561,52 +607,16 @@ And the error is
 
 model = mrcal.cameramodel(args.model)
 
-optimization_inputs = model.optimization_inputs()
-
-imagepaths      = optimization_inputs['imagepaths']
-rt_camera_board = optimization_inputs['frames_rt_toref']
-
-if len(imagepaths) != len(rt_camera_board) or \
-   optimization_inputs['extrinsics_rt_fromref'].size > 0:
-    raise Exception("I'm assuming a monocular camera calibration, with the camera at the origin")
-
-# Read the timestamps, and get a t array to timestamp each board pose
-if True:
-    timestamps = \
-        np.loadtxt(args.timestamps,
-                   dtype = np.dtype([('t',float), ('imagepath','S200')]))
-    t_from_imagepath = dict()
-    for t,imagepath in timestamps:
-        t_from_imagepath[imagepath.decode()] = t
-    t = np.zeros(imagepaths.shape)
-    for i in range(len(imagepaths)):
-        t[i] = t_from_imagepath[imagepaths[i]]
-
-if np.any(np.diff(t) <= 0):
-    # The timestamps aren't sorted. This is probably OK, but more logic maybe is
-    # needed, and this case needs more testing. Here's the code I had to deal
-    # with it. It might be enough
-
-    # idx   = t.argsort()
-    # t     = t[idx]
-    # rt_camera_board = rt_camera_board[idx]
-
-    raise Exception("Images in the optical calibration set are not in order")
-
-
-iobservation_stationary = find_stationary_frame(t, rt_camera_board)
-
-if len(iobservation_stationary) == 0:
-    raise Exception("No stationary image frames found")
-
+if args.optical_calibration_from_bag:
+    t_pose = find_stationary_image_poses(model.optimization_inputs())
+else:
+    raise Exception("Not implemented")
 
 joint_observations = list()
 
 lidar_frame               = None
 rt_lidar_camera__estimate = None
-for i in iobservation_stationary:
-
-    t_stationary = t[i]
+for t_stationary,rt_camera_board in t_pose:
 
     tmargin = 0.1
 
@@ -646,7 +656,7 @@ for i in iobservation_stationary:
 
         rt_lidar_board__estimate = \
             mrcal.compose_rt(rt_lidar_camera__estimate,
-                             rt_camera_board[i])
+                             rt_camera_board)
     else:
         rt_lidar_camera__estimate = None
 
@@ -655,10 +665,10 @@ for i in iobservation_stationary:
             find_chessboard_in_view(rt_lidar_board__estimate,
                                     lidar_points_filename,
                                     mrcal.ref_calibration_object(optimization_inputs =
-                                                                 optimization_inputs),
-                                    i)
+                                                                 model.optimization_inputs()),
+                                    t_stationary)
     except:
-        print(f"No board observation found for stationary observation {i} (t={t_stationary})")
+        print(f"No board observation found for observation at t={t_stationary}")
         continue
 
 
@@ -667,7 +677,7 @@ for i in iobservation_stationary:
     # along this normal.
     #
     # I find n,d in the camera coordinate system
-    Rt_camera_board = mrcal.Rt_from_rt(rt_camera_board[i])
+    Rt_camera_board = mrcal.Rt_from_rt(rt_camera_board)
     R_camera_board = Rt_camera_board[:3,:]
     t_camera_board = Rt_camera_board[ 3,:]
     # The normal is [0,0,1] in board coords. Here I convert it to camera
