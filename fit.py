@@ -56,6 +56,11 @@ def parse_args():
                         to computed the optical model appears in the --bag; and
                         thus the rt_camera_board pose is already computed''')
 
+    parser.add_argument('--timestamp-vnl',
+                        type = str,
+                        help='''vnl with timestamps for each image. Columns "t
+                        imagepath". Required if --optical-calibration-from-bag''')
+
     parser.add_argument('--viz',
                         action='store_true',
                         help = '''Visualize the points''')
@@ -68,11 +73,14 @@ def parse_args():
                         optimization_inputs. Otherwise we estimate it from the
                         intrinsics in this model''')
 
-    parser.add_argument('timestamps',
-                        type = str,
-                        help='''vnl with timestamps for each image. Columns "t imagepath"''')
+    args = parser.parse_args()
 
-    return parser.parse_args()
+    if args.timestamp_vnl is None and args.optical_calibration_from_bag:
+        print("--optical-calibration-from-bag requires --timestamp-vnl, but this wasn't given",
+              file=sys.stderr)
+        sys.exit()
+
+    return args
 
 
 args = parse_args()
@@ -144,7 +152,8 @@ def find_stationary_frame(t, rt_rf):
 
     return idx
 
-def find_stationary_image_poses(optimization_inputs):
+def find_stationary_image_poses(optimization_inputs,
+                                timestamps_vnl):
     imagepaths      = optimization_inputs['imagepaths']
     rt_camera_board = optimization_inputs['frames_rt_toref']
 
@@ -154,7 +163,7 @@ def find_stationary_image_poses(optimization_inputs):
 
     # Read the timestamps, and get a t array to timestamp each board pose
     timestamps = \
-        np.loadtxt(args.timestamps,
+        np.loadtxt(timestamps_vnl,
                    dtype = np.dtype([('t',float), ('imagepath','S200')]))
     t_from_imagepath = dict()
     for t,imagepath in timestamps:
@@ -608,7 +617,8 @@ And the error is
 model = mrcal.cameramodel(args.model)
 
 if args.optical_calibration_from_bag:
-    t_pose = find_stationary_image_poses(model.optimization_inputs())
+    t_pose = find_stationary_image_poses(model.optimization_inputs(),
+                                         args.timestamp_vnl)
 else:
     raise Exception("Not implemented")
 
