@@ -384,6 +384,9 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
             mask_plane[idx_plane] = True
 
             hardcopy = f'/tmp/lidar-{i_observation}-{i_cluster}.gp'
+            show_full_point_cloud = True
+
+
             plot_tuples = \
                 [
                   ( points_cluster[~mask_plane],
@@ -399,7 +402,20 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                    dict(_with  = 'points pt 3 ps 1',
                         legend = 'Assuming old calibration')),
                 ]
-            if False:
+            plot_options = \
+                dict(cbmin     = 0,
+                     cbmax     = 5,
+                     tuplesize = -3,
+                     xlabel = 'x',
+                     ylabel = 'y',
+                     zlabel = 'z',
+                     title = f"Cluster {i_cluster}",
+                     _3d       = True,
+                     square    = True,
+                     wait      = True)
+
+
+            if show_full_point_cloud:
                 plot_tuples = \
                     [
                         ( points[ ~mask_cluster ],
@@ -408,21 +424,11 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                         *plot_tuples
                     ]
 
-            gp.plot(
-                *plot_tuples,
-                cbmin     = 0,
-                cbmax     = 5,
-                tuplesize = -3,
-                xlabel = 'x',
-                ylabel = 'y',
-                zlabel = 'z',
-                title = f"Cluster {i_cluster}",
-                _3d       = True,
-                square    = True,
-                wait      = True,
-                hardcopy  = hardcopy,
-                )
-            print(f"Wrote '{hardcopy}'")
+            if hardcopy is not None:
+                plot_options['hardcopy'] = hardcopy
+            gp.plot( *plot_tuples, **plot_options)
+            if hardcopy is not None:
+                print(f"Wrote '{hardcopy}'")
 
         if not np.any(mask_plane_keep):
             continue
