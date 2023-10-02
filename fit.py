@@ -259,17 +259,17 @@ def find_chessboard_in_plane_fit(points_plane,
         # chessboard to be
 
         # shape (Npoints_ring,)
-        p_ring = points_plane[mask_ring]
-        if len(p_ring) == 0:
+        points_ring = points_plane[mask_ring]
+        if len(points_ring) == 0:
             continue
 
         distance_threshold = 1.0
         offplane_threshold = 0.5
         # shape (Npoints_ring,)
         mask_near_estimate = \
-            ( np.abs(nps.inner(p_ring - p_center__estimate,
+            ( np.abs(nps.inner(points_ring - p_center__estimate,
                                n__estimate)) < offplane_threshold ) * \
-            (nps.norm2(p_ring - p_center__estimate) < distance_threshold*distance_threshold)
+            (nps.norm2(points_ring - p_center__estimate) < distance_threshold*distance_threshold)
 
         # shape (Npoints_ring,); indexes xxx_plane
         idx_ring = np.nonzero(mask_ring)[0]
