@@ -551,10 +551,10 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                          legend = 'In cluster, not in plane') ),
                   ( points_plane[~mask_plane_keep],
                     dict(_with  = 'points pt 2 ps 1',
-                         legend = 'In cluster, in plane, does not match estimate') ),
+                         legend = 'In cluster, in plane, rejected by find_chessboard_in_plane_fit()') ),
                   ( points_plane[mask_plane_keep],
                     dict(_with  = 'points pt 7 ps 2 lc "red"',
-                         legend = 'In cluster, in plane, matches estimate. Using these') ),
+                         legend = 'ACCEPTED') ),
                 ]
             if p__estimate is not None:
                 plot_tuples.append( (p__estimate,
