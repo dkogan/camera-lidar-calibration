@@ -834,7 +834,8 @@ def Rt_camera_board__from__bag(bag):
 
     q_observed = mrgingham.find_board(image, gridn=14)
     if q_observed is None:
-        raise Exception(f"Couldn't find chessboard in '{image_filename}'")
+        print(f"Couldn't find chessboard in '{image_filename}'")
+        return None
 
     observation_qxqyw = np.ones( (len(q_observed),3), dtype=float)
     observation_qxqyw[:,:2] = q_observed
@@ -846,7 +847,8 @@ def Rt_camera_board__from__bag(bag):
                             nps.clump(p_chessboard_ref, n=2),
                             image_filename)
     if Rt_camera_board[3,2] <= 0:
-        raise Exception("Chessboard is behind the camera")
+        print("Chessboard is behind the camera")
+        return None
 
     if False:
         # diagnostics
@@ -869,6 +871,8 @@ def Rt_camera_board__from__bag(bag):
 
 def joint_observation__from__bag(bag):
     Rt_camera_board = Rt_camera_board__from__bag(bag)
+    if Rt_camera_board is None:
+        return None
     rt_camera_board = mrcal.rt_from_Rt(Rt_camera_board)
 
     return \
