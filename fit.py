@@ -506,14 +506,18 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
 
     i_cluster = -1
     i_cluster_accepted = None
-    for idx_cluster in cluster_points(cloud):
+    for idx_cluster in cluster_points(cloud,
+                                      cluster_tolerance = 0.5):
 
         i_cluster += 1
 
         points_cluster = points[idx_cluster]
         ring_cluster   = ring[idx_cluster]
 
-        idx_plane = find_plane(points_cluster)
+        idx_plane = find_plane(points_cluster,
+                               distance_threshold     = 0.05,
+                               ksearch                = 500,
+                               normal_distance_weight = 0.2)
         if len(idx_plane) == 0:
             continue
 
