@@ -30,20 +30,30 @@ def parse_args():
                         required = True,
                         help = '''Which lidar we're talking to''')
 
+    parser.add_argument('--image-topic',
+                        type=str,
+                        required = False,
+                        help = '''The topic that contains the images. Used and
+                        required if no --optical-calibration-from-bag''')
+
     parser.add_argument('--bag',
                         type=str,
                         required = True,
-                        help = '''The rosbag that contains the lidar and camera data''')
+                        help = '''Globs for the rosbag that contains the lidar
+                        and camera data. If --optical-calibration-from-bag, then
+                        ALL the data comes from the bag, and the glob must match
+                        exactly one file. Otherwise multiple bags can be given
+                        in this argument''')
 
     parser.add_argument('--t0',
                         type=float,
-                        required = True,
                         help = '''Reference time value. Usually obtained with a
                         shell command like t0=$(<
                         multisense-metadata-front-left.vnl vnl-filter --eval
                         '{print field.header.stamp; exit;}'). Must match the t0
                         used when computing the image-timestamps.vnl table
-                        passed in the "timestamp" argument''')
+                        passed in the "timestamp" argument. Used and required if
+                        --optical-calibration-from-bag''')
 
     parser.add_argument('--reference-geometry',
                         type = str,
@@ -75,10 +85,44 @@ def parse_args():
 
     args = parser.parse_args()
 
-    if args.timestamp_vnl is None and args.optical_calibration_from_bag:
-        print("--optical-calibration-from-bag requires --timestamp-vnl, but this wasn't given",
+    if args.optical_calibration_from_bag:
+        if args.timestamp_vnl is None:
+            print("--optical-calibration-from-bag requires --timestamp-vnl, but this wasn't given",
+                  file=sys.stderr)
+        if args.t0 is None:
+            print("--optical-calibration-from-bag requires --t0, but this wasn't given",
+                  file=sys.stderr)
+        sys.exit(1)
+
+    if args.image_topic is None and not args.optical_calibration_from_bag:
+        print("No --optical-calibration-from-bag requires --image-topic, but this wasn't given",
               file=sys.stderr)
-        sys.exit()
+        sys.exit(1)
+
+    import glob
+    f = glob.glob(args.bag)
+
+    if len(f) == 0:
+        print(f"'{args.bag} matched no files",
+              file=sys.stderr)
+        sys.exit(1)
+    if args.optical_calibration_from_bag:
+        if len(f) != 1:
+            print(f"'--optical-calibration-from-bag, so '{args.bag}' must match exactly one file. Instead this matched {len(f)} files",
+                  file=sys.stderr)
+            sys.exit(1)
+
+        # --optical-calibration-from-bag. args.bag is a scalar of the one bag
+        args.bag = f[0]
+
+    else:
+        if len(f) < 3:
+            print(f"'no --optical-calibration-from-bag, so '{args.bag}' must match at least 3 files. Instead this matched {len(f)} files",
+                  file=sys.stderr)
+            sys.exit(1)
+
+        # No --optical-calibration-from-bag. args.bag is a list of all the matched bags
+        args.bag = f
 
     return args
 
@@ -100,6 +144,11 @@ import io
 sys.path[:0] = '/home/dima/projects/mrcal',
 import mrcal
 
+import mrgingham
+if not hasattr(mrgingham, "find_board"):
+    print("mrginham too old. Need at least 1.24",
+          file=sys.stderr)
+    sys.exit(1)
 
 
 
@@ -388,6 +437,7 @@ def find_chessboard_in_plane_fit(points_plane,
 def find_chessboard_in_view(rt_lidar_board__estimate,
                             lidar_points_vnl,
                             ref_chessboard,
+                            *,
                             # identifying string
                             what):
 
@@ -611,75 +661,90 @@ And the error is
 
     return rt_camera_lidar
 
+def slurp_rostopic_echo(bag, topic,
+                        *rostopic_args,
+                        filter = None):
+    cmd = ('rostopic', 'echo',) + \
+          ((f'--filter={filter}',) if filter is not None else ()) + \
+          ( '-p',
+            '-b', bag,
+            *rostopic_args,
+            '--output-directory', '/tmp',
+            topic )
 
+    if True:
+        print(f"command: {' '.join(cmd)}")
+    metadata_string = subprocess.check_output( cmd )
+    return list(vnlog.vnlog(io.StringIO(metadata_string.decode())))
 
+def estimate__rt_lidar_board(lidar_frame, rt_camera_board):
+    if args.reference_geometry is None:
+        return None
 
-model = mrcal.cameramodel(args.model)
+    global rt_lidar_camera__estimate
+    if not hasattr(estimate__rt_lidar_board,'lidar_frame'):
+        estimate__rt_lidar_board.lidar_frame = lidar_frame
+        rt_lidar_camera__estimate = \
+            estimate__rt_lidar_camera(lidar_frame,
+                                      args.camera_frame,
+                                      args.reference_geometry)
 
-if args.optical_calibration_from_bag:
-    t_pose = find_stationary_image_poses(model.optimization_inputs(),
-                                         args.timestamp_vnl)
-else:
-    raise Exception("Not implemented")
+    elif estimate__rt_lidar_board.lidar_frame != lidar_frame:
+        raise Exception(f"LIDAR points aren't all from in the same frame. Saw {estimate__rt_lidar_board.lidar_frame} and {lidar_frame}")
 
-joint_observations = list()
+    return \
+        mrcal.compose_rt(rt_lidar_camera__estimate,
+                         rt_camera_board)
 
-lidar_frame               = None
-rt_lidar_camera__estimate = None
-for t_stationary,rt_camera_board in t_pose:
+def joint_observation__from__t_pose(t,rt_camera_board):
+
+    r'''Used if --optical-calibration-from-bag'''
 
     tmargin = 0.1
 
     filter_string = \
-        f"m.header.stamp.to_sec() > {args.t0/1e9+t_stationary-tmargin} and " + \
-        f"m.header.stamp.to_sec() < {args.t0/1e9+t_stationary+tmargin}"
+        f"m.header.stamp.to_sec() > {args.t0/1e9+t-tmargin} and " + \
+        f"m.header.stamp.to_sec() < {args.t0/1e9+t+tmargin}"
 
-    cmd = ( 'rostopic', 'echo',
-            f'--filter={filter_string}',
-            '-p',
-            '-b', args.bag,
-            '-n', '1',
-            '--output-directory', '/tmp',
-            args.lidar_topic )
-    metadata_string = \
-        subprocess.check_output( cmd )
-    lidar_metadata = list(vnlog.vnlog(io.StringIO(metadata_string.decode())))
+    Rt_camera_board = mrcal.Rt_from_rt(rt_camera_board)
+    what            = t
+    bag             = args.bag
+
+    return \
+        joint_observation__common(Rt_camera_board,rt_camera_board,
+                                  what          = t,
+                                  bag           = args.bag,
+                                  filter_string = filter_string)
+
+
+def joint_observation__common(Rt_camera_board,rt_camera_board,
+                              *,
+                              what,
+                              bag,
+                              filter_string):
+
+    lidar_metadata = slurp_rostopic_echo(bag, args.lidar_topic,
+                                         '-n', '1',
+                                         filter = filter_string)
     if len(lidar_metadata) == 0:
-        raise Exception(f"Couldn't find lidar scan near stationary image frame. Command: {cmd}")
+        raise Exception(f"Couldn't find lidar scan")
     if len(lidar_metadata) != 1:
-        raise Exception(f"Found multiple lidar scans near stationary image frame. I asked for exactly 1. Command: {cmd}")
-
+        raise Exception(f"Found multiple lidar scans. I asked for exactly 1")
     lidar_metadata = lidar_metadata[0]
 
+    rt_lidar_board__estimate = estimate__rt_lidar_board(lidar_metadata['field.header.frame_id'],
+                                                        rt_camera_board)
+
     lidar_points_filename = lidar_metadata['points']
-
-    if args.reference_geometry is not None:
-        if lidar_frame is None:
-            lidar_frame = lidar_metadata['field.header.frame_id']
-            rt_lidar_camera__estimate = \
-                estimate__rt_lidar_camera(lidar_frame,
-                                          args.camera_frame,
-                                          args.reference_geometry)
-
-        elif lidar_frame != lidar_metadata['field.header.frame_id']:
-            raise Exception(f"LIDAR points aren't all from in the same frame. Saw {lidar_frame} and {lidar_metadata['field.header.frame_id']}")
-
-        rt_lidar_board__estimate = \
-            mrcal.compose_rt(rt_lidar_camera__estimate,
-                             rt_camera_board)
-    else:
-        rt_lidar_camera__estimate = None
-
     try:
         plidar = \
             find_chessboard_in_view(rt_lidar_board__estimate,
                                     lidar_points_filename,
-                                    mrcal.ref_calibration_object(optimization_inputs =
-                                                                 model.optimization_inputs()),
-                                    t_stationary)
+                                    p_chessboard_ref,
+                                    what = what)
     except:
-        print(f"No board observation found for observation at t={t_stationary}")
-        continue
+        print(f"No board observation found for observation at {what=}")
+        return None
 
 
     # I have a chessboard pose. I represent its plane as all x where nt x = d. n
@@ -687,7 +752,6 @@ for t_stationary,rt_camera_board in t_pose:
     # along this normal.
     #
     # I find n,d in the camera coordinate system
-    Rt_camera_board = mrcal.Rt_from_rt(rt_camera_board)
     R_camera_board = Rt_camera_board[:3,:]
     t_camera_board = Rt_camera_board[ 3,:]
     # The normal is [0,0,1] in board coords. Here I convert it to camera
@@ -705,11 +769,102 @@ for t_stationary,rt_camera_board in t_pose:
     dlidar = nps.mag(plidar)
     vlidar = plidar / nps.dummy(dlidar,-1)
 
-    joint_observations.append(dict(plidar = plidar,
-                                   dlidar = dlidar,
-                                   vlidar = vlidar,
-                                   ncam   = ncam,
-                                   dcam   = dcam))
+    return dict(plidar = plidar,
+                dlidar = dlidar,
+                vlidar = vlidar,
+                ncam   = ncam,
+                dcam   = dcam)
+
+def Rt_camera_board__from__bag(bag):
+    import mrcal.calibration
+
+    metadata = slurp_rostopic_echo(bag,
+                                   args.image_topic,
+                                   '-n', '1',)
+
+    image_filename = metadata[0]['image']
+    image = mrcal.load_image(image_filename,
+                             bits_per_pixel = 8,
+                             channels       = 1)
+
+    if not 'clahe' in globals():
+        import cv2
+        clahe = cv2.createCLAHE()
+        clahe.setClipLimit(8)
+    image = clahe.apply(image)
+
+    q_observed = mrgingham.find_board(image, gridn=14)
+    if q_observed is None:
+        raise Exception(f"Couldn't find chessboard in '{image_filename}'")
+
+    observation_qxqyw = np.ones( (len(q_observed),3), dtype=float)
+    observation_qxqyw[:,:2] = q_observed
+
+    Rt_camera_board = \
+        mrcal.calibration._estimate_camera_pose_from_fixed_point_observations( \
+                            *model.intrinsics(),
+                            observation_qxqyw,
+                            nps.clump(p_chessboard_ref, n=2),
+                            image_filename)
+    if Rt_camera_board[3,2] <= 0:
+        raise Exception("Chessboard is behind the camera")
+
+    if False:
+        # diagnostics
+        q_perfect = mrcal.project(mrcal.transform_point_Rt(Rt_camera_board,
+                                                           nps.clump(p_chessboard_ref,n=2)),
+                                  *model.intrinsics())
+
+        rms_error = np.sqrt(np.mean(nps.norm2(q_perfect - q_observed)))
+        print(f"RMS error: {rms_error}")
+        gp.plot(q_perfect,
+                tuplesize = -2,
+                _with = 'linespoints pt 2 ps 2 lw 2',
+                rgbimage = image_filename,
+                square = True,
+                yinv = True,
+                wait = True)
+
+    return Rt_camera_board
+
+
+def joint_observation__from__bag(bag):
+    Rt_camera_board = Rt_camera_board__from__bag(bag)
+    rt_camera_board = mrcal.rt_from_Rt(Rt_camera_board)
+
+    return \
+        joint_observation__common(Rt_camera_board, rt_camera_board,
+                                  what          = bag,
+                                  bag           = bag,
+                                  filter_string = None)
+
+
+
+model = mrcal.cameramodel(args.model)
+# shape (Nh,Nw,3)
+p_chessboard_ref = mrcal.ref_calibration_object(optimization_inputs =
+                                                model.optimization_inputs())
+
+rt_lidar_camera__estimate = None
+
+
+
+
+
+
+
+
+if args.optical_calibration_from_bag:
+    t_pose = find_stationary_image_poses(model.optimization_inputs(),
+                                         args.timestamp_vnl)
+
+    joint_observations = [joint_observation__from__t_pose(t,rt_camera_board) \
+                          for t,rt_camera_board in t_pose ]
+else:
+    joint_observations = [joint_observation__from__bag(bag) \
+                          for bag in args.bag ]
+
+joint_observations = [o for o in joint_observations if o is not None]
 
 if len(joint_observations) < 3:
     print(f"I need at least 3 joint camera/lidar observations (the set of all plane normals must span R^3). Got only {len(joint_observations)}",
