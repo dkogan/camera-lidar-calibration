@@ -875,9 +875,10 @@ def joint_observation__from__bag(bag):
         return None
     rt_camera_board = mrcal.rt_from_Rt(Rt_camera_board)
 
+    what = os.path.splitext(os.path.basename(bag))[0]
     return \
         joint_observation__common(Rt_camera_board, rt_camera_board,
-                                  what          = bag,
+                                  what          = what,
                                   bag           = bag,
                                   filter_string = None)
 
