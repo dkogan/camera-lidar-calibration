@@ -876,8 +876,8 @@ def _sub_str_plot(val, time_offset, field_filter, output_directory):
                          np.uint16:  '%d',
                          np.int32:   '%d',
                          np.uint32:  '%d',
-                         np.float32: '%.6f',
-                         np.float64: '%.6f' }
+                         np.float32: '%.8f',
+                         np.float64: '%.8f' }
 
 
                 # This is needed because numpy complains if I give it a one-element array
