@@ -365,7 +365,11 @@ def find_chessboard_in_plane_fit(points_plane,
 
     Nrings = rings_plane_max+1 - rings_plane_min
 
-    for ring_plane in range(rings_plane_min,rings_plane_max+1):
+    mask_ring_accepted = np.zeros((Nrings,), dtype=bool)
+
+    for iring_plane in range(Nrings):
+        ring_plane = iring_plane + rings_plane_min
+
         # shape (Npoints_plane,)
         mask_ring = rings_plane == ring_plane
 
@@ -450,7 +454,12 @@ def find_chessboard_in_plane_fit(points_plane,
         import IPython
         IPython.embed()
 
-
+    # I want at least 4 contiguous rings to have data on my plane
+    iring_hasdata_start,iring_hasdata_end = longest_run_of_0(~mask_ring_accepted)
+    if iring_hasdata_start is None or iring_hasdata_end is None:
+        return np.zeros( (len(points_plane),), dtype=bool)
+    if iring_hasdata_end-iring_hasdata_start+1 < 4:
+        return np.zeros( (len(points_plane),), dtype=bool)
 
     return mask_plane_keep
 
