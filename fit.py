@@ -280,27 +280,37 @@ def load_lidar_points(filename):
     ring       = ring      [idx]
     return points_xyz, ring
 
-def cluster_points(cloud):
+def cluster_points(cloud,
+                   *,
+                   cluster_tolerance = 0.4,
+                   min_cluster_size  = 100,
+                   max_cluster_size  = 25000):
 
     tree = cloud.make_kdtree()
 
     ec = cloud.make_EuclideanClusterExtraction()
-    ec.set_ClusterTolerance(0.4)
-    ec.set_MinClusterSize(100)
-    ec.set_MaxClusterSize(25000)
+    ec.set_ClusterTolerance(cluster_tolerance)
+    ec.set_MinClusterSize(min_cluster_size)
+    ec.set_MaxClusterSize(max_cluster_size)
     ec.set_SearchMethod(tree)
     return ec.Extract()
 
-def find_plane(points):
+def find_plane(points,
+               *,
+               ksearch                = 50,
+               max_iterations         = 100,
+               distance_threshold     = 0.2,
+               normal_distance_weight = 0.1):
 
-    seg = pcl.PointCloud(points.astype(np.float32)).make_segmenter_normals(ksearch=50)
+    seg = pcl.PointCloud(points.astype(np.float32)).make_segmenter_normals(ksearch=
+                                                                           ksearch)
 
     seg.set_optimize_coefficients(True)
     seg.set_model_type(pcl.SACMODEL_NORMAL_PLANE)
     seg.set_method_type(pcl.SAC_RANSAC)
-    seg.set_max_iterations(100)
-    seg.set_distance_threshold(0.2)
-    seg.set_normal_distance_weight(.1)
+    seg.set_max_iterations(max_iterations)
+    seg.set_distance_threshold(distance_threshold)
+    seg.set_normal_distance_weight(normal_distance_weight)
 
     idx_plane, coefficients = seg.segment()
 
