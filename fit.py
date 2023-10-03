@@ -397,42 +397,54 @@ def find_chessboard_in_plane_fit(points_plane,
                 continue
 
         th_ring = th_plane[idx_ring]
-
-        # I examined the data to confirm that the points come regularly at an
-        # even interval of:
-        dth = 0.2 * np.pi/180.
-        # Validated by making this plot, observing that with this dth I get
-        # integers with this plot:
-        #   gp.plot(np.diff(np.sort(th_ring/dth)))
-        # So I make my dth, and any gap of > 1*dth means there was a gap in the
-        # plane scan. I look for the biggest interval with no gaps
         idx_sort = np.argsort(th_ring)
-        diff_ring_plane_gap = np.diff(th_ring[idx_sort]/dth) > 1.5
 
-        # I look for the largest run of False in diff_ring_plane_gap
-        # These are inclusive indices into diff(th)
-        if len(diff_ring_plane_gap) == 0:
-            continue
-        if np.all(diff_ring_plane_gap):
-            continue
+        # Below is logic to look for long continuous scans. Any missing points
+        # indicate that we're in a noisy area that maybe isn't in the plane.
+        # This was too strong a filter, and I was finding that it was always
+        # throwing out far too much data that was truly on the board. I'm
+        # disabling this.
+        if True:
+            i0 = 0
+            i1 = len(idx_sort)-1
+        else:
+            # I examined the data to confirm that the points come regularly at an
+            # even interval of:
+            dth = 0.2 * np.pi/180.
+            # Validated by making this plot, observing that with this dth I get
+            # integers with this plot:
+            #   gp.plot(np.diff(np.sort(th_ring/dth)))
+            # So I make my dth, and any gap of > 1*dth means there was a gap in the
+            # plane scan. I look for the biggest interval with no gaps
+            diff_ring_plane_gap = np.diff(th_ring[idx_sort]/dth) > 1.5
 
-        i0,i1 = longest_run_of_0(diff_ring_plane_gap)
+            # I look for the largest run of False in diff_ring_plane_gap
+            # These are inclusive indices into diff(th)
+            if len(diff_ring_plane_gap) == 0:
+                continue
+            if np.all(diff_ring_plane_gap):
+                continue
 
-        # I want to index th, not diff(th). Still inclusive indices
-        i1 += 1
+            i0,i1 = longest_run_of_0(diff_ring_plane_gap)
+
+            # I want to index th, not diff(th). Still inclusive indices
+            i1 += 1
+
+        # indexes th_ring
+        idx_keep = idx_sort[i0:i1+1]
 
         # If the selected segment is too short, I throw it out as noise
         len_segment = \
-            nps.mag(points_plane[idx_ring[idx_sort[i1]]] - points_plane[idx_ring[idx_sort[i0]]])
+            nps.mag(points_plane[idx_ring[idx_keep[-1]]] - \
+                    points_plane[idx_ring[idx_keep[ 0]]])
         if len_segment < 0.85:
             continue
 
         ########## TODO: only contiguous chunks of rings should be accepted
 
-        # indexes th_ring
-        idx_longest_run = idx_sort[i0:i1+1]
+        mask_ring_accepted[iring_plane] = 1
 
-        mask_plane_keep[idx_ring[idx_longest_run]] = True
+        mask_plane_keep[idx_ring[idx_keep]] = True
 
     if debug:
         import IPython
