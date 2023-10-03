@@ -443,6 +443,8 @@ def find_chessboard_in_plane_fit(points_plane,
                     points_plane[idx_ring[idx_keep[ 0]]])
         if len_segment < 0.85:
             continue
+        if len_segment > 1.3:
+            continue
 
         ########## TODO: only contiguous chunks of rings should be accepted
 
