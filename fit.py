@@ -538,7 +538,9 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
             mask_plane = np.zeros( (len(points_cluster),), dtype=bool)
             mask_plane[idx_plane] = True
 
-            hardcopy = f'/tmp/lidar-{what}-{i_cluster}.gp'
+            if np.any(mask_plane_keep): any_accepted = "-SOMEACCEPTED"
+            else:                       any_accepted = ""
+            hardcopy = f'/tmp/lidar-{what}-{i_cluster}{any_accepted}.gp'
             show_full_point_cloud = True
 
 
