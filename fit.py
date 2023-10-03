@@ -781,8 +781,8 @@ def joint_observation__common(Rt_camera_board,rt_camera_board,
                                     lidar_points_filename,
                                     p_chessboard_ref,
                                     what = what)
-    except:
-        print(f"No board observation found for observation at {what=}")
+    except Exception as e:
+        print(f"No board observation found for observation at {what=}: {e}")
         return None
 
 
