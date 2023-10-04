@@ -898,6 +898,7 @@ def joint_observation__common(Rt_camera_board,rt_camera_board,
     dlidar = nps.mag(plidar)
     vlidar = plidar / nps.dummy(dlidar,-1)
 
+    print(f"SUCCESS! Found lidar scan of board")
     return dict(plidar = plidar,
                 dlidar = dlidar,
                 vlidar = vlidar,
@@ -957,6 +958,7 @@ def Rt_camera_board__from__bag(bag):
                 yinv = True,
                 wait = True)
 
+    print(f"SUCCESS! Found Rt_camera_board in {image_filename}")
     return Rt_camera_board
 
 
