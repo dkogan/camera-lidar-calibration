@@ -588,9 +588,13 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                 points_cluster = points_cluster[~mask_plane]
                 ring_cluster   = ring_cluster  [~mask_plane]
 
+                print(f"{len(points_cluster)} points remaining")
+
                 if len(points_cluster) < 20:
                     break
 
+
+            print(f"looking for plane within {len(points_cluster)} points")
             idx_plane = find_plane(points_cluster,
                                    distance_threshold     = 0.05,
                                    ksearch                = 500,
