@@ -73,7 +73,13 @@ def parse_args():
 
     parser.add_argument('--viz',
                         action='store_true',
-                        help = '''Visualize the points''')
+                        help = '''Visualize the LIDAR point cloud as we search
+                        for the chessboafd''')
+
+    parser.add_argument('--viz-show-point-cloud-context',
+                        action='store_true',
+                        help = '''If given, display ALL the points in the scene
+                        to make it easier to orient ourselves''')
 
     parser.add_argument('model',
                         type = str,
@@ -623,8 +629,6 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                 if np.any(mask_plane_keep): any_accepted = "-SOMEACCEPTED"
                 else:                       any_accepted = ""
                 hardcopy = f'/tmp/lidar-{what}-{i_cluster}-{i_subcluster}{any_accepted}.gp'
-                show_full_point_cloud = True
-
 
                 plot_tuples = \
                     [
@@ -657,7 +661,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                          wait      = True)
 
 
-                if show_full_point_cloud:
+                if args.viz_show_point_cloud_context:
                     mask_cluster = np.zeros( (len(points),), dtype=bool)
                     mask_cluster[idx_cluster] = True
                     plot_tuples = \
