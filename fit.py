@@ -790,8 +790,16 @@ And the error is
 
     rt_camera_lidar = res.x
 
-    x = cost(rt_camera_lidar)
-    print(f"RMS fit error: {np.sqrt(np.mean(x*x)):.2f}m")
+    if True:
+        x = cost(rt_camera_lidar)
+        print(f"RMS fit error: {np.sqrt(np.mean(x*x)):.2f}m")
+
+        filename = '/tmp/residuals.gp'
+        gp.plot(x,
+                _with = 'points',
+                ylabel = 'Fit residual (m)',
+                hardcopy = filename)
+        print(f"Wrote '{filename}'")
 
     return rt_camera_lidar
 
