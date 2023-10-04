@@ -610,6 +610,8 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                                              n__estimate,
                                              # debug = (i_cluster==1),
                                              )
+            if mask_plane_keep is None:
+                mask_plane_keep = np.zeros( (len(points_plane),), dtype=bool)
 
             if args.viz:
 
