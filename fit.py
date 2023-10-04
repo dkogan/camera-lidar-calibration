@@ -503,115 +503,138 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     cloud = pcl.PointCloud(points.astype(np.float32))
 
     p_accepted = None
+    p_accepted_multiple = False
 
-    i_cluster = -1
-    i_cluster_accepted = None
+    i_cluster             = -1
+    i_cluster_accepted    = None
+    i_subcluster_accepted = None
     for idx_cluster in cluster_points(cloud,
                                       cluster_tolerance = 0.5):
 
         i_cluster += 1
+        i_subcluster = -1
 
         points_cluster = points[idx_cluster]
         ring_cluster   = ring[idx_cluster]
 
-        idx_plane = find_plane(points_cluster,
-                               distance_threshold     = 0.05,
-                               ksearch                = 500,
-                               normal_distance_weight = 0.2)
-        if len(idx_plane) == 0:
-            continue
+        mask_plane = None
+        while True:
 
-        points_plane = points_cluster[idx_plane]
-        rings_plane  = ring_cluster[idx_plane]
+            i_subcluster += 1
 
-        mask_plane_keep = \
-            find_chessboard_in_plane_fit(points_plane,
-                                         rings_plane,
-                                         p_center__estimate,
-                                         n__estimate)
+            # Remove the previous plane found in this cluster, and go again.
+            # This is required if a cluster contains multiple planes
+            if mask_plane is not None:
 
-        if args.viz:
+                points_cluster = points_cluster[~mask_plane]
+                ring_cluster   = ring_cluster  [~mask_plane]
 
-            mask_cluster = np.zeros( (len(points),), dtype=bool)
-            mask_cluster[idx_cluster] = True
+                if len(points_cluster) < 20:
+                    break
+
+            idx_plane = find_plane(points_cluster,
+                                   distance_threshold     = 0.05,
+                                   ksearch                = 500,
+                                   normal_distance_weight = 0.1)
+            if len(idx_plane) == 0:
+                break
 
             mask_plane = np.zeros( (len(points_cluster),), dtype=bool)
             mask_plane[idx_plane] = True
 
-            if np.any(mask_plane_keep): any_accepted = "-SOMEACCEPTED"
-            else:                       any_accepted = ""
-            hardcopy = f'/tmp/lidar-{what}-{i_cluster}{any_accepted}.gp'
-            show_full_point_cloud = True
+            points_plane = points_cluster[idx_plane]
+            rings_plane  = ring_cluster[idx_plane]
+
+            mask_plane_keep = \
+                find_chessboard_in_plane_fit(points_plane,
+                                             rings_plane,
+                                             p_center__estimate,
+                                             n__estimate,
+                                             # debug = (i_cluster==1),
+                                             )
+
+            if args.viz:
+
+                if np.any(mask_plane_keep): any_accepted = "-SOMEACCEPTED"
+                else:                       any_accepted = ""
+                hardcopy = f'/tmp/lidar-{what}-{i_cluster}-{i_subcluster}{any_accepted}.gp'
+                show_full_point_cloud = True
 
 
-            plot_tuples = \
-                [
-                  ( points_cluster[~mask_plane],
-                    dict(_with  = 'points pt 1 ps 1',
-                         legend = 'In cluster, not in plane') ),
-                  ( points_plane[~mask_plane_keep],
-                    dict(_with  = 'points pt 2 ps 1',
-                         legend = 'In cluster, in plane, rejected by find_chessboard_in_plane_fit()') ),
-                  ( points_plane[mask_plane_keep],
-                    dict(_with  = 'points pt 7 ps 2 lc "red"',
-                         legend = 'ACCEPTED') ),
-                ]
-            if p__estimate is not None:
-                plot_tuples.append( (p__estimate,
-                                     dict(_with  = 'points pt 3 ps 1',
-                                          legend = 'Assuming old calibration')),
-                                   )
-
-            plot_options = \
-                dict(cbmin     = 0,
-                     cbmax     = 5,
-                     tuplesize = -3,
-                     xlabel = 'x',
-                     ylabel = 'y',
-                     zlabel = 'z',
-                     title = f"Cluster {i_cluster}",
-                     _3d       = True,
-                     square    = True,
-                     wait      = True)
-
-
-            if show_full_point_cloud:
                 plot_tuples = \
                     [
-                        ( points[ ~mask_cluster ],
-                          dict(_with  = 'dots',
-                               legend = 'Not in cluster') ),
-                        *plot_tuples
+                      ( points_cluster[~mask_plane],
+                        dict(_with  = 'points pt 1 ps 1',
+                             legend = 'In cluster, not in plane') ),
+                      ( points_plane[~mask_plane_keep],
+                        dict(_with  = 'points pt 2 ps 1',
+                             legend = 'In cluster, in plane, rejected by find_chessboard_in_plane_fit()') ),
+                      ( points_plane[mask_plane_keep],
+                        dict(_with  = 'points pt 7 ps 2 lc "red"',
+                             legend = 'ACCEPTED') ),
                     ]
+                if p__estimate is not None:
+                    plot_tuples.append( (p__estimate,
+                                         dict(_with  = 'points pt 3 ps 1',
+                                              legend = 'Assuming old calibration')),
+                                       )
 
-            if hardcopy is not None:
-                plot_options['hardcopy'] = hardcopy
-            gp.plot( *plot_tuples, **plot_options)
-            if hardcopy is not None:
-                print(f"Wrote '{hardcopy}'")
-
-        if not np.any(mask_plane_keep):
-            continue
-
-        # Found an acceptable set of points on the chessboard in this cluster!
-
-        if p_accepted is not None:
-            raise Exception("More than one cluster found that observes a board")
-
-        p_accepted = points_cluster[ mask_plane][mask_plane_keep]
-        i_cluster_accepted = i_cluster
-
-
+                plot_options = \
+                    dict(cbmin     = 0,
+                         cbmax     = 5,
+                         tuplesize = -3,
+                         xlabel = 'x',
+                         ylabel = 'y',
+                         zlabel = 'z',
+                         title = f"Cluster {i_cluster}",
+                         _3d       = True,
+                         square    = True,
+                         wait      = True)
 
 
+                if show_full_point_cloud:
+                    mask_cluster = np.zeros( (len(points),), dtype=bool)
+                    mask_cluster[idx_cluster] = True
+                    plot_tuples = \
+                        [
+                            ( points[ ~mask_cluster ],
+                              dict(_with  = 'dots',
+                                   legend = 'Not in cluster') ),
+                            *plot_tuples
+                        ]
+
+                if hardcopy is not None:
+                    plot_options['hardcopy'] = hardcopy
+                gp.plot( *plot_tuples, **plot_options)
+                if hardcopy is not None:
+                    print(f"Wrote '{hardcopy}'")
+
+            if not np.any(mask_plane_keep):
+                continue
+
+            # Found an acceptable set of points on the chessboard in this cluster!
+
+            if p_accepted is not None:
+                p_accepted_multiple = True
+                # This is an error. I don't fail immediately because I want to
+                # generate all the plots
+            else:
+                p_accepted = points_cluster[ mask_plane][mask_plane_keep]
+                i_cluster_accepted    = i_cluster
+                i_subcluster_accepted = i_subcluster
 
 
 
 
+
+
+
+    if p_accepted_multiple:
+        raise Exception("More than one cluster found that observes a board")
     if p_accepted is None:
         raise Exception("No chessboard found in view")
 
-    print(f"Accepted cluster={i_cluster_accepted}")
+    print(f"Accepted cluster={i_cluster_accepted} subcluster={i_subcluster_accepted}")
     return p_accepted
 
 
