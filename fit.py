@@ -805,7 +805,7 @@ def joint_observation__common(Rt_camera_board,rt_camera_board,
                                     p_chessboard_ref,
                                     what = what)
     except Exception as e:
-        print(f"No board observation found for observation at {what=}: {e}")
+        print(f"No unambiguous board observation found for observation at {what=}: {e}")
         return None
 
 
