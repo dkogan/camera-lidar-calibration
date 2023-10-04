@@ -989,25 +989,33 @@ rt_lidar_camera__estimate = None
 
 
 
+if True:
 
+    if args.optical_calibration_from_bag:
+        t_pose = find_stationary_image_poses(model.optimization_inputs(),
+                                             args.timestamp_vnl)
 
-if args.optical_calibration_from_bag:
-    t_pose = find_stationary_image_poses(model.optimization_inputs(),
-                                         args.timestamp_vnl)
+        joint_observations = [joint_observation__from__t_pose(t,rt_camera_board) \
+                              for t,rt_camera_board in t_pose ]
+    else:
+        joint_observations = [joint_observation__from__bag(bag) \
+                              for bag in args.bag ]
 
-    joint_observations = [joint_observation__from__t_pose(t,rt_camera_board) \
-                          for t,rt_camera_board in t_pose ]
+    joint_observations = [o for o in joint_observations if o is not None]
+
+    print(f"Have {len(joint_observations)} joint observations")
+
+    if len(joint_observations) < 3:
+        print(f"I need at least 3 joint camera/lidar observations (the set of all plane normals must span R^3). Got only {len(joint_observations)}",
+              file=sys.stderr)
+        sys.exit(1)
+
+    import dill
+    dill.dump_session('/tmp/session.pickle')
+
 else:
-    joint_observations = [joint_observation__from__bag(bag) \
-                          for bag in args.bag ]
-
-joint_observations = [o for o in joint_observations if o is not None]
-
-if len(joint_observations) < 3:
-    print(f"I need at least 3 joint camera/lidar observations (the set of all plane normals must span R^3). Got only {len(joint_observations)}",
-          file=sys.stderr)
-    sys.exit(1)
-
+    import dill
+    dill.load_session('/tmp/session.pickle')
 
 rt_camera_lidar = fit_camera_lidar(joint_observations,
                                    rt_camera_lidar__seed = \
