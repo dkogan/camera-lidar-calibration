@@ -785,10 +785,8 @@ And the error is
 
     rt_camera_lidar = res.x
 
-    import IPython
-    IPython.embed()
-    sys.exit()
-
+    x = cost(rt_camera_lidar)
+    print(f"RMS fit error: {np.sqrt(np.mean(x*x)):.2f}m")
 
     return rt_camera_lidar
 
