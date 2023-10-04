@@ -1015,7 +1015,14 @@ rt_camera_lidar = fit_camera_lidar(joint_observations,
                                    if rt_lidar_camera__estimate is not None \
                                    else mrcal.identity_rt())
 
+model.extrinsics_rt_fromref(rt_camera_lidar)
+root,extension = os.path.splitext(args.model)
+filename = f"{root}-mounted{extension}"
+model.write(filename)
+print(f"Wrote '{filename}'")
+
 # Done. I want to plot the whole thing
+filename = f"{root}-mounted.gp"
 data_tuples, plot_options = \
     mrcal.show_geometry((model,
                          mrcal.invert_rt(rt_camera_lidar)),
@@ -1023,11 +1030,8 @@ data_tuples, plot_options = \
                         show_calobjects  = None,
                         axis_scale       = 1.0,
                         return_plot_args = True)
-
-
 points = [ mrcal.transform_point_rt(rt_camera_lidar, o['plidar']) \
            for o in joint_observations]
-
 gp.plot(*data_tuples,
         *[ (points[i], dict(_with     = 'points',
                             legend    = f"Points from frame {i}",
@@ -1035,3 +1039,4 @@ gp.plot(*data_tuples,
            for i in range(len(points)) ],
         **plot_options,
         hardcopy = '/tmp/tst.gp')
+print(f"Wrote '{filename}'")
