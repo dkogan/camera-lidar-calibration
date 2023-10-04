@@ -347,6 +347,52 @@ are found, the first one is returned (we use np.argmax internally)
     i = np.argmax(N)
     return i_start_run[i],i_end_run[i]
 
+def rotation_any_v_to_z(v):
+    r'''Return any rotation matrix that maps the given unit vector v to [0,0,1]'''
+    z = v/nps.mag(v)
+    if np.abs(z[0]) < .9:
+        x = np.array((1,0,0.))
+    else:
+        x = np.array((0,1,0.))
+    x -= nps.inner(x,z)*z
+    x /= nps.mag(x)
+    y = np.cross(z,x)
+    return nps.cat(x,y,z)
+
+def cloud_to_plane_fit(p):
+    r'''Fits a plane to some points and returns a transformed point cloud
+
+    The returned point cloud has mean-0 and normal (0,0,1)
+
+    p.shape is (N,3)
+    '''
+    p = p - np.mean(p, axis=-2)
+    l,v = mrcal.utils._sorted_eig(nps.matmult(p.T,p))
+    n = v[:,0]
+
+    # I have the normal n to the plane
+
+    R_board_world = rotation_any_v_to_z(n)
+    return mrcal.rotate_point_R(R_board_world, p)
+
+def distance_between_furthest_pair_of_points(p):
+
+    r'''Given a set of N points, returns the largest distance between a pair of them
+
+    Fits a plane to operate in 2D, computes the convex hull, then exhausively
+    computes each pairwise distance, and returns the largest
+
+    '''
+    import scipy.spatial
+    import scipy.spatial.distance
+
+    # shape (N,2)
+    p = cloud_to_plane_fit(p)[:,:2]
+
+    hull = scipy.spatial.ConvexHull(p)
+
+    return np.max(scipy.spatial.distance.pdist( p[hull.vertices,:] ))
+
 def find_chessboard_in_plane_fit(points_plane,
                                  rings_plane,
                                  p_center__estimate,
@@ -469,6 +515,11 @@ def find_chessboard_in_plane_fit(points_plane,
         mask_plane_keep_per_ring[iring_hasdata_start] |= \
             mask_plane_keep_per_ring[iring_plane]
     mask_plane_keep = mask_plane_keep_per_ring[iring_hasdata_start]
+
+    # The longest distance between points in the set cannot be longer than the
+    # corner-corner distance of the chessboard
+    if distance_between_furthest_pair_of_points(points_plane[mask_plane_keep]) > np.sqrt(2) + 0.1:
+        return None
 
     return mask_plane_keep
 
