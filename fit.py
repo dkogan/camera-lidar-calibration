@@ -491,7 +491,7 @@ def find_chessboard_in_plane_fit(points_plane,
                     points_plane[idx_ring[idx_keep[ 0]]])
         if len_segment < 0.85:
             continue
-        if len_segment > 1.3:
+        if len_segment > np.sqrt(2):
             continue
 
         mask_ring_accepted[iring_plane] = 1
