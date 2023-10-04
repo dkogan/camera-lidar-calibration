@@ -452,10 +452,10 @@ def find_chessboard_in_plane_fit(points_plane,
 
         # Below is logic to look for long continuous scans. Any missing points
         # indicate that we're in a noisy area that maybe isn't in the plane.
-        # This was too strong a filter, and I was finding that it was always
-        # throwing out far too much data that was truly on the board. I'm
-        # disabling this.
-        if True:
+        # This was sometimes too strong a filter, and I was disabling it because
+        # it was sometimes throwing out far too much data that was truly on the
+        # board. I'm enabling it because it works now
+        if False:
             i0 = 0
             i1 = len(idx_sort)-1
         else:
@@ -466,8 +466,9 @@ def find_chessboard_in_plane_fit(points_plane,
             # integers with this plot:
             #   gp.plot(np.diff(np.sort(th_ring/dth)))
             # So I make my dth, and any gap of > 1*dth means there was a gap in the
-            # plane scan. I look for the biggest interval with no gaps
-            diff_ring_plane_gap = np.diff(th_ring[idx_sort]/dth) > 1.5
+            # plane scan. I look for the biggest interval with no BIG gaps. I
+            # allow small gaps (hence 3.5 and not 1.5)
+            diff_ring_plane_gap = np.diff(th_ring[idx_sort]/dth) > 3.5
 
             # I look for the largest run of False in diff_ring_plane_gap
             # These are inclusive indices into diff(th)
