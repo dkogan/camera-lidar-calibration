@@ -768,11 +768,16 @@ And the error is
         return x
 
 
+    # Docs say:
+    # * 0 (default) : work silently.
+    # * 1 : display a termination report.
+    # * 2 : display progress during iterations (not supported by 'lm'
+    verbose = 0
     res = scipy.optimize.least_squares(cost,
 
                                        rt_camera_lidar__seed,
                                        method  = 'dogbox',
-                                       verbose = 2,
+                                       verbose = verbose,
                                        kwargs = dict(use_distance_to_plane = True))
 
     rt_camera_lidar__presolve = res.x
@@ -780,7 +785,7 @@ And the error is
 
                                        rt_camera_lidar__presolve,
                                        method  = 'dogbox',
-                                       verbose = 2,
+                                       verbose = verbose,
                                        kwargs = dict(use_distance_to_plane = False))
 
     rt_camera_lidar = res.x
