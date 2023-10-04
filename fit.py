@@ -854,6 +854,7 @@ def Rt_camera_board__from__bag(bag):
         clahe = cv2.createCLAHE()
         clahe.setClipLimit(8)
     image = clahe.apply(image)
+    cv2.blur(image, (3,3), dst=image)
 
     q_observed = mrgingham.find_board(image, gridn=14)
     if q_observed is None:
