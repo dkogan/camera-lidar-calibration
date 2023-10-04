@@ -1020,6 +1020,7 @@ data_tuples, plot_options = \
     mrcal.show_geometry((model,
                          mrcal.invert_rt(rt_camera_lidar)),
                         cameranames = ('camera', 'lidar'),
+                        show_calobjects  = None,
                         axis_scale       = 1.0,
                         return_plot_args = True)
 
