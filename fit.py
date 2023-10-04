@@ -354,8 +354,6 @@ def find_chessboard_in_plane_fit(points_plane,
                                  *,
                                  debug = False):
 
-    mask_plane_keep = np.zeros( (len(points_plane),), dtype=bool)
-
     # For each ring I find the longest contiguous section on my plane
     th_plane = np.arctan2(points_plane[:,1],
                           points_plane[:,0])
@@ -366,6 +364,9 @@ def find_chessboard_in_plane_fit(points_plane,
     Nrings = rings_plane_max+1 - rings_plane_min
 
     mask_ring_accepted = np.zeros((Nrings,), dtype=bool)
+
+    mask_plane_keep_per_ring = [None] * Nrings
+
 
     for iring_plane in range(Nrings):
         ring_plane = iring_plane + rings_plane_min
@@ -446,11 +447,10 @@ def find_chessboard_in_plane_fit(points_plane,
         if len_segment > 1.3:
             continue
 
-        ########## TODO: only contiguous chunks of rings should be accepted
-
         mask_ring_accepted[iring_plane] = 1
 
-        mask_plane_keep[idx_ring[idx_keep]] = True
+        mask_plane_keep_per_ring[iring_plane] = np.zeros( (len(points_plane),), dtype=bool)
+        mask_plane_keep_per_ring[iring_plane][idx_ring[idx_keep]] = True
 
     if debug:
         import IPython
@@ -459,9 +459,16 @@ def find_chessboard_in_plane_fit(points_plane,
     # I want at least 4 contiguous rings to have data on my plane
     iring_hasdata_start,iring_hasdata_end = longest_run_of_0(~mask_ring_accepted)
     if iring_hasdata_start is None or iring_hasdata_end is None:
-        return np.zeros( (len(points_plane),), dtype=bool)
+        return None
     if iring_hasdata_end-iring_hasdata_start+1 < 4:
-        return np.zeros( (len(points_plane),), dtype=bool)
+        return None
+
+    # Join all the masks of the ring I'm keeping
+    # Start with mask_plane_keep_per_ring[iring_hasdata_start], and add to it
+    for iring_plane in range(iring_hasdata_start+1,iring_hasdata_end+1):
+        mask_plane_keep_per_ring[iring_hasdata_start] |= \
+            mask_plane_keep_per_ring[iring_plane]
+    mask_plane_keep = mask_plane_keep_per_ring[iring_hasdata_start]
 
     return mask_plane_keep
 
