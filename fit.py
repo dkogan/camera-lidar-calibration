@@ -32,44 +32,21 @@ def parse_args():
 
     parser.add_argument('--image-topic',
                         type=str,
-                        required = False,
-                        help = '''The topic that contains the images. Used and
-                        required if no --optical-calibration-from-bag''')
+                        required = True,
+                        help = '''The topic that contains the images. This is a
+                        comma-separated list of topics. Any number of cameras >=
+                        1 is supported''')
 
     parser.add_argument('--bag',
                         type=str,
                         required = True,
-                        help = '''Globs for the rosbag that contains the lidar
-                        and camera data. If --optical-calibration-from-bag, then
-                        ALL the data comes from the bag, and the glob must match
-                        exactly one file. Otherwise multiple bags can be given
-                        in this argument''')
-
-    parser.add_argument('--t0',
-                        type=float,
-                        help = '''Reference time value. Usually obtained with a
-                        shell command like t0=$(<
-                        multisense-metadata-front-left.vnl vnl-filter --eval
-                        '{print field.header.stamp; exit;}'). Must match the t0
-                        used when computing the image-timestamps.vnl table
-                        passed in the "timestamp" argument. Used and required if
-                        --optical-calibration-from-bag''')
+                        help = '''Glob for the rosbag that contains the lidar
+                        and camera data. This can match multiple files''')
 
     parser.add_argument('--reference-geometry',
                         type = str,
                         help='''json with the reference geometry of the cameras,
                         lidar units''')
-
-    parser.add_argument('--optical-calibration-from-bag',
-                        action='store_true',
-                        help = '''If given, we asusme the calibration data used
-                        to computed the optical model appears in the --bag; and
-                        thus the rt_camera_board pose is already computed''')
-
-    parser.add_argument('--timestamp-vnl',
-                        type = str,
-                        help='''vnl with timestamps for each image. Columns "t
-                        imagepath". Required if --optical-calibration-from-bag''')
 
     parser.add_argument('--viz',
                         action='store_true',
@@ -83,27 +60,9 @@ def parse_args():
 
     parser.add_argument('model',
                         type = str,
-                        help='''Camera model from the optical calibration. If
-                        --optical-calibration-from-bag we grab the
-                        alreadycomputed rt_camera_board from the
-                        optimization_inputs. Otherwise we estimate it from the
-                        intrinsics in this model''')
+                        help='''Camera model for the optical calibration''')
 
     args = parser.parse_args()
-
-    if args.optical_calibration_from_bag:
-        if args.timestamp_vnl is None:
-            print("--optical-calibration-from-bag requires --timestamp-vnl, but this wasn't given",
-                  file=sys.stderr)
-        if args.t0 is None:
-            print("--optical-calibration-from-bag requires --t0, but this wasn't given",
-                  file=sys.stderr)
-        sys.exit(1)
-
-    if args.image_topic is None and not args.optical_calibration_from_bag:
-        print("No --optical-calibration-from-bag requires --image-topic, but this wasn't given",
-              file=sys.stderr)
-        sys.exit(1)
 
     import glob
     f = glob.glob(args.bag)
@@ -112,23 +71,13 @@ def parse_args():
         print(f"'{args.bag} matched no files",
               file=sys.stderr)
         sys.exit(1)
-    if args.optical_calibration_from_bag:
-        if len(f) != 1:
-            print(f"'--optical-calibration-from-bag, so '{args.bag}' must match exactly one file. Instead this matched {len(f)} files",
-                  file=sys.stderr)
-            sys.exit(1)
 
-        # --optical-calibration-from-bag. args.bag is a scalar of the one bag
-        args.bag = f[0]
+    if len(f) < 3:
+        print(f"--bag '{args.bag}' must match at least 3 files. Instead this matched {len(f)} files",
+              file=sys.stderr)
+        sys.exit(1)
 
-    else:
-        if len(f) < 3:
-            print(f"'no --optical-calibration-from-bag, so '{args.bag}' must match at least 3 files. Instead this matched {len(f)} files",
-                  file=sys.stderr)
-            sys.exit(1)
-
-        # No --optical-calibration-from-bag. args.bag is a list of all the matched bags
-        args.bag = f
+    args.bag = f
 
     return args
 
@@ -206,44 +155,6 @@ def find_stationary_frame(t, rt_rf):
     idx += 1
 
     return idx
-
-def find_stationary_image_poses(optimization_inputs,
-                                timestamps_vnl):
-    imagepaths      = optimization_inputs['imagepaths']
-    rt_camera_board = optimization_inputs['frames_rt_toref']
-
-    if len(imagepaths) != len(rt_camera_board) or \
-       optimization_inputs['extrinsics_rt_fromref'].size > 0:
-        raise Exception("I'm assuming a monocular camera calibration, with the camera at the origin")
-
-    # Read the timestamps, and get a t array to timestamp each board pose
-    timestamps = \
-        np.loadtxt(timestamps_vnl,
-                   dtype = np.dtype([('t',float), ('imagepath','S200')]))
-    t_from_imagepath = dict()
-    for t,imagepath in timestamps:
-        t_from_imagepath[imagepath.decode()] = t
-
-    t = np.zeros(imagepaths.shape)
-    for i in range(len(imagepaths)):
-        t[i] = t_from_imagepath[imagepaths[i]]
-
-    if np.any(np.diff(t) <= 0):
-        # The timestamps aren't sorted. This is probably OK, but more logic maybe is
-        # needed, and this case needs more testing. Here's the code I had to deal
-        # with it. It might be enough
-
-        # idx   = t.argsort()
-        # t     = t[idx]
-        # rt_camera_board = rt_camera_board[idx]
-
-        raise Exception("Images in the optical calibration set are not in order")
-
-    iobservation_stationary = find_stationary_frame(t, rt_camera_board)
-    if len(iobservation_stationary) == 0:
-        raise Exception("No stationary image frames found")
-
-    return [ (t[i],rt_camera_board[i]) for i in iobservation_stationary]
 
 def estimate__rt_lidar_camera(lidar_frame,
                               camera_frame,
@@ -921,26 +832,6 @@ def estimate__rt_lidar_board(lidar_frame, rt_camera_board):
         mrcal.compose_rt(rt_lidar_camera__estimate,
                          rt_camera_board)
 
-def joint_observation__from__t_pose(t,rt_camera_board):
-
-    r'''Used if --optical-calibration-from-bag'''
-
-    tmargin = 0.1
-
-    filter_string = \
-        f"m.header.stamp.to_sec() > {args.t0/1e9+t-tmargin} and " + \
-        f"m.header.stamp.to_sec() < {args.t0/1e9+t+tmargin}"
-
-    Rt_camera_board = mrcal.Rt_from_rt(rt_camera_board)
-    what            = t
-    bag             = args.bag
-
-    return \
-        joint_observation__common(Rt_camera_board,rt_camera_board,
-                                  what          = t,
-                                  bag           = args.bag,
-                                  filter_string = filter_string)
-
 
 def joint_observation__common(Rt_camera_board,rt_camera_board,
                               *,
@@ -1087,16 +978,8 @@ rt_lidar_camera__estimate = None
 
 if True:
 
-    if args.optical_calibration_from_bag:
-        t_pose = find_stationary_image_poses(model.optimization_inputs(),
-                                             args.timestamp_vnl)
-
-        joint_observations = [joint_observation__from__t_pose(t,rt_camera_board) \
-                              for t,rt_camera_board in t_pose ]
-    else:
-        joint_observations = [joint_observation__from__bag(bag) \
-                              for bag in args.bag ]
-
+    joint_observations = [joint_observation__from__bag(bag) \
+                          for bag in args.bag ]
     joint_observations = [o for o in joint_observations if o is not None]
 
     print(f"Have {len(joint_observations)} joint observations")
