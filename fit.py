@@ -20,11 +20,6 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('--camera-frame',
-                        type=str,
-                        help = '''The frame of the camera we're looking at. Used
-                        to index the --reference-geometry file''')
-
     parser.add_argument('--lidar-topic',
                         type=str,
                         required = True,
@@ -44,11 +39,6 @@ def parse_args():
                         required = True,
                         help = '''Glob for the rosbag that contains the lidar
                         and camera data. This can match multiple files''')
-
-    parser.add_argument('--reference-geometry',
-                        type = str,
-                        help='''json with the reference geometry of the cameras,
-                        lidar units''')
 
     parser.add_argument('--viz',
                         action='store_true',
@@ -157,32 +147,6 @@ def find_stationary_frame(t, rt_rf):
     idx += 1
 
     return idx
-
-def estimate__rt_lidar_camera(lidar_frame,
-                              camera_frame,
-                              reference_geometry):
-
-    with open(reference_geometry) as f:
-        extrinsics_estimate_dict = json.load(f)
-
-
-    def extrinsics_from_reference(what):
-        try:
-            d = extrinsics_estimate_dict['extrinsics'][what]
-        except KeyError:
-            print(f"'{what}' not found in '{reference_geometry}'. Giving up",
-                  file=sys.stderr)
-            sys.exit(1)
-
-        return \
-            np.array(( d['angle_axis_x'], d['angle_axis_y'], d['angle_axis_z'],
-                       d['x'],            d['y'],            d['z'] ))
-
-    rt_lidar_ref  = extrinsics_from_reference(lidar_frame)
-    rt_camera_ref = extrinsics_from_reference(camera_frame)
-
-    return mrcal.compose_rt( rt_lidar_ref,
-                             mrcal.invert_rt(rt_camera_ref) )
 
 def load_lidar_points(filename):
 
@@ -814,85 +778,6 @@ def slurp_rostopic_echo(bag, topic,
         print(f"command: {' '.join(cmd)}")
     metadata_string = subprocess.check_output( cmd )
     return list(vnlog.vnlog(io.StringIO(metadata_string.decode())))
-
-def estimate__rt_lidar_board(lidar_frame, rt_camera_board):
-    if args.reference_geometry is None:
-        return None
-
-    global rt_lidar_camera__estimate
-    if not hasattr(estimate__rt_lidar_board,'lidar_frame'):
-        estimate__rt_lidar_board.lidar_frame = lidar_frame
-        rt_lidar_camera__estimate = \
-            estimate__rt_lidar_camera(lidar_frame,
-                                      args.camera_frame,
-                                      args.reference_geometry)
-
-    elif estimate__rt_lidar_board.lidar_frame != lidar_frame:
-        raise Exception(f"LIDAR points aren't all from in the same frame. Saw {estimate__rt_lidar_board.lidar_frame} and {lidar_frame}")
-
-    return \
-        mrcal.compose_rt(rt_lidar_camera__estimate,
-                         rt_camera_board)
-
-
-def joint_observation__common(Rt_camera_board,rt_camera_board,
-                              *,
-                              what,
-                              bag,
-                              filter_string):
-
-    lidar_metadata = slurp_rostopic_echo(bag, args.lidar_topic,
-                                         '-n', '1',
-                                         filter = filter_string)
-    if len(lidar_metadata) == 0:
-        raise Exception(f"Couldn't find lidar scan")
-    if len(lidar_metadata) != 1:
-        raise Exception(f"Found multiple lidar scans. I asked for exactly 1")
-    lidar_metadata = lidar_metadata[0]
-
-    rt_lidar_board__estimate = estimate__rt_lidar_board(lidar_metadata['field.header.frame_id'],
-                                                        rt_camera_board)
-
-    lidar_points_filename = lidar_metadata['points']
-    try:
-        plidar = \
-            find_chessboard_in_view(rt_lidar_board__estimate,
-                                    lidar_points_filename,
-                                    p_chessboard_ref,
-                                    what = what)
-    except Exception as e:
-        print(f"No unambiguous board observation found for observation at {what=}: {e}")
-        return None
-
-
-    # I have a chessboard pose. I represent its plane as all x where nt x = d. n
-    # is the normal to the plane from the origin. d is the distance to the plane
-    # along this normal.
-    #
-    # I find n,d in the camera coordinate system
-    R_camera_board = Rt_camera_board[:3,:]
-    t_camera_board = Rt_camera_board[ 3,:]
-    # The normal is [0,0,1] in board coords. Here I convert it to camera
-    # coordinates
-    ncam = R_camera_board[:,2]
-    # The point [0,0,0] in board coords is on the plane. I convert to camera
-    # coordinates
-    dcam = nps.inner(t_camera_board, ncam)
-    if dcam < 0:
-        dcam *= -1
-        ncam *= -1
-
-
-    # I convert the lidar points to direction, magnitude
-    dlidar = nps.mag(plidar)
-    vlidar = plidar / nps.dummy(dlidar,-1)
-
-    print(f"SUCCESS! Found lidar scan of board")
-    return dict(plidar = plidar,
-                dlidar = dlidar,
-                vlidar = vlidar,
-                ncam   = ncam,
-                dcam   = dcam)
 
 def Rt_camera_board__from__bag(bag):
     import mrcal.calibration
