@@ -28,9 +28,11 @@ def parse_args():
     parser.add_argument('--lidar-topic',
                         type=str,
                         required = True,
-                        help = '''Which lidar we're talking to''')
+                        help = '''Which lidar(s) we're talking to. This is a
+                        comma-separated list of topics. Any number of lidars >=
+                        1 is supported''')
 
-    parser.add_argument('--image-topic',
+    parser.add_argument('--camera-topic',
                         type=str,
                         required = True,
                         help = '''The topic that contains the images. This is a
@@ -896,7 +898,7 @@ def Rt_camera_board__from__bag(bag):
     import mrcal.calibration
 
     metadata = slurp_rostopic_echo(bag,
-                                   args.image_topic,
+                                   args.camera_topic,
                                    '-n', '1',)
 
     image_filename = metadata[0]['image']
