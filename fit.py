@@ -707,67 +707,147 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     return p_accepted
 
 
-def fit_camera_lidar(joint_observations,
-                     rt_camera_lidar__seed = mrcal.identity_rt()):
+def fit( # shape (Nobservations_cameras,2)
+         indices_board_camera,
+         # shape (Nobservations_cameras,Nh,Nw,2)
+         q_observed_all,
+         # shape (Nobservations_lidar,2)
+         indices_board_lidar,
+         # list of length (Nobservations_lidar); eash slice has shape (Npoints_lidar_here,3)
+         plidar_all,
+         Nboards, Ncameras, Nlidars):
     r'''Align the LIDAR and camera geometry
-
-A plane in camera coordinates: all pcam where
-
-  nt pcam = d
-
-In lidar coords:
-
-  pcam = Rcl xlidar + tcl
-  nt Rcl xlidar + nt tcl = d
-  (nt Rcl) xlidar = d - nt tcl
-
-Lidar measurements are distances along a vector vlidar. xlidar = dlidar vlidar.
-I have a measurement dlidar. Along the lidar vector vlidar, the distance should
-satisfy
-
-  (nt Rcl) vlidar dlidar = d - nt tcl
-
-So dlidar = (d - nt tcl) / ( nt Rcl vlidar )
-
-And the error is
-
-  dlidar - dlidar_observed
 
     '''
 
-    Nmeasurements = sum(len(o['dlidar']) for o in joint_observations)
 
-    def cost(rt_camera_lidar, *,
+    print("xxxxxx The reference must be fixed")
+
+    Nmeas_camera_observation = p_chessboard_ref.shape[-3]*p_chessboard_ref.shape[-2]*2
+    Nmeas_camera_observation_all = len(indices_board_camera) * Nmeas_camera_observation
+    Nmeas_lidar_observation_all  = sum( len(p) for p in plidar_all )
+
+    Nmeasurements = \
+        Nmeas_camera_observation_all + \
+        Nmeas_lidar_observation_all
+
+    # I have some number of cameras and some number of lidars. They each
+    # observe a chessboard that moves around. At each instant in time the
+    # chessboard has a constant pose. The optimization vector contains:
+    # - pose of the chessboard in the reference frame
+    # - pose of cameras in the reference frame
+    # - pose of lidars  in the reference frame
+    istate_board_pose_0  = 0
+    Nstate_board_pose_0  = 6 * Nboards
+    istate_camera_pose_0 = istate_board_pose_0 + Nstate_board_pose_0
+    Nstate_camera_pose_0 = 6 * Ncameras
+    istate_lidar_pose_0  = istate_camera_pose_0 + Nstate_camera_pose_0
+    Nstate_lidar_pose_0  = 6 * Nlidars
+
+    d_lidar_all = [ nps.mag(plidar)                        for plidar in plidar_all ]
+    v_lidar_all = [ plidar / nps.dummy(nps.mag(plidar),-1) for plidar in plidar_all ]
+
+    def pack_state(# shape (Nboards, 6)
+                   rt_ref_board
+                   # shape (Ncameras, 6)
+                   rt_camera_ref,
+                   # shape (Nlidars, 6)
+                   rt_lidar_ref,):
+        return nps.glue( rt_ref_board .ravel(),
+                         rt_camera_ref.ravel(),
+                         rt_lidar_ref .ravel(),
+                         axis = -1)
+    def unpack_state(b):
+        return                                                                               \
+            b[istate_camera_pose_0:                                                          \
+              istate_camera_pose_0+Nstate_camera_pose_0].reshape(Nstate_camera_pose_0//6,6), \
+            b[istate_lidar_pose_0:                                                           \
+              istate_lidar_pose_0+Nstate_lidar_pose_0].reshape(Nstate_lidar_pose_0//6,6),    \
+            b[istate_board_pose_0:                                                           \
+              istate_board_pose_0+Nstate_board_pose_0].reshape(Nstate_board_pose_0//6,6),
+
+    def cost(b, *,
 
              # simplified computation for seeding
              use_distance_to_plane = False):
 
-        Rt_cl = mrcal.Rt_from_rt(rt_camera_lidar)
-        R_cl = Rt_cl[:3,:]
-        t_cl = Rt_cl[ 3,:]
-
         x     = np.zeros((Nmeasurements,), dtype=float)
         imeas = 0
 
-        for o in joint_observations:
-            Nmeas_here = len(o['dlidar'])
+        rt_ref_board__all,rt_camera_ref__all,rt_lidar_ref__all = unpack_state(b)
 
+        Nmeas_camera_observation = p_chessboard_ref.shape[-3]*p_chessboard_ref.shape[-2]*2
+        for iobs in range(len(indices_board_camera)):
+            iboard,icamera = indices_board_camera[iobs]
+
+            rt_ref_board  = rt_ref_board__all [iboard]
+            rt_camera_ref = rt_camera_ref__all[icamera]
+
+            Rt_ref_board  = mrcal.Rt_from_rt(rt_ref_board)
+            Rt_camera_ref = mrcal.Rt_from_rt(rt_camera_ref)
+
+            Rt_camera_board = mrcal.compose_Rt( Rt_camera_ref,
+                                                Rt_ref_board )
+            q = mrcal.project( mrcal.transform_point_Rt(Rt_ref_board, p_chessboard_ref),
+                               *model.intrinsics() )
+            x[imeas:imeas+Nmeas_camera_observation] = (q - q_observed_all[iobs]).ravel()
+            imeas += Nmeas_camera_observation
+
+        for iobs in range(len(indices_board_lidar)):
+            iboard,ilidar = indices_board_lidar[iobs]
+
+            rt_ref_board = rt_ref_board__all[iboard]
+            rt_lidar_ref = rt_lidar_ref__all[ilidar]
+
+            Rt_lidar_ref = mrcal.Rt_from_rt(rt_lidar_ref)
+            Rt_ref_lidar = mrcal.invert_Rt (Rt_lidar_ref)
+            Rt_ref_board = mrcal.Rt_from_rt(rt_ref_board)
+            Rt_board_ref = mrcal.invert_Rt (Rt_ref_board)
+
+            Nmeas_here = len(v_lidar_all[iobs])
+
+            # The pose of the board is Rt_ref_board. The board is z=0 in the
+            # board coords so the normal to the plane is nref = Rrb[:,2]. I
+            # want to define the board as
+            #
+            #   all x where d = inner(nref,xref) = inner(nref, Rrb xy0 + trl)
+            #
+            # d = inner(Rrb[:,2], Rrb xy0 + trb) =
+            #   = inner(Rrb[:,2], Rrb[:,0]x + Rrb[:,1]y + trb)
+            #   = inner(Rrb[:,2], trb)
             if use_distance_to_plane:
+                # Simplified error: look at perpendicular distance off the
+                # plane. inner(x,nref) - dref
+                nref = Rt_ref_board[:3, 2]
+                dref = nps.inner(nref, Rt_ref_board[3, :])
                 x[imeas:imeas+Nmeas_here] = \
-                    nps.inner(o['ncam'],
-                              mrcal.transform_point_Rt(Rt_cl,o['plidar'])) \
-                    - o['dcam']
+                    nps.inner(nref,
+                              mrcal.transform_point_Rt(Rt_ref_lidar,plidar_all[iobs])) \
+                    - dref
             else:
-                dp = ( o['dcam'] - nps.inner(o['ncam'],t_cl)) / \
-                    nps.inner(o['vlidar'], \
-                              nps.inner(o['ncam'],R_cl.T))
-                x[imeas:imeas+Nmeas_here] = dp - o['dlidar']
-
+                # More complex, but truer error
+                #
+                # A plane is zboard = 0
+                # A lidar point plidar = vlidar dlidar
+                #
+                # pboard = Rbl plidar + tbl
+                # 0 = zboard = pboard[2] = inner(Rbl[2,:],plidar) + tbl[2]
+                # -> inner(Rbl[2,:],vlidar)*dlidar = -tbl[2]
+                # -> dlidar = -tbl[2] / inner(Rbl[2,:],vlidar)
+                #
+                # And the error is
+                #
+                #   dlidar - dlidar_observed
+                Rt_board_lidar = mrcal.compose_Rt( Rt_board_ref,
+                                                   Rt_ref_lidar )
+                dlidar_predicted = -Rt_board_lidar[3,2] / nps.inner(Rt_board_lidar[2,:],v_lidar_all[iobs])
+                x[imeas:imeas+Nmeas_here] = dlidar_predicted - d_lidar_all[iobs]
             imeas += Nmeas_here
 
         return x
 
 
+    print("xxxxxx pass in the seed")
     # Docs say:
     # * 0 (default) : work silently.
     # * 1 : display a termination report.
@@ -780,19 +860,21 @@ And the error is
                                        verbose = verbose,
                                        kwargs = dict(use_distance_to_plane = True))
 
-    rt_camera_lidar__presolve = res.x
     res = scipy.optimize.least_squares(cost,
 
-                                       rt_camera_lidar__presolve,
+                                       res.x,
                                        method  = 'dogbox',
                                        verbose = verbose,
                                        kwargs = dict(use_distance_to_plane = False))
+    b = res.x
 
-    rt_camera_lidar = res.x
+    rt_ref_board__all,rt_camera_ref__all,rt_lidar_ref__all = unpack_state(b)
+
 
     if True:
-        x = cost(rt_camera_lidar)
-        print(f"RMS fit error: {np.sqrt(np.mean(x*x)):.2f}m")
+        print("xxxxxx print out correct residual units")
+        x = cost(b, use_distance_to_plane = False)
+        print(f"RMS fit error: {np.sqrt(np.mean(x*x)):.2f}m,px")
 
         filename = '/tmp/residuals.gp'
         gp.plot(x,
@@ -801,7 +883,8 @@ And the error is
                 hardcopy = filename)
         print(f"Wrote '{filename}'")
 
-    return rt_camera_lidar
+    print("xxxxxx handle joint return")
+    return rt_ref_board__all,rt_camera_ref__all,rt_lidar_ref__all
 
 def slurp_rostopic_echo(bag, topic,
                         *rostopic_args,
@@ -1030,9 +1113,9 @@ else:
     import dill
     dill.load_session('/tmp/session.pickle')
 
-rt_camera_lidar = fit_camera_lidar(joint_observations,
-                                   rt_camera_lidar__seed = \
-                                   mrcal.invert_rt(rt_lidar_camera__estimate) \
+rt_camera_lidar = fit(joint_observations,
+                      rt_camera_lidar__seed = \
+                      mrcal.invert_rt(rt_lidar_camera__estimate) \
                                    if rt_lidar_camera__estimate is not None \
                                    else mrcal.identity_rt())
 
