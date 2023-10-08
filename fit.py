@@ -605,9 +605,6 @@ def fit( # shape (Nobservations_camera,2)
 
     '''
 
-
-    print("xxxxxx The reference must be fixed")
-
     Nmeas_camera_observation = p_chessboard_ref.shape[-3]*p_chessboard_ref.shape[-2]*2
     Nmeas_camera_observation_all = len(indices_board_camera) * Nmeas_camera_observation
     Nmeas_lidar_observation_all  = sum( len(p) for p in plidar_all )
@@ -627,7 +624,7 @@ def fit( # shape (Nobservations_camera,2)
     istate_camera_pose_0 = istate_board_pose_0 + Nstate_board_pose_0
     Nstate_camera_pose_0 = 6 * Ncameras
     istate_lidar_pose_0  = istate_camera_pose_0 + Nstate_camera_pose_0
-    Nstate_lidar_pose_0  = 6 * Nlidars
+    Nstate_lidar_pose_0  = 6 * (Nlidars-1) # lidar0 is the reference coord system
 
     Nstate = \
         Nstate_board_pose_0 + \
@@ -637,15 +634,20 @@ def fit( # shape (Nobservations_camera,2)
     d_lidar_all = [ nps.mag(plidar)                        for plidar in plidar_all ]
     v_lidar_all = [ plidar / nps.dummy(nps.mag(plidar),-1) for plidar in plidar_all ]
 
+
+    # The reference coordinate system is defined by the coord system of the
+    # first lidar
     def pack_state(# shape (Nboards, 6)
                    rt_ref_board,
                    # shape (Ncameras, 6)
                    rt_camera_ref,
                    # shape (Nlidars, 6)
                    rt_lidar_ref,):
+        if np.any(rt_lidar_ref != 0):
+            raise Exception("lidar0 is the reference coordinate system so it MUST have the identity transform")
         return nps.glue( rt_ref_board .ravel(),
                          rt_camera_ref.ravel(),
-                         rt_lidar_ref .ravel(),
+                         rt_lidar_ref[1:] .ravel(),
                          axis = -1)
     def unpack_state(b):
         return                                                                               \
@@ -658,8 +660,10 @@ def fit( # shape (Nobservations_camera,2)
                    istate_camera_pose_0+Nstate_camera_pose_0].reshape(Nstate_camera_pose_0//6,6),    \
 
                  rt_lidar_ref = \
-                 b[istate_lidar_pose_0:                                                           \
-                   istate_lidar_pose_0+Nstate_lidar_pose_0].reshape(Nstate_lidar_pose_0//6,6))
+                 nps.glue( mrcal.identity_rt(),
+                           b[istate_lidar_pose_0:                                                           \
+                             istate_lidar_pose_0+Nstate_lidar_pose_0].reshape(Nstate_lidar_pose_0//6,6),
+                           axis = -2 ) )
 
     def cost(b, *,
 
