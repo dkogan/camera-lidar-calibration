@@ -629,6 +629,11 @@ def fit( # shape (Nobservations_camera,2)
     istate_lidar_pose_0  = istate_camera_pose_0 + Nstate_camera_pose_0
     Nstate_lidar_pose_0  = 6 * Nlidars
 
+    Nstate = \
+        Nstate_board_pose_0 + \
+        Nstate_camera_pose_0 + \
+        Nstate_lidar_pose_0
+
     d_lidar_all = [ nps.mag(plidar)                        for plidar in plidar_all ]
     v_lidar_all = [ plidar / nps.dummy(nps.mag(plidar),-1) for plidar in plidar_all ]
 
@@ -645,16 +650,16 @@ def fit( # shape (Nobservations_camera,2)
     def unpack_state(b):
         return                                                                               \
             dict(rt_ref_board = \
-                 b[istate_camera_pose_0:                                                          \
-                   istate_camera_pose_0+Nstate_camera_pose_0].reshape(Nstate_camera_pose_0//6,6), \
+                 b[istate_board_pose_0:                                                          \
+                   istate_board_pose_0+Nstate_board_pose_0].reshape(Nstate_board_pose_0//6,6), \
 
                  rt_camera_ref = \
-                 b[istate_lidar_pose_0:                                                           \
-                   istate_lidar_pose_0+Nstate_lidar_pose_0].reshape(Nstate_lidar_pose_0//6,6),    \
+                 b[istate_camera_pose_0:                                                           \
+                   istate_camera_pose_0+Nstate_camera_pose_0].reshape(Nstate_camera_pose_0//6,6),    \
 
                  rt_lidar_ref = \
-                 b[istate_board_pose_0:                                                           \
-                   istate_board_pose_0+Nstate_board_pose_0].reshape(Nstate_board_pose_0//6,6))
+                 b[istate_lidar_pose_0:                                                           \
+                   istate_lidar_pose_0+Nstate_lidar_pose_0].reshape(Nstate_lidar_pose_0//6,6))
 
     def cost(b, *,
 
@@ -680,6 +685,7 @@ def fit( # shape (Nobservations_camera,2)
                                                 Rt_ref_board )
             q = mrcal.project( mrcal.transform_point_Rt(Rt_ref_board, p_chessboard_ref),
                                *models[icamera].intrinsics() )
+            q = nps.clump(q,n=2)
             x[imeas:imeas+Nmeas_camera_observation] = (q - q_observed_all[iobs]).ravel()
             imeas += Nmeas_camera_observation
 
@@ -738,6 +744,10 @@ def fit( # shape (Nobservations_camera,2)
 
 
     print("xxxxxx pass in the seed")
+
+
+    rt_camera_lidar__seed = (np.random.random((Nstate,),) - 0.5) * 1e-3
+
     # Docs say:
     # * 0 (default) : work silently.
     # * 1 : display a termination report.
@@ -892,7 +902,6 @@ if any(is_different(p_chessboard_ref__all[0][...,:2],
 p_chessboard_ref = p_chessboard_ref__all[0]
 p_chessboard_ref[...,2] = 0 # assume flat. calobject_warp may differ between samples
 
-rt_lidar_camera__estimate = None
 
 
 
@@ -997,8 +1006,8 @@ rt_camera_lidar = fit( # shape (Nobservations_camera,2)
                        Nboards, Ncameras, Nlidars)
 
 
-##### xxx args.model is now a list
-##### xxx models is now a list
+print("xxx args.model is now a list")
+print("xxx models is now a list")
 model.extrinsics_rt_fromref(rt_camera_lidar)
 root,extension = os.path.splitext(args.model)
 filename = f"{root}-mounted{extension}"
