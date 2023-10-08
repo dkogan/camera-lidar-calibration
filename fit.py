@@ -94,6 +94,7 @@ import scipy.optimize
 import subprocess
 import io
 import cv2
+import pickle
 
 sys.path[:0] = '/home/dima/projects/mrcal',
 import mrcal
@@ -955,12 +956,35 @@ if True:
                       if x is not None]
 
 
-    import dill
-    dill.dump_session('/tmp/session.pickle')
+    with open("/tmp/session.pickle", "wb") as f:
+        pickle.dump( ( models, \
+                       p_chessboard_ref, \
+                       joint_observations, \
+                       Nboards, \
+                       Ncameras, \
+                       Nlidars, \
+                       Nobservations_camera, \
+                       Nobservations_lidar, \
+                       indices_board_camera, \
+                       indices_board_lidar, \
+                       q_observed_all, \
+                       plidar_all ),
+                     f)
 
 else:
-    import dill
-    dill.load_session('/tmp/session.pickle')
+    with open("/tmp/session.pickle", "rb") as f:
+        ( models, \
+          p_chessboard_ref, \
+          joint_observations, \
+          Nboards, \
+          Ncameras, \
+          Nlidars, \
+          Nobservations_camera, \
+          Nobservations_lidar, \
+          indices_board_camera, \
+          indices_board_lidar, \
+          q_observed_all, \
+          plidar_all ) = pickle.load(f)
 
 rt_camera_lidar = fit( # shape (Nobservations_camera,2)
                        indices_board_camera,
