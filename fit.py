@@ -32,7 +32,8 @@ def parse_args():
                         required = True,
                         help = '''The topic that contains the images. This is a
                         comma-separated list of topics. Any number of cameras >=
-                        1 is supported''')
+                        1 is supported. The number of camera topics must match
+                        the number of given models EXACTLY''')
 
     parser.add_argument('--bag',
                         type=str,
@@ -50,26 +51,31 @@ def parse_args():
                         help = '''If given, display ALL the points in the scene
                         to make it easier to orient ourselves''')
 
-    parser.add_argument('model',
+    parser.add_argument('models',
                         type = str,
-                        help='''Camera model for the optical calibration''')
+                        nargs='+',
+                        help='''Camera model for the optical calibration. Only
+                        the intrinsics are used. The number of models given must
+                        match the number of --camera-topic EXACTLY''')
 
     args = parser.parse_args()
 
     import glob
     f = glob.glob(args.bag)
 
-    if len(f) == 0:
-        print(f"'{args.bag} matched no files",
-              file=sys.stderr)
-        sys.exit(1)
-
     if len(f) < 3:
         print(f"--bag '{args.bag}' must match at least 3 files. Instead this matched {len(f)} files",
               file=sys.stderr)
         sys.exit(1)
-
     args.bag = f
+
+    args.lidar_topic  = args.lidar_topic.split(',')
+    args.camera_topic = args.camera_topic.split(',')
+
+    if len(args.models) != len(args.camera_topic):
+        print(f"The number of models given must match the number of --camera-topic EXACTLY",
+              file=sys.stderr)
+        sys.exit(1)
 
     return args
 
@@ -87,6 +93,7 @@ import pcl
 import scipy.optimize
 import subprocess
 import io
+import cv2
 
 sys.path[:0] = '/home/dima/projects/mrcal',
 import mrcal
@@ -411,7 +418,7 @@ def find_chessboard_in_plane_fit(points_plane,
 
 def find_chessboard_in_view(rt_lidar_board__estimate,
                             lidar_points_vnl,
-                            ref_chessboard,
+                            p_chessboard_ref,
                             *,
                             # identifying string
                             what):
@@ -421,7 +428,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
         p__estimate = \
             nps.clump( \
                 mrcal.transform_point_rt(rt_lidar_board__estimate,
-                                         ref_chessboard),
+                                         p_chessboard_ref),
                 n = 2 )
 
         # The center point and normal vector where we expect the chessboard to be
@@ -584,13 +591,13 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     return p_accepted
 
 
-def fit( # shape (Nobservations_cameras,2)
+def fit( # shape (Nobservations_camera,2)
          indices_board_camera,
-         # shape (Nobservations_cameras,Nh,Nw,2)
+         # list of length (Nobservations_camera); each slice has shape (Nh,Nw,2)
          q_observed_all,
          # shape (Nobservations_lidar,2)
          indices_board_lidar,
-         # list of length (Nobservations_lidar); eash slice has shape (Npoints_lidar_here,3)
+         # list of length (Nobservations_lidar); each slice has shape (Npoints_lidar_here,3)
          plidar_all,
          Nboards, Ncameras, Nlidars):
     r'''Align the LIDAR and camera geometry
@@ -625,7 +632,7 @@ def fit( # shape (Nobservations_cameras,2)
     v_lidar_all = [ plidar / nps.dummy(nps.mag(plidar),-1) for plidar in plidar_all ]
 
     def pack_state(# shape (Nboards, 6)
-                   rt_ref_board
+                   rt_ref_board,
                    # shape (Ncameras, 6)
                    rt_camera_ref,
                    # shape (Nlidars, 6)
@@ -636,12 +643,17 @@ def fit( # shape (Nobservations_cameras,2)
                          axis = -1)
     def unpack_state(b):
         return                                                                               \
-            b[istate_camera_pose_0:                                                          \
-              istate_camera_pose_0+Nstate_camera_pose_0].reshape(Nstate_camera_pose_0//6,6), \
-            b[istate_lidar_pose_0:                                                           \
-              istate_lidar_pose_0+Nstate_lidar_pose_0].reshape(Nstate_lidar_pose_0//6,6),    \
-            b[istate_board_pose_0:                                                           \
-              istate_board_pose_0+Nstate_board_pose_0].reshape(Nstate_board_pose_0//6,6),
+            dict(rt_ref_board = \
+                 b[istate_camera_pose_0:                                                          \
+                   istate_camera_pose_0+Nstate_camera_pose_0].reshape(Nstate_camera_pose_0//6,6), \
+
+                 rt_camera_ref = \
+                 b[istate_lidar_pose_0:                                                           \
+                   istate_lidar_pose_0+Nstate_lidar_pose_0].reshape(Nstate_lidar_pose_0//6,6),    \
+
+                 rt_lidar_ref = \
+                 b[istate_board_pose_0:                                                           \
+                   istate_board_pose_0+Nstate_board_pose_0].reshape(Nstate_board_pose_0//6,6))
 
     def cost(b, *,
 
@@ -651,14 +663,14 @@ def fit( # shape (Nobservations_cameras,2)
         x     = np.zeros((Nmeasurements,), dtype=float)
         imeas = 0
 
-        rt_ref_board__all,rt_camera_ref__all,rt_lidar_ref__all = unpack_state(b)
+        state = unpack_state(b)
 
         Nmeas_camera_observation = p_chessboard_ref.shape[-3]*p_chessboard_ref.shape[-2]*2
         for iobs in range(len(indices_board_camera)):
             iboard,icamera = indices_board_camera[iobs]
 
-            rt_ref_board  = rt_ref_board__all [iboard]
-            rt_camera_ref = rt_camera_ref__all[icamera]
+            rt_ref_board  = state['rt_ref_board'] [iboard]
+            rt_camera_ref = state['rt_camera_ref'][icamera]
 
             Rt_ref_board  = mrcal.Rt_from_rt(rt_ref_board)
             Rt_camera_ref = mrcal.Rt_from_rt(rt_camera_ref)
@@ -666,15 +678,15 @@ def fit( # shape (Nobservations_cameras,2)
             Rt_camera_board = mrcal.compose_Rt( Rt_camera_ref,
                                                 Rt_ref_board )
             q = mrcal.project( mrcal.transform_point_Rt(Rt_ref_board, p_chessboard_ref),
-                               *model.intrinsics() )
+                               *models[icamera].intrinsics() )
             x[imeas:imeas+Nmeas_camera_observation] = (q - q_observed_all[iobs]).ravel()
             imeas += Nmeas_camera_observation
 
         for iobs in range(len(indices_board_lidar)):
             iboard,ilidar = indices_board_lidar[iobs]
 
-            rt_ref_board = rt_ref_board__all[iboard]
-            rt_lidar_ref = rt_lidar_ref__all[ilidar]
+            rt_ref_board = state['rt_ref_board'][iboard]
+            rt_lidar_ref = state['rt_lidar_ref'][ilidar]
 
             Rt_lidar_ref = mrcal.Rt_from_rt(rt_lidar_ref)
             Rt_ref_lidar = mrcal.invert_Rt (Rt_lidar_ref)
@@ -745,7 +757,7 @@ def fit( # shape (Nobservations_cameras,2)
                                        kwargs = dict(use_distance_to_plane = False))
     b = res.x
 
-    rt_ref_board__all,rt_camera_ref__all,rt_lidar_ref__all = unpack_state(b)
+    state = unpack_state(b)
 
 
     if True:
@@ -761,7 +773,7 @@ def fit( # shape (Nobservations_cameras,2)
         print(f"Wrote '{filename}'")
 
     print("xxxxxx handle joint return")
-    return rt_ref_board__all,rt_camera_ref__all,rt_lidar_ref__all
+    return state
 
 def slurp_rostopic_echo(bag, topic,
                         *rostopic_args,
@@ -779,11 +791,9 @@ def slurp_rostopic_echo(bag, topic,
     metadata_string = subprocess.check_output( cmd )
     return list(vnlog.vnlog(io.StringIO(metadata_string.decode())))
 
-def Rt_camera_board__from__bag(bag):
-    import mrcal.calibration
-
+def chessboard_corners(bag, camera_topic):
     metadata = slurp_rostopic_echo(bag,
-                                   args.camera_topic,
+                                   camera_topic,
                                    '-n', '1',)
 
     image_filename = metadata[0]['image']
@@ -791,70 +801,95 @@ def Rt_camera_board__from__bag(bag):
                              bits_per_pixel = 8,
                              channels       = 1)
 
-    if not 'clahe' in globals():
-        import cv2
-        clahe = cv2.createCLAHE()
-        clahe.setClipLimit(8)
-    image = clahe.apply(image)
+    if not hasattr(chessboard_corners, 'clahe'):
+        chessboard_corners.clahe = cv2.createCLAHE()
+        chessboard_corners.clahe.setClipLimit(8)
+    image = chessboard_corners.clahe.apply(image)
     cv2.blur(image, (3,3), dst=image)
 
     q_observed = mrgingham.find_board(image, gridn=14)
     if q_observed is None:
         print(f"Couldn't find chessboard in '{image_filename}'")
         return None
+    return q_observed
 
-    observation_qxqyw = np.ones( (len(q_observed),3), dtype=float)
-    observation_qxqyw[:,:2] = q_observed
 
-    Rt_camera_board = \
-        mrcal.calibration._estimate_camera_pose_from_fixed_point_observations( \
-                            *model.intrinsics(),
-                            observation_qxqyw,
-                            nps.clump(p_chessboard_ref, n=2),
-                            image_filename)
-    if Rt_camera_board[3,2] <= 0:
-        print("Chessboard is behind the camera")
+def get_lidar_observation(bag, lidar_topic,
+                          *,
+                          what):
+    lidar_metadata = slurp_rostopic_echo(bag, lidar_topic,
+                                         '-n', '1')
+    if len(lidar_metadata) == 0:
+        raise Exception(f"Couldn't find lidar scan")
+    if len(lidar_metadata) != 1:
+        raise Exception(f"Found multiple lidar scans. I asked for exactly 1")
+    lidar_metadata = lidar_metadata[0]
+
+    lidar_points_filename = lidar_metadata['points']
+    try:
+        return \
+            find_chessboard_in_view(None,
+                                    lidar_points_filename,
+                                    p_chessboard_ref,
+                                    what = what)
+    except Exception as e:
+        print(f"No unambiguous board observation found for observation at {what=}: {e}")
         return None
 
-    if False:
-        # diagnostics
-        q_perfect = mrcal.project(mrcal.transform_point_Rt(Rt_camera_board,
-                                                           nps.clump(p_chessboard_ref,n=2)),
-                                  *model.intrinsics())
+def get_joint_observation(bag):
+    r'''Compute ONE lidar observation and/or ONE camera observation
 
-        rms_error = np.sqrt(np.mean(nps.norm2(q_perfect - q_observed)))
-        print(f"RMS error: {rms_error}")
-        gp.plot(q_perfect,
-                tuplesize = -2,
-                _with = 'linespoints pt 2 ps 2 lw 2',
-                rgbimage = image_filename,
-                square = True,
-                yinv = True,
-                wait = True)
-
-    print(f"SUCCESS! Found Rt_camera_board in {image_filename}")
-    return Rt_camera_board
-
-
-def joint_observation__from__bag(bag):
-    Rt_camera_board = Rt_camera_board__from__bag(bag)
-    if Rt_camera_board is None:
-        return None
-    rt_camera_board = mrcal.rt_from_Rt(Rt_camera_board)
+    from a bag of ostensibly-stationary data'''
 
     what = os.path.splitext(os.path.basename(bag))[0]
-    return \
-        joint_observation__common(Rt_camera_board, rt_camera_board,
-                                  what          = what,
-                                  bag           = bag,
-                                  filter_string = None)
+
+    Ncameras = len(args.camera_topic)
+    q_observed = \
+        [ chessboard_corners(bag,
+                             args.camera_topic[icamera]) \
+          for icamera in range(Ncameras) ]
+
+    Nlidars = len(args.lidar_topic)
+    p_lidar = \
+        [ get_lidar_observation(bag,
+                                args.lidar_topic[ilidar],
+                                what = what) \
+          for ilidar in range(Nlidars)]
+
+    if all(x is None for x in q_observed) and \
+       all(x is None for x in p_lidar):
+        return None
+
+    return q_observed,p_lidar
 
 
 
-model = mrcal.cameramodel(args.model)
+
+def open_model(f):
+    try: return mrcal.cameramodel(f)
+    except:
+        print(f"Couldn't open '{f}' as a camera model",
+              file=sys.stderr)
+        sys.exit(1)
+models = [open_model(f) for f in args.models]
+
+# I assume each model used the same calibration object
 # shape (Nh,Nw,3)
-p_chessboard_ref = mrcal.ref_calibration_object(optimization_inputs =
-                                                model.optimization_inputs())
+p_chessboard_ref__all = \
+    [mrcal.ref_calibration_object(optimization_inputs =
+                                  m.optimization_inputs()) \
+     for m in models]
+def is_different(x,y):
+    try:    return nps.norm2((x-y).ravel()) > 1e-12
+    except: return True
+if any(is_different(p_chessboard_ref__all[0][...,:2],
+                    p_chessboard_ref__all[i][...,:2]) \
+       for i in range(1,len(models))):
+    print("Each model should have been made with the same chessboard, but some are different. I use this calibration-time chessboard for the camera-lidar calibration",
+          file = sys.stderr)
+    sys.exit(1)
+p_chessboard_ref = p_chessboard_ref__all[0]
+p_chessboard_ref[...,2] = 0 # assume flat. calobject_warp may differ between samples
 
 rt_lidar_camera__estimate = None
 
@@ -865,16 +900,60 @@ rt_lidar_camera__estimate = None
 
 if True:
 
-    joint_observations = [joint_observation__from__bag(bag) \
-                          for bag in args.bag ]
+    joint_observations = [get_joint_observation(bag) for bag in args.bag ]
     joint_observations = [o for o in joint_observations if o is not None]
 
-    print(f"Have {len(joint_observations)} joint observations")
+    # joint_observations is now
+    # [ obs0, obs1, obs2, ... ] where each observation corresponds to a board pose
+    # Each obs is (q_observed, p_lidar)
+    # q_observed is a list of board corners; one per camera; some could be None
+    # p_lidar is a list of lidar points on the board; one per lidar; some could be None
+    Nboards = len(joint_observations)
+    print(f"Have {Nboards} joint observations")
 
-    if len(joint_observations) < 3:
-        print(f"I need at least 3 joint camera/lidar observations (the set of all plane normals must span R^3). Got only {len(joint_observations)}",
-              file=sys.stderr)
-        sys.exit(1)
+    Ncameras = len(args.camera_topic)
+    for icamera in range(Ncameras):
+        NcameraObservations_this = sum(0 if o[0][icamera] is None else 1 for o in joint_observations)
+        if NcameraObservations_this == 0:
+            print(f"I need at least 1 observation of each camera. Got only {len(NcameraObservations_this)} for camera {icamera} from {args.camera_topic[icamera]}",
+                  file=sys.stderr)
+            sys.exit(1)
+    Nlidars = len(args.lidar_topic)
+    for ilidar in range(Nlidars):
+        NlidarObservations_this = sum(0 if o[1][ilidar] is None else 1 for o in joint_observations)
+        if NlidarObservations_this < 3:
+            print(f"I need at least 3 observations of each lidar to unambiguously set the translation (the set of all plane normals must span R^3). Got only {len(NlidarObservations_this)} for lidar {ilidar} from {args.lidar_topic[ilidar]}",
+                  file=sys.stderr)
+            sys.exit(1)
+
+
+    Nobservations_camera = sum(0 if x is None else 1 \
+                               for o in joint_observations \
+                               for x in o[0])
+    Nobservations_lidar  = sum(0 if x is None else 1 \
+                               for o in joint_observations \
+                               for x in o[1])
+
+    indices_board_camera = np.array([(iboard,icamera) \
+                                     for iboard in range(Nboards) \
+                                     for icamera in range(len(joint_observations[iboard][0])) \
+                                     if joint_observations[iboard][0][icamera] is not None],
+                                    dtype=np.int32)
+    indices_board_lidar  = np.array([(iboard,ilidar) \
+                                     for iboard in range(Nboards) \
+                                     for ilidar in range(len(joint_observations[iboard][1])) \
+                                     if joint_observations[iboard][1][ilidar] is not None],
+                                    dtype=np.int32)
+
+    q_observed_all = [x \
+                      for o in joint_observations \
+                      for x in o[0] \
+                      if x is not None]
+    plidar_all     = [x \
+                      for o in joint_observations \
+                      for x in o[1] \
+                      if x is not None]
+
 
     import dill
     dill.dump_session('/tmp/session.pickle')
@@ -883,12 +962,19 @@ else:
     import dill
     dill.load_session('/tmp/session.pickle')
 
-rt_camera_lidar = fit(joint_observations,
-                      rt_camera_lidar__seed = \
-                      mrcal.invert_rt(rt_lidar_camera__estimate) \
-                                   if rt_lidar_camera__estimate is not None \
-                                   else mrcal.identity_rt())
+rt_camera_lidar = fit( # shape (Nobservations_camera,2)
+                       indices_board_camera,
+                       # list of length (Nobservations_camera); each slice has shape (Nh,Nw,2)
+                       q_observed_all,
+                       # shape (Nobservations_lidar,2)
+                       indices_board_lidar,
+                       # list of length (Nobservations_lidar); each slice has shape (Npoints_lidar_here,3)
+                       plidar_all,
+                       Nboards, Ncameras, Nlidars)
 
+
+##### xxx args.model is now a list
+##### xxx models is now a list
 model.extrinsics_rt_fromref(rt_camera_lidar)
 root,extension = os.path.splitext(args.model)
 filename = f"{root}-mounted{extension}"
