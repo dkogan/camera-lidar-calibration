@@ -915,7 +915,15 @@ p_chessboard_ref[...,2] = 0 # assume flat. calobject_warp may differ between sam
 if True:
 
     joint_observations = [get_joint_observation(bag) for bag in args.bag ]
-    joint_observations = [o for o in joint_observations if o is not None]
+
+    # Any boards observed by a single sensor aren't useful, and I get rid of
+    # them
+    def num_sensors_observed(o):
+        return \
+            sum(0 if x is None else 1 for qp in o for x in qp)
+    joint_observations = [o for o in joint_observations \
+                          if o is not None and num_sensors_observed(o) > 1]
+
 
     # joint_observations is now
     # [ obs0, obs1, obs2, ... ] where each observation corresponds to a board pose
