@@ -841,10 +841,10 @@ def fit( # shape (Nobservations_camera,2)
                     istate_camera_pose_0+Nstate_camera_pose_0].reshape(Nstate_camera_pose_0//6,6)),    \
 
                  rt_lidar_ref = \
-                 SCALE_RT_LIDAR_REF * \
                  nps.glue( mrcal.identity_rt(),
-                           b[istate_lidar_pose_0:                                                           \
-                             istate_lidar_pose_0+Nstate_lidar_pose_0].reshape(Nstate_lidar_pose_0//6,6),
+                           SCALE_RT_LIDAR_REF * \
+                           ( b[istate_lidar_pose_0:                                                           \
+                               istate_lidar_pose_0+Nstate_lidar_pose_0].reshape(Nstate_lidar_pose_0//6,6)),
                            axis = -2 ) )
 
     def cost(b, *,
@@ -872,8 +872,8 @@ def fit( # shape (Nobservations_camera,2)
                                *models[icamera].intrinsics() )
             q = nps.clump(q,n=2)
             x[imeas:imeas+Nmeas_camera_observation] = \
-                SCALE_MEASUREMENT_PX * \
-                (q - q_observed_all[iobs]).ravel()
+                (q - q_observed_all[iobs]).ravel() / SCALE_MEASUREMENT_PX
+
             imeas += Nmeas_camera_observation
 
         for iobs in range(len(indices_board_lidar)):
