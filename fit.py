@@ -955,7 +955,7 @@ def fit( # shape (Nobservations_camera,2)
         x_lidar  = x[Nmeas_camera_observation_all:]
         print(f"RMS fit error: {np.sqrt(np.mean(x*x)):.2f} normalized units")
         print(f"RMS fit error (camera): {np.sqrt(np.mean(x_camera*x_camera))*SCALE_MEASUREMENT_PX:.2f} pixels")
-        print(f"RMS fit error (lidar): { np.sqrt(np.mean(x_lidar *x_lidar ))*SCALE_MEASUREMENT_M:.2f } m")
+        print(f"RMS fit error (lidar): {(np.sqrt(np.mean(x_lidar *x_lidar ))*SCALE_MEASUREMENT_M):.2f} m")
 
         filename = '/tmp/residuals.gp'
         gp.plot((np.arange(0,Nmeas_camera_observation_all),
