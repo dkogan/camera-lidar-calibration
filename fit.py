@@ -592,6 +592,156 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     return p_accepted
 
 
+def fit_estimate( # shape (Nobservations_camera,2)
+                  indices_board_camera,
+                  # list of length (Nobservations_camera); each slice has shape (Nh,Nw,2)
+                  q_observed_all,
+                  # shape (Nobservations_lidar,2)
+                  indices_board_lidar,
+                  # list of length (Nobservations_lidar); each slice has shape (Npoints_lidar_here,3)
+                  plidar_all,
+                  Nboards, Ncameras, Nlidars):
+    r'''Simplified fit() used to produce a seed for fit() to refine
+
+    Same arguments as fit()'''
+
+    def get__Rt_camera_board(iobservation_camera, model):
+        nonlocal q_observed_all
+        q_observed = q_observed_all[iobservation_camera]
+
+        observation_qxqyw = np.ones( (len(q_observed),3), dtype=float)
+        observation_qxqyw[:,:2] = q_observed
+
+        Rt_camera_board = \
+            mrcal.calibration._estimate_camera_pose_from_fixed_point_observations( \
+                                *model.intrinsics(),
+                                observation_qxqyw = observation_qxqyw,
+                                points_ref = nps.clump(p_chessboard_ref, n=2),
+                                what = f"{iobservation_camera=}")
+        if Rt_camera_board[3,2] <= 0:
+            print("Chessboard is behind the camera")
+            return None
+
+        if False:
+            # diagnostics
+            q_perfect = mrcal.project(mrcal.transform_point_Rt(Rt_camera_board,
+                                                               nps.clump(p_chessboard_ref,n=2)),
+                                      *model.intrinsics())
+
+            rms_error = np.sqrt(np.mean(nps.norm2(q_perfect - q_observed)))
+            print(f"RMS error: {rms_error}")
+            gp.plot(q_perfect,
+                    tuplesize = -2,
+                    _with = 'linespoints pt 2 ps 2 lw 2',
+                    rgbimage = image_filename,
+                    square = True,
+                    yinv = True,
+                wait = True)
+
+        return Rt_camera_board
+
+
+
+
+    if Nlidars != 1:
+        raise Exception("For now this implementation assumes Nlidars==1")
+
+    Nobservations_camera = len(indices_board_camera)
+    Nobservations_lidar  = len(indices_board_lidar)
+
+    # The estimate of the center of the board, in board coords. This doesn't
+    # need to be precise. If the board has an even number of corners, I just
+    # take the nearest one'''
+    Nh,Nw = p_chessboard_ref.shape[:2]
+    p_center_board = p_chessboard_ref[Nh//2,Nw//2,:]
+
+    # shape (Nobservations_camera, 4,3)
+    Rt_camera_board_all = \
+        [ get__Rt_camera_board(i, models[indices_board_camera[i,1]]) \
+          for i in range(Nobservations_camera) ]
+
+    # shape (Nobservations_camera, 3)
+    pcenter_camera_all = \
+        [ mrcal.transform_point_Rt(Rt_camera_board_all[i], p_center_board) \
+          for i in range(Nobservations_camera) ]
+
+    # shape (Nobservations_lidar, 3)
+    pcenter_lidar_all = \
+        [ np.mean(plidar_all[i], axis=-2) \
+          for i in range(Nobservations_lidar) ]
+
+
+    # results go here
+    Rt_lidar_camera = np.zeros((Ncameras,4,3), dtype=float)
+
+    for icamera in range(Ncameras):
+
+        # I allocate an upper bound
+        pcenter_camera_lidar_joint = np.zeros((Nboards,6), dtype=float)
+        Ncenter_camera_lidar_joint = 0
+
+        mask_observation_camera = (indices_board_camera[:,1] == icamera)
+
+        for iobservation_camera in range(Nobservations_camera):
+            iboard,icamera_here = indices_board_camera[iobservation_camera]
+            if icamera_here != icamera: continue
+
+            mask_observation_lidar = indices_board_lidar[:,0] == iboard
+            if not np.any(mask_observation_lidar):
+                continue
+            iobservation_lidar = np.argmax(mask_observation_lidar)
+
+            pcenter_camera_lidar_joint[Ncenter_camera_lidar_joint,
+                                       0:3] = pcenter_camera_all[iobservation_camera]
+            pcenter_camera_lidar_joint[Ncenter_camera_lidar_joint,
+                                       3:6] = pcenter_lidar_all [iobservation_lidar ]
+            Ncenter_camera_lidar_joint += 1
+
+
+        plidar_joint = \
+            pcenter_camera_lidar_joint[:Ncenter_camera_lidar_joint,
+                                       3:6]
+        pcamera_joint = \
+            pcenter_camera_lidar_joint[:Ncenter_camera_lidar_joint,
+                                       0:3]
+
+        Rt_lidar_camera[icamera] = \
+            mrcal.align_procrustes_points_Rt01(plidar_joint,
+                                               pcamera_joint)
+        # Errors are reported this way (Rt_lidar_camera=0) in the bleeding-edge mrcal
+        # only. So I also check for Ncenter_camera_lidar_joint
+        if Ncenter_camera_lidar_joint < 4 or np.all(Rt_lidar_camera == 0):
+            raise Exception(f"Insufficient lidar-camera calibration data for camera {icamera}")
+
+
+
+    # I use the first available camera to seed each board pose
+    Rt_lidar_board        = np.zeros((Nboards,4,3), dtype=float)
+    have_Rt_lidar_board   = np.zeros((Nboards,), dtype=bool)
+    N_have_Rt_lidar_board = 0
+    for iobservation_camera in range(Nobservations_camera):
+        iboard,icamera = indices_board_camera[iobservation_camera]
+        if have_Rt_lidar_board[iboard]:
+            continue
+        Rt_lidar_board[iboard] = \
+            mrcal.compose_Rt(Rt_lidar_camera[icamera],
+                             Rt_camera_board_all[iobservation_camera])
+        have_Rt_lidar_board[iboard] = 1
+        N_have_Rt_lidar_board += 1
+        if N_have_Rt_lidar_board == Nboards:
+            break
+    if N_have_Rt_lidar_board < Nboards:
+        raise Exception("Insufficient data to seed the board poses")
+
+    return \
+        dict(rt_ref_board  = nps.atleast_dims(mrcal.rt_from_Rt(Rt_lidar_board),
+                                              -2),
+             rt_camera_ref = nps.atleast_dims(mrcal.rt_from_Rt(mrcal.invert_Rt(Rt_lidar_camera)),
+                                              -2),
+             rt_lidar_ref  = nps.atleast_dims(mrcal.identity_rt(),
+                                              -2))
+
+
 def fit( # shape (Nobservations_camera,2)
          indices_board_camera,
          # list of length (Nobservations_camera); each slice has shape (Nh,Nw,2)
@@ -747,10 +897,11 @@ def fit( # shape (Nobservations_camera,2)
         return x
 
 
-    print("xxxxxx pass in the seed")
-
-
-    rt_camera_lidar__seed = (np.random.random((Nstate,),) - 0.5) * 1e-3
+    seed = pack_state(**fit_estimate( indices_board_camera,
+                                      q_observed_all,
+                                      indices_board_lidar,
+                                      plidar_all,
+                                      Nboards, Ncameras, Nlidars ))
 
     # Docs say:
     # * 0 (default) : work silently.
@@ -759,7 +910,7 @@ def fit( # shape (Nobservations_camera,2)
     verbose = 0
     res = scipy.optimize.least_squares(cost,
 
-                                       rt_camera_lidar__seed,
+                                       seed,
                                        method  = 'dogbox',
                                        verbose = verbose,
                                        kwargs = dict(use_distance_to_plane = True))
