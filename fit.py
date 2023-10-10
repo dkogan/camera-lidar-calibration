@@ -1246,7 +1246,7 @@ points_lidar_observations = \
 gp.plot(*data_tuples,
         *[ (points_lidar_observations[i],
             dict(_with     = 'points',
-                 legend    = f"Points from lidar observatoin {i}",
+                 legend    = f"Points from lidar observation {i}",
                  tuplesize = -3)) \
            for i in range(len(points_lidar_observations)) ],
         **plot_options,
