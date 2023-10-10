@@ -984,7 +984,6 @@ def fit( # shape (Nobservations_camera,2)
                 hardcopy = filename)
         print(f"Wrote '{filename}'")
 
-    print("xxxxxx handle joint return")
     return state
 
 def slurp_rostopic_echo(bag, topic,
