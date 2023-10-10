@@ -51,6 +51,17 @@ def parse_args():
                         help = '''If given, display ALL the points in the scene
                         to make it easier to orient ourselves''')
 
+    parser.add_argument('--cache',
+                        default = '/tmp/lidar-camera-calibration-session.pickle',
+                        help = '''The filename we use to store the results of
+                        the slow computation. We ALWAYS write to this. We read
+                        from this ONLY if --read-cache''')
+
+    parser.add_argument('--read-cache',
+                        action='store_true',
+                        help = '''If given, we don't run the slow computation,
+                        but read it from the file given in --cache''')
+
     parser.add_argument('models',
                         type = str,
                         nargs='+',
@@ -1099,8 +1110,22 @@ p_chessboard_ref[...,2] = 0 # assume flat. calobject_warp may differ between sam
 
 
 
+if args.read_cache:
+    with open(args.cache, "rb") as f:
+        ( models, \
+          p_chessboard_ref, \
+          joint_observations, \
+          Nboards, \
+          Ncameras, \
+          Nlidars, \
+          Nobservations_camera, \
+          Nobservations_lidar, \
+          indices_board_camera, \
+          indices_board_lidar, \
+          q_observed_all, \
+          plidar_all ) = pickle.load(f)
 
-if True:
+else:
 
     joint_observations = [get_joint_observation(bag) for bag in args.bag ]
 
@@ -1165,7 +1190,7 @@ if True:
                       if x is not None]
 
 
-    with open("/tmp/session.pickle", "wb") as f:
+    with open(args.cache, "wb") as f:
         pickle.dump( ( models, \
                        p_chessboard_ref, \
                        joint_observations, \
@@ -1180,20 +1205,6 @@ if True:
                        plidar_all ),
                      f)
 
-else:
-    with open("/tmp/session.pickle", "rb") as f:
-        ( models, \
-          p_chessboard_ref, \
-          joint_observations, \
-          Nboards, \
-          Ncameras, \
-          Nlidars, \
-          Nobservations_camera, \
-          Nobservations_lidar, \
-          indices_board_camera, \
-          indices_board_lidar, \
-          q_observed_all, \
-          plidar_all ) = pickle.load(f)
 
 solved_state = \
     fit( # shape (Nobservations_camera,2)
