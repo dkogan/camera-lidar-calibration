@@ -106,6 +106,24 @@ if not hasattr(mrgingham, "find_board"):
     sys.exit(1)
 
 
+# from mrcal/scales.h:
+SCALE_ROTATION_CAMERA    = (0.1 * np.pi/180.0)
+SCALE_TRANSLATION_CAMERA = 1.0
+SCALE_ROTATION_FRAME     = (15.0 * np.pi/180.0)
+SCALE_TRANSLATION_FRAME  = 1.0
+SCALE_POSITION_POINT     = SCALE_TRANSLATION_FRAME
+SCALE_CALOBJECT_WARP     = 0.01
+SCALE_DISTORTION         = 1.0
+
+SCALE_RT_REF_BOARD = np.array((SCALE_ROTATION_FRAME,     SCALE_ROTATION_FRAME,    SCALE_ROTATION_FRAME,
+                               SCALE_TRANSLATION_FRAME,  SCALE_TRANSLATION_FRAME, SCALE_TRANSLATION_FRAME,))
+SCALE_RT_CAMERA_REF= np.array((SCALE_ROTATION_CAMERA,    SCALE_ROTATION_CAMERA,   SCALE_ROTATION_CAMERA,
+                               SCALE_TRANSLATION_CAMERA, SCALE_TRANSLATION_CAMERA,SCALE_TRANSLATION_FRAME,))
+SCALE_RT_LIDAR_REF = SCALE_RT_CAMERA_REF
+
+SCALE_MEASUREMENT_PX = 0.3  # expected noise levels
+SCALE_MEASUREMENT_M  = 0.01 # expected noise levels
+
 
 
 
@@ -795,21 +813,24 @@ def fit( # shape (Nobservations_camera,2)
                    rt_lidar_ref,):
         if np.any(rt_lidar_ref != 0):
             raise Exception("lidar0 is the reference coordinate system so it MUST have the identity transform")
-        return nps.glue( rt_ref_board .ravel(),
-                         rt_camera_ref.ravel(),
-                         rt_lidar_ref[1:] .ravel(),
+        return nps.glue( (rt_ref_board     / SCALE_RT_REF_BOARD) .ravel(),
+                         (rt_camera_ref    / SCALE_RT_CAMERA_REF).ravel(),
+                         (rt_lidar_ref[1:] / SCALE_RT_LIDAR_REF) .ravel(),
                          axis = -1)
     def unpack_state(b):
         return                                                                               \
             dict(rt_ref_board = \
-                 b[istate_board_pose_0:                                                          \
-                   istate_board_pose_0+Nstate_board_pose_0].reshape(Nstate_board_pose_0//6,6), \
+                 SCALE_RT_REF_BOARD * \
+                 ( b[istate_board_pose_0:                                                          \
+                     istate_board_pose_0+Nstate_board_pose_0].reshape(Nstate_board_pose_0//6,6)), \
 
                  rt_camera_ref = \
-                 b[istate_camera_pose_0:                                                           \
-                   istate_camera_pose_0+Nstate_camera_pose_0].reshape(Nstate_camera_pose_0//6,6),    \
+                 SCALE_RT_CAMERA_REF * \
+                 ( b[istate_camera_pose_0:                                                           \
+                    istate_camera_pose_0+Nstate_camera_pose_0].reshape(Nstate_camera_pose_0//6,6)),    \
 
                  rt_lidar_ref = \
+                 SCALE_RT_LIDAR_REF * \
                  nps.glue( mrcal.identity_rt(),
                            b[istate_lidar_pose_0:                                                           \
                              istate_lidar_pose_0+Nstate_lidar_pose_0].reshape(Nstate_lidar_pose_0//6,6),
@@ -840,7 +861,9 @@ def fit( # shape (Nobservations_camera,2)
             q = mrcal.project( mrcal.transform_point_Rt(Rt_ref_board, p_chessboard_ref),
                                *models[icamera].intrinsics() )
             q = nps.clump(q,n=2)
-            x[imeas:imeas+Nmeas_camera_observation] = (q - q_observed_all[iobs]).ravel()
+            x[imeas:imeas+Nmeas_camera_observation] = \
+                SCALE_MEASUREMENT_PX * \
+                (q - q_observed_all[iobs]).ravel()
             imeas += Nmeas_camera_observation
 
         for iobs in range(len(indices_board_lidar)):
@@ -871,9 +894,9 @@ def fit( # shape (Nobservations_camera,2)
                 nref = Rt_ref_board[:3, 2]
                 dref = nps.inner(nref, Rt_ref_board[3, :])
                 x[imeas:imeas+Nmeas_here] = \
-                    nps.inner(nref,
-                              mrcal.transform_point_Rt(Rt_ref_lidar,plidar_all[iobs])) \
-                    - dref
+                    ( nps.inner(nref,
+                                mrcal.transform_point_Rt(Rt_ref_lidar,plidar_all[iobs])) \
+                      - dref ) / SCALE_MEASUREMENT_M
             else:
                 # More complex, but truer error
                 #
@@ -891,7 +914,8 @@ def fit( # shape (Nobservations_camera,2)
                 Rt_board_lidar = mrcal.compose_Rt( Rt_board_ref,
                                                    Rt_ref_lidar )
                 dlidar_predicted = -Rt_board_lidar[3,2] / nps.inner(Rt_board_lidar[2,:],v_lidar_all[iobs])
-                x[imeas:imeas+Nmeas_here] = dlidar_predicted - d_lidar_all[iobs]
+                x[imeas:imeas+Nmeas_here] = \
+                    (dlidar_predicted - d_lidar_all[iobs]) / SCALE_MEASUREMENT_M
             imeas += Nmeas_here
 
         return x
@@ -927,14 +951,26 @@ def fit( # shape (Nobservations_camera,2)
 
 
     if True:
-        print("xxxxxx print out correct residual units")
         x = cost(b, use_distance_to_plane = False)
-        print(f"RMS fit error: {np.sqrt(np.mean(x*x)):.2f}m,px")
+        x_camera = x[:Nmeas_camera_observation_all]
+        x_lidar  = x[Nmeas_camera_observation_all:]
+        print(f"RMS fit error: {np.sqrt(np.mean(x*x)):.2f} normalized units")
+        print(f"RMS fit error (camera): {np.sqrt(np.mean(x_camera*x_camera))*SCALE_MEASUREMENT_PX:.2f} pixels")
+        print(f"RMS fit error (lidar): { np.sqrt(np.mean(x_lidar *x_lidar ))*SCALE_MEASUREMENT_M:.2f } m")
 
         filename = '/tmp/residuals.gp'
-        gp.plot(x,
+        gp.plot((np.arange(0,Nmeas_camera_observation_all),
+                 x_camera*SCALE_MEASUREMENT_PX,
+                 dict(legend = "Camera residuals")),
+                (np.arange(Nmeas_camera_observation_all,Nmeasurements),
+                 x_lidar*SCALE_MEASUREMENT_M,
+                 dict(legend = "LIDAR residuals",
+                      y2     = True)),
                 _with = 'points',
-                ylabel = 'Fit residual (m)',
+                ylabel  = 'Camera fit residual (pixels)',
+                y2label = 'LIDAR fit residual (m)',
+                ymin    = 0,
+                y2min   = 0,
                 hardcopy = filename)
         print(f"Wrote '{filename}'")
 
