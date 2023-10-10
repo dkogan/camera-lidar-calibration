@@ -1040,7 +1040,7 @@ def open_model(f):
 models = [open_model(f) for f in args.models]
 
 # I assume each model used the same calibration object
-# shape (Nh,Nw,3)
+# shape (Ncameras, Nh,Nw,3)
 p_chessboard_ref__all = \
     [mrcal.ref_calibration_object(optimization_inputs =
                                   m.optimization_inputs()) \
@@ -1054,6 +1054,8 @@ if any(is_different(p_chessboard_ref__all[0][...,:2],
     print("Each model should have been made with the same chessboard, but some are different. I use this calibration-time chessboard for the camera-lidar calibration",
           file = sys.stderr)
     sys.exit(1)
+
+# shape (Nh,Nw,3)
 p_chessboard_ref = p_chessboard_ref__all[0]
 p_chessboard_ref[...,2] = 0 # assume flat. calobject_warp may differ between samples
 
