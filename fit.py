@@ -1239,12 +1239,21 @@ data_tuples, plot_options = \
                         axis_scale       = 1.0,
                         return_plot_args = True)
 
+points_camera_observations = \
+    [ mrcal.transform_point_rt(rt_ref_board[indices_board_camera[iobs,0]],
+                               nps.clump(p_chessboard_ref,n=2) ) \
+      for iobs in range(Nobservations_camera) ]
 points_lidar_observations = \
-    [ mrcal.transform_point_rt(rt_lidar_ref[indices_board_lidar[iobs,1]],
+    [ mrcal.transform_point_rt(mrcal.invert_rt(rt_lidar_ref[indices_board_lidar[iobs,1]]),
                                plidar_all[iobs]) \
       for iobs in range(Nobservations_lidar) ]
 
 gp.plot(*data_tuples,
+        *[ (points_camera_observations[i],
+            dict(_with     = 'lines',
+                 legend    = f"Points from camera observation {i}",
+                 tuplesize = -3)) \
+           for i in range(len(points_camera_observations)) ],
         *[ (points_lidar_observations[i],
             dict(_with     = 'points',
                  legend    = f"Points from lidar observation {i}",
