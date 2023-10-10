@@ -868,7 +868,8 @@ def fit( # shape (Nobservations_camera,2)
 
             Rt_camera_board = mrcal.compose_Rt( Rt_camera_ref,
                                                 Rt_ref_board )
-            q = mrcal.project( mrcal.transform_point_Rt(Rt_ref_board, p_chessboard_ref),
+            q = mrcal.project( mrcal.transform_point_Rt(Rt_camera_board,
+                                                        p_chessboard_ref),
                                *models[icamera].intrinsics() )
             q = nps.clump(q,n=2)
             x[imeas:imeas+Nmeas_camera_observation] = \
