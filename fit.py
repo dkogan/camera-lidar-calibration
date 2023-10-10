@@ -1228,14 +1228,17 @@ data_tuples, plot_options = \
                         axis_scale       = 1.0,
                         return_plot_args = True)
 
-# points = [ mrcal.transform_point_rt(rt_camera_lidar, o['plidar']) \
-#            for o in joint_observations]
+points_lidar_observations = \
+    [ mrcal.transform_point_rt(rt_lidar_ref[indices_board_lidar[iobs,1]],
+                               plidar_all[iobs]) \
+      for iobs in range(Nobservations_lidar) ]
 
 gp.plot(*data_tuples,
-        # *[ (points[i], dict(_with     = 'points',
-        #                     legend    = f"Points from frame {i}",
-        #                     tuplesize = -3)) \
-        #    for i in range(len(points)) ],
+        *[ (points_lidar_observations[i],
+            dict(_with     = 'points',
+                 legend    = f"Points from lidar observatoin {i}",
+                 tuplesize = -3)) \
+           for i in range(len(points_lidar_observations)) ],
         **plot_options,
         hardcopy = filename)
 print(f"Wrote '{filename}'")
