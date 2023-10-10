@@ -846,7 +846,6 @@ def fit( # shape (Nobservations_camera,2)
 
         state = unpack_state(b)
 
-        Nmeas_camera_observation = p_chessboard_ref.shape[-3]*p_chessboard_ref.shape[-2]*2
         for iobs in range(len(indices_board_camera)):
             iboard,icamera = indices_board_camera[iobs]
 
