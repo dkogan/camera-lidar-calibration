@@ -448,7 +448,7 @@ def find_chessboard_in_plane_fit(points_plane,
 
 def find_chessboard_in_view(rt_lidar_board__estimate,
                             lidar_points_vnl,
-                            p_chessboard_ref,
+                            p_board_local,
                             *,
                             # identifying string
                             what):
@@ -458,7 +458,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
         p__estimate = \
             nps.clump( \
                 mrcal.transform_point_rt(rt_lidar_board__estimate,
-                                         p_chessboard_ref),
+                                         p_board_local),
                 n = 2 )
 
         # The center point and normal vector where we expect the chessboard to be
@@ -645,7 +645,7 @@ def fit_estimate( # shape (Nobservations_camera,2)
             mrcal.calibration._estimate_camera_pose_from_fixed_point_observations( \
                                 *model.intrinsics(),
                                 observation_qxqyw = observation_qxqyw,
-                                points_ref = nps.clump(p_chessboard_ref, n=2),
+                                points_ref = nps.clump(p_board_local, n=2),
                                 what = f"{iobservation_camera=}")
         if Rt_camera_board[3,2] <= 0:
             print("Chessboard is behind the camera")
@@ -654,7 +654,7 @@ def fit_estimate( # shape (Nobservations_camera,2)
         if False:
             # diagnostics
             q_perfect = mrcal.project(mrcal.transform_point_Rt(Rt_camera_board,
-                                                               nps.clump(p_chessboard_ref,n=2)),
+                                                               nps.clump(p_board_local,n=2)),
                                       *model.intrinsics())
 
             rms_error = np.sqrt(np.mean(nps.norm2(q_perfect - q_observed)))
@@ -681,8 +681,8 @@ def fit_estimate( # shape (Nobservations_camera,2)
     # The estimate of the center of the board, in board coords. This doesn't
     # need to be precise. If the board has an even number of corners, I just
     # take the nearest one'''
-    Nh,Nw = p_chessboard_ref.shape[:2]
-    p_center_board = p_chessboard_ref[Nh//2,Nw//2,:]
+    Nh,Nw = p_board_local.shape[:2]
+    p_center_board = p_board_local[Nh//2,Nw//2,:]
 
     # shape (Nobservations_camera, 4,3)
     Rt_camera_board_all = \
@@ -784,7 +784,7 @@ def fit( # shape (Nobservations_camera,2)
 
     '''
 
-    Nmeas_camera_observation = p_chessboard_ref.shape[-3]*p_chessboard_ref.shape[-2]*2
+    Nmeas_camera_observation = p_board_local.shape[-3]*p_board_local.shape[-2]*2
     Nmeas_camera_observation_all = len(indices_board_camera) * Nmeas_camera_observation
     Nmeas_lidar_observation_all  = sum( len(p) for p in plidar_all )
 
@@ -869,7 +869,7 @@ def fit( # shape (Nobservations_camera,2)
             Rt_camera_board = mrcal.compose_Rt( Rt_camera_ref,
                                                 Rt_ref_board )
             q = mrcal.project( mrcal.transform_point_Rt(Rt_camera_board,
-                                                        p_chessboard_ref),
+                                                        p_board_local),
                                *models[icamera].intrinsics() )
             q = nps.clump(q,n=2)
             x[imeas:imeas+Nmeas_camera_observation] = \
@@ -1042,7 +1042,7 @@ def get_lidar_observation(bag, lidar_topic,
         return \
             find_chessboard_in_view(None,
                                     lidar_points_filename,
-                                    p_chessboard_ref,
+                                    p_board_local,
                                     what = what)
     except Exception as e:
         print(f"No unambiguous board observation found for observation at {what=}: {e}")
@@ -1087,23 +1087,23 @@ models = [open_model(f) for f in args.models]
 
 # I assume each model used the same calibration object
 # shape (Ncameras, Nh,Nw,3)
-p_chessboard_ref__all = \
+p_board_local__all = \
     [mrcal.ref_calibration_object(optimization_inputs =
                                   m.optimization_inputs()) \
      for m in models]
 def is_different(x,y):
     try:    return nps.norm2((x-y).ravel()) > 1e-12
     except: return True
-if any(is_different(p_chessboard_ref__all[0][...,:2],
-                    p_chessboard_ref__all[i][...,:2]) \
+if any(is_different(p_board_local__all[0][...,:2],
+                    p_board_local__all[i][...,:2]) \
        for i in range(1,len(models))):
     print("Each model should have been made with the same chessboard, but some are different. I use this calibration-time chessboard for the camera-lidar calibration",
           file = sys.stderr)
     sys.exit(1)
 
 # shape (Nh,Nw,3)
-p_chessboard_ref = p_chessboard_ref__all[0]
-p_chessboard_ref[...,2] = 0 # assume flat. calobject_warp may differ between samples
+p_board_local = p_board_local__all[0]
+p_board_local[...,2] = 0 # assume flat. calobject_warp may differ between samples
 
 
 
@@ -1113,7 +1113,7 @@ p_chessboard_ref[...,2] = 0 # assume flat. calobject_warp may differ between sam
 if args.read_cache:
     with open(args.cache, "rb") as f:
         ( models, \
-          p_chessboard_ref, \
+          p_board_local, \
           joint_observations, \
           Nboards, \
           Ncameras, \
@@ -1192,7 +1192,7 @@ else:
 
     with open(args.cache, "wb") as f:
         pickle.dump( ( models, \
-                       p_chessboard_ref, \
+                       p_board_local, \
                        joint_observations, \
                        Nboards, \
                        Ncameras, \
@@ -1241,7 +1241,7 @@ data_tuples, plot_options = \
 
 points_camera_observations = \
     [ mrcal.transform_point_rt(rt_ref_board[indices_board_camera[iobs,0]],
-                               nps.clump(p_chessboard_ref,n=2) ) \
+                               nps.clump(p_board_local,n=2) ) \
       for iobs in range(Nobservations_camera) ]
 points_lidar_observations = \
     [ mrcal.transform_point_rt(mrcal.invert_rt(rt_lidar_ref[indices_board_lidar[iobs,1]]),
