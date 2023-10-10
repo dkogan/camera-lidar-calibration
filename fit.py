@@ -1242,3 +1242,30 @@ gp.plot(*data_tuples,
         **plot_options,
         hardcopy = filename)
 print(f"Wrote '{filename}'")
+
+for iobservation in range(len(joint_observations)):
+    (q_observed, p_lidar) = joint_observations[iobservation]
+    for ilidar in range(Nlidars):
+        if p_lidar[ilidar] is None: continue
+        for icamera in range(Ncameras):
+            if q_observed[icamera] is None: continue
+
+        rt_camera_lidar = mrcal.compose_rt(rt_camera_ref[icamera],
+                                           mrcal.invert_rt(rt_lidar_ref[ilidar]))
+        p = mrcal.transform_point_rt(rt_camera_lidar, p_lidar[ilidar])
+        q_lidar = mrcal.project(p, *models[icamera].intrinsics())
+
+        filename = f"/tmp/reprojected-observation{iobservation}-camera{icamera}-lidar{ilidar}.gp"
+        gp.plot( (q_observed[icamera],
+                  dict(tuplesize = -2,
+                       _with     = 'linespoints',
+                       legend    = 'Chessboard corners from the image')),
+                 (q_lidar,
+                  dict(tuplesize = -2,
+                       _with     = 'points',
+                       legend    = 'Reprojected LIDAR points')),
+                 square  = True,
+                 _xrange = (0,960),
+                 _yrange = (600,0),
+                 hardcopy = filename)
+        print(f"Wrote '{filename}'")
