@@ -1160,41 +1160,47 @@ else:
           q_observed_all, \
           plidar_all ) = pickle.load(f)
 
-rt_camera_lidar = fit( # shape (Nobservations_camera,2)
-                       indices_board_camera,
-                       # list of length (Nobservations_camera); each slice has shape (Nh,Nw,2)
-                       q_observed_all,
-                       # shape (Nobservations_lidar,2)
-                       indices_board_lidar,
-                       # list of length (Nobservations_lidar); each slice has shape (Npoints_lidar_here,3)
-                       plidar_all,
-                       Nboards, Ncameras, Nlidars)
+solved_state = \
+    fit( # shape (Nobservations_camera,2)
+         indices_board_camera,
+         # list of length (Nobservations_camera); each slice has shape (Nh,Nw,2)
+         q_observed_all,
+         # shape (Nobservations_lidar,2)
+         indices_board_lidar,
+         # list of length (Nobservations_lidar); each slice has shape (Npoints_lidar_here,3)
+         plidar_all,
+         Nboards, Ncameras, Nlidars)
+
+rt_ref_board  = solved_state['rt_ref_board']
+rt_camera_ref = solved_state['rt_camera_ref']
+rt_lidar_ref  = solved_state['rt_lidar_ref']
 
 
-print("xxx args.model is now a list")
-print("xxx models is now a list")
-model.extrinsics_rt_fromref(rt_camera_lidar)
-root,extension = os.path.splitext(args.model)
-filename = f"{root}-mounted{extension}"
-model.write(filename)
-print(f"Wrote '{filename}'")
+for imodel in range(len(args.models)):
+    models[imodel].extrinsics_rt_fromref(rt_camera_ref[imodel])
+    root,extension = os.path.splitext(args.models[imodel])
+    filename = f"{root}-mounted{extension}"
+    models[imodel].write(filename)
+    print(f"Wrote '{filename}'")
 
-# Done. I want to plot the whole thing
-filename = f"{root}-mounted.gp"
+# Done. Plot the whole thing
+filename = "/tmp/mounted.gp"
 data_tuples, plot_options = \
-    mrcal.show_geometry((model,
-                         mrcal.invert_rt(rt_camera_lidar)),
-                        cameranames = ('camera', 'lidar'),
+    mrcal.show_geometry((*models,
+                         rt_lidar_ref),
+                        cameranames = (*args.models, 'lidar'),
                         show_calobjects  = None,
                         axis_scale       = 1.0,
                         return_plot_args = True)
-points = [ mrcal.transform_point_rt(rt_camera_lidar, o['plidar']) \
-           for o in joint_observations]
+
+# points = [ mrcal.transform_point_rt(rt_camera_lidar, o['plidar']) \
+#            for o in joint_observations]
+
 gp.plot(*data_tuples,
-        *[ (points[i], dict(_with     = 'points',
-                            legend    = f"Points from frame {i}",
-                            tuplesize = -3)) \
-           for i in range(len(points)) ],
+        # *[ (points[i], dict(_with     = 'points',
+        #                     legend    = f"Points from frame {i}",
+        #                     tuplesize = -3)) \
+        #    for i in range(len(points)) ],
         **plot_options,
-        hardcopy = '/tmp/tst.gp')
+        hardcopy = filename)
 print(f"Wrote '{filename}'")
