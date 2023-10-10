@@ -762,7 +762,7 @@ def fit_estimate( # shape (Nobservations_camera,2)
 
 def fit( # shape (Nobservations_camera,2)
          indices_board_camera,
-         # list of length (Nobservations_camera); each slice has shape (Nh,Nw,2)
+         # list of length (Nobservations_camera); each slice has shape (Nh*Nw,2)
          q_observed_all,
          # shape (Nobservations_lidar,2)
          indices_board_lidar,
@@ -1198,7 +1198,7 @@ else:
 solved_state = \
     fit( # shape (Nobservations_camera,2)
          indices_board_camera,
-         # list of length (Nobservations_camera); each slice has shape (Nh,Nw,2)
+         # list of length (Nobservations_camera); each slice has shape (Nh*Nw,2)
          q_observed_all,
          # shape (Nobservations_lidar,2)
          indices_board_lidar,
