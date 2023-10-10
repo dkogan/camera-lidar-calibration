@@ -337,7 +337,7 @@ def find_chessboard_in_plane_fit(points_plane,
         if len(points_ring) < 20:
             continue
 
-        # shape (Npoints_ring,); indexes xxx_plane
+        # shape (Npoints_ring,); indexes_plane
         idx_ring = np.nonzero(mask_ring)[0]
         # This is about to become invalid, so I get rid of it. Use idx_ring
         del mask_ring
