@@ -1163,20 +1163,7 @@ else:
     print(f"Have {Nboards} joint observations")
 
     Ncameras = len(args.camera_topic)
-    for icamera in range(Ncameras):
-        NcameraObservations_this = sum(0 if o[0][icamera] is None else 1 for o in joint_observations)
-        if NcameraObservations_this == 0:
-            print(f"I need at least 1 observation of each camera. Got only {len(NcameraObservations_this)} for camera {icamera} from {args.camera_topic[icamera]}",
-                  file=sys.stderr)
-            sys.exit(1)
-    Nlidars = len(args.lidar_topic)
-    for ilidar in range(Nlidars):
-        NlidarObservations_this = sum(0 if o[1][ilidar] is None else 1 for o in joint_observations)
-        if NlidarObservations_this < 3:
-            print(f"I need at least 3 observations of each lidar to unambiguously set the translation (the set of all plane normals must span R^3). Got only {NlidarObservations_this} for lidar {ilidar} from {args.lidar_topic[ilidar]}",
-                  file=sys.stderr)
-            sys.exit(1)
-
+    Nlidars  = len(args.lidar_topic)
 
     Nobservations_camera = sum(0 if x is None else 1 \
                                for o in joint_observations \
@@ -1220,6 +1207,20 @@ else:
                        q_observed_all, \
                        plidar_all ),
                      f)
+
+
+for icamera in range(Ncameras):
+    NcameraObservations_this = sum(0 if o[0][icamera] is None else 1 for o in joint_observations)
+    if NcameraObservations_this == 0:
+        print(f"I need at least 1 observation of each camera. Got only {len(NcameraObservations_this)} for camera {icamera} from {args.camera_topic[icamera]}",
+              file=sys.stderr)
+        sys.exit(1)
+for ilidar in range(Nlidars):
+    NlidarObservations_this = sum(0 if o[1][ilidar] is None else 1 for o in joint_observations)
+    if NlidarObservations_this < 3:
+        print(f"I need at least 3 observations of each lidar to unambiguously set the translation (the set of all plane normals must span R^3). Got only {NlidarObservations_this} for lidar {ilidar} from {args.lidar_topic[ilidar]}",
+              file=sys.stderr)
+        sys.exit(1)
 
 
 solved_state = \
