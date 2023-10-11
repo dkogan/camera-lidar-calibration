@@ -560,102 +560,133 @@ def _rostopic_echo(topic, callback_echo, bag_file, echo_all_topics=False):
             if callback_echo.done:
                 break
 
-def create_field_filter(echo_nostr, echo_noarr):
-    def field_filter(val):
-        fields = val.__slots__
-        field_types = val._slot_types
-        for f, t in zip(val.__slots__, val._slot_types):
-            if echo_noarr and '[' in t:
-                continue
-            elif echo_nostr and 'string' in t:
-                continue
-            yield f
-    return field_filter
+
+
+def debag(bag,
+          topic,
+          *,
+          fixed_numeric_width = None,
+          filter_expr         = None,
+          nostr               = False,
+          noarr               = False,
+          all_topics          = False,
+          msg_count           = None,
+          offset_time         = False,
+          output_directory    = "/tmp"):
+    r'''The main function in this module
+
+    The input is a file on disk. Output is text on standard output and possibly
+    more files on disk
+    '''
+
+    def create_field_filter(echo_nostr, echo_noarr):
+        def field_filter(val):
+            fields = val.__slots__
+            field_types = val._slot_types
+            for f, t in zip(val.__slots__, val._slot_types):
+                if echo_noarr and '[' in t:
+                    continue
+                elif echo_nostr and 'string' in t:
+                    continue
+                yield f
+        return field_filter
+
+    def expr_eval(expr):
+        def eval_fn(m):
+            return eval(expr)
+        return eval_fn
 
 
 
+    filter_fn = None
+    if filter_expr:
+        filter_fn = expr_eval(filter_expr)
+
+    field_filter_fn = create_field_filter(nostr, noarr)
+
+    callback_echo = CallbackEcho(topic,
+                                 filter_fn=filter_fn,
+                                 echo_all_topics=all_topics,
+                                 offset_time=offset_time, count=msg_count,
+                                 field_filter_fn=field_filter_fn,
+                                 fixed_numeric_width=fixed_numeric_width,
+                                 output_directory=output_directory)
+    _rostopic_echo(topic, callback_echo, bag_file=bag)
 
 
-def expr_eval(expr):
-    def eval_fn(m):
-        return eval(expr)
-    return eval_fn
+if __name__ == "__main__":
 
-args = sys.argv[1:]
-from optparse import OptionParser
-parser = OptionParser(usage="usage: %prog echo [options] /topic", prog=sys.argv[0])
-parser.add_option("-b", "--bag",
-                  dest="bag",
-                  help="echo messages from .bag file", metavar="BAGFILE")
-parser.add_option("-w",
-                  dest="fixed_numeric_width", default=None, metavar="NUM_WIDTH",
-                  help="fixed width for numeric values")
-parser.add_option("--filter", 
-                  dest="filter_expr", default=None,
-                  metavar="FILTER-EXPRESSION",
-                  help="Python expression to filter messages that are printed. Expression can use Python builtins as well as m (the message) and topic (the topic name).")
-parser.add_option("--nostr", 
-                  dest="nostr", default=False,
-                  action="store_true",
-                  help="exclude string fields")
-parser.add_option("--noarr",
-                  dest="noarr", default=False,
-                  action="store_true",
-                  help="exclude arrays")
-parser.add_option("-a", "--all",
-                  dest="all_topics", default=False,
-                  action="store_true",
-                  help="display all message in bag, only valid with -b option")
-parser.add_option("-n", 
-                  dest="msg_count", default=None, metavar="COUNT",
-                  help="number of messages to echo")
-parser.add_option("--offset",
-                  dest="offset_time", default=False,
-                  action="store_true",
-                  help="display time as offsets from current time (in seconds)")
-parser.add_option("--output-directory",
-                  help="""The output directory to store the extracted data.
-                  Currently this is used (and required) only for images and
-                  LIDAR scans""")
+    args = sys.argv[1:]
+    from optparse import OptionParser
+    parser = OptionParser(usage="usage: %prog echo [options] /topic", prog=sys.argv[0])
+    parser.add_option("-b", "--bag",
+                      dest="bag",
+                      help="echo messages from .bag file", metavar="BAGFILE")
+    parser.add_option("-w",
+                      dest="fixed_numeric_width", default=None, metavar="NUM_WIDTH",
+                      help="fixed width for numeric values")
+    parser.add_option("--filter", 
+                      dest="filter_expr", default=None,
+                      metavar="FILTER-EXPRESSION",
+                      help="Python expression to filter messages that are printed. Expression can use Python builtins as well as m (the message) and topic (the topic name).")
+    parser.add_option("--nostr", 
+                      dest="nostr", default=False,
+                      action="store_true",
+                      help="exclude string fields")
+    parser.add_option("--noarr",
+                      dest="noarr", default=False,
+                      action="store_true",
+                      help="exclude arrays")
+    parser.add_option("-a", "--all",
+                      dest="all_topics", default=False,
+                      action="store_true",
+                      help="display all message in bag, only valid with -b option")
+    parser.add_option("-n", 
+                      dest="msg_count", default=None, metavar="COUNT",
+                      help="number of messages to echo")
+    parser.add_option("--offset",
+                      dest="offset_time", default=False,
+                      action="store_true",
+                      help="display time as offsets from current time (in seconds)")
+    parser.add_option("--output-directory",
+                      help="""The output directory to store the extracted data.
+                      Currently this is used (and required) only for images and
+                      LIDAR scans""")
 
-(options, args) = parser.parse_args(args)
-if len(args) > 1:
-    parser.error("you may only specify one input topic")
-if options.all_topics and not options.bag:
-    parser.error("Display all option is only valid when echoing from bag files")
-if options.offset_time and options.bag:
-    parser.error("offset time option is not valid with bag files")
-if options.all_topics:
-    topic = ''
-else:
-    if len(args) == 0:
-        parser.error("topic must be specified")        
-    topic = rosgraph.names.script_resolve_name('rostopic', args[0])
-    # suppressing output to keep it clean
+    (options, args) = parser.parse_args(args)
+    if not options.bag:
+        parser.error("The bag is required")
+    if len(args) > 1:
+        parser.error("you may only specify one input topic")
+    if options.offset_time:
+        parser.error("offset time option is not valid with bag files")
+    if options.all_topics:
+        topic = ''
+    else:
+        if len(args) == 0:
+            parser.error("topic must be specified")        
+        topic = rosgraph.names.script_resolve_name('rostopic', args[0])
+        # suppressing output to keep it clean
 
-filter_fn = None
-if options.filter_expr:
-    filter_fn = expr_eval(options.filter_expr)
+    try:
+        options.msg_count = int(options.msg_count) if options.msg_count else None
+    except ValueError:
+        parser.error("COUNT must be an integer")
 
-try:
-    msg_count = int(options.msg_count) if options.msg_count else None
-except ValueError:
-    parser.error("COUNT must be an integer")
+    try:
+        options.fixed_numeric_width = int(options.fixed_numeric_width) if options.fixed_numeric_width else None
+        if options.fixed_numeric_width is not None and options.fixed_numeric_width < 2:
+            parser.error("Fixed width for numeric values must be at least 2")
+    except ValueError:
+        parser.error("NUM_WIDTH must be an integer")
 
-try:
-    fixed_numeric_width = int(options.fixed_numeric_width) if options.fixed_numeric_width else None
-    if fixed_numeric_width is not None and fixed_numeric_width < 2:
-        parser.error("Fixed width for numeric values must be at least 2")
-except ValueError:
-    parser.error("NUM_WIDTH must be an integer")
-
-field_filter_fn = create_field_filter(options.nostr, options.noarr)
-
-callback_echo = CallbackEcho(topic,
-                             filter_fn=filter_fn,
-                             echo_all_topics=options.all_topics,
-                             offset_time=options.offset_time, count=msg_count,
-                             field_filter_fn=field_filter_fn,
-                             fixed_numeric_width=fixed_numeric_width,
-                             output_directory=options.output_directory)
-_rostopic_echo(topic, callback_echo, bag_file=options.bag)
+    debag(options.bag,
+          topic,
+          fixed_numeric_width = options.fixed_numeric_width,
+          filter_expr         = options.filter_expr,
+          nostr               = options.nostr,
+          noarr               = options.noarr,
+          all_topics          = options.all_topics,
+          msg_count           = options.msg_count,
+          offset_time         = options.offset_time,
+          output_directory    = options.output_directory)
