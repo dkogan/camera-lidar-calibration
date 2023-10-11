@@ -36,6 +36,15 @@
 
 # This is a hacked "rostopic echo" to produce .vnl with binary data in separate
 # files
+#
+# The repo with patches is here:
+#   https://nora.jpl.nasa.gov/common/python3-rostopic/-/tree/patch-queue/master
+#
+# It is a fork off the Debian ROS comm package:
+#   https://salsa.debian.org/science-team/ros-ros-comm.git
+#
+# The patches are in our patch-queue/master branch
+
 import os
 import sys
 import traceback
