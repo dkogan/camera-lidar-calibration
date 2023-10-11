@@ -107,7 +107,6 @@ import vnlog
 import json
 import pcl
 import scipy.optimize
-import subprocess
 import io
 import cv2
 import pickle
@@ -120,6 +119,8 @@ if not hasattr(mrgingham, "find_board"):
     print("mrginham too old. Need at least 1.24",
           file=sys.stderr)
     sys.exit(1)
+
+import debag
 
 
 # from mrcal/scales.h:
@@ -1010,25 +1011,21 @@ def fit( # shape (Nobservations_camera,2)
 
     return state
 
-def slurp_rostopic_echo(bag, topic,
-                        *rostopic_args,
-                        filter = None):
-    cmd = ('./debag.py',) + \
-          ((f'--filter={filter}',) if filter is not None else ()) + \
-          ( '-b', bag,
-            *rostopic_args,
-            '--output-directory', '/tmp',
-            topic )
+def read_first_message_in_bag(bag, topic,
+                              filter = None):
 
-    if True:
-        print(f"command: {' '.join(cmd)}")
-    metadata_string = subprocess.check_output( cmd )
-    return list(vnlog.vnlog(io.StringIO(metadata_string.decode())))
+    pipe = io.StringIO()
+    debag.debag(bag = bag,
+                topic = topic,
+                filter_expr         = filter,
+                msg_count           = 1,
+                output_directory    = "/tmp",
+                output_pipe         = pipe)
+    pipe.seek(0)
+    return list(vnlog.vnlog(pipe))
 
 def chessboard_corners(bag, camera_topic):
-    metadata = slurp_rostopic_echo(bag,
-                                   camera_topic,
-                                   '-n', '1',)
+    metadata = read_first_message_in_bag(bag, camera_topic)
 
     image_filename = metadata[0]['image']
     image = mrcal.load_image(image_filename,
@@ -1051,8 +1048,7 @@ def chessboard_corners(bag, camera_topic):
 def get_lidar_observation(bag, lidar_topic,
                           *,
                           what):
-    lidar_metadata = slurp_rostopic_echo(bag, lidar_topic,
-                                         '-n', '1')
+    lidar_metadata = read_first_message_in_bag(bag, lidar_topic)
     if len(lidar_metadata) == 0:
         raise Exception(f"Couldn't find lidar scan")
     if len(lidar_metadata) != 1:
