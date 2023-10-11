@@ -949,7 +949,7 @@ def fit( # shape (Nobservations_camera,2)
     # * 0 (default) : work silently.
     # * 1 : display a termination report.
     # * 2 : display progress during iterations (not supported by 'lm'
-    verbose = 0
+    verbose = 2
     res = scipy.optimize.least_squares(cost,
                                        seed,
                                        method  = 'dogbox',
