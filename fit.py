@@ -951,14 +951,12 @@ def fit( # shape (Nobservations_camera,2)
     # * 2 : display progress during iterations (not supported by 'lm'
     verbose = 0
     res = scipy.optimize.least_squares(cost,
-
                                        seed,
                                        method  = 'dogbox',
                                        verbose = verbose,
                                        kwargs = dict(use_distance_to_plane = True))
 
     res = scipy.optimize.least_squares(cost,
-
                                        res.x,
                                        method  = 'dogbox',
                                        verbose = verbose,
