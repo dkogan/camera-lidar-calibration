@@ -1173,7 +1173,7 @@ else:
     for ilidar in range(Nlidars):
         NlidarObservations_this = sum(0 if o[1][ilidar] is None else 1 for o in joint_observations)
         if NlidarObservations_this < 3:
-            print(f"I need at least 3 observations of each lidar to unambiguously set the translation (the set of all plane normals must span R^3). Got only {len(NlidarObservations_this)} for lidar {ilidar} from {args.lidar_topic[ilidar]}",
+            print(f"I need at least 3 observations of each lidar to unambiguously set the translation (the set of all plane normals must span R^3). Got only {NlidarObservations_this} for lidar {ilidar} from {args.lidar_topic[ilidar]}",
                   file=sys.stderr)
             sys.exit(1)
 
