@@ -1013,10 +1013,9 @@ def fit( # shape (Nobservations_camera,2)
 def slurp_rostopic_echo(bag, topic,
                         *rostopic_args,
                         filter = None):
-    cmd = ('rostopic', 'echo',) + \
+    cmd = ('./debag.py',) + \
           ((f'--filter={filter}',) if filter is not None else ()) + \
-          ( '-p',
-            '-b', bag,
+          ( '-b', bag,
             *rostopic_args,
             '--output-directory', '/tmp',
             topic )
