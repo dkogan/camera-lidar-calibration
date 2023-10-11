@@ -438,7 +438,8 @@ class CallbackEcho(object):
                  echo_all_topics=False,
                  offset_time=False, count=None,
                  field_filter_fn=None, fixed_numeric_width=None,
-                 output_directory = None):
+                 output_directory = None,
+                 output_pipe      = sys.stdout):
         """
         :param filter_fn: function that evaluates to ``True`` if message is to be echo'd, ``fn(topic, msg)``
         :param echo_all_topics: (optional) if ``True``, echo all messages in bag, ``bool``
@@ -453,6 +454,7 @@ class CallbackEcho(object):
         self.output_directory = output_directory
         self.filter_fn = filter_fn
         self.fixed_numeric_width = fixed_numeric_width
+        self.output_pipe = output_pipe
 
         self.echo_all_topics = echo_all_topics
         self.offset_time = offset_time
@@ -510,28 +512,26 @@ class CallbackEcho(object):
                 
             # data can be None if msg_eval returns None
             if data is not None:
-                # NOTE: we do all prints using direct writes to sys.stdout, which works better with piping
-                
                 self.count += 1
-                
+
                 # print fields header for plot
                 if self.first:
-                    sys.stdout.write("# "+_str_plot_fields(data, 'field', self.field_filter)+'\n')
+                    self.output_pipe.write("# "+_str_plot_fields(data, 'field', self.field_filter)+'\n')
                     self.first = False
 
                 if self.offset_time:
-                    sys.stdout.write(_str_plot(data, time_offset=rospy.get_rostime(),
-                                               current_time=current_time, field_filter=self.field_filter,
-                                               type_information=type_information, fixed_numeric_width=self.fixed_numeric_width,
-                                               output_directory=self.output_directory) + '\n')
+                    self.output_pipe.write(_str_plot(data, time_offset=rospy.get_rostime(),
+                                                     current_time=current_time, field_filter=self.field_filter,
+                                                     type_information=type_information, fixed_numeric_width=self.fixed_numeric_width,
+                                                     output_directory=self.output_directory) + '\n')
                 else:
-                    sys.stdout.write(_str_plot(data,
-                                               current_time=current_time, field_filter=self.field_filter,
-                                               type_information=type_information, fixed_numeric_width=self.fixed_numeric_width,
-                                               output_directory=self.output_directory) + '\n')
+                    self.output_pipe.write(_str_plot(data,
+                                                     current_time=current_time, field_filter=self.field_filter,
+                                                     type_information=type_information, fixed_numeric_width=self.fixed_numeric_width,
+                                                     output_directory=self.output_directory) + '\n')
 
                 # we have to flush in order before piping to work
-                sys.stdout.flush()
+                self.output_pipe.flush()
             # #2778 : have to check count after incr to set done flag
             if self.max_count is not None and self.count >= self.max_count:
                 self.done = True
@@ -581,11 +581,13 @@ def debag(bag,
           all_topics          = False,
           msg_count           = None,
           offset_time         = False,
-          output_directory    = "/tmp"):
+          output_directory    = "/tmp",
+          output_pipe         = sys.stdout):
     r'''The main function in this module
 
-    The input is a file on disk. Output is text on standard output and possibly
+    The input is a file on disk. Output is text on the output_pipe and possibly
     more files on disk
+
     '''
 
     def create_field_filter(echo_nostr, echo_noarr):
@@ -619,7 +621,8 @@ def debag(bag,
                                  offset_time=offset_time, count=msg_count,
                                  field_filter_fn=field_filter_fn,
                                  fixed_numeric_width=fixed_numeric_width,
-                                 output_directory=output_directory)
+                                 output_directory=output_directory,
+                                 output_pipe = output_pipe)
     _rostopic_echo(topic, callback_echo, bag_file=bag)
 
 
