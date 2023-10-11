@@ -886,6 +886,9 @@ def _sub_str_plot(val, time_offset, field_filter, output_directory):
                         raise Exception("Only scalar types supported. I don't know how to specify both an offset AND a count in a dtype")
                     dtype_dict[f.name] = (types[f.datatype], f.offset)
 
+                dtype_dict['pad'] = (np.uint8,47)
+                dtype = np.dtype(dtype_dict, align=True)
+
                 points = \
                     np.frombuffer(val.data, dtype = dtype)
 
@@ -898,7 +901,8 @@ def _sub_str_plot(val, time_offset, field_filter, output_directory):
 
                 np.savetxt(filename, points,
                            header = ' '.join(dtype.names),
-                           fmt    = [fmts[types[f.datatype]] for f in val.fields])
+                           fmt    = [fmts[types[f.datatype]] for f in val.fields] + ["%d",])
+
 
                 _sub_str_plot.i_points = i_points + 1
 
