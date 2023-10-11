@@ -985,6 +985,23 @@ def fit( # shape (Nobservations_camera,2)
                 hardcopy = filename)
         print(f"Wrote '{filename}'")
 
+        filename = '/tmp/residuals-histogram.gp'
+        gp.plot( (x_camera*SCALE_MEASUREMENT_PX,
+                  dict(histogram=True,
+                       binwidth = SCALE_MEASUREMENT_PX/10,
+                       xrange   = (-3*SCALE_MEASUREMENT_PX,3*SCALE_MEASUREMENT_PX),
+                       xlabel   = "Camera residual (px)",
+                       ylabel   = "frequency")),
+                 (x_lidar*SCALE_MEASUREMENT_M,
+                  dict(histogram=True,
+                       binwidth = SCALE_MEASUREMENT_M/10,
+                       xrange   = (-3*SCALE_MEASUREMENT_M,3*SCALE_MEASUREMENT_M),
+                       xlabel   = "LIDAR residual (m)",
+                       ylabel   = "frequency")),
+                 multiplot='title "LIDAR-camera calibration residuals" layout 2,1',
+                 hardcopy = filename)
+        print(f"Wrote '{filename}'")
+
     return state
 
 def slurp_rostopic_echo(bag, topic,
