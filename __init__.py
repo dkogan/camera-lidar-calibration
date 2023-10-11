@@ -880,11 +880,11 @@ def _sub_str_plot(val, time_offset, field_filter, output_directory):
                          np.float64: '%.8f' }
 
 
-                # This is needed because numpy complains if I give it a one-element array
-                def dtype_element(f):
-                    if f.count == 1: return (f.name, types[f.datatype])
-                    return (f.name, types[f.datatype], f.count)
-                dtype = np.dtype([dtype_element(f) for f in val.fields])
+                dtype_dict = dict()
+                for f in val.fields:
+                    if f.count != 1:
+                        raise Exception("Only scalar types supported. I don't know how to specify both an offset AND a count in a dtype")
+                    dtype_dict[f.name] = (types[f.datatype], f.offset)
 
                 points = \
                     np.frombuffer(val.data, dtype = dtype)
