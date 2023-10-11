@@ -51,6 +51,11 @@ def parse_args():
                         help = '''If given, display ALL the points in the scene
                         to make it easier to orient ourselves''')
 
+    parser.add_argument('--viz-show-only-accepted',
+                        action='store_true',
+                        help = '''If given, only plot the frames where a board
+                        was found''')
+
     parser.add_argument('--cache',
                         default = '/tmp/lidar-camera-calibration-session.pickle',
                         help = '''The filename we use to store the results of
@@ -538,7 +543,8 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
             if mask_plane_keep is None:
                 mask_plane_keep = np.zeros( (len(points_plane),), dtype=bool)
 
-            if args.viz:
+            if args.viz and \
+               (not args.viz_show_only_accepted or np.any(mask_plane_keep)):
 
                 if np.any(mask_plane_keep): any_accepted = "-SOMEACCEPTED"
                 else:                       any_accepted = ""
