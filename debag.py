@@ -274,15 +274,29 @@ def _sub_str_plot(val, time_offset, field_filter, output_directory):
                 if output_directory is None:
                     raise Exception("Need valid --output-directory to write out the image vnl")
 
-                if val.encoding == 'mono8':
-                    if val.step != val.width:
-                        raise Exception(f"Got _sensor_msgs__Image.encoding == mono8. Expecting dense storage, but step != width: {val.step} != {val.width}")
-                    if len(val.data) != val.width*val.height:
-                        raise Exception(f"Got _sensor_msgs__Image.encoding == mono8. Expecting dense storage, but len(data) != width*height: {len(val.data)} != {val.width}*{val.height}")
+                if val.encoding == 'mono8' or \
+                   val.encoding == 'bgr8':
 
-                    image = \
-                        np.frombuffer(val.data,
-                                      dtype = np.uint8).reshape((val.height, val.width),)
+                    if val.encoding == 'mono8':
+                        if val.step != val.width:
+                            raise Exception(f"Got _sensor_msgs__Image.encoding == mono8. Expecting dense storage, but step != width: {val.step} != {val.width}")
+                        if len(val.data) != val.width*val.height:
+                            raise Exception(f"Got _sensor_msgs__Image.encoding == mono8. Expecting dense storage, but len(data) != width*height: {len(val.data)} != {val.width}*{val.height}")
+
+                        image = \
+                            np.frombuffer(val.data,
+                                          dtype = np.uint8).reshape((val.height, val.width),)
+
+                    else:
+                        if val.step != val.width*3:
+                            raise Exception(f"Got _sensor_msgs__Image.encoding == bgr8. Expecting dense storage, but step != width*3: {val.step} != {val.width*3}")
+                        if len(val.data) != val.width*val.height*3:
+                            raise Exception(f"Got _sensor_msgs__Image.encoding == bgr8. Expecting dense storage, but len(data) != width*height*3: {len(val.data)} != {val.width}*{val.height}*3")
+
+                        image = \
+                            np.frombuffer(val.data,
+                                          dtype = np.uint8).reshape((val.height, val.width, 3),)
+
                     directory      = f"{output_directory}/{val.header.frame_id}"
                     os.makedirs(directory, exist_ok = True)
 
@@ -299,7 +313,7 @@ def _sub_str_plot(val, time_offset, field_filter, output_directory):
                         ' ' + filename
 
                 else:
-                    raise Exception(f"I only support mono8 images for now. Got {val.encoding=}")
+                    raise Exception(f"I only support mono8 and bgr8 images for now. Got {val.encoding=}")
             elif type(val).__name__ == '_sensor_msgs__PointCloud2':
 
                 if output_directory is None:
