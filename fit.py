@@ -746,8 +746,8 @@ def fit_estimate( # shape (Nobservations_camera,2)
                                                pcamera_joint)
         # Errors are reported this way (Rt_lidar_camera=0) in the bleeding-edge mrcal
         # only. So I also check for Ncenter_camera_lidar_joint
-        if Ncenter_camera_lidar_joint < 4 or np.all(Rt_lidar_camera == 0):
-            raise Exception(f"Insufficient lidar-camera calibration data for camera {icamera}")
+        if Ncenter_camera_lidar_joint < 3 or np.all(Rt_lidar_camera == 0):
+            raise Exception(f"Insufficient lidar-camera calibration data for camera {icamera}. I have {Ncenter_camera_lidar_joint=}")
 
 
 
