@@ -641,6 +641,9 @@ def fit_estimate( # shape (Nobservations_camera,2)
 
     Same arguments as fit()'''
 
+    Nobservations_camera = len(indices_board_camera)
+    Nobservations_lidar  = len(indices_board_lidar)
+
     def get__Rt_camera_board(iobservation_camera, model):
         nonlocal q_observed_all
         q_observed = q_observed_all[iobservation_camera]
@@ -676,106 +679,308 @@ def fit_estimate( # shape (Nobservations_camera,2)
 
         return Rt_camera_board
 
+    def get__pcenter():
+
+        # The estimate of the center of the board, in board coords. This doesn't
+        # need to be precise. If the board has an even number of corners, I just
+        # take the nearest one'''
+        Nh,Nw = p_board_local.shape[:2]
+        p_center_board = p_board_local[Nh//2,Nw//2,:]
+
+        # shape (Nobservations_camera, 4,3)
+        Rt_camera_board_all = \
+            [ get__Rt_camera_board(i, models[indices_board_camera[i,1]]) \
+              for i in range(Nobservations_camera) ]
+
+        # shape (Nobservations_camera, 3)
+        pcenter_camera_all = \
+            [ mrcal.transform_point_Rt(Rt_camera_board_all[i], p_center_board) \
+              for i in range(Nobservations_camera) ]
+
+        # shape (Nobservations_lidar, 3)
+        pcenter_lidar_all = \
+            [ np.mean(plidar_all[i], axis=-2) \
+              for i in range(Nobservations_lidar) ]
+
+        return \
+            pcenter_camera_all, \
+            pcenter_lidar_all
 
 
 
-    if Nlidars != 1:
-        raise Exception("For now this implementation assumes Nlidars==1")
 
-    Nobservations_camera = len(indices_board_camera)
-    Nobservations_lidar  = len(indices_board_lidar)
-
-    # The estimate of the center of the board, in board coords. This doesn't
-    # need to be precise. If the board has an even number of corners, I just
-    # take the nearest one'''
-    Nh,Nw = p_board_local.shape[:2]
-    p_center_board = p_board_local[Nh//2,Nw//2,:]
-
-    # shape (Nobservations_camera, 4,3)
-    Rt_camera_board_all = \
-        [ get__Rt_camera_board(i, models[indices_board_camera[i,1]]) \
-          for i in range(Nobservations_camera) ]
-
-    # shape (Nobservations_camera, 3)
-    pcenter_camera_all = \
-        [ mrcal.transform_point_Rt(Rt_camera_board_all[i], p_center_board) \
-          for i in range(Nobservations_camera) ]
-
-    # shape (Nobservations_lidar, 3)
-    pcenter_lidar_all = \
-        [ np.mean(plidar_all[i], axis=-2) \
-          for i in range(Nobservations_lidar) ]
+    # shape (Nobservations_camera, 3), (Nobservations_lidar, 3)
+    (pcenter_camera_all, pcenter_lidar_all) = get__pcenter()
 
 
     # results go here
-    Rt_lidar_camera = np.zeros((Ncameras,4,3), dtype=float)
+    Rt_lidar0_camera = np.zeros((Ncameras, 4,3), dtype=float)
+    Rt_lidar0_lidar  = np.zeros((Nlidars-1,4,3), dtype=float)
+    Rt_lidar0_board  = np.zeros((Nboards,  4,3), dtype=float)
 
-    for icamera in range(Ncameras):
+
+
+    Nsensors = Ncameras + Nlidars
+
+    def pairwise_index(a,b,N = Nsensors):
+        # Conceptually I have an (N,N) symmetric matrix with a 0 diagonal. I
+        # store only the upper triangle: a 1D array of (N*(N-1)/2) values. This
+        # function returns the linear index into this array
+        #
+        # If a > b: a + b*N - sum(0..b) = a + b*N - b*(b+1)/2
+        if a>b: return a + b*N - b*(b+1)/2
+        else:   return b + a*N - a*(a+1)/2
+
+    def pairwise_N(N = Nsensors):
+        # I have an (N,N) symmetric matrix with a 0 diagonal. I store only the
+        # upper triangle: (N*(N-1)/2) values. This function returns the size of
+        # the linear array
+        return N*(N-1)//2
+
+    def connectivity_matrix():
+        r'''Returns a connectivity matrix of sensor observations
+
+        Returns a symmetric (Nsensor,Nsensor) matrix of integers, where each
+        entry contains the number of frames containing overlapping observations
+        for that pair of sensors.
+
+        The sensors are the lidars,cameras; in order
+
+        '''
+
+        def runs(x, what):
+            r'''Finds consecutive runs in a monotonically-increasing sequence
+
+            For each iteration yields (range0,range1, x)'''
+
+            dx = np.diff(x)
+            if np.any(dx < 0):
+                raise Exception(f"Looking for runs in {what}: must be monotonically increasing")
+            run_start = 1+np.nonzero(dx)[0]
+            N = len(run_start)
+
+            yield (0,run_start[0], x[0])
+            for i in range(N-1):
+                yield (run_start[i],run_start[i+1], x[run_start[i]])
+            yield (run_start[N-1],len(x), x[-1])
+
+        def observation_sets():
+
+            runs_camera = \
+                runs(indices_board_camera[:,0], "iboard from indices_board_camera")
+            runs_lidar = \
+                runs(indices_board_lidar[:,0], "iboard from indices_board_lidar")
+
+            run_camera = next(runs_camera, None)
+            run_lidar  = next(runs_lidar,  None)
+
+            while run_camera is not None or \
+                  run_lidar  is not None:
+
+                if run_camera is not None and \
+                   run_lidar  is not None and \
+                   run_camera[2] == run_lidar[2]:
+                    yield (indices_board_camera[run_camera[0]:run_camera[1],
+                                                1],
+                           indices_board_lidar[run_lidar[0]:run_lidar[1],
+                                               1],
+                           run_camera[2])
+                    run_camera = next(runs_camera, None)
+                    run_lidar  = next(runs_lidar,  None)
+                    continue
+
+                if run_lidar is None or \
+                   run_camera[2] < run_lidar[2]:
+                    yield (indices_board_camera[run_camera[0]:run_camera[1],
+                                                1],
+                           None,
+                           run_camera[2])
+                    run_camera  = next(runs_camera,  None)
+                    continue
+
+                if run_camera is None or \
+                   run_lidar[2] < run_camera[2]:
+                    yield (None,
+                           indices_board_lidar[run_lidar[0]:run_lidar[1],
+                                               1],
+                           run_lidar[2])
+                    run_lidar  = next(runs_lidar,  None)
+                    continue
+
+                raise Exception("Getting here is a bug")
+
+
+        connectivity = np.zeros( (pairwise_N(),), dtype=int )
+
+
+        for cameras,lidars,iboard in observations_sets():
+            for ic0 in range(len(cameras)-1):
+                for ic1 in range(ic0+1,len(cameras)):
+                    connectivity[ pairwise_index(Nlidars+cameras[ic0],
+                                                 Nlidars+cameras[ic1]) ] += 1
+            for il0 in range(len(lidars)-1):
+                for il1 in range(il0+1,len(lidars)):
+                    connectivity[ pairwise_index(lidars[il1],
+                                                 lidars[il0]) ] += 1
+            for ic in range(len(cameras)):
+                for il in range(len(lidars)):
+                    connectivity[ pairwise_index(lidars[il],
+                                                 Nlidars+cameras[ic])] += 1
+
+        return connectivity
+
+    def align_point_clouds(isensor0,isensor1):
+        xxxxx
+        # FINISH THIS. shared_frames[] should have the camera,lidar indices in
+        # the shared observations. connectivity_matrix() has this, but currently
+        # doesn't return it. It should
+        shared_frames[pairwise_index(isensor0,isensor1)] = xxx
+
+
+        ####### OLD STUFF. I'M GOING TO BE REUSING THIS ALMOST CERTAINLY
+
 
         # I allocate an upper bound
-        pcenter_camera_lidar_joint = np.zeros((Nboards,6), dtype=float)
-        Ncenter_camera_lidar_joint = 0
+        pcenter_cloud0_cloud1_joint = np.zeros((Nboards,6), dtype=float)
+        Ncenter_cloud0_cloud1_joint = 0
 
         mask_observation_camera = (indices_board_camera[:,1] == icamera)
 
         for iobservation_camera in range(Nobservations_camera):
-            iboard,icamera_here = indices_board_camera[iobservation_camera]
-            if icamera_here != icamera: continue
+            if indices_board_camera[iobservation_camera,1] != icamera:
+                continue
 
-            mask_observation_lidar = indices_board_lidar[:,0] == iboard
+            mask_observation_lidar = indices_board_lidar[:,0] == indices_board_camera[iobservation_camera,0]
             if not np.any(mask_observation_lidar):
                 continue
             iobservation_lidar = np.argmax(mask_observation_lidar)
 
-            pcenter_camera_lidar_joint[Ncenter_camera_lidar_joint,
+            pcenter_cloud0_cloud1_joint[Ncenter_cloud0_cloud1_joint,
                                        0:3] = pcenter_camera_all[iobservation_camera]
-            pcenter_camera_lidar_joint[Ncenter_camera_lidar_joint,
+            pcenter_cloud0_cloud1_joint[Ncenter_cloud0_cloud1_joint,
                                        3:6] = pcenter_lidar_all [iobservation_lidar ]
-            Ncenter_camera_lidar_joint += 1
+            Ncenter_cloud0_cloud1_joint += 1
 
 
         plidar_joint = \
-            pcenter_camera_lidar_joint[:Ncenter_camera_lidar_joint,
+            pcenter_cloud0_cloud1_joint[:Ncenter_cloud0_cloud1_joint,
                                        3:6]
         pcamera_joint = \
-            pcenter_camera_lidar_joint[:Ncenter_camera_lidar_joint,
+            pcenter_cloud0_cloud1_joint[:Ncenter_cloud0_cloud1_joint,
                                        0:3]
 
         Rt_lidar_camera[icamera] = \
             mrcal.align_procrustes_points_Rt01(plidar_joint,
                                                pcamera_joint)
         # Errors are reported this way (Rt_lidar_camera=0) in the bleeding-edge mrcal
-        # only. So I also check for Ncenter_camera_lidar_joint
-        if Ncenter_camera_lidar_joint < 3 or np.all(Rt_lidar_camera == 0):
-            raise Exception(f"Insufficient lidar-camera calibration data for camera {icamera}. I have {Ncenter_camera_lidar_joint=}")
+        # only. So I also check for Ncenter_cloud0_cloud1_joint
+        if Ncenter_cloud0_cloud1_joint < 3 or np.all(Rt_lidar_camera == 0):
+            raise Exception(f"Insufficient lidar-camera calibration data for camera {icamera}. I have {Ncenter_cloud0_cloud1_joint=}")
 
 
 
-    # I use the first available camera to seed each board pose
-    Rt_lidar_board        = np.zeros((Nboards,4,3), dtype=float)
-    have_Rt_lidar_board   = np.zeros((Nboards,), dtype=bool)
-    N_have_Rt_lidar_board = 0
-    for iobservation_camera in range(Nobservations_camera):
-        iboard,icamera = indices_board_camera[iobservation_camera]
-        if have_Rt_lidar_board[iboard]:
-            continue
-        Rt_lidar_board[iboard] = \
-            mrcal.compose_Rt(Rt_lidar_camera[icamera],
-                             Rt_camera_board_all[iobservation_camera])
-        have_Rt_lidar_board[iboard] = 1
-        N_have_Rt_lidar_board += 1
-        if N_have_Rt_lidar_board == Nboards:
-            break
-    if N_have_Rt_lidar_board < Nboards:
-        raise Exception("Insufficient data to seed the board poses")
+
+
+
+
+
+    def found_best_path_to_node(isensor1, isensor0):
+        '''A shortest path was found'''
+        if isensor1 == 0:
+            # This is the reference sensor. Nothing to do
+            return
+
+        Rt01 = align_point_clouds(isensor0,isensor1)
+
+        if isensor1 >= Nlidars:
+            icamera1 = isensor1 - Nlidars
+
+            if isensor0 >= Nlidars:
+                # from a camera to a camera
+                icamera0 = isensor0 - Nlidars
+                if not np.any(Rt_lidar0_camera[icamera0]):
+                    raise Exception(f"Computing pose of camera {icamera1} from camera {icamera0}, but the pose of camera {icamera0} is not initialized")
+                Rt_lidar0_camera[icamera1] = mrcal.compose_Rt(Rt_lidar0_camera[icamera0],
+                                                              Rt01)
+
+            else:
+                # from a lidar to a camera
+                ilidar0 = isensor0
+                if not np.any(Rt_lidar0_lidar[ilidar0]):
+                    raise Exception(f"Computing pose of camera {icamera1} from lidar {ilidar0}, but the pose of lidar {ilidar0} is not initialized")
+                Rt_lidar0_camera[icamera1] = mrcal.compose_Rt(Rt_lidar0_lidar[ilidar0],
+                                                              Rt01)
+        else:
+            ilidar1  = isensor1
+            if isensor0 >= Nlidars:
+                # from a camera to a lidar
+                icamera0 = isensor0 - Nlidars
+                if not np.any(Rt_lidar0_camera[icamera0]):
+                    raise Exception(f"Computing pose of lidar {ilidar1} from camera {icamera0}, but the pose of camera {icamera0} is not initialized")
+                Rt_lidar0_lidar[ilidar1] = mrcal.compose_Rt(Rt_lidar0_camera[icamera0],
+                                                            Rt01)
+
+            else:
+                # from a lidar to a lidar
+                ilidar0 = isensor0
+                if not np.any(Rt_lidar0_lidar[ilidar0]):
+                    raise Exception(f"Computing pose of lidar {ilidar1} from lidar {ilidar0}, but the pose of lidar {ilidar0} is not initialized")
+                Rt_lidar0_lidar[ilidar1] = mrcal.compose_Rt(Rt_lidar0_lidar[ilidar0],
+                                                            Rt01)
+
+    def cost_edge(isensor0, isensor1):
+        # I want to MINIMIZE cost, so I MAXIMIZE the shared frames count and
+        # MINIMIZE the hop count. Furthermore, I really want to minimize the
+        # number of hops, so that's worth many shared frames.
+        num_shared_frames = shared_frames[pairwise_index(isensor0,isensor1)]
+        cost = 100000 - num_shared_frames
+        assert(cost > 0) # dijkstra's algorithm requires this to be true
+        return cost
+
+    def neighbors(isensor0):
+        for isensor1 in range(Nsensors):
+            if isensor1 == isensor0 or \
+               shared_frames[pairwise_index(isensor1,isensor0)] == 0:
+                continue
+            yield isensor1
+
+    shared_frames = connectivity_matrix()
+
+
+    import mrcal.calibration
+    mrcal.calibration._traverse_sensor_connections \
+        ( Nsensors,
+          neighbors,
+          cost_edge,
+          found_best_path_to_node )
+
+    if any([x is None for x in Rt_0c]):
+        raise Exception("ERROR: Don't have complete camera observations overlap!\n" +
+                        f"Past-camera-0 Rt:\n{Rt_0c}\n"                             +
+                        f"Shared observations matrix:\n{shared_frames}\n")
+
+
+
+
+
+
+
+
+
+
 
     return \
-        dict(rt_ref_board  = nps.atleast_dims(mrcal.rt_from_Rt(Rt_lidar_board),
-                                              -2),
-             rt_camera_ref = nps.atleast_dims(mrcal.rt_from_Rt(mrcal.invert_Rt(Rt_lidar_camera)),
-                                              -2),
-             rt_lidar_ref  = nps.atleast_dims(mrcal.identity_rt(),
-                                              -2))
+        dict(rt_ref_board  = \
+                 nps.atleast_dims(mrcal.rt_from_Rt(Rt_lidar0_board),
+                                  -2),
+             rt_camera_ref = \
+                 nps.atleast_dims(mrcal.rt_from_Rt(mrcal.invert_Rt(Rt_lidar0_camera)),
+                                  -2),
+             rt_lidar_ref  = \
+                 nps.atleast_dims(nps.glue(mrcal.identity_rt(),
+                                           mrcal.rt_from_Rt(mrcal.invert_Rt(Rt_lidar0_lidar)),
+                                           axis = -2),
+                                  -2))
 
 
 def fit( # shape (Nobservations_camera,2)
