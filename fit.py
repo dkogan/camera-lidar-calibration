@@ -1,10 +1,31 @@
 #!/usr/bin/python3
 
-r'''Do thing
+r'''Calibrate a set of cameras and LIDARs into a common coordinate system
 
 SYNOPSIS
 
-  $ xxx
+  $ lidars=(/lidar/vl_points_0)
+  $ cameras=(/front/multisense/{{left,right}/image_mono_throttle,aux/image_color_throttle})
+
+  $ ./fit.py \
+      --lidar-topic  ${(j:,:)lidars}  \
+      --camera-topic ${(j:,:)cameras} \
+      --bag 'camera-lidar-*.bag'      \
+      --viz \
+      intrinsics/{left,right,aux}_camera/camera-0-OPENCV8.cameramodel
+
+  [ The tool chugs for a bit, and in the end produces diagnostics and the aligned ]
+  [ models                                                                        ]
+
+This tool computes a geometry-only calibration. It is assumed that the camera
+intrinsics have already been computed. The results are computed in the
+coordinate system of the first LIDAR. All the sensors must overlap each other
+transitively: every sensor doesn't need to overlap every other sensor, but there
+must be an overlapping path between each pair of sensors.
+
+The data comes from a set of ROS bags. Each bag is assumed to have captured a
+single frame (one set of images, LIDAR revolutions) of a stationary scene
+
 '''
 
 
