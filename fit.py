@@ -1084,16 +1084,16 @@ def fit( joint_observations,
     # - pose of cameras in the reference frame
     # - pose of lidars  in the reference frame
     istate_board_pose_0  = 0
-    Nstate_board_pose_0  = 6 * Nboards
-    istate_camera_pose_0 = istate_board_pose_0 + Nstate_board_pose_0
-    Nstate_camera_pose_0 = 6 * Ncameras
-    istate_lidar_pose_0  = istate_camera_pose_0 + Nstate_camera_pose_0
-    Nstate_lidar_pose_0  = 6 * (Nlidars-1) # lidar0 is the reference coord system
+    Nstate_board_pose    = 6 * Nboards
+    istate_camera_pose_0 = istate_board_pose_0 + Nstate_board_pose
+    Nstate_camera_pose   = 6 * Ncameras
+    istate_lidar_pose_0  = istate_camera_pose_0 + Nstate_camera_pose
+    Nstate_lidar_pose    = 6 * (Nlidars-1) # lidar0 is the reference coord system
 
     Nstate = \
-        Nstate_board_pose_0 + \
-        Nstate_camera_pose_0 + \
-        Nstate_lidar_pose_0
+        Nstate_board_pose + \
+        Nstate_camera_pose + \
+        Nstate_lidar_pose
 
     # The reference coordinate system is defined by the coord system of the
     # first lidar
@@ -1114,18 +1114,18 @@ def fit( joint_observations,
             dict(rt_ref_board = \
                  SCALE_RT_REF_BOARD * \
                  ( b[istate_board_pose_0:                                                          \
-                     istate_board_pose_0+Nstate_board_pose_0].reshape(Nstate_board_pose_0//6,6)), \
+                     istate_board_pose_0+Nstate_board_pose].reshape(Nstate_board_pose//6,6)), \
 
                  rt_camera_ref = \
                  SCALE_RT_CAMERA_REF * \
                  ( b[istate_camera_pose_0:                                                           \
-                    istate_camera_pose_0+Nstate_camera_pose_0].reshape(Nstate_camera_pose_0//6,6)),    \
+                    istate_camera_pose_0+Nstate_camera_pose].reshape(Nstate_camera_pose//6,6)),    \
 
                  rt_lidar_ref = \
                  nps.glue( mrcal.identity_rt(),
                            SCALE_RT_LIDAR_REF * \
                            ( b[istate_lidar_pose_0:                                                           \
-                               istate_lidar_pose_0+Nstate_lidar_pose_0].reshape(Nstate_lidar_pose_0//6,6)),
+                               istate_lidar_pose_0+Nstate_lidar_pose].reshape(Nstate_lidar_pose//6,6)),
                            axis = -2 ) )
 
     def cost(b, *,
