@@ -226,34 +226,28 @@ def _sub_str_plot_fields(val, f, field_filter):
     return None
 
 
-def _str_plot(val, time_offset=None, current_time=None, field_filter=None, type_information=None, fixed_numeric_width=None, output_directory = None):
+def _str_plot(val, current_time=None, field_filter=None, type_information=None, fixed_numeric_width=None, output_directory = None):
     """
     Convert value to matlab/octave-friendly vnl string representation.
 
     :param val: message
     :param current_time: current :class:`genpy.Time` to use if message does not contain its own timestamp.
-    :param time_offset: (optional) for time printed for message, print as offset against this :class:`genpy.Time`
     :param field_filter: filter the fields that are stringified for Messages, ``fn(Message)->iter(str)``
     :returns: comma-separated list of field values in val, ``str``
     """
-        
-    s = _sub_str_plot(val, time_offset, field_filter, output_directory)
+
+    s = _sub_str_plot(val, field_filter, output_directory)
     if s is None:
         s = ''
 
-    if time_offset is not None:
-        time_offset = time_offset.to_nsec()
-    else:
-        time_offset = 0            
-        
     if current_time is not None:
-        return "%s %s"%(current_time.to_nsec()-time_offset, s)
+        return "%s %s"%(current_time.to_nsec(), s)
     elif getattr(val, "_has_header", False):
-        return "%s %s"%(val.header.stamp.to_nsec()-time_offset, s)
+        return "%s %s"%(val.header.stamp.to_nsec(), s)
     else:
-        return "%s %s"%(rospy.get_rostime().to_nsec()-time_offset, s)
+        return "%s %s"%(rospy.get_rostime().to_nsec(), s)
 
-def _sub_str_plot(val, time_offset, field_filter, output_directory):
+def _sub_str_plot(val, field_filter, output_directory):
     """Helper routine for _str_plot."""
     # vnl
     type_ = type(val)
@@ -262,10 +256,7 @@ def _sub_str_plot(val, time_offset, field_filter, output_directory):
         return '1' if val else '0'
     elif type_ in (int, long, float) or \
            isinstance(val, genpy.TVal):
-        if time_offset is not None and isinstance(val, genpy.Time):
-            return str(val-time_offset)
-        else:
-            return str(val)    
+        return str(val)
     elif hasattr(val, "_slot_types"):
         if field_filter is not None:
 
@@ -309,7 +300,7 @@ def _sub_str_plot(val, time_offset, field_filter, output_directory):
                     fields = ['header', 'image']
 
                     return \
-                        _sub_str_plot(_convert_getattr(val, 'header', 'std_msgs/Header'), time_offset, field_filter, output_directory) + \
+                        _sub_str_plot(_convert_getattr(val, 'header', 'std_msgs/Header'), field_filter, output_directory) + \
                         ' ' + filename
 
                 else:
@@ -397,7 +388,7 @@ def _sub_str_plot(val, time_offset, field_filter, output_directory):
                 fields = ['header', 'points']
 
                 return \
-                    _sub_str_plot(_convert_getattr(val, 'header', 'std_msgs/Header'), time_offset, field_filter, output_directory) + \
+                    _sub_str_plot(_convert_getattr(val, 'header', 'std_msgs/Header'), field_filter, output_directory) + \
                     ' ' + filename
 
             else:
@@ -405,7 +396,7 @@ def _sub_str_plot(val, time_offset, field_filter, output_directory):
         else:
             fields = val.__slots__            
 
-        sub = (_sub_str_plot(_convert_getattr(val, f, t), time_offset, field_filter, output_directory) for f,t in zip(val.__slots__, val._slot_types) if f in fields)
+        sub = (_sub_str_plot(_convert_getattr(val, f, t), field_filter, output_directory) for f,t in zip(val.__slots__, val._slot_types) if f in fields)
         sub = [s for s in sub if s is not None]
         if sub:
             return ' '.join(sub)
@@ -425,7 +416,7 @@ def _sub_str_plot(val, time_offset, field_filter, output_directory):
         elif _isstring_type(type0):
             return ' '.join([v for v in val])            
         elif hasattr(val0, "_slot_types"):
-            sub = [s for s in [_sub_str_plot(v, time_offset, field_filter, output_directory) for v in val] if s is not None]
+            sub = [s for s in [_sub_str_plot(v, field_filter, output_directory) for v in val] if s is not None]
             if sub:
                 return ' '.join([s for s in sub])
     return None
@@ -450,14 +441,13 @@ class CallbackEcho(object):
 
     def __init__(self, topic, filter_fn=None,
                  echo_all_topics=False,
-                 offset_time=False, count=None,
+                 count=None,
                  field_filter_fn=None, fixed_numeric_width=None,
                  output_directory = None,
                  output_pipe      = sys.stdout):
         """
         :param filter_fn: function that evaluates to ``True`` if message is to be echo'd, ``fn(topic, msg)``
         :param echo_all_topics: (optional) if ``True``, echo all messages in bag, ``bool``
-        :param offset_time: (optional) if ``True``, display time as offset from current time, ``bool``
         :param count: number of messages to echo, ``None`` for infinite, ``int``
         :param field_filter_fn: filter the fields that are stringified for Messages, ``fn(Message)->iter(str)``
         :param fixed_numeric_width: fixed width for numeric values, ``None`` for automatic, ``int``
@@ -471,7 +461,6 @@ class CallbackEcho(object):
         self.output_pipe = output_pipe
 
         self.echo_all_topics = echo_all_topics
-        self.offset_time = offset_time
 
         # done tracks when we've exceeded the count
         self.done = False
@@ -533,16 +522,10 @@ class CallbackEcho(object):
                     self.output_pipe.write("# "+_str_plot_fields(data, 'field', self.field_filter)+'\n')
                     self.first = False
 
-                if self.offset_time:
-                    self.output_pipe.write(_str_plot(data, time_offset=rospy.get_rostime(),
-                                                     current_time=current_time, field_filter=self.field_filter,
-                                                     type_information=type_information, fixed_numeric_width=self.fixed_numeric_width,
-                                                     output_directory=self.output_directory) + '\n')
-                else:
-                    self.output_pipe.write(_str_plot(data,
-                                                     current_time=current_time, field_filter=self.field_filter,
-                                                     type_information=type_information, fixed_numeric_width=self.fixed_numeric_width,
-                                                     output_directory=self.output_directory) + '\n')
+                self.output_pipe.write(_str_plot(data,
+                                                 current_time=current_time, field_filter=self.field_filter,
+                                                 type_information=type_information, fixed_numeric_width=self.fixed_numeric_width,
+                                                 output_directory=self.output_directory) + '\n')
 
                 # we have to flush in order before piping to work
                 self.output_pipe.flush()
@@ -594,7 +577,6 @@ def debag(bag,
           noarr               = False,
           all_topics          = False,
           msg_count           = None,
-          offset_time         = False,
           output_directory    = "/tmp",
           output_pipe         = sys.stdout):
     r'''The main function in this module
@@ -632,7 +614,7 @@ def debag(bag,
     callback_echo = CallbackEcho(topic,
                                  filter_fn=filter_fn,
                                  echo_all_topics=all_topics,
-                                 offset_time=offset_time, count=msg_count,
+                                 count=msg_count,
                                  field_filter_fn=field_filter_fn,
                                  fixed_numeric_width=fixed_numeric_width,
                                  output_directory=output_directory,
@@ -670,10 +652,6 @@ if __name__ == "__main__":
     parser.add_option("-n", 
                       dest="msg_count", default=None, metavar="COUNT",
                       help="number of messages to echo")
-    parser.add_option("--offset",
-                      dest="offset_time", default=False,
-                      action="store_true",
-                      help="display time as offsets from current time (in seconds)")
     parser.add_option("--output-directory",
                       help="""The output directory to store the extracted data.
                       Currently this is used (and required) only for images and
@@ -684,8 +662,6 @@ if __name__ == "__main__":
         parser.error("The bag is required")
     if len(args) > 1:
         parser.error("you may only specify one input topic")
-    if options.offset_time:
-        parser.error("offset time option is not valid with bag files")
     if options.all_topics:
         topic = ''
     else:
@@ -714,5 +690,4 @@ if __name__ == "__main__":
           noarr               = options.noarr,
           all_topics          = options.all_topics,
           msg_count           = options.msg_count,
-          offset_time         = options.offset_time,
           output_directory    = options.output_directory)
