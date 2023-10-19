@@ -626,10 +626,7 @@ if __name__ == "__main__":
 
     args = sys.argv[1:]
     from optparse import OptionParser
-    parser = OptionParser(usage="usage: %prog echo [options] /topic", prog=sys.argv[0])
-    parser.add_option("-b", "--bag",
-                      dest="bag",
-                      help="echo messages from .bag file", metavar="BAGFILE")
+    parser = OptionParser(usage="usage: %prog [options] BAG [TOPIC]", prog=sys.argv[0])
     parser.add_option("-w",
                       dest="fixed_numeric_width", default=None, metavar="NUM_WIDTH",
                       help="fixed width for numeric values")
@@ -658,17 +655,19 @@ if __name__ == "__main__":
                       LIDAR scans""")
 
     (options, args) = parser.parse_args(args)
-    if not options.bag:
-        parser.error("The bag is required")
-    if len(args) > 1:
-        parser.error("you may only specify one input topic")
     if options.all_topics:
+        if len(args) != 1:
+            parser.error("--all passed: the options must be followed by 'BAG'")
+
+        bag   = args[0]
         topic = ''
     else:
-        if len(args) == 0:
-            parser.error("topic must be specified")        
-        topic = rosgraph.names.script_resolve_name('rostopic', args[0])
-        # suppressing output to keep it clean
+        if len(args) != 2:
+            parser.error("The options must be followed by 'BAG TOPIC'")
+
+        bag   = args[0]
+        topic = rosgraph.names.script_resolve_name('rostopic', args[1])
+
 
     try:
         options.msg_count = int(options.msg_count) if options.msg_count else None
@@ -682,8 +681,7 @@ if __name__ == "__main__":
     except ValueError:
         parser.error("NUM_WIDTH must be an integer")
 
-    debag(options.bag,
-          topic,
+    debag(bag, topic,
           fixed_numeric_width = options.fixed_numeric_width,
           filter_expr         = options.filter_expr,
           nostr               = options.nostr,
