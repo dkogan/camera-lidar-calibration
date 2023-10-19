@@ -135,6 +135,7 @@ import pickle
 sys.path[:0] = '/home/dima/projects/mrcal',
 import mrcal
 import mrcal.calibration
+import mrcal.utils
 
 import mrgingham
 if not hasattr(mrgingham, "find_board"):
@@ -160,9 +161,16 @@ SCALE_RT_CAMERA_REF= np.array((SCALE_ROTATION_CAMERA,    SCALE_ROTATION_CAMERA, 
                                SCALE_TRANSLATION_CAMERA, SCALE_TRANSLATION_CAMERA,SCALE_TRANSLATION_FRAME,))
 SCALE_RT_LIDAR_REF = SCALE_RT_CAMERA_REF
 
-SCALE_MEASUREMENT_PX = 0.15  # expected noise levels
-SCALE_MEASUREMENT_M  = 0.015 # expected noise levels
-
+SCALE_MEASUREMENT_PX                = 0.15   # expected noise levels
+SCALE_MEASUREMENT_M                 = 0.015  # expected noise levels
+SCALE_MEASUREMENT_REGULARIZATION_r  = 100.   # rad
+SCALE_MEASUREMENT_REGULARIZATION_t  = 10000. # meters
+SCALE_MEASUREMENT_REGULARIZATION_rt = np.array((SCALE_MEASUREMENT_REGULARIZATION_r,
+                                                SCALE_MEASUREMENT_REGULARIZATION_r,
+                                                SCALE_MEASUREMENT_REGULARIZATION_r,
+                                                SCALE_MEASUREMENT_REGULARIZATION_t,
+                                                SCALE_MEASUREMENT_REGULARIZATION_t,
+                                                SCALE_MEASUREMENT_REGULARIZATION_t))
 
 
 
@@ -1029,19 +1037,41 @@ def fit_estimate( joint_observations,
     for iboard in range(len(joint_observations)):
         q_observed_all = joint_observations[iboard][0]
 
-        icamera = next((i for i in range(len(q_observed_all)) if q_observed_all[i] is not None),
-                       None)
-        if icamera is not None:
-            # we have some camera observation
+        icamera_first = \
+            next((i for i in range(len(q_observed_all)) if q_observed_all[i] is not None),
+                 None)
+        if icamera_first is not None:
+            # We have some camera observation. I arbitrarily use the first one
 
             Rt_lidar0_board[iboard] = \
-                mrcal.compose_Rt(Rt_lidar0_camera[icamera],
-                                 Rt_camera_board_cache[iboard,icamera])
+                mrcal.compose_Rt(Rt_lidar0_camera[icamera_first],
+                                 Rt_camera_board_cache[iboard,icamera_first])
 
         else:
-            # this board is observed only by LIDARs
-            raise Exception("Seeding for LIDAR-only cameras not yet supported")
+            # This board is observed only by LIDARs
+            plidar_all = joint_observations[iboard][1]
+            ilidar_first = \
+                next((i for i in range(len(plidar_all)) if plidar_all[i] is not None),
+                     None)
+            if ilidar_first is not None:
+                raise Exception(f"Getting here is a bug: no camera or lidar observations for {iboard=}")
 
+            plidar = plidar_all[ilidar_first]
+            plidar_mean = np.mean(plidar, axis=-2)
+            p = plidar - plidar_mean
+            n = mrcal.utils._sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
+            # I have the normal to the board, in lidar coordinates. Compute an
+            # arbitrary rotation that matches this normal. This is unique only
+            # up to yaw
+            Rt_board_lidar = np.zeros((4,3), dtype=float)
+            Rt_board_lidar[:3,:] = rotation_any_v_to_z(n)
+            # I want p_center_board to map to plidar_mean: R_board_lidar
+            # plidar_mean + t_board_lidar = p_center_lidar
+            Rt_board_lidar[3,:] = p_center_lidar - mrcal.rotate_point_R(Rt_board_lidar[:3,:],plidar_mean)
+
+            Rt_lidar0_board[iboard] = \
+                mrcal.compose_Rt(Rt_lidar0_lidar[ilidar_first],
+                                 mrcal.invert_Rt(Rt_board_lidar))
 
     return \
         dict(rt_ref_board  = \
@@ -1073,9 +1103,22 @@ def fit( joint_observations,
     # q_observed is a list of board corners; one per camera; some could be None
     # p_lidar is a list of lidar points on the board; one per lidar; some could be None
 
+    # the measurement vector is [camera errors, lidar errors, regularization]
+    #
+    # The regularization lightly pulls every element of rt_ref_board towards
+    # zero. This is necessary because LIDAR-only observations of the board have
+    # only 3 DOF: the board is free to translate and yaw in its plane. I can
+    # accomplish the same thing with a different T_ref_board representation for
+    # LIDAR-only observations: (n,d). That disparate representation would take
+    # more typing, so I don't do that just yet
+    Nmeas_regularization = 6*Nboards
     Nmeasurements = \
         Nmeas_camera_observation_all + \
-        Nmeas_lidar_observation_all
+        Nmeas_lidar_observation_all  + \
+        Nmeas_regularization
+    imeas_camera_0         = 0
+    imeas_lidar_0          = imeas_camera_0 + Nmeas_camera_observation_all
+    imeas_regularization_0 = imeas_lidar_0 + Nmeas_lidar_observation_all
 
     # I have some number of cameras and some number of lidars. They each
     # observe a chessboard that moves around. At each instant in time the
@@ -1225,6 +1268,20 @@ def fit( joint_observations,
                         (dlidar_predicted - dlidar) / SCALE_MEASUREMENT_M
                 imeas += Nmeas_here
 
+        # Regularization
+        Nmeas_here = Nboards*6
+
+        x[imeas:imeas+Nmeas_here] = \
+            (state['rt_ref_board'] / SCALE_MEASUREMENT_REGULARIZATION_rt).ravel()
+        imeas += Nmeas_here
+
+        for iboard in range(len(joint_observations)):
+                rt_ref_board = state['rt_ref_board'][iboard]
+
+
+        if imeas != Nmeasurements:
+            raise Exception(f"cost() wrote an unexpected number of measurements: {imeas=}, {Nmeasurements=}")
+
         return x
 
 
@@ -1257,20 +1314,31 @@ def fit( joint_observations,
 
     if True:
         x = cost(b, use_distance_to_plane = False)
-        x_camera = x[:Nmeas_camera_observation_all]
-        x_lidar  = x[Nmeas_camera_observation_all:]
+        x_camera = \
+            x[imeas_camera_0:
+              imeas_camera_0+Nmeas_camera_observation_all]
+        x_lidar  = \
+            x[imeas_lidar_0:
+              imeas_lidar_0+Nmeas_lidar_observation_all]
+        x_regularization = \
+            x[imeas_regularization_0:
+              imeas_regularization_0+Nmeas_regularization]
         print(f"RMS fit error: {np.sqrt(np.mean(x*x)):.2f} normalized units")
         print(f"RMS fit error (camera): {np.sqrt(np.mean(x_camera*x_camera))*SCALE_MEASUREMENT_PX:.3f} pixels")
         print(f"RMS fit error (lidar): {(np.sqrt(np.mean(x_lidar *x_lidar ))*SCALE_MEASUREMENT_M):.3f} m")
+        print(f"norm2(error_regularization)/norm2(error): {nps.norm2(x_regularization)/nps.norm2(x):.3f} m")
 
         filename = '/tmp/residuals.gp'
-        gp.plot((np.arange(0,Nmeas_camera_observation_all),
+        gp.plot((imeas_camera_0 + np.arange(Nmeas_camera_observation_all),
                  x_camera*SCALE_MEASUREMENT_PX,
                  dict(legend = "Camera residuals")),
-                (np.arange(Nmeas_camera_observation_all,Nmeasurements),
+                (imeas_lidar_0 + np.arange(Nmeas_lidar_observation_all),
                  x_lidar*SCALE_MEASUREMENT_M,
                  dict(legend = "LIDAR residuals",
                       y2     = True)),
+                (imeas_regularization_0 + np.arange(Nmeas_regularization),
+                 x_regularization*SCALE_MEASUREMENT_PX,
+                 dict(legend = "Regularization residuals; plotted in pixels on the left y axis")),
                 _with = 'points',
                 ylabel  = 'Camera fit residual (pixels)',
                 y2label = 'LIDAR fit residual (m)',
