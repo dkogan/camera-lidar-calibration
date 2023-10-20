@@ -152,7 +152,7 @@ def cloud_to_plane_fit(p):
 
     # I have the normal n to the plane
 
-    R_board_world = mrcal.rotation_any_v_to_z(n)
+    R_board_world = mrcal.R_aligned_to_vector(n)
     return mrcal.rotate_point_R(R_board_world, p)
 
 def distance_between_furthest_pair_of_points(p):

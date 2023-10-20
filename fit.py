@@ -576,7 +576,7 @@ def fit_estimate( joint_observations,
             # arbitrary rotation that matches this normal. This is unique only
             # up to yaw
             Rt_board_lidar = np.zeros((4,3), dtype=float)
-            Rt_board_lidar[:3,:] = mrcal.rotation_any_v_to_z(n)
+            Rt_board_lidar[:3,:] = mrcal.R_aligned_to_vector(n)
             # I want p_center_board to map to plidar_mean: R_board_lidar
             # plidar_mean + t_board_lidar = p_center_lidar
             Rt_board_lidar[3,:] = p_center_lidar - mrcal.rotate_point_R(Rt_board_lidar[:3,:],plidar_mean)
