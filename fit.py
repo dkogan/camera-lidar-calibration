@@ -487,7 +487,10 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                             p_board_local,
                             *,
                             # identifying string
-                            what):
+                            what,
+                            viz                          = False,
+                            viz_show_only_accepted       = False,
+                            viz_show_point_cloud_context = False):
 
     if rt_lidar_board__estimate is not None:
         # shape (N,3)
@@ -574,8 +577,8 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
             if mask_plane_keep is None:
                 mask_plane_keep = np.zeros( (len(points_plane),), dtype=bool)
 
-            if args.viz and \
-               (not args.viz_show_only_accepted or np.any(mask_plane_keep)):
+            if viz and \
+               (not viz_show_only_accepted or np.any(mask_plane_keep)):
 
                 if np.any(mask_plane_keep): any_accepted = "-SOMEACCEPTED"
                 else:                       any_accepted = ""
@@ -612,7 +615,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                          wait      = True)
 
 
-                if args.viz_show_point_cloud_context:
+                if viz_show_point_cloud_context:
                     mask_cluster = np.zeros( (len(points),), dtype=bool)
                     mask_cluster[idx_cluster] = True
                     plot_tuples = \
@@ -1402,7 +1405,10 @@ def chessboard_corners(bag, camera_topic):
 
 def get_lidar_observation(bag, lidar_topic,
                           *,
-                          what):
+                          what,
+                          viz                          = False,
+                          viz_show_only_accepted       = False,
+                          viz_show_point_cloud_context = False):
     lidar_metadata = read_first_message_in_bag(bag, lidar_topic)
     if len(lidar_metadata) == 0:
         raise Exception(f"Couldn't find lidar scan")
@@ -1416,7 +1422,10 @@ def get_lidar_observation(bag, lidar_topic,
             find_chessboard_in_view(None,
                                     lidar_points_filename,
                                     p_board_local,
-                                    what = what)
+                                    what = what,
+                                    viz                          = viz,
+                                    viz_show_only_accepted       = viz_show_only_accepted,
+                                    viz_show_point_cloud_context = viz_show_point_cloud_context)
     except Exception as e:
         print(f"No unambiguous board observation found for observation at {what=}: {e}")
         return None
@@ -1438,7 +1447,10 @@ def get_joint_observation(bag):
     p_lidar = \
         [ get_lidar_observation(bag,
                                 args.lidar_topic[ilidar],
-                                what = what) \
+                                what = what,
+                                viz                          = args.viz,
+                                viz_show_only_accepted       = args.viz_show_only_accepted,
+                                viz_show_point_cloud_context = args.viz_show_point_cloud_context) \
           for ilidar in range(Nlidars)]
 
     if all(x is None for x in q_observed) and \
