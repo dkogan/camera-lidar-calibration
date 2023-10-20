@@ -606,7 +606,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                          xlabel = 'x',
                          ylabel = 'y',
                          zlabel = 'z',
-                         title = f"Cluster {i_cluster}",
+                         title = f"{what}: {i_cluster=} {i_subcluster=}",
                          _3d       = True,
                          square    = True,
                          wait      = True)
