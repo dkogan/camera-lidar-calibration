@@ -365,11 +365,23 @@ def _sub_str_plot(val, field_filter, output_directory):
                         raise Exception("Only scalar types supported. I don't know how to specify both an offset AND a count in a dtype")
                     dtype_dict[f.name] = (types[f.datatype], f.offset)
 
-                dtype_dict['pad'] = (np.uint8,47)
-                dtype = np.dtype(dtype_dict, align=True)
+                dtype = np.dtype(dtype_dict)
 
-                points = \
-                    np.frombuffer(val.data, dtype = dtype)
+                # This is a hack. I don't know how to detect this reliably. So
+                # far I've seen two different LIDAR data formats:
+                #
+                #   itemsize = 22: requires no alignment or padding
+                #   itemsize = 34: requires padding up to the next multiple of 16: until 48
+                #
+                # I support those cases explicitly. Other cases may not work
+                has_padding = False
+
+                if dtype.itemsize == 34:
+                    has_padding = True
+                    dtype_dict['_padding'] = (np.uint8,47)
+                    dtype = np.dtype(dtype_dict)
+
+                points = np.frombuffer(val.data, dtype = dtype)
 
                 directory      = f"{output_directory}/{val.header.frame_id}"
                 os.makedirs(directory, exist_ok = True)
@@ -378,9 +390,11 @@ def _sub_str_plot(val, field_filter, output_directory):
                 except: i_points = 0
                 filename = f"{directory}/points{i_points:05d}.vnl"
 
+                fmt = [fmts[types[f.datatype]] for f in val.fields]
+                if has_padding: fmt += ["%d",]
                 np.savetxt(filename, points,
                            header = ' '.join(dtype.names),
-                           fmt    = [fmts[types[f.datatype]] for f in val.fields] + ["%d",])
+                           fmt    = fmt)
 
 
                 _sub_str_plot.i_points = i_points + 1
