@@ -571,7 +571,7 @@ def fit_estimate( joint_observations,
             plidar = plidar_all[ilidar_first]
             plidar_mean = np.mean(plidar, axis=-2)
             p = plidar - plidar_mean
-            n = mrcal.utils._sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
+            n = mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
             # I have the normal to the board, in lidar coordinates. Compute an
             # arbitrary rotation that matches this normal. This is unique only
             # up to yaw

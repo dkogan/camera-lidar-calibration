@@ -6,7 +6,6 @@ import numpysane as nps
 import gnuplotlib as gp
 
 import mrcal
-import mrcal.utils
 import vnlog
 import pcl
 import io
@@ -147,7 +146,7 @@ def cloud_to_plane_fit(p):
     p.shape is (N,3)
     '''
     p = p - np.mean(p, axis=-2)
-    l,v = mrcal.utils._sorted_eig(nps.matmult(p.T,p))
+    l,v = mrcal.sorted_eig(nps.matmult(p.T,p))
     n = v[:,0]
 
     # I have the normal n to the plane
