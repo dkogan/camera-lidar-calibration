@@ -199,6 +199,13 @@ def find_chessboard_in_plane_fit(points, ring,
     th_plane = np.arctan2(points_plane[:,1],
                           points_plane[:,0])
 
+    # I examined the data to confirm that the points come regularly at an
+    # even interval of:
+    dth = 0.2 * np.pi/180.
+    # Validated by making this plot, observing that with this dth I get
+    # integers with this plot:
+    #   gp.plot(np.diff(th_plane/dth))
+
     rings_plane_min = np.min(rings_plane)
     rings_plane_max = np.max(rings_plane)
 
@@ -243,7 +250,8 @@ def find_chessboard_in_plane_fit(points, ring,
                 continue
 
         th_ring = th_plane[idx_ring]
-        idx_sort = np.argsort(th_ring)
+
+        # the data is pre-sorted, so th_ring is sorted as well
 
         # Below is logic to look for long continuous scans. Any missing points
         # indicate that we're in a noisy area that maybe isn't in the plane.
@@ -252,18 +260,12 @@ def find_chessboard_in_plane_fit(points, ring,
         # board. I'm enabling it because it works now
         if False:
             i0 = 0
-            i1 = len(idx_sort)-1
+            i1 = len(idx_ring)-1
         else:
-            # I examined the data to confirm that the points come regularly at an
-            # even interval of:
-            dth = 0.2 * np.pi/180.
-            # Validated by making this plot, observing that with this dth I get
-            # integers with this plot:
-            #   gp.plot(np.diff(np.sort(th_ring/dth)))
-            # So I make my dth, and any gap of > 1*dth means there was a gap in the
-            # plane scan. I look for the biggest interval with no BIG gaps. I
-            # allow small gaps (hence 3.5 and not 1.5)
-            diff_ring_plane_gap = np.diff(th_ring[idx_sort]/dth) > 3.5
+            # Any gap of > 1*dth means there was a gap in the plane scan. I look
+            # for the biggest interval with no BIG gaps. I allow small gaps
+            # (hence 3.5 and not 1.5)
+            diff_ring_plane_gap = np.diff(th_ring/dth) > 3.5
 
             # I look for the largest run of False in diff_ring_plane_gap
             # These are inclusive indices into diff(th)
@@ -277,13 +279,10 @@ def find_chessboard_in_plane_fit(points, ring,
             # I want to index th, not diff(th). Still inclusive indices
             i1 += 1
 
-        # indexes th_ring
-        idx_keep = idx_sort[i0:i1+1]
-
         # If the selected segment is too short, I throw it out as noise
         len_segment = \
-            nps.mag(points_plane[idx_ring[idx_keep[-1]]] - \
-                    points_plane[idx_ring[idx_keep[ 0]]])
+            nps.mag(points_plane[idx_ring[i1]] - \
+                    points_plane[idx_ring[i0]])
         if len_segment < 0.85:
             continue
         if len_segment > np.sqrt(2):
@@ -292,7 +291,7 @@ def find_chessboard_in_plane_fit(points, ring,
         mask_ring_accepted[iring_plane] = 1
 
         mask_plane_keep_per_ring[iring_plane] = np.zeros( (len(points_plane),), dtype=bool)
-        mask_plane_keep_per_ring[iring_plane][idx_ring[idx_keep]] = True
+        mask_plane_keep_per_ring[iring_plane][idx_ring[i0:i1+1]] = True
 
     if debug:
         import IPython
@@ -351,6 +350,14 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
 
 
     points, ring = load_lidar_points(lidar_points_vnl)
+    th           = np.arctan2( points[:,1], points[:,0] )
+
+    # I sort the points by ring and angle so that I can easily look at the
+    # "next" and "previous" points in a scan
+    i = np.argsort( th + ring*100 )
+    points = points[i]
+    ring   = ring  [i]
+    th     = th    [i]
 
     # Ignore all points > 5m away
     mask_near = nps.mag(points) < 5.
