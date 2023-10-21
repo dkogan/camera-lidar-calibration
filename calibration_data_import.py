@@ -352,7 +352,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     mask_near = nps.mag(points) < 5.
     idx_near  = np.nonzero(mask_near)[0]
 
-    cloud = pcl.PointCloud(points[mask_near].astype(np.float32))
+    cloud_near = pcl.PointCloud(points[mask_near].astype(np.float32))
 
     p_accepted = None
     p_accepted_multiple = False
@@ -360,7 +360,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     i_cluster             = -1
     i_cluster_accepted    = None
     i_subcluster_accepted = None
-    for idx_cluster in cluster_points(cloud,
+    for idx_cluster in cluster_points(cloud_near,
                                       cluster_tolerance = 0.5):
         # idx_cluster indexes points[idx_near]
         # Convert it to index points[]
