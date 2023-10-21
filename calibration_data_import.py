@@ -550,8 +550,8 @@ def get_lidar_observation(bag, lidar_topic,
         return \
             find_chessboard_in_view(None,
                                     lidar_points_filename,
-                                    p_board_local,
-                                    what = what,
+                                    p_board_local = p_board_local,
+                                    what          = what,
                                     viz                          = viz,
                                     viz_show_only_accepted       = viz_show_only_accepted,
                                     viz_show_point_cloud_context = viz_show_point_cloud_context)
