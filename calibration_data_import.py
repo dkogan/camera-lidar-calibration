@@ -9,6 +9,15 @@ import mrcal
 import vnlog
 import pcl
 import io
+import cv2
+
+import debag
+
+import mrgingham
+if not hasattr(mrgingham, "find_board"):
+    print("mrginham too old. Need at least 1.24",
+          file=sys.stderr)
+    sys.exit(1)
 
 
 def find_stationary_frame(t, rt_rf):
@@ -516,6 +525,7 @@ def chessboard_corners(bag, camera_topic):
 
 def get_lidar_observation(bag, lidar_topic,
                           *,
+                          p_board_local,
                           what,
                           viz                          = False,
                           viz_show_only_accepted       = False,

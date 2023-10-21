@@ -125,20 +125,12 @@ import numpy as np
 import numpysane as nps
 import gnuplotlib as gp
 import scipy.optimize
-import cv2
 import pickle
 
 sys.path[:0] = '/home/dima/projects/mrcal',
 import mrcal
 import mrcal.calibration
 
-import mrgingham
-if not hasattr(mrgingham, "find_board"):
-    print("mrginham too old. Need at least 1.24",
-          file=sys.stderr)
-    sys.exit(1)
-
-import debag
 import calibration_data_import
 
 
@@ -199,7 +191,8 @@ def fit_estimate( joint_observations,
                   Nboards, Ncameras, Nlidars,
                   Nmeas_camera_observation,
                   Nmeas_camera_observation_all,
-                  Nmeas_lidar_observation_all ):
+                  Nmeas_lidar_observation_all,
+                  p_board_local):
 
     r'''Simplified fit() used to produce a seed for fit() to refine
 
@@ -603,7 +596,8 @@ def fit( joint_observations,
          Nboards, Ncameras, Nlidars,
          Nmeas_camera_observation,
          Nmeas_camera_observation_all,
-         Nmeas_lidar_observation_all ):
+         Nmeas_lidar_observation_all,
+         p_board_local):
 
     r'''Align the LIDAR and camera geometry
 
@@ -801,7 +795,8 @@ def fit( joint_observations,
                                       Nboards, Ncameras, Nlidars,
                                       Nmeas_camera_observation,
                                       Nmeas_camera_observation_all,
-                                      Nmeas_lidar_observation_all ))
+                                      Nmeas_lidar_observation_all,
+                                      p_board_local ))
 
     # Docs say:
     # * 0 (default) : work silently.
@@ -897,6 +892,7 @@ def get_joint_observation(bag):
         [ calibration_data_import.get_lidar_observation( \
                                 bag,
                                 args.lidar_topic[ilidar],
+                                p_board_local = p_board_local,
                                 what = what,
                                 viz                          = args.viz,
                                 viz_show_only_accepted       = args.viz_show_only_accepted,
@@ -1033,7 +1029,8 @@ solved_state = \
          Nboards, Ncameras, Nlidars,
          Nmeas_camera_observation,
          Nmeas_camera_observation_all,
-         Nmeas_lidar_observation_all )
+         Nmeas_lidar_observation_all,
+         p_board_local )
 
 
 rt_ref_board  = solved_state['rt_ref_board']
