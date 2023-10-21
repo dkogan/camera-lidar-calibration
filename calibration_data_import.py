@@ -571,5 +571,5 @@ def get_lidar_observation(bag, lidar_topic,
                                     viz_show_only_accepted       = viz_show_only_accepted,
                                     viz_show_point_cloud_context = viz_show_point_cloud_context)
     except Exception as e:
-        print(f"No unambiguous board observation found for observation at {what=}: {e}")
+        print(f"Exception in find_chessboard_in_view({what=}): {e}")
         return None
