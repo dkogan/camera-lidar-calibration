@@ -878,7 +878,7 @@ def get_joint_observation(bag):
 
     from a bag of ostensibly-stationary data'''
 
-    what = os.path.splitext(os.path.basename(bag))[0]
+    bagname = os.path.split(os.path.splitext(os.path.basename(bag))[0])[1]
 
     Ncameras = len(args.camera_topic)
     q_observed = \
@@ -893,7 +893,7 @@ def get_joint_observation(bag):
                                 bag,
                                 args.lidar_topic[ilidar],
                                 p_board_local = p_board_local,
-                                what = what,
+                                what = f"{bagname}-{os.path.split(args.lidar_topic[ilidar])[1]}",
                                 viz                          = args.viz,
                                 viz_show_only_accepted       = args.viz_show_only_accepted,
                                 viz_show_point_cloud_context = args.viz_show_point_cloud_context) \
