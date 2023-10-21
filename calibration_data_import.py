@@ -1,5 +1,10 @@
 #!/usr/bin/python3
 
+r'''Utilities to extract chessboard data from ROS bags
+
+Used by the higher-level calibration routines
+'''
+
 import sys
 import numpy as np
 import numpysane as nps
