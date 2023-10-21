@@ -349,9 +349,8 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     points, ring = load_lidar_points(lidar_points_vnl)
 
     # Ignore all points > 5m away
-    idx    = nps.mag(points) < 5.
-    points = points[idx]
-    ring   = ring  [idx]
+    mask_near = nps.mag(points) < 5.
+    idx_near  = np.nonzero(mask_near)[0]
 
     if False:
         # azimuth, elevation we can use for visualization and studies
@@ -359,7 +358,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
         phi = np.arctan2( nps.mag(points[:,:2]), points[:,2] )
 
 
-    cloud = pcl.PointCloud(points.astype(np.float32))
+    cloud = pcl.PointCloud(points[mask_near].astype(np.float32))
 
     p_accepted = None
     p_accepted_multiple = False
@@ -369,12 +368,17 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     i_subcluster_accepted = None
     for idx_cluster in cluster_points(cloud,
                                       cluster_tolerance = 0.5):
+        # idx_cluster indexes points[idx_near]
+        # Convert it to index points[]
+        idx_cluster = idx_near[idx_cluster]
+        mask_cluster = np.zeros( (len(points),), dtype=bool)
+        mask_cluster[idx_cluster] = 1
 
         i_cluster += 1
         i_subcluster = -1
 
-        points_cluster = points[idx_cluster]
-        ring_cluster   = ring[idx_cluster]
+        points_cluster = points[mask_cluster]
+        ring_cluster   = ring  [mask_cluster]
 
         mask_plane = None
         while True:
@@ -385,8 +389,10 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
             # This is required if a cluster contains multiple planes
             if mask_plane is not None:
 
-                points_cluster = points_cluster[~mask_plane]
-                ring_cluster   = ring_cluster  [~mask_plane]
+                mask_cluster *= ~mask_plane
+                idx_cluster = np.nonzero(mask_cluster)[0]
+                points_cluster = points[mask_cluster]
+                ring_cluster   = ring  [mask_cluster]
 
                 print(f"{len(points_cluster)} points remaining")
 
@@ -402,11 +408,15 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
             if len(idx_plane) == 0:
                 break
 
-            mask_plane = np.zeros( (len(points_cluster),), dtype=bool)
+            # idx_plane indexes points[idx_cluster]
+            # Convert it to index points[]
+            idx_plane = idx_cluster[idx_plane]
+
+            mask_plane = np.zeros( (len(points),), dtype=bool)
             mask_plane[idx_plane] = True
 
-            points_plane = points_cluster[idx_plane]
-            rings_plane  = ring_cluster[idx_plane]
+            points_plane = points[idx_plane]
+            rings_plane  = ring  [idx_plane]
 
             mask_plane_keep = \
                 find_chessboard_in_plane_fit(points_plane,
@@ -416,10 +426,18 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                                              # debug = (i_cluster==1),
                                              )
             if mask_plane_keep is None:
-                mask_plane_keep = np.zeros( (len(points_plane),), dtype=bool)
+                mask_plane_keep = np.zeros( (len(points),), dtype=bool)
                 have_acceptable_plane = False
             else:
                 have_acceptable_plane = np.any(mask_plane_keep)
+
+                idx_plane_keep = np.nonzero(mask_plane_keep)[0]
+                # idx_plane_keep indexes points[idx_plane]
+                # Convert it to index points[]
+                idx_plane_keep = idx_plane[idx_plane_keep]
+                mask_plane_keep = np.zeros( (len(points),), dtype=bool)
+                mask_plane_keep[idx_plane_keep] = 1
+
             if viz and \
                (not viz_show_only_accepted or have_acceptable_plane):
 
@@ -429,13 +447,13 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
 
                 plot_tuples = \
                     [
-                      ( points_cluster[~mask_plane],
+                      ( points[mask_cluster * ~mask_plane],
                         dict(_with  = 'points pt 1 ps 1',
                              legend = 'In cluster, not in plane') ),
-                      ( points_plane[~mask_plane_keep],
+                      ( points[mask_plane * ~mask_plane_keep],
                         dict(_with  = 'points pt 2 ps 1',
                              legend = 'In cluster, in plane, rejected by find_chessboard_in_plane_fit()') ),
-                      ( points_plane[mask_plane_keep],
+                      ( points[mask_plane_keep],
                         dict(_with  = 'points pt 7 ps 2 lc "red"',
                              legend = 'ACCEPTED') ),
                     ]
@@ -459,8 +477,6 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
 
 
                 if viz_show_point_cloud_context:
-                    mask_cluster = np.zeros( (len(points),), dtype=bool)
-                    mask_cluster[idx_cluster] = True
                     plot_tuples = \
                         [
                             ( points[ ~mask_cluster ],
@@ -485,7 +501,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                 # This is an error. I don't fail immediately because I want to
                 # generate all the plots
             else:
-                p_accepted = points_cluster[ mask_plane][mask_plane_keep]
+                p_accepted = points[mask_plane_keep]
                 i_cluster_accepted    = i_cluster
                 i_subcluster_accepted = i_subcluster
 
