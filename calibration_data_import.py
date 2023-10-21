@@ -352,12 +352,6 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     mask_near = nps.mag(points) < 5.
     idx_near  = np.nonzero(mask_near)[0]
 
-    if False:
-        # azimuth, elevation we can use for visualization and studies
-        th  = np.arctan2( points[:,1], points[:,0] )
-        phi = np.arctan2( nps.mag(points[:,:2]), points[:,2] )
-
-
     cloud = pcl.PointCloud(points[mask_near].astype(np.float32))
 
     p_accepted = None
