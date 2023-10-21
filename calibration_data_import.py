@@ -184,12 +184,16 @@ def distance_between_furthest_pair_of_points(p):
 
     return np.max(scipy.spatial.distance.pdist( p[hull.vertices,:] ))
 
-def find_chessboard_in_plane_fit(points_plane,
-                                 rings_plane,
+def find_chessboard_in_plane_fit(points, ring,
+                                 idx_plane,
                                  p_center__estimate,
                                  n__estimate,
                                  *,
                                  debug = False):
+
+    points_plane = points[idx_plane]
+    rings_plane  = ring  [idx_plane]
+
 
     # For each ring I find the longest contiguous section on my plane
     th_plane = np.arctan2(points_plane[:,1],
@@ -413,8 +417,8 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
             rings_plane  = ring  [idx_plane]
 
             mask_plane_keep = \
-                find_chessboard_in_plane_fit(points_plane,
-                                             rings_plane,
+                find_chessboard_in_plane_fit(points, ring,
+                                             idx_plane,
                                              p_center__estimate,
                                              n__estimate,
                                              # debug = (i_cluster==1),
