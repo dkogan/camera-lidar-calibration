@@ -82,10 +82,6 @@ def load_lidar_points(filename):
                             dict_key_index['z'])]
     ring       = points[:, dict_key_index['ring']].astype(int)
 
-    r = nps.mag(points_xyz)
-    idx = r < 5.
-    points_xyz = points_xyz[idx]
-    ring       = ring      [idx]
     return points_xyz, ring
 
 def cluster_points(cloud,
@@ -351,6 +347,11 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
 
 
     points, ring = load_lidar_points(lidar_points_vnl)
+
+    # Ignore all points > 5m away
+    idx    = nps.mag(points) < 5.
+    points = points[idx]
+    ring   = ring  [idx]
 
     if False:
         # azimuth, elevation we can use for visualization and studies
