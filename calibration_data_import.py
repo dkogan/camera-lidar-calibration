@@ -416,12 +416,14 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                                              )
             if mask_plane_keep is None:
                 mask_plane_keep = np.zeros( (len(points_plane),), dtype=bool)
-
+                have_acceptable_plane = False
+            else:
+                have_acceptable_plane = np.any(mask_plane_keep)
             if viz and \
-               (not viz_show_only_accepted or np.any(mask_plane_keep)):
+               (not viz_show_only_accepted or have_acceptable_plane):
 
-                if np.any(mask_plane_keep): any_accepted = "-SOMEACCEPTED"
-                else:                       any_accepted = ""
+                if have_acceptable_plane: any_accepted = "-SOMEACCEPTED"
+                else:                     any_accepted = ""
                 hardcopy = f'/tmp/lidar-{what}-{i_cluster}-{i_subcluster}{any_accepted}.gp'
 
                 plot_tuples = \
@@ -472,7 +474,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                 if hardcopy is not None:
                     print(f"Wrote '{hardcopy}'")
 
-            if not np.any(mask_plane_keep):
+            if not have_acceptable_plane:
                 continue
 
             # Found an acceptable set of points on the chessboard in this cluster!
