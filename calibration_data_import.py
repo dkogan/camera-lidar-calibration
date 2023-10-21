@@ -319,8 +319,8 @@ def find_chessboard_in_plane_fit(points_plane,
 
 def find_chessboard_in_view(rt_lidar_board__estimate,
                             lidar_points_vnl,
-                            p_board_local,
                             *,
+                            p_board_local = None,
                             # identifying string
                             what,
                             viz                          = False,
@@ -328,6 +328,9 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                             viz_show_point_cloud_context = False):
 
     if rt_lidar_board__estimate is not None:
+        if p_board_local is None:
+            raise Exception("rt_lidar_board__estimate is given, so p_board_local MUST be given also")
+
         # shape (N,3)
         p__estimate = \
             nps.clump( \
@@ -530,7 +533,7 @@ def chessboard_corners(bag, camera_topic):
 
 def get_lidar_observation(bag, lidar_topic,
                           *,
-                          p_board_local,
+                          p_board_local                = None,
                           what,
                           viz                          = False,
                           viz_show_only_accepted       = False,
