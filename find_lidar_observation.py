@@ -59,5 +59,5 @@ calibration_data_import.get_lidar_observation( \
                         lidar_topic,
                         what                         = what,
                         viz                          = True,
-                        viz_show_only_accepted       = True,
+                        viz_show_only_accepted       = False,
                         viz_show_point_cloud_context = args.viz_show_point_cloud_context)
