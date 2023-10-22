@@ -210,6 +210,8 @@ def find_chessboard_in_plane_fit(points, ring,
     # integers with this plot:
     #   gp.plot(np.diff(th_plane/dth))
 
+    expected_board_size = 1.0 # 1m across
+
     rings_plane_min = rings_plane[ 0]
     rings_plane_max = rings_plane[-1]
 
@@ -278,9 +280,8 @@ def find_chessboard_in_plane_fit(points, ring,
         len_segment = \
             nps.mag(points_plane[idx_ring[i1-1]] - \
                     points_plane[idx_ring[i0]])
-        if len_segment < 0.85:
-            continue
-        if len_segment > np.sqrt(2):
+        if len_segment < 0.85*expected_board_size or \
+           len_segment > np.sqrt(2)*expected_board_size:
             continue
 
         mask_ring_accepted[iring] = 1
@@ -307,8 +308,9 @@ def find_chessboard_in_plane_fit(points, ring,
     mask_plane_keep = mask_plane_keep_per_ring[iring_hasdata_start]
 
     # The longest distance between points in the set cannot be longer than the
-    # corner-corner distance of the chessboard
-    if distance_between_furthest_pair_of_points(points_plane[mask_plane_keep]) > np.sqrt(2) + 0.1:
+    # corner-corner distance of the chessboard. Checking this is useful to catch
+    # skewed scans
+    if distance_between_furthest_pair_of_points(points_plane[mask_plane_keep]) > (np.sqrt(2) + 0.1)*expected_board_size:
         return None
 
     return mask_plane_keep
