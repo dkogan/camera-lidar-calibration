@@ -210,8 +210,8 @@ def find_chessboard_in_plane_fit(points, ring,
     # integers with this plot:
     #   gp.plot(np.diff(th_plane/dth))
 
-    rings_plane_min = np.min(rings_plane)
-    rings_plane_max = np.max(rings_plane)
+    rings_plane_min = rings_plane[ 0]
+    rings_plane_max = rings_plane[-1]
 
     Nrings = rings_plane_max+1 - rings_plane_min
 
