@@ -258,10 +258,7 @@ def find_chessboard_in_plane_fit(points, ring,
         # This was sometimes too strong a filter, and I was disabling it because
         # it was sometimes throwing out far too much data that was truly on the
         # board. I'm enabling it because it works now
-        if False:
-            i0 = 0
-            i1 = len(idx_ring)
-        else:
+        if True:
             # Any gap of > 1*dth means there was a gap in the plane scan. I look
             # for the biggest interval with no BIG gaps. I allow small gaps
             # (hence 3.5 and not 1.5)
@@ -275,11 +272,12 @@ def find_chessboard_in_plane_fit(points, ring,
                 continue
 
             i0,i1 = longest_run_of_0(diff_ring_plane_gap)
+            idx_ring = idx_ring[i0:i1]
 
         # If the selected segment is too short, I throw it out as noise
         len_segment = \
-            nps.mag(points_plane[idx_ring[i1-1]] - \
-                    points_plane[idx_ring[i0]])
+            nps.mag(points_plane[-1] - \
+                    points_plane[ 0])
         if len_segment < 0.85*expected_board_size or \
            len_segment > np.sqrt(2)*expected_board_size:
             continue
@@ -287,7 +285,7 @@ def find_chessboard_in_plane_fit(points, ring,
         mask_ring_accepted[iring] = 1
 
         mask_plane_keep_per_ring[iring] = np.zeros( (len(points_plane),), dtype=bool)
-        mask_plane_keep_per_ring[iring][idx_ring[i0:i1]] = True
+        mask_plane_keep_per_ring[iring][idx_ring] = True
 
     if debug:
         import IPython
