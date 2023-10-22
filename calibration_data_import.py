@@ -121,10 +121,13 @@ def find_plane(points,
     return idx_plane
 
 def longest_run_of_0(x):
-    r'''Returns the start and end (inclusive) of the largest contiguous run of 0
+    r'''Returns the start and end (exclusive) of the largest contiguous run of 0
 
 If no 0 values are present, returns (None,None). If multiple "longest" sequences
 are found, the first one is returned (we use np.argmax internally)
+
+Note that this returns a python-style range: the returned upper bound is one
+past the last element
 
     '''
 
@@ -133,7 +136,7 @@ are found, the first one is returned (we use np.argmax internally)
         return None,None
     if len(x) == 1:
         if not x[0]:
-            return 0,0
+            return 0,1
     if np.all(x):
         return None,None
 
@@ -149,7 +152,8 @@ are found, the first one is returned (we use np.argmax internally)
     N = i_end_run - i_start_run
 
     i = np.argmax(N)
-    return i_start_run[i],i_end_run[i]
+    return i_start_run[i],i_end_run[i]+1
+
 def cloud_to_plane_fit(p):
     r'''Fits a plane to some points and returns a transformed point cloud
 
@@ -260,7 +264,7 @@ def find_chessboard_in_plane_fit(points, ring,
         # board. I'm enabling it because it works now
         if False:
             i0 = 0
-            i1 = len(idx_ring)-1
+            i1 = len(idx_ring)
         else:
             # Any gap of > 1*dth means there was a gap in the plane scan. I look
             # for the biggest interval with no BIG gaps. I allow small gaps
@@ -276,12 +280,9 @@ def find_chessboard_in_plane_fit(points, ring,
 
             i0,i1 = longest_run_of_0(diff_ring_plane_gap)
 
-            # I want to index th, not diff(th). Still inclusive indices
-            i1 += 1
-
         # If the selected segment is too short, I throw it out as noise
         len_segment = \
-            nps.mag(points_plane[idx_ring[i1]] - \
+            nps.mag(points_plane[idx_ring[i1-1]] - \
                     points_plane[idx_ring[i0]])
         if len_segment < 0.85:
             continue
@@ -291,7 +292,7 @@ def find_chessboard_in_plane_fit(points, ring,
         mask_ring_accepted[iring_plane] = 1
 
         mask_plane_keep_per_ring[iring_plane] = np.zeros( (len(points_plane),), dtype=bool)
-        mask_plane_keep_per_ring[iring_plane][idx_ring[i0:i1+1]] = True
+        mask_plane_keep_per_ring[iring_plane][idx_ring[i0:i1]] = True
 
     if debug:
         import IPython
@@ -301,12 +302,12 @@ def find_chessboard_in_plane_fit(points, ring,
     iring_hasdata_start,iring_hasdata_end = longest_run_of_0(~mask_ring_accepted)
     if iring_hasdata_start is None or iring_hasdata_end is None:
         return None
-    if iring_hasdata_end-iring_hasdata_start+1 < 4:
+    if iring_hasdata_end-iring_hasdata_start < 4:
         return None
 
     # Join all the masks of the ring I'm keeping
     # Start with mask_plane_keep_per_ring[iring_hasdata_start], and add to it
-    for iring_plane in range(iring_hasdata_start+1,iring_hasdata_end+1):
+    for iring_plane in range(iring_hasdata_start+1,iring_hasdata_end):
         mask_plane_keep_per_ring[iring_hasdata_start] |= \
             mask_plane_keep_per_ring[iring_plane]
     mask_plane_keep = mask_plane_keep_per_ring[iring_hasdata_start]
