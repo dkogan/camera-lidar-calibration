@@ -561,9 +561,11 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
 
 
     if p_accepted_multiple:
-        raise Exception("More than one cluster found that observes a board")
+        print("More than one cluster found that observes a board")
+        return None
     if p_accepted is None:
-        raise Exception("No chessboard found in view")
+        print("No chessboard found in view")
+        return None
 
     print(f"Accepted cluster={i_cluster_accepted} subcluster={i_subcluster_accepted}")
     return p_accepted
@@ -616,15 +618,12 @@ def get_lidar_observation(bag, lidar_topic,
     lidar_metadata = lidar_metadata[0]
 
     lidar_points_filename = lidar_metadata['points']
-    try:
-        return \
-            find_chessboard_in_view(None,
-                                    lidar_points_filename,
-                                    p_board_local = p_board_local,
-                                    what          = what,
-                                    viz                          = viz,
-                                    viz_show_only_accepted       = viz_show_only_accepted,
-                                    viz_show_point_cloud_context = viz_show_point_cloud_context)
-    except Exception as e:
-        print(f"Exception in find_chessboard_in_view({what=}): {e}")
-        return None
+
+    return \
+        find_chessboard_in_view(None,
+                                lidar_points_filename,
+                                p_board_local = p_board_local,
+                                what          = what,
+                                viz                          = viz,
+                                viz_show_only_accepted       = viz_show_only_accepted,
+                                viz_show_point_cloud_context = viz_show_point_cloud_context)
