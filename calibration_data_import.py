@@ -188,7 +188,7 @@ def distance_between_furthest_pair_of_points(p):
 
     return np.max(scipy.spatial.distance.pdist( p[hull.vertices,:] ))
 
-def find_chessboard_in_plane_fit(points, ring,
+def find_chessboard_in_plane_fit(points, ring, th,
                                  idx_plane,
                                  p_center__estimate,
                                  n__estimate,
@@ -197,11 +197,7 @@ def find_chessboard_in_plane_fit(points, ring,
 
     points_plane = points[idx_plane]
     rings_plane  = ring  [idx_plane]
-
-
-    # For each ring I find the longest contiguous section on my plane
-    th_plane = np.arctan2(points_plane[:,1],
-                          points_plane[:,0])
+    th_plane     = th    [idx_plane]
 
     # I examined the data to confirm that the points come regularly at an
     # even interval of:
@@ -222,6 +218,7 @@ def find_chessboard_in_plane_fit(points, ring,
     mask_plane_keep_per_ring = [None] * Nrings
 
 
+    # For each ring I find the longest contiguous section on my plane
     for iring in range(Nrings):
         # shape (Npoints_plane,); indexes_plane
         idx_ring = np.nonzero(rings_plane ==
@@ -419,7 +416,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
             rings_plane  = ring  [idx_plane]
 
             mask_plane_keep = \
-                find_chessboard_in_plane_fit(points, ring,
+                find_chessboard_in_plane_fit(points, ring, th,
                                              idx_plane,
                                              p_center__estimate,
                                              n__estimate,
