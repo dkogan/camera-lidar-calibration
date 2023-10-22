@@ -279,6 +279,58 @@ def find_chessboard_in_plane_fit(points, ring, th,
            len_segment > np.sqrt(2)*expected_board_size:
             continue
 
+        # I look at a few LIDAR returns past the edges. The board should be in
+        # front of everything, not behind. So these adjacent LIDAR cannot have a
+        # shorter range
+        NscansAtEdge = 3
+        max_range_ahead_allowed = 0.2
+
+        i0 = idx_plane[idx_ring[ 0]] # first point index in this segment
+        i1 = idx_plane[idx_ring[-1]] # last  point index in this segment
+
+        def scan_indices_off_edge(i0, N):
+
+            # I keep those indices. Initially I keep all of them
+            mask_keep = np.ones((abs(N),), dtype=bool)
+
+            if N < 0:
+                # looking BEFORE i. I now have a candidate set of indices
+                i = np.arange(i0 + N, i0)
+
+            else:
+                # looking AFTER i. I now have a candidate set of indices
+                i = np.arange(i0, i0 + N)
+
+            # Throw away out-of-bounds ones
+            mask_keep[i <            0] = 0
+            mask_keep[i >= len(points)] = 0
+
+            # Throw away any that are on a different ring
+            mask_keep[ ring[i0] != ring[i] ] = 0
+
+            # Throw away any that are more than N azimuth points away. This
+            # can happen if we have missing returns
+            mask_keep[ np.abs(th[i0] - th[i])  > (N+0.5)*dth ] = 0
+
+            return i[mask_keep]
+
+
+        i = scan_indices_off_edge(i0, -NscansAtEdge)
+        if i.size:
+            range0  = nps.mag(points[i0])
+            _range  = nps.mag(points[i ])
+            if np.any(range0 - _range > max_range_ahead_allowed):
+                continue
+
+        i = scan_indices_off_edge(i1, NscansAtEdge)
+        if i.size:
+            range0  = nps.mag(points[i1])
+            _range  = nps.mag(points[i ])
+            if np.any(range0 - _range > max_range_ahead_allowed):
+                continue
+
+
+
         mask_ring_accepted[iring] = 1
 
         mask_plane_keep_per_ring[iring] = np.zeros( (len(points_plane),), dtype=bool)
