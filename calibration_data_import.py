@@ -220,34 +220,28 @@ def find_chessboard_in_plane_fit(points, ring,
     mask_plane_keep_per_ring = [None] * Nrings
 
 
-    for iring_plane in range(Nrings):
-        ring_plane = iring_plane + rings_plane_min
-
-        # shape (Npoints_plane,)
-        mask_ring = rings_plane == ring_plane
+    for iring in range(Nrings):
+        # shape (Npoints_plane,); indexes_plane
+        idx_ring = np.nonzero(rings_plane ==
+                              iring + rings_plane_min)[0]
+        if len(idx_ring) < 20:
+            continue
 
         # Throw out all points that are too far from where we expect the
         # chessboard to be
-
-        # shape (Npoints_ring,)
-        points_ring = points_plane[mask_ring]
-        if len(points_ring) < 20:
-            continue
-
-        # shape (Npoints_ring,); indexes_plane
-        idx_ring = np.nonzero(mask_ring)[0]
-        # This is about to become invalid, so I get rid of it. Use idx_ring
-        del mask_ring
-
         if p_center__estimate is not None and \
            n__estimate is not None:
             distance_threshold = 1.0
             offplane_threshold = 0.5
+
+            # shape (Npoints_ring,)
+            points_ring_off_center = points_plane[idx_ring] - p_center__estimate
+
             # shape (Npoints_ring,)
             mask_near_estimate = \
-                ( np.abs(nps.inner(points_ring - p_center__estimate,
-                                   n__estimate)) < offplane_threshold ) * \
-                (nps.norm2(points_ring - p_center__estimate) < distance_threshold*distance_threshold)
+                (np.abs(nps.inner(points_ring_off_center,
+                                  n__estimate)) < offplane_threshold ) * \
+                (nps.norm2(points_ring_off_center) < distance_threshold*distance_threshold)
 
             idx_ring = idx_ring[mask_near_estimate]
             if len(idx_ring) == 0:
@@ -289,10 +283,10 @@ def find_chessboard_in_plane_fit(points, ring,
         if len_segment > np.sqrt(2):
             continue
 
-        mask_ring_accepted[iring_plane] = 1
+        mask_ring_accepted[iring] = 1
 
-        mask_plane_keep_per_ring[iring_plane] = np.zeros( (len(points_plane),), dtype=bool)
-        mask_plane_keep_per_ring[iring_plane][idx_ring[i0:i1]] = True
+        mask_plane_keep_per_ring[iring] = np.zeros( (len(points_plane),), dtype=bool)
+        mask_plane_keep_per_ring[iring][idx_ring[i0:i1]] = True
 
     if debug:
         import IPython
@@ -307,9 +301,9 @@ def find_chessboard_in_plane_fit(points, ring,
 
     # Join all the masks of the ring I'm keeping
     # Start with mask_plane_keep_per_ring[iring_hasdata_start], and add to it
-    for iring_plane in range(iring_hasdata_start+1,iring_hasdata_end):
+    for iring in range(iring_hasdata_start+1,iring_hasdata_end):
         mask_plane_keep_per_ring[iring_hasdata_start] |= \
-            mask_plane_keep_per_ring[iring_plane]
+            mask_plane_keep_per_ring[iring]
     mask_plane_keep = mask_plane_keep_per_ring[iring_hasdata_start]
 
     # The longest distance between points in the set cannot be longer than the
