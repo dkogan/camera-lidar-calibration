@@ -252,30 +252,27 @@ def find_chessboard_in_plane_fit(points, ring, th,
 
         # Below is logic to look for long continuous scans. Any missing points
         # indicate that we're in a noisy area that maybe isn't in the plane.
-        # This was sometimes too strong a filter, and I was disabling it because
-        # it was sometimes throwing out far too much data that was truly on the
-        # board. I'm enabling it because it works now
-        if True:
-            # Any gap of > 1*dth means there was a gap in the plane scan. I look
-            # for the biggest interval with no BIG gaps. I allow small gaps
-            # (hence 3.5 and not 1.5)
-            large_diff_ring_plane_gap = np.diff(th_ring/dth) > 3.5
 
-            # I look for the largest run of False in large_diff_ring_plane_gap
-            # These are inclusive indices into diff(th)
-            if len(large_diff_ring_plane_gap) == 0:
-                continue
-            if np.all(large_diff_ring_plane_gap):
-                continue
+        # Any gap of > 1*dth means there was a gap in the plane scan. I look
+        # for the biggest interval with no BIG gaps. I allow small gaps
+        # (hence 3.5 and not 1.5)
+        large_diff_ring_plane_gap = np.diff(th_ring/dth) > 3.5
 
-            # i0,i1 are python-style ranges indexing diff(th_ring)
-            i0,i1 = longest_run_of_0(large_diff_ring_plane_gap)
-            # I convert them to index idx_ring. i0 means "there was a large jump
-            # between i0-1,i0". So the segment starts at i0. i1 means "there was
-            # a large jump between i1,i1+1". So the segment ends at i1, and to
-            # get a python-style range I use i1+1
-            i1 += 1
-            idx_ring = idx_ring[i0:i1]
+        # I look for the largest run of False in large_diff_ring_plane_gap
+        # These are inclusive indices into diff(th)
+        if len(large_diff_ring_plane_gap) == 0:
+            continue
+        if np.all(large_diff_ring_plane_gap):
+            continue
+
+        # i0,i1 are python-style ranges indexing diff(th_ring)
+        i0,i1 = longest_run_of_0(large_diff_ring_plane_gap)
+        # I convert them to index idx_ring. i0 means "there was a large jump
+        # between i0-1,i0". So the segment starts at i0. i1 means "there was
+        # a large jump between i1,i1+1". So the segment ends at i1, and to
+        # get a python-style range I use i1+1
+        i1 += 1
+        idx_ring = idx_ring[i0:i1]
 
         # If the selected segment is too short, I throw it out as noise
         len_segment = \
