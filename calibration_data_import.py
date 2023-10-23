@@ -357,8 +357,19 @@ def find_chessboard_in_plane_fit(points, ring, th,
     # The longest distance between points in the set cannot be longer than the
     # corner-corner distance of the chessboard. Checking this is useful to catch
     # skewed scans
-    if distance_between_furthest_pair_of_points(points_plane[mask_plane_keep]) > (np.sqrt(2) + 0.1)*expected_board_size:
+    p = points_plane[mask_plane_keep]
+    if distance_between_furthest_pair_of_points(p) > (np.sqrt(2) + 0.1)*expected_board_size:
         return None
+
+    # The angle of the plane off the lidar plane should be > some threshold. cos(th) = inner(normal,z)
+    pmean = np.mean(p, axis=-2)
+    p = p - pmean
+    n = mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
+    if abs(n[2]) > np.cos(30.*np.pi/180.):
+        return None
+
+
+
 
     return mask_plane_keep
 
