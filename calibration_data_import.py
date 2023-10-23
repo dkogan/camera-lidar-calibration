@@ -268,7 +268,13 @@ def find_chessboard_in_plane_fit(points, ring, th,
             if np.all(large_diff_ring_plane_gap):
                 continue
 
+            # i0,i1 are python-style ranges indexing diff(th_ring)
             i0,i1 = longest_run_of_0(large_diff_ring_plane_gap)
+            # I convert them to index idx_ring. i0 means "there was a large jump
+            # between i0-1,i0". So the segment starts at i0. i1 means "there was
+            # a large jump between i1,i1+1". So the segment ends at i1, and to
+            # get a python-style range I use i1+1
+            i1 += 1
             idx_ring = idx_ring[i0:i1]
 
         # If the selected segment is too short, I throw it out as noise
