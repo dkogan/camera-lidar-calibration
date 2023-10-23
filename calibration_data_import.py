@@ -140,18 +140,18 @@ past the last element
     if np.all(x):
         return None,None
 
-    i_start_run = np.nonzero(np.diff(x.astype(int)) == -1)[0] + 1
+    d = np.diff(x.astype(int))
+    i_start_run = np.nonzero(d == -1)[0] + 1
     if not x[0]:
         i_start_run = nps.glue(0, i_start_run,
                                axis = -1)
-    i_end_run   = np.nonzero(np.diff(x.astype(int)) ==  1)[0]
+    # end of run. inclusive
+    i_end_run   = np.nonzero(d ==  1)[0]
     if not x[-1]:
         i_end_run = nps.glue(i_end_run, len(x)-1,
                              axis = -1)
 
-    N = i_end_run - i_start_run
-
-    i = np.argmax(N)
+    i = np.argmax(i_end_run - i_start_run)
     return i_start_run[i],i_end_run[i]+1
 
 def cloud_to_plane_fit(p):
