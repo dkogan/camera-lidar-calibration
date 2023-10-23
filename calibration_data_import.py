@@ -259,16 +259,16 @@ def find_chessboard_in_plane_fit(points, ring, th,
             # Any gap of > 1*dth means there was a gap in the plane scan. I look
             # for the biggest interval with no BIG gaps. I allow small gaps
             # (hence 3.5 and not 1.5)
-            diff_ring_plane_gap = np.diff(th_ring/dth) > 3.5
+            large_diff_ring_plane_gap = np.diff(th_ring/dth) > 3.5
 
-            # I look for the largest run of False in diff_ring_plane_gap
+            # I look for the largest run of False in large_diff_ring_plane_gap
             # These are inclusive indices into diff(th)
-            if len(diff_ring_plane_gap) == 0:
+            if len(large_diff_ring_plane_gap) == 0:
                 continue
-            if np.all(diff_ring_plane_gap):
+            if np.all(large_diff_ring_plane_gap):
                 continue
 
-            i0,i1 = longest_run_of_0(diff_ring_plane_gap)
+            i0,i1 = longest_run_of_0(large_diff_ring_plane_gap)
             idx_ring = idx_ring[i0:i1]
 
         # If the selected segment is too short, I throw it out as noise
