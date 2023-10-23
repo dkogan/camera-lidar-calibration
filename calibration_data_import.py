@@ -279,8 +279,8 @@ def find_chessboard_in_plane_fit(points, ring, th,
 
         # If the selected segment is too short, I throw it out as noise
         len_segment = \
-            nps.mag(points_plane[-1] - \
-                    points_plane[ 0])
+            nps.mag(points_plane[idx_ring[-1]] - \
+                    points_plane[idx_ring[ 0]])
         if len_segment < 0.85*expected_board_size or \
            len_segment > np.sqrt(2)*expected_board_size:
             continue
