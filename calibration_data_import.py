@@ -528,7 +528,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                 if viz_show_point_cloud_context:
                     plot_tuples = \
                         [
-                            ( points[ ~mask_cluster ],
+                            ( points[ ~mask_cluster * mask_near ],
                               dict(_with  = 'dots',
                                    legend = 'Not in cluster') ),
                             *plot_tuples
