@@ -1015,7 +1015,7 @@ else:
 for icamera in range(Ncameras):
     NcameraObservations_this = sum(0 if o[0][icamera] is None else 1 for o in joint_observations)
     if NcameraObservations_this == 0:
-        print(f"I need at least 1 observation of each camera. Got only {len(NcameraObservations_this)} for camera {icamera} from {args.camera_topic[icamera]}",
+        print(f"I need at least 1 observation of each camera. Got only {NcameraObservations_this} for camera {icamera} from {args.camera_topic[icamera]}",
               file=sys.stderr)
         sys.exit(1)
 for ilidar in range(Nlidars):
