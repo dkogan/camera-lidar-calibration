@@ -442,7 +442,9 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
 
     # Ignore all points <1m or >5m away
     range_sq = nps.norm2(points)
-    mask_midrange = (1.*1. < range_sq) * (range_sq < 5.*5.)
+    mask_near     = (1.*1. > range_sq)
+    mask_far      = (range_sq > 5.*5.)
+    mask_midrange = (~mask_near) * (~mask_far)
     idx_midrange  = np.nonzero(mask_midrange)[0]
 
     cloud_midrange = pcl.PointCloud(points[mask_midrange].astype(np.float32))
@@ -579,9 +581,9 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                 if viz_show_point_cloud_context:
                     plot_tuples = \
                         [
-                            ( points[ ~mask_cluster * mask_midrange ],
+                            ( points[ ~mask_cluster * (~mask_far) ],
                               dict(_with  = 'dots',
-                                   legend = 'Not in cluster') ),
+                                   legend = 'Not in cluster; cutting off far points') ),
                             *plot_tuples
                         ]
 
