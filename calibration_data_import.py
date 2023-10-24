@@ -304,7 +304,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
 
             else:
                 # looking AFTER i. I now have a candidate set of indices
-                i = np.arange(i0, i0 + N)
+                i = np.arange(i0+1, i0 + N+1)
 
             # Throw away out-of-bounds ones
             mask_keep[i <            0] = 0
@@ -315,7 +315,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
 
             # Throw away any that are more than N azimuth points away. This
             # can happen if we have missing returns
-            mask_keep[ np.abs(th[i0] - th[i])  > (N+0.5)*dth ] = 0
+            mask_keep[ np.abs(th[i0] - th[i])  > (abs(N)+0.5)*dth ] = 0
 
             return i[mask_keep]
 
