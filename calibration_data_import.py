@@ -401,7 +401,8 @@ def find_chessboard_in_plane_fit(points, ring, th,
     # corner-corner distance of the chessboard. Checking this is useful to catch
     # skewed scans
     p = points_plane[mask_plane_keep]
-    if distance_between_furthest_pair_of_points(p) > (np.sqrt(2) + 0.1)*expected_board_size:
+    d = distance_between_furthest_pair_of_points(p)
+    if d > (np.sqrt(2) + 0.1)*expected_board_size:
         print(f"Ignoring plane on line {line_number()}")
         return None
 
