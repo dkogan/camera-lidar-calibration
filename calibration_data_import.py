@@ -193,7 +193,9 @@ def find_chessboard_in_plane_fit(points, ring, th,
                                  p_center__estimate,
                                  n__estimate,
                                  *,
-                                 debug = False):
+                                 # for diagnostics
+                                 i_cluster    = None,
+                                 i_subcluster = None):
 
     points_plane = points[idx_plane]
     rings_plane  = ring  [idx_plane]
@@ -339,10 +341,6 @@ def find_chessboard_in_plane_fit(points, ring, th,
         mask_plane_keep_per_ring[iring] = np.zeros( (len(points_plane),), dtype=bool)
         mask_plane_keep_per_ring[iring][idx_ring] = True
 
-    if debug:
-        import IPython
-        IPython.embed()
-
     # I want at least 4 contiguous rings to have data on my plane
     iring_hasdata_start,iring_hasdata_end = longest_run_of_0(~mask_ring_accepted)
     if iring_hasdata_start is None or iring_hasdata_end is None:
@@ -487,8 +485,9 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                                              idx_plane,
                                              p_center__estimate,
                                              n__estimate,
-                                             # debug = (i_cluster==1),
-                                             )
+                                             # for diagnostics
+                                             i_cluster    = i_cluster,
+                                             i_subcluster = i_subcluster)
             if mask_plane_keep is None:
                 mask_plane_keep = np.zeros( (len(points),), dtype=bool)
                 have_acceptable_plane = False
