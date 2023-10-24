@@ -265,8 +265,8 @@ def find_chessboard_in_plane_fit(points, ring, th,
 
         # Any gap of > 1*dth means there was a gap in the plane scan. I look
         # for the biggest interval with no BIG gaps. I allow small gaps
-        # (hence 3.5 and not 1.5)
-        large_diff_ring_plane_gap = np.diff(th_ring/dth) > 3.5
+        # (hence 4.5 and not 1.5)
+        large_diff_ring_plane_gap = np.diff(th_ring/dth) > 4.5
 
         # I look for the largest run of False in large_diff_ring_plane_gap
         # These are inclusive indices into diff(th)
@@ -298,7 +298,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
         len_segment = \
             nps.mag(points_plane[idx_ring[-1]] - \
                     points_plane[idx_ring[ 0]])
-        if len_segment < 0.85*expected_board_size or \
+        if len_segment < 0.7*expected_board_size or \
            len_segment > np.sqrt(2)*expected_board_size:
             print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
             continue
@@ -454,7 +454,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     i_cluster_accepted    = None
     i_subcluster_accepted = None
     for idx_cluster in cluster_points(cloud_midrange,
-                                      cluster_tolerance = 0.5):
+                                      cluster_tolerance = 0.3):
         # idx_cluster indexes points[idx_midrange]
         # Convert it to index points[]
         idx_cluster = idx_midrange[idx_cluster]
