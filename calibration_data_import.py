@@ -102,13 +102,20 @@ def cluster_points(cloud,
 
 def find_plane(points,
                *,
-               ksearch                = 50,
+               ksearch                = -1,
+               search_radius          = 0.1,
                max_iterations         = 100,
                distance_threshold     = 0.2,
                normal_distance_weight = 0.1):
 
-    seg = pcl.PointCloud(points.astype(np.float32)).make_segmenter_normals(ksearch=
-                                                                           ksearch)
+
+    # The logic around ksearch and search_radius is apparently not in libpcl at
+    # all, but in the Python wrapper:
+    #
+    #   https://sources.debian.org/src/python-pcl/0.3.0~rc1%2Bdfsg-14/pcl/minipcl.cpp/#L17
+    seg = pcl.PointCloud(points.astype(np.float32)). \
+        make_segmenter_normals(ksearch      = ksearch,
+                               searchRadius = search_radius)
 
     seg.set_optimize_coefficients(True)
     seg.set_model_type(pcl.SACMODEL_NORMAL_PLANE)
@@ -305,8 +312,11 @@ def find_chessboard_in_plane_fit(points, ring, th,
 
         # I look at a few LIDAR returns past the edges. The board should be in
         # front of everything, not behind. So these adjacent LIDAR cannot have a
-        # shorter range
-        NscansAtEdge = 3
+        # shorter range. I look at NscansAtEdge LIDAR returns off to either
+        # side. This is set to a high number: I cannot be near anything that
+        # might be occluding. Such a high number is required to catch the roll
+        # cage bars that might split a view of a wall
+        NscansAtEdge = 20
         max_range_ahead_allowed = 0.2
 
         i0 = idx_plane[idx_ring[ 0]] # first point index in this segment
@@ -492,7 +502,8 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
             print(f"looking for plane within {len(points_cluster)} points")
             idx_plane = find_plane(points_cluster,
                                    distance_threshold     = 0.05,
-                                   ksearch                = 500,
+                                   ksearch                = -1,
+                                   search_radius          = 0.3,
                                    normal_distance_weight = 0.1)
             if len(idx_plane) == 0:
                 break
