@@ -322,6 +322,15 @@ def find_chessboard_in_plane_fit(points, ring, th,
         i0 = idx_plane[idx_ring[ 0]] # first point index in this segment
         i1 = idx_plane[idx_ring[-1]] # last  point index in this segment
 
+        if False:
+            # useful plot
+            gp.plot(th            [ring == iring + rings_plane_min],
+                    nps.mag(points[ring == iring + rings_plane_min]),
+                    xlabel = "Azimuth (rad)",
+                    ylabel = "Range (m)",
+                    _set=(f'arrow from {th[i0]},   graph 0 to {th[i0]},   graph 1 nohead',
+                          f'arrow from {th[i1-1]}, graph 0 to {th[i1-1]}, graph 1 nohead'))
+
         def scan_indices_off_edge(i0, N):
 
             # I keep those indices. Initially I keep all of them
