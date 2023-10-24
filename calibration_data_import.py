@@ -515,6 +515,13 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                 else:                     any_accepted = ""
                 hardcopy = f'/tmp/lidar-{what}-{i_cluster}-{i_subcluster}{any_accepted}.gp'
 
+                rings_here = np.unique(ring_cluster)
+                p_center_of_rings = np.zeros((len(rings_here),3), dtype=float)
+                for i,r in enumerate(rings_here):
+                    p_center_of_rings[i] = \
+                        np.mean(points_cluster[ring_cluster == r],
+                                axis=-2)
+
                 plot_tuples = \
                     [
                       ( points[mask_cluster * ~mask_plane],
@@ -526,7 +533,12 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                       ( points[mask_plane_keep],
                         dict(_with  = 'points pt 4 ps 1 lc "red"',
                              legend = 'ACCEPTED') ),
+                      ( *p_center_of_rings.T, rings_here,
+                        dict(_with  = 'labels',
+                             legend = 'ring',
+                             tuplesize = 4) ),
                     ]
+
                 if p__estimate is not None:
                     plot_tuples.append( (p__estimate,
                                          dict(_with  = 'points pt 3 ps 1',
