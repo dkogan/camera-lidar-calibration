@@ -274,6 +274,13 @@ def find_chessboard_in_plane_fit(points, ring, th,
         # a large jump between i1,i1+1". So the segment ends at i1, and to
         # get a python-style range I use i1+1
         i1 += 1
+
+        if (i1 - i0) / len(large_diff_ring_plane_gap) < 0.7:
+            # most of the planar section of a ring's data should be in the
+            # chessboard. If there's a big chunk off the plane NOT on my
+            # chessboard, I ignore it
+            continue
+
         idx_ring = idx_ring[i0:i1]
 
         # If the selected segment is too short, I throw it out as noise
