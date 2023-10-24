@@ -17,6 +17,7 @@ import vnlog
 import pcl
 import io
 import cv2
+import inspect
 
 import debag
 
@@ -188,6 +189,11 @@ def distance_between_furthest_pair_of_points(p):
 
     return np.max(scipy.spatial.distance.pdist( p[hull.vertices,:] ))
 
+def line_number():
+    # back one so that I'm not in the lineno() function
+    frame = inspect.currentframe().f_back
+    return frame.f_lineno
+
 def find_chessboard_in_plane_fit(points, ring, th,
                                  idx_plane,
                                  p_center__estimate,
@@ -226,6 +232,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
         idx_ring = np.nonzero(rings_plane ==
                               iring + rings_plane_min)[0]
         if len(idx_ring) < 20:
+            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
             continue
 
         # Throw out all points that are too far from where we expect the
@@ -246,6 +253,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
 
             idx_ring = idx_ring[mask_near_estimate]
             if len(idx_ring) == 0:
+                print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
                 continue
 
         th_ring = th_plane[idx_ring]
@@ -263,8 +271,10 @@ def find_chessboard_in_plane_fit(points, ring, th,
         # I look for the largest run of False in large_diff_ring_plane_gap
         # These are inclusive indices into diff(th)
         if len(large_diff_ring_plane_gap) == 0:
+            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
             continue
         if np.all(large_diff_ring_plane_gap):
+            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
             continue
 
         # i0,i1 are python-style ranges indexing diff(th_ring)
@@ -279,6 +289,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
             # most of the planar section of a ring's data should be in the
             # chessboard. If there's a big chunk off the plane NOT on my
             # chessboard, I ignore it
+            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
             continue
 
         idx_ring = idx_ring[i0:i1]
@@ -289,6 +300,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
                     points_plane[idx_ring[ 0]])
         if len_segment < 0.85*expected_board_size or \
            len_segment > np.sqrt(2)*expected_board_size:
+            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
             continue
 
         # I look at a few LIDAR returns past the edges. The board should be in
@@ -332,6 +344,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
             range0  = nps.mag(points[i0])
             _range  = nps.mag(points[i ])
             if np.any(range0 - _range > max_range_ahead_allowed):
+                print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
                 continue
 
         i = scan_indices_off_edge(i1, NscansAtEdge)
@@ -339,6 +352,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
             range0  = nps.mag(points[i1])
             _range  = nps.mag(points[i ])
             if np.any(range0 - _range > max_range_ahead_allowed):
+                print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
                 continue
 
 
@@ -351,8 +365,10 @@ def find_chessboard_in_plane_fit(points, ring, th,
     # I want at least 4 contiguous rings to have data on my plane
     iring_hasdata_start,iring_hasdata_end = longest_run_of_0(~mask_ring_accepted)
     if iring_hasdata_start is None or iring_hasdata_end is None:
+        print(f"Ignoring plane on line {line_number()}")
         return None
     if iring_hasdata_end-iring_hasdata_start < 4:
+        print(f"Ignoring plane on line {line_number()}")
         return None
 
     # Join all the masks of the ring I'm keeping
@@ -367,6 +383,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
     # skewed scans
     p = points_plane[mask_plane_keep]
     if distance_between_furthest_pair_of_points(p) > (np.sqrt(2) + 0.1)*expected_board_size:
+        print(f"Ignoring plane on line {line_number()}")
         return None
 
     # The angle of the plane off the lidar plane should be > some threshold. cos(th) = inner(normal,z)
@@ -374,6 +391,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
     p = p - pmean
     n = mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
     if abs(n[2]) > np.cos(30.*np.pi/180.):
+        print(f"Ignoring plane on line {line_number()}")
         return None
 
 
