@@ -880,6 +880,8 @@ def get_joint_observation(bag):
 
     bagname = os.path.split(os.path.splitext(os.path.basename(bag))[0])[1]
 
+    print(f"===== Looking for joint observations in '{bagname}'")
+
     Ncameras = len(args.camera_topic)
     q_observed = \
         [ calibration_data_import.chessboard_corners( \

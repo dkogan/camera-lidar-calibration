@@ -601,6 +601,9 @@ def chessboard_corners(bag, camera_topic):
     metadata = read_first_message_in_bag(bag, camera_topic)
 
     image_filename = metadata[0]['image']
+
+    print(f"=== Looking for board in image '{image_filename}'....")
+
     image = mrcal.load_image(image_filename,
                              bits_per_pixel = 8,
                              channels       = 1)
@@ -613,8 +616,9 @@ def chessboard_corners(bag, camera_topic):
 
     q_observed = mrgingham.find_board(image, gridn=14)
     if q_observed is None:
-        print(f"Couldn't find chessboard in '{image_filename}'")
+        print(f"NO chessboard in '{image_filename}'")
         return None
+    print(f"FOUND chessboard in '{image_filename}'")
     return q_observed
 
 def get_lidar_observation(bag, lidar_topic,
