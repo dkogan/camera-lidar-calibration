@@ -897,8 +897,6 @@ def fit( joint_observations,
                 _set  = measurement_boundaries,
                 ylabel  = 'Camera fit residual (pixels)',
                 y2label = 'LIDAR fit residual (m)',
-                ymin    = 0,
-                y2min   = 0,
                 hardcopy = filename)
         print(f"Wrote '{filename}'")
 
