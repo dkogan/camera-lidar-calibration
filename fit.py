@@ -684,7 +684,8 @@ def fit( joint_observations,
     def cost(b, *,
 
              # simplified computation for seeding
-             use_distance_to_plane = False):
+             use_distance_to_plane = False,
+             report_imeas          = False):
 
         x     = np.zeros((Nmeasurements,), dtype=float)
         imeas = 0
@@ -698,6 +699,9 @@ def fit( joint_observations,
 
                 if q_observed is None:
                     continue
+
+                if report_imeas:
+                    print(f"{iboard=} {icamera=} {imeas=}")
 
                 rt_ref_board  = state['rt_ref_board'] [iboard]
                 rt_camera_ref = state['rt_camera_ref'][icamera]
@@ -725,6 +729,9 @@ def fit( joint_observations,
                 if plidar is None:
                     continue
 
+                if report_imeas:
+                    print(f"{iboard=} {ilidar=} {imeas=}")
+
                 dlidar = nps.mag(plidar)
                 vlidar = plidar / nps.dummy(dlidar,-1)
 
@@ -738,8 +745,6 @@ def fit( joint_observations,
                 Rt_board_ref = mrcal.invert_Rt (Rt_ref_board)
 
                 Nmeas_here = len(plidar)
-
-                if False: print(f"{iboard=} {ilidar=} {imeas=}")
 
                 # The pose of the board is Rt_ref_board. The board is z=0 in the
                 # board coords so the normal to the plane is nref = Rrb[:,2]. I
@@ -840,7 +845,7 @@ def fit( joint_observations,
 
     seed = pack_state(**seed_kwargs)
 
-    x = cost(seed, use_distance_to_plane = False)
+    x = cost(seed, use_distance_to_plane = False, report_imeas = True)
     x_camera = \
         x[imeas_camera_0:
           imeas_camera_0+Nmeas_camera_observation_all]
