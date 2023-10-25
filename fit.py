@@ -897,6 +897,45 @@ def get_joint_observation(bag):
 
     return q_observed,p_lidar
 
+def plot_geometry(filename,
+                  *,
+                  rt_ref_board,
+                  rt_camera_ref,
+                  rt_lidar_ref):
+    data_tuples, plot_options = \
+        mrcal.show_geometry(nps.glue(rt_camera_ref,
+                                     rt_lidar_ref,
+                                     axis = -2),
+                            cameranames = (*args.camera_topic,
+                                           *args.lidar_topic),
+                            show_calobjects  = None,
+                            axis_scale       = 1.0,
+                            return_plot_args = True)
+
+    points_camera_observations = \
+        [ mrcal.transform_point_rt(rt_ref_board[iboard],
+                                   nps.clump(p_board_local,n=2) ) \
+          for (q_observed,iboard,icamera,iobservation) in observations_camera(joint_observations) ]
+    points_lidar_observations = \
+        [ mrcal.transform_point_rt(mrcal.invert_rt(rt_lidar_ref[ilidar]),
+                                   plidar) \
+                for (plidar,iboard,ilidar,iobservation) in observations_lidar(joint_observations) ]
+
+    gp.plot(*data_tuples,
+            *[ (points_camera_observations[i],
+                dict(_with     = 'lines',
+                     legend    = f"Points from camera observation {i}",
+                     tuplesize = -3)) \
+               for i in range(len(points_camera_observations)) ],
+            *[ (points_lidar_observations[i],
+                dict(_with     = 'points',
+                     legend    = f"Points from lidar observation {i}",
+                     tuplesize = -3)) \
+               for i in range(len(points_lidar_observations)) ],
+            **plot_options,
+            hardcopy = filename)
+    print(f"Wrote '{filename}'")
+
 
 
 
@@ -1023,6 +1062,10 @@ seed_state = \
                   Nmeas_camera_observation_all,
                   Nmeas_lidar_observation_all,
                   p_board_local )
+plot_geometry("/tmp/geometry-seed.gp",
+              **seed_state)
+
+
 solved_state = \
     fit( joint_observations,
          Nboards, Ncameras, Nlidars,
@@ -1031,53 +1074,15 @@ solved_state = \
          Nmeas_lidar_observation_all,
          p_board_local,
          seed_state )
-
-
-rt_ref_board  = solved_state['rt_ref_board']
-rt_camera_ref = solved_state['rt_camera_ref']
-rt_lidar_ref  = solved_state['rt_lidar_ref']
-
+plot_geometry("/tmp/geometry.gp",
+              **solved_state)
 
 for imodel in range(len(args.models)):
-    models[imodel].extrinsics_rt_fromref(rt_camera_ref[imodel])
+    models[imodel].extrinsics_rt_fromref(solved_state['rt_camera_ref'][imodel])
     root,extension = os.path.splitext(args.models[imodel])
     filename = f"{root}-mounted{extension}"
     models[imodel].write(filename)
     print(f"Wrote '{filename}'")
-
-# Done. Plot the whole thing
-filename = "/tmp/mounted.gp"
-data_tuples, plot_options = \
-    mrcal.show_geometry((*models,
-                         rt_lidar_ref),
-                        cameranames = (*args.models, 'lidar'),
-                        show_calobjects  = None,
-                        axis_scale       = 1.0,
-                        return_plot_args = True)
-
-points_camera_observations = \
-    [ mrcal.transform_point_rt(rt_ref_board[iboard],
-                               nps.clump(p_board_local,n=2) ) \
-      for (q_observed,iboard,icamera,iobservation) in observations_camera(joint_observations) ]
-points_lidar_observations = \
-    [ mrcal.transform_point_rt(mrcal.invert_rt(rt_lidar_ref[ilidar]),
-                               plidar) \
-            for (plidar,iboard,ilidar,iobservation) in observations_lidar(joint_observations) ]
-
-gp.plot(*data_tuples,
-        *[ (points_camera_observations[i],
-            dict(_with     = 'lines',
-                 legend    = f"Points from camera observation {i}",
-                 tuplesize = -3)) \
-           for i in range(len(points_camera_observations)) ],
-        *[ (points_lidar_observations[i],
-            dict(_with     = 'points',
-                 legend    = f"Points from lidar observation {i}",
-                 tuplesize = -3)) \
-           for i in range(len(points_lidar_observations)) ],
-        **plot_options,
-        hardcopy = filename)
-print(f"Wrote '{filename}'")
 
 for iobservation in range(len(joint_observations)):
     (q_observed, p_lidar) = joint_observations[iobservation]
@@ -1086,8 +1091,8 @@ for iobservation in range(len(joint_observations)):
         for icamera in range(Ncameras):
             if q_observed[icamera] is None: continue
 
-        rt_camera_lidar = mrcal.compose_rt(rt_camera_ref[icamera],
-                                           mrcal.invert_rt(rt_lidar_ref[ilidar]))
+        rt_camera_lidar = mrcal.compose_rt(solved_state['rt_camera_ref'][icamera],
+                                           mrcal.invert_rt(solved_state['rt_lidar_ref'][ilidar]))
         p = mrcal.transform_point_rt(rt_camera_lidar, p_lidar[ilidar])
         q_from_lidar = mrcal.project(p, *models[icamera].intrinsics())
 
