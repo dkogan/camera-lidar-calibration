@@ -548,6 +548,9 @@ def fit_estimate( joint_observations,
             if ilidar_first is None:
                 raise Exception(f"Getting here is a bug: no camera or lidar observations for {iboard=}")
 
+            # I'm looking at the first LIDAR in the list. This is arbitrary. Any
+            # LIDAR will do
+
             plidar = plidar_all[ilidar_first]
             plidar_mean = np.mean(plidar, axis=-2)
             p = plidar - plidar_mean
@@ -561,9 +564,12 @@ def fit_estimate( joint_observations,
             # plidar_mean + t_board_lidar = p_center_board
             Rt_board_lidar[3,:] = p_center_board - mrcal.rotate_point_R(Rt_board_lidar[:3,:],plidar_mean)
 
-            Rt_lidar0_board[iboard] = \
-                mrcal.compose_Rt(Rt_lidar0_lidar[ilidar_first],
-                                 mrcal.invert_Rt(Rt_board_lidar))
+            if ilidar_first == 0:
+                Rt_lidar0_board[iboard] = mrcal.invert_Rt(Rt_board_lidar)
+            else:
+                Rt_lidar0_board[iboard] = \
+                    mrcal.compose_Rt(Rt_lidar0_lidar[ilidar_first - 1],
+                                     mrcal.invert_Rt(Rt_board_lidar))
 
     return \
         dict(rt_ref_board  = \
