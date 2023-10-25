@@ -716,6 +716,36 @@ def fit( joint_observations,
                                istate_lidar_pose_0+Nstate_lidar_pose].reshape(Nstate_lidar_pose//6,6)),
                            axis = -2 ) )
 
+    def measurement_indices():
+
+        # Same measurement loop as in cost()
+
+        imeas = 0
+        for iboard in range(len(joint_observations)):
+            q_observed_all = joint_observations[iboard][0]
+            for icamera in range(Ncameras):
+                if q_observed_all[icamera] is None:
+                    continue
+
+                yield (imeas, f"{iboard=}\\n{icamera=}")
+
+                imeas += Nmeas_camera_observation
+
+
+        for iboard in range(len(joint_observations)):
+            plidar_all = joint_observations[iboard][1]
+            for ilidar in range(Nlidars):
+
+                if plidar_all[ilidar] is None:
+                    continue
+
+                yield (imeas, f"{iboard=}\\n{ilidar=}")
+
+                imeas += len(plidar_all[ilidar])
+
+        yield (imeas, f"regularization")
+
+
     def cost(b, *,
 
              # simplified computation for seeding
@@ -842,6 +872,16 @@ def fit( joint_observations,
                        x_camera,
                        x_lidar,
                        x_regularization):
+
+        imeas_all = list(measurement_indices())
+
+        measurement_boundaries = \
+            [ x \
+              for imeas,what in imeas_all \
+              for x in \
+              (f'arrow from {imeas}, graph 0 to {imeas}, graph 1 nohead',
+               f'label "{what}" at {imeas},graph 0 left front offset 0,character 2 boxed') ]
+
         filename = f'{filename_base}.gp'
         gp.plot((imeas_camera_0 + np.arange(Nmeas_camera_observation_all),
                  x_camera*SCALE_MEASUREMENT_PX,
@@ -854,6 +894,7 @@ def fit( joint_observations,
                  x_regularization*SCALE_MEASUREMENT_PX,
                  dict(legend = "Regularization residuals; plotted in pixels on the left y axis")),
                 _with = 'points',
+                _set  = measurement_boundaries,
                 ylabel  = 'Camera fit residual (pixels)',
                 y2label = 'LIDAR fit residual (m)',
                 ymin    = 0,
