@@ -250,8 +250,7 @@ def fit_estimate( joint_observations,
                                      p_center_board,
                                      out = out)
 
-    def pcenter_lidar(plidar, ilidar, what,
-                      out = None):
+    def pcenter_lidar(plidar, out = None):
         return \
             np.mean(plidar, axis=-2,
                     out = out)
@@ -372,9 +371,7 @@ def fit_estimate( joint_observations,
                 ilidar0,plidar0 = lidars[il0]
 
                 pcenter_lidar0 = \
-                    pcenter_lidar(plidar0,
-                                  ilidar0,
-                                  what = f"{iboard=},ilidar={ilidar0}")
+                    pcenter_lidar(plidar0)
 
                 for il1 in range(il0+1,len(lidars)):
                     ilidar1,plidar1 = lidars[il1]
@@ -386,8 +383,6 @@ def fit_estimate( joint_observations,
                     pcloud_next = get_pcloud_next(idx)
                     pcloud_next[0] = pcenter_lidar0
                     pcenter_lidar(plidar1,
-                                  ilidar1,
-                                  what = f"{iboard=},ilidar={ilidar1}",
                                   out = pcloud_next[1])
 
                     shared_observation_counts[idx] += 1
@@ -415,8 +410,6 @@ def fit_estimate( joint_observations,
                     # pcloud_next[0]
                     pcloud_next[1] = pcenter_camera0
                     pcenter_lidar(plidar,
-                                  ilidar,
-                                  what = f"{iboard=},ilidar={ilidar}",
                                   out = pcloud_next[0])
 
                     shared_observation_counts[idx] += 1
