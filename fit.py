@@ -413,8 +413,14 @@ def fit_estimate( joint_observations,
 
     def align_point_clouds(isensor0,isensor1):
 
-        # shape (N,2,3)
-        pclouds = shared_observation_pcenter[pairwise_index(isensor1,isensor0)]
+        idx = pairwise_index(isensor1,isensor0)
+
+        # shape (Nbuffer,2,3)
+        pclouds = shared_observation_pcenter[idx]
+
+        # Nbuffer > N; I cut it down to the real data
+        N = shared_observation_counts[idx]
+        pclouds = pclouds[:N]
 
         if isensor1 > isensor0:
             pcloud0 = pclouds[...,0,:]
@@ -422,6 +428,10 @@ def fit_estimate( joint_observations,
         else:
             pcloud0 = pclouds[...,1,:]
             pcloud1 = pclouds[...,0,:]
+
+        if not np.all(nps.norm2(pcloud0)) or \
+           not np.all(nps.norm2(pcloud1)):
+            raise Exception("Aligning uninitialized data")
 
         Rt01 = \
             mrcal.align_procrustes_points_Rt01(pcloud0, pcloud1)
