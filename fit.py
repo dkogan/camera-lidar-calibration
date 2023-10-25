@@ -792,17 +792,22 @@ def fit( joint_observations,
     # Docs say:
     # * 0 (default) : work silently.
     # * 1 : display a termination report.
-    # * 2 : display progress during iterations (not supported by 'lm'
+    # * 2 : display progress during iterations (not supported by 'lm')
     verbose = 2
+
+    # Crude pre-solve
     res = scipy.optimize.least_squares(cost,
                                        seed,
-                                       method  = 'dogbox',
-                                       verbose = verbose,
-                                       kwargs = dict(use_distance_to_plane = True))
+                                       max_nfev = 20,
+                                       method   = 'dogbox',
+                                       verbose  = verbose,
+                                       kwargs   = dict(use_distance_to_plane = True))
 
+    # Fine refinement. Note: verbosity doesn't work (see note above about 'lm')
     res = scipy.optimize.least_squares(cost,
                                        res.x,
-                                       method  = 'dogbox',
+                                       method  = 'lm',
+                                       ftol    = 1e-8,
                                        verbose = verbose,
                                        kwargs = dict(use_distance_to_plane = False))
     b = res.x
