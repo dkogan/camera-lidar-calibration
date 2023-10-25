@@ -181,6 +181,11 @@ def observations_lidar(joint_observations):
 
             yield (plidar,iboard,ilidar)
 
+def normal(p):
+    p_mean = np.mean(p, axis=-2)
+    p = p - p_mean
+    return mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
+
 def fit_estimate( joint_observations,
                   Nboards, Ncameras, Nlidars,
                   Nmeas_camera_observation,
@@ -560,11 +565,9 @@ def fit_estimate( joint_observations,
 
             # I'm looking at the first LIDAR in the list. This is arbitrary. Any
             # LIDAR will do
-
             plidar = plidar_all[ilidar_first]
+            n = normal(plidar)
             plidar_mean = np.mean(plidar, axis=-2)
-            p = plidar - plidar_mean
-            n = mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
             # I have the normal to the board, in lidar coordinates. Compute an
             # arbitrary rotation that matches this normal. This is unique only
             # up to yaw
