@@ -787,7 +787,64 @@ def fit( joint_observations,
         return x
 
 
+    def plot_residuals(filename_base,
+                       *,
+                       x_camera,
+                       x_lidar,
+                       x_regularization):
+        filename = f'{filename_base}.gp'
+        gp.plot((imeas_camera_0 + np.arange(Nmeas_camera_observation_all),
+                 x_camera*SCALE_MEASUREMENT_PX,
+                 dict(legend = "Camera residuals")),
+                (imeas_lidar_0 + np.arange(Nmeas_lidar_observation_all),
+                 x_lidar*SCALE_MEASUREMENT_M,
+                 dict(legend = "LIDAR residuals",
+                      y2     = True)),
+                (imeas_regularization_0 + np.arange(Nmeas_regularization),
+                 x_regularization*SCALE_MEASUREMENT_PX,
+                 dict(legend = "Regularization residuals; plotted in pixels on the left y axis")),
+                _with = 'points',
+                ylabel  = 'Camera fit residual (pixels)',
+                y2label = 'LIDAR fit residual (m)',
+                ymin    = 0,
+                y2min   = 0,
+                hardcopy = filename)
+        print(f"Wrote '{filename}'")
+
+        filename = f'{filename_base}-histogram.gp'
+        gp.plot( (x_camera*SCALE_MEASUREMENT_PX,
+                  dict(histogram=True,
+                       binwidth = SCALE_MEASUREMENT_PX/10,
+                       xrange   = (-3*SCALE_MEASUREMENT_PX,3*SCALE_MEASUREMENT_PX),
+                       xlabel   = "Camera residual (px)",
+                       ylabel   = "frequency")),
+                 (x_lidar*SCALE_MEASUREMENT_M,
+                  dict(histogram=True,
+                       binwidth = SCALE_MEASUREMENT_M/10,
+                       xrange   = (-3*SCALE_MEASUREMENT_M,3*SCALE_MEASUREMENT_M),
+                       xlabel   = "LIDAR residual (m)",
+                       ylabel   = "frequency")),
+                 multiplot='title "LIDAR-camera calibration residuals" layout 2,1',
+                 hardcopy = filename)
+        print(f"Wrote '{filename}'")
+
     seed = pack_state(**seed_kwargs)
+
+    x = cost(seed, use_distance_to_plane = False)
+    x_camera = \
+        x[imeas_camera_0:
+          imeas_camera_0+Nmeas_camera_observation_all]
+    x_lidar  = \
+        x[imeas_lidar_0:
+          imeas_lidar_0+Nmeas_lidar_observation_all]
+    x_regularization = \
+        x[imeas_regularization_0:
+          imeas_regularization_0+Nmeas_regularization]
+    plot_residuals("/tmp/residuals-seed",
+                   x_camera         = x_camera,
+                   x_lidar          = x_lidar,
+                   x_regularization = x_regularization)
+
 
     # Docs say:
     # * 0 (default) : work silently.
@@ -831,41 +888,10 @@ def fit( joint_observations,
         print(f"RMS fit error (lidar): {(np.sqrt(np.mean(x_lidar *x_lidar ))*SCALE_MEASUREMENT_M):.3f} m")
         print(f"norm2(error_regularization)/norm2(error): {nps.norm2(x_regularization)/nps.norm2(x):.3f} m")
 
-        filename = '/tmp/residuals.gp'
-        gp.plot((imeas_camera_0 + np.arange(Nmeas_camera_observation_all),
-                 x_camera*SCALE_MEASUREMENT_PX,
-                 dict(legend = "Camera residuals")),
-                (imeas_lidar_0 + np.arange(Nmeas_lidar_observation_all),
-                 x_lidar*SCALE_MEASUREMENT_M,
-                 dict(legend = "LIDAR residuals",
-                      y2     = True)),
-                (imeas_regularization_0 + np.arange(Nmeas_regularization),
-                 x_regularization*SCALE_MEASUREMENT_PX,
-                 dict(legend = "Regularization residuals; plotted in pixels on the left y axis")),
-                _with = 'points',
-                ylabel  = 'Camera fit residual (pixels)',
-                y2label = 'LIDAR fit residual (m)',
-                ymin    = 0,
-                y2min   = 0,
-                hardcopy = filename)
-        print(f"Wrote '{filename}'")
-
-        filename = '/tmp/residuals-histogram.gp'
-        gp.plot( (x_camera*SCALE_MEASUREMENT_PX,
-                  dict(histogram=True,
-                       binwidth = SCALE_MEASUREMENT_PX/10,
-                       xrange   = (-3*SCALE_MEASUREMENT_PX,3*SCALE_MEASUREMENT_PX),
-                       xlabel   = "Camera residual (px)",
-                       ylabel   = "frequency")),
-                 (x_lidar*SCALE_MEASUREMENT_M,
-                  dict(histogram=True,
-                       binwidth = SCALE_MEASUREMENT_M/10,
-                       xrange   = (-3*SCALE_MEASUREMENT_M,3*SCALE_MEASUREMENT_M),
-                       xlabel   = "LIDAR residual (m)",
-                       ylabel   = "frequency")),
-                 multiplot='title "LIDAR-camera calibration residuals" layout 2,1',
-                 hardcopy = filename)
-        print(f"Wrote '{filename}'")
+        plot_residuals("/tmp/residuals",
+                       x_camera         = x_camera,
+                       x_lidar          = x_lidar,
+                       x_regularization = x_regularization)
 
     return state
 
