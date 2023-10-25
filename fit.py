@@ -533,6 +533,8 @@ def fit_estimate( joint_observations,
         if icamera_first is not None:
             # We have some camera observation. I arbitrarily use the first one
 
+            if not np.any(Rt_camera_board_cache[iboard,icamera_first]):
+                raise Exception(f"Rt_camera_board_cache[{iboard=},{icamera_first=}] uninitialized")
             Rt_lidar0_board[iboard] = \
                 mrcal.compose_Rt(Rt_lidar0_camera[icamera_first],
                                  Rt_camera_board_cache[iboard,icamera_first])
