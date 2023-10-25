@@ -660,7 +660,12 @@ def read_first_message_in_bag(bag, topic,
 
 def chessboard_corners(bag, camera_topic,
                        *,
-                       bagname):
+                       bagname,
+                       cache = None):
+
+    if cache is not None and camera_topic in cache:
+        return cache[camera_topic]
+
     metadata = read_first_message_in_bag(bag, camera_topic)
 
     image_filename = metadata[0]['image']
@@ -688,17 +693,26 @@ def chessboard_corners(bag, camera_topic,
     q_observed = mrgingham.find_board(image, gridn=14)
     if q_observed is None:
         print(f"NO chessboard in '{image_filename_target}'")
-        return None
-    print(f"FOUND chessboard in '{image_filename_target}'")
+    else:
+        print(f"FOUND chessboard in '{image_filename_target}'")
+
+    if cache is not None: cache[camera_topic] = q_observed
+
     return q_observed
 
 def get_lidar_observation(bag, lidar_topic,
                           *,
                           p_board_local                = None,
                           what,
+                          cache                        = None,
                           viz                          = False,
                           viz_show_only_accepted       = False,
                           viz_show_point_cloud_context = False):
+
+    if cache is not None and lidar_topic in cache:
+        return cache[lidar_topic]
+
+
     lidar_metadata = read_first_message_in_bag(bag, lidar_topic)
     if len(lidar_metadata) == 0:
         raise Exception(f"Couldn't find lidar scan")
@@ -708,7 +722,7 @@ def get_lidar_observation(bag, lidar_topic,
 
     lidar_points_filename = lidar_metadata['points']
 
-    return \
+    p_lidar = \
         find_chessboard_in_view(None,
                                 lidar_points_filename,
                                 p_board_local = p_board_local,
@@ -716,3 +730,6 @@ def get_lidar_observation(bag, lidar_topic,
                                 viz                          = viz,
                                 viz_show_only_accepted       = viz_show_only_accepted,
                                 viz_show_point_cloud_context = viz_show_point_cloud_context)
+
+    if cache is not None: cache[lidar_topic] = p_lidar
+    return p_lidar

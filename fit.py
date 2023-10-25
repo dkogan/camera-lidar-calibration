@@ -910,22 +910,33 @@ def fit( joint_observations,
 
     return state
 
-def get_joint_observation(bag):
+def get_joint_observation(bag,
+                          *,
+                          # Both input and output
+                          cache = None):
     r'''Compute ONE lidar observation and/or ONE camera observation
 
     from a bag of ostensibly-stationary data'''
 
     bagname = os.path.split(os.path.splitext(os.path.basename(bag))[0])[1]
 
+    if cache is not None:
+        if bagname not in cache:
+            cache[bagname] = dict()
+        cache = cache[bagname]
+
     print(f"===== Looking for joint observations in '{bagname}'")
 
     Ncameras = len(args.camera_topic)
+
     q_observed = \
         [ calibration_data_import.chessboard_corners( \
                              bag,
                              args.camera_topic[icamera],
-                             bagname = bagname) \
+                             bagname = bagname,
+                             cache   = cache ) \
           for icamera in range(Ncameras) ]
+
 
     Nlidars = len(args.lidar_topic)
     p_lidar = \
@@ -934,6 +945,7 @@ def get_joint_observation(bag):
                                 args.lidar_topic[ilidar],
                                 p_board_local = p_board_local,
                                 what = f"{bagname}-{os.path.split(args.lidar_topic[ilidar])[1]}",
+                                cache = cache,
                                 viz                          = args.viz,
                                 viz_show_only_accepted       = args.viz_show_only_accepted,
                                 viz_show_point_cloud_context = args.viz_show_point_cloud_context) \
@@ -1028,71 +1040,51 @@ p_board_local[...,2] = 0 # assume flat. calobject_warp may differ between sample
 
 if args.read_cache:
     with open(args.cache, "rb") as f:
-        ( models,
-          p_board_local,
-          joint_observations,
-          Nboards,
-          Ncameras,
-          Nlidars,
-          Nobservations_camera,
-          Nmeas_camera_observation,
-          Nmeas_camera_observation_all,
-          Nobservations_lidar,
-          Nmeas_lidar_observation_all ) = pickle.load(f)
-
+        cache = pickle.load(f)
 else:
+    cache = dict()
 
-    joint_observations = [get_joint_observation(bag) for bag in args.bag ]
+# read AND write the cache dict
+joint_observations = [get_joint_observation(bag, cache=cache) for bag in args.bag ]
 
-    # Any boards observed by a single sensor aren't useful, and I get rid of
-    # them
-    def num_sensors_observed(o):
-        return \
-            sum(0 if x is None else 1 for qp in o for x in qp)
-    joint_observations = [o for o in joint_observations \
-                          if o is not None and num_sensors_observed(o) > 1]
+# Any boards observed by a single sensor aren't useful, and I get rid of
+# them
+def num_sensors_observed(o):
+    return \
+        sum(0 if x is None else 1 for qp in o for x in qp)
+joint_observations = [o for o in joint_observations \
+                      if o is not None and num_sensors_observed(o) > 1]
 
 
-    # joint_observations is now
-    # [ obs0, obs1, obs2, ... ] where each observation corresponds to a board pose
-    # Each obs is (q_observed, p_lidar)
-    # q_observed is a list of board corners; one per camera; some could be None
-    # p_lidar is a list of lidar points on the board; one per lidar; some could be None
-    Nboards = len(joint_observations)
-    print(f"Have {Nboards} joint observations")
+# joint_observations is now
+# [ obs0, obs1, obs2, ... ] where each observation corresponds to a board pose
+# Each obs is (q_observed, p_lidar)
+# q_observed is a list of board corners; one per camera; some could be None
+# p_lidar is a list of lidar points on the board; one per lidar; some could be None
+Nboards = len(joint_observations)
+print(f"Have {Nboards} joint observations")
 
-    Ncameras = len(args.camera_topic)
-    Nlidars  = len(args.lidar_topic)
+Ncameras = len(args.camera_topic)
+Nlidars  = len(args.lidar_topic)
 
-    Nobservations_camera = sum(0 if x is None else 1 \
-                               for o in joint_observations \
-                               for x in o[0])
+Nobservations_camera = sum(0 if x is None else 1 \
+                           for o in joint_observations \
+                           for x in o[0])
 
-    Nmeas_camera_observation = p_board_local.shape[-3]*p_board_local.shape[-2]*2
-    Nmeas_camera_observation_all = Nobservations_camera * Nmeas_camera_observation
+Nmeas_camera_observation = p_board_local.shape[-3]*p_board_local.shape[-2]*2
+Nmeas_camera_observation_all = Nobservations_camera * Nmeas_camera_observation
 
-    Nobservations_lidar  = \
-        sum(0 if x is None else 1 \
-            for o in joint_observations \
-            for x in o[1])
-    Nmeas_lidar_observation_all = \
-        sum(0 if x is None else len(x) \
-            for o in joint_observations \
-            for x in o[1])
+Nobservations_lidar  = \
+    sum(0 if x is None else 1 \
+        for o in joint_observations \
+        for x in o[1])
+Nmeas_lidar_observation_all = \
+    sum(0 if x is None else len(x) \
+        for o in joint_observations \
+        for x in o[1])
 
-    with open(args.cache, "wb") as f:
-        pickle.dump( ( models,
-                       p_board_local,
-                       joint_observations,
-                       Nboards,
-                       Ncameras,
-                       Nlidars,
-                       Nobservations_camera,
-                       Nmeas_camera_observation,
-                       Nmeas_camera_observation_all,
-                       Nobservations_lidar,
-                       Nmeas_lidar_observation_all),
-                     f)
+with open(args.cache, "wb") as f:
+    pickle.dump(cache, f)
 
 
 for icamera in range(Ncameras):
