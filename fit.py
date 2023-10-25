@@ -551,7 +551,7 @@ def fit_estimate( joint_observations,
             ilidar_first = \
                 next((i for i in range(len(plidar_all)) if plidar_all[i] is not None),
                      None)
-            if ilidar_first is not None:
+            if ilidar_first is None:
                 raise Exception(f"Getting here is a bug: no camera or lidar observations for {iboard=}")
 
             plidar = plidar_all[ilidar_first]
@@ -564,8 +564,8 @@ def fit_estimate( joint_observations,
             Rt_board_lidar = np.zeros((4,3), dtype=float)
             Rt_board_lidar[:3,:] = mrcal.R_aligned_to_vector(n)
             # I want p_center_board to map to plidar_mean: R_board_lidar
-            # plidar_mean + t_board_lidar = p_center_lidar
-            Rt_board_lidar[3,:] = p_center_lidar - mrcal.rotate_point_R(Rt_board_lidar[:3,:],plidar_mean)
+            # plidar_mean + t_board_lidar = p_center_board
+            Rt_board_lidar[3,:] = p_center_board - mrcal.rotate_point_R(Rt_board_lidar[:3,:],plidar_mean)
 
             Rt_lidar0_board[iboard] = \
                 mrcal.compose_Rt(Rt_lidar0_lidar[ilidar_first],
@@ -645,7 +645,7 @@ def fit( joint_observations,
                    rt_camera_ref,
                    # shape (Nlidars, 6)
                    rt_lidar_ref,):
-        if np.any(rt_lidar_ref != 0):
+        if np.any(rt_lidar_ref[0]):
             raise Exception("lidar0 is the reference coordinate system so it MUST have the identity transform")
         return nps.glue( (rt_ref_board     / SCALE_RT_REF_BOARD) .ravel(),
                          (rt_camera_ref    / SCALE_RT_CAMERA_REF).ravel(),
