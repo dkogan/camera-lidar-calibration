@@ -26,6 +26,13 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
+    parser.add_argument('--viz',
+                        action = argparse.BooleanOptionalAction,
+                        help = '''By default, we produce visualizations ONLY if
+                        we have ONE bag and ONE lidar-topic; if we have more of
+                        either, we do NOT visualize. To force visualization,
+                        pass --viz; to force NO visualization, pass --no-viz''')
+
     parser.add_argument('--viz-show-point-cloud-context',
                         action='store_true',
                         help = '''If given, display ALL the points in the scene
@@ -33,11 +40,13 @@ def parse_args():
 
     parser.add_argument('bag',
                         type=str,
-                        help = '''The rosbag that contains the lidar data''')
+                        help = '''Glob for the rosbags that contains the lidar data''')
 
     parser.add_argument('lidar-topic',
                         type=str,
-                        help = '''The one LIDAR topic we're looking at''')
+                        nargs = '+',
+                        help = '''The LIDAR topics we're looking at. At least one must be given''')
+
 
     args = parser.parse_args()
 
@@ -46,18 +55,34 @@ def parse_args():
 
 args = parse_args()
 
-
-
 import calibration_data_import
+import glob
 
-lidar_topic = getattr(args, 'lidar-topic')
-bagname = os.path.split(os.path.splitext(os.path.basename(args.bag))[0])[1]
-what = f"{bagname}-{os.path.split(lidar_topic)[1]}"
 
-calibration_data_import.get_lidar_observation( \
-                        args.bag,
-                        lidar_topic,
-                        what                         = what,
-                        viz                          = True,
-                        viz_show_only_accepted       = False,
-                        viz_show_point_cloud_context = args.viz_show_point_cloud_context)
+lidar_topics = getattr(args, 'lidar-topic')
+bags = glob.glob(args.bag)
+if len(bags) == 0:
+    print(f"No files matched the glob '{args.bag}'", file=sys.stderr)
+    sys.exit(1)
+
+if args.viz is not None:
+    # user asked for specific visualization settings
+    viz = args.viz
+else:
+    # default viz
+    viz = (len(bags) == 1 and len(lidar_topics) == 1)
+
+
+for lidar_topic in lidar_topics:
+    for bag in bags:
+
+        bagname = os.path.split(os.path.splitext(os.path.basename(bag))[0])[1]
+        what = f"{bagname}-{os.path.split(lidar_topic)[1]}"
+
+        calibration_data_import.get_lidar_observation( \
+                                bag,
+                                lidar_topic,
+                                what                         = what,
+                                viz                          = viz,
+                                viz_show_only_accepted       = False,
+                                viz_show_point_cloud_context = args.viz_show_point_cloud_context)
