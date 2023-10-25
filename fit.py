@@ -729,6 +729,8 @@ def fit( joint_observations,
 
                 Nmeas_here = len(plidar)
 
+                if False: print(f"{iboard=} {ilidar=} {imeas=}")
+
                 # The pose of the board is Rt_ref_board. The board is z=0 in the
                 # board coords so the normal to the plane is nref = Rrb[:,2]. I
                 # want to define the board as
