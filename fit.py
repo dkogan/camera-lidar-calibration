@@ -1097,7 +1097,6 @@ for iobservation in range(len(joint_observations)):
                        _with     = 'points',
                        legend    = 'Reprojected LIDAR points')),
                  square  = True,
-                 _xrange = (0,960),
-                 _yrange = (600,0),
+                 yinv    = True,
                  hardcopy = filename)
         print(f"Wrote '{filename}'")
