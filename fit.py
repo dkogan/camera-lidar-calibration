@@ -886,7 +886,8 @@ def get_joint_observation(bag):
     q_observed = \
         [ calibration_data_import.chessboard_corners( \
                              bag,
-                             args.camera_topic[icamera]) \
+                             args.camera_topic[icamera],
+                             bagname = bagname) \
           for icamera in range(Ncameras) ]
 
     Nlidars = len(args.lidar_topic)

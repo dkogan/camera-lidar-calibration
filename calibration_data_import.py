@@ -6,6 +6,7 @@ Used by the higher-level calibration routines
 '''
 
 import sys
+import os
 import numpy as np
 import numpysane as nps
 import gnuplotlib as gp
@@ -657,14 +658,24 @@ def read_first_message_in_bag(bag, topic,
     pipe.seek(0)
     return list(vnlog.vnlog(pipe))
 
-def chessboard_corners(bag, camera_topic):
+def chessboard_corners(bag, camera_topic,
+                       *,
+                       bagname):
     metadata = read_first_message_in_bag(bag, camera_topic)
 
     image_filename = metadata[0]['image']
 
-    print(f"=== Looking for board in image '{image_filename}'....")
+    image_filename_target = \
+        os.path.split(image_filename)[0] + '/' + bagname + os.path.splitext(image_filename)[1]
+    # make symlink, overwriting if needed
+    try:    os.unlink(image_filename_target)
+    except: pass
+    os.symlink(os.path.split(image_filename)[1],
+               image_filename_target)
 
-    image = mrcal.load_image(image_filename,
+    print(f"=== Looking for board in image '{image_filename_target}'....")
+
+    image = mrcal.load_image(image_filename_target,
                              bits_per_pixel = 8,
                              channels       = 1)
 
@@ -676,9 +687,9 @@ def chessboard_corners(bag, camera_topic):
 
     q_observed = mrgingham.find_board(image, gridn=14)
     if q_observed is None:
-        print(f"NO chessboard in '{image_filename}'")
+        print(f"NO chessboard in '{image_filename_target}'")
         return None
-    print(f"FOUND chessboard in '{image_filename}'")
+    print(f"FOUND chessboard in '{image_filename_target}'")
     return q_observed
 
 def get_lidar_observation(bag, lidar_topic,

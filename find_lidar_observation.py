@@ -231,9 +231,12 @@ else:
 
 Nfail = 0
 for lidar_topic in lidar_topics:
-    for bag in bags:
+    print(f"======== Looking for observations of {lidar_topic}'")
 
+    for bag in bags:
         bagname = os.path.split(os.path.splitext(os.path.basename(bag))[0])[1]
+        print(f"===== Looking for observations of {lidar_topic} in '{bagname}'")
+
         what = f"{bagname}-{os.path.split(lidar_topic)[1]}"
 
         if not args.check:
