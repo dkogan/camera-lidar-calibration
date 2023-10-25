@@ -996,7 +996,8 @@ def plot_geometry(filename,
                   *,
                   rt_ref_board,
                   rt_camera_ref,
-                  rt_lidar_ref):
+                  rt_lidar_ref,
+                  only_axes = False):
     data_tuples, plot_options = \
         mrcal.show_geometry(nps.glue(rt_camera_ref,
                                      rt_lidar_ref,
@@ -1007,32 +1008,35 @@ def plot_geometry(filename,
                             axis_scale       = 1.0,
                             return_plot_args = True)
 
-    points_camera_observations = \
-        [ mrcal.transform_point_rt(rt_ref_board[iboard],
-                                   nps.clump(p_board_local,n=2) ) \
-          for (q_observed,iboard,icamera) in observations_camera(joint_observations) ]
-    legend_camera_observations = \
-        [ f"{iboard=} {icamera=}" \
-          for (q_observed,iboard,icamera) in observations_camera(joint_observations) ]
-    points_lidar_observations = \
-        [ mrcal.transform_point_rt(mrcal.invert_rt(rt_lidar_ref[ilidar]),
-                                   plidar) \
-                for (plidar,iboard,ilidar) in observations_lidar(joint_observations) ]
-    legend_lidar_observations = \
-        [ f"{iboard=} {ilidar=}" \
-          for (plidar,iboard,ilidar) in observations_lidar(joint_observations) ]
+    if not only_axes:
+        points_camera_observations = \
+            [ mrcal.transform_point_rt(rt_ref_board[iboard],
+                                       nps.clump(p_board_local,n=2) ) \
+              for (q_observed,iboard,icamera) in observations_camera(joint_observations) ]
+        legend_camera_observations = \
+            [ f"{iboard=} {icamera=}" \
+              for (q_observed,iboard,icamera) in observations_camera(joint_observations) ]
+        points_lidar_observations = \
+            [ mrcal.transform_point_rt(mrcal.invert_rt(rt_lidar_ref[ilidar]),
+                                       plidar) \
+                    for (plidar,iboard,ilidar) in observations_lidar(joint_observations) ]
+        legend_lidar_observations = \
+            [ f"{iboard=} {ilidar=}" \
+              for (plidar,iboard,ilidar) in observations_lidar(joint_observations) ]
+
+        data_tuples = (*data_tuples,
+                       *[ (points_camera_observations[i],
+                           dict(_with     = 'lines',
+                                legend    = legend_camera_observations[i],
+                                tuplesize = -3)) \
+                          for i in range(len(points_camera_observations)) ],
+                       *[ (points_lidar_observations[i],
+                           dict(_with     = 'points',
+                                legend    = legend_lidar_observations[i],
+                                tuplesize = -3)) \
+                          for i in range(len(points_lidar_observations)) ] )
 
     gp.plot(*data_tuples,
-            *[ (points_camera_observations[i],
-                dict(_with     = 'lines',
-                     legend    = legend_camera_observations[i],
-                     tuplesize = -3)) \
-               for i in range(len(points_camera_observations)) ],
-            *[ (points_lidar_observations[i],
-                dict(_with     = 'points',
-                     legend    = legend_lidar_observations[i],
-                     tuplesize = -3)) \
-               for i in range(len(points_lidar_observations)) ],
             **plot_options,
             hardcopy = filename)
     print(f"Wrote '{filename}'")
@@ -1145,6 +1149,9 @@ seed_state = \
                   p_board_local )
 plot_geometry("/tmp/geometry-seed.gp",
               **seed_state)
+plot_geometry("/tmp/geometry-seed-onlyaxes.gp",
+              only_axes = True,
+              **seed_state)
 
 
 solved_state = \
@@ -1156,6 +1163,9 @@ solved_state = \
          p_board_local,
          seed_state )
 plot_geometry("/tmp/geometry.gp",
+              **solved_state)
+plot_geometry("/tmp/geometry-onlyaxes.gp",
+              only_axes = True,
               **solved_state)
 
 for imodel in range(len(args.models)):
