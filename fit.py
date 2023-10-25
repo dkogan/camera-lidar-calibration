@@ -590,7 +590,8 @@ def fit( joint_observations,
          Nmeas_camera_observation,
          Nmeas_camera_observation_all,
          Nmeas_lidar_observation_all,
-         p_board_local):
+         p_board_local,
+         seed_kwargs):
 
     r'''Align the LIDAR and camera geometry
 
@@ -784,12 +785,7 @@ def fit( joint_observations,
         return x
 
 
-    seed = pack_state(**fit_estimate( joint_observations,
-                                      Nboards, Ncameras, Nlidars,
-                                      Nmeas_camera_observation,
-                                      Nmeas_camera_observation_all,
-                                      Nmeas_lidar_observation_all,
-                                      p_board_local ))
+    seed = pack_state(**seed_kwargs)
 
     # Docs say:
     # * 0 (default) : work silently.
@@ -1020,13 +1016,21 @@ for ilidar in range(Nlidars):
         sys.exit(1)
 
 
+seed_state = \
+    fit_estimate( joint_observations,
+                  Nboards, Ncameras, Nlidars,
+                  Nmeas_camera_observation,
+                  Nmeas_camera_observation_all,
+                  Nmeas_lidar_observation_all,
+                  p_board_local )
 solved_state = \
     fit( joint_observations,
          Nboards, Ncameras, Nlidars,
          Nmeas_camera_observation,
          Nmeas_camera_observation_all,
          Nmeas_lidar_observation_all,
-         p_board_local )
+         p_board_local,
+         seed_state )
 
 
 rt_ref_board  = solved_state['rt_ref_board']
