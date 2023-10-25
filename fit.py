@@ -447,7 +447,7 @@ def fit_estimate( joint_observations,
             if isensor0 >= Nlidars:
                 icamera0 = isensor0 - Nlidars
 
-                # from a camera to a camera
+                print(f"Estimating pose of camera {icamera1} from camera {icamera0}")
                 if not np.any(Rt_lidar0_camera[icamera0]):
                     raise Exception(f"Computing pose of camera {icamera1} from camera {icamera0}, but the pose of camera {icamera0} is not initialized")
                 Rt_lidar0_camera[icamera1] = mrcal.compose_Rt(Rt_lidar0_camera[icamera0],
@@ -456,8 +456,7 @@ def fit_estimate( joint_observations,
             else:
                 ilidar0 = isensor0
 
-                # from a lidar to a camera
-
+                print(f"Estimating pose of camera {icamera1} from lidar {ilidar0}")
                 if ilidar0 == 0:
                     # from the reference
                     Rt_lidar0_camera[icamera1] = Rt01
@@ -472,7 +471,7 @@ def fit_estimate( joint_observations,
             if isensor0 >= Nlidars:
                 icamera0 = isensor0 - Nlidars
 
-                # from a camera to a lidar
+                print(f"Estimating pose of lidar {ilidar1} from camera {icamera0}")
                 if not np.any(Rt_lidar0_camera[icamera0]):
                     raise Exception(f"Computing pose of lidar {ilidar1} from camera {icamera0}, but the pose of camera {icamera0} is not initialized")
                 Rt_lidar0_lidar[ilidar1-1] = mrcal.compose_Rt(Rt_lidar0_camera[icamera0],
@@ -481,8 +480,7 @@ def fit_estimate( joint_observations,
             else:
                 ilidar0 = isensor0
 
-                # from a lidar to a lidar
-
+                print(f"Estimating pose of lidar {ilidar1} from lidar {ilidar0}")
                 if ilidar0 == 0:
                     # from the reference
                     Rt_lidar0_lidar[ilidar1-1] = Rt01
