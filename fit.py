@@ -239,20 +239,37 @@ def fit_estimate( joint_observations,
 
         return Rt_camera_board
 
-    def pcenter_camera(q_observed, iboard, icamera, what,
-                       out = None):
-        return \
-            mrcal.transform_point_Rt(get__Rt_camera_board(q_observed,
-                                                          iboard,
-                                                          icamera,
-                                                          what = what),
-                                     p_center_board,
-                                     out = out)
+    def pcenter_normal_camera(q_observed, iboard, icamera, what,
+                              out = None):
 
-    def pcenter_lidar(plidar, out = None):
-        return \
-            np.mean(plidar, axis=-2,
-                    out = out)
+        Rt_camera_board = \
+            get__Rt_camera_board(q_observed,
+                                 iboard,
+                                 icamera,
+                                 what = what)
+
+        if out is None:
+            out = np.zeros((2,3),dtype=float)
+        mrcal.transform_point_Rt(Rt_camera_board,
+                                 p_center_board,
+                                 out = out[0])
+        out[1] = Rt_camera_board[:3,2]
+
+        # I make sure that the normal points towards the sensor; for consistency
+        if nps.inner(out[0],out[1]) > 0:
+            out[1] *= -1
+        return out
+
+    def pcenter_normal_lidar(plidar, out = None):
+        if out is None:
+            out = np.zeros((2,3),dtype=float)
+        np.mean(plidar, axis=-2,
+                out = out[0])
+        out[1] = normal(plidar)
+        # I make sure that the normal points towards the sensor; for consistency
+        if nps.inner(out[0],out[1]) > 0:
+            out[1] *= -1
+        return out
 
 
 
@@ -318,22 +335,23 @@ def fit_estimate( joint_observations,
         # I preallocate too many. I will grow the buffer as I need to. The
         # currently needed buffer size is in shared_observation_counts
         #
-        # shared_observation_pcenter[...,0,:] is from isensor0 and
-        # shared_observation_pcenter[...,1,:] is from isensor1
+        # shared_observation_pcenter_normal[...,0,:,:] is from isensor0 and
+        # shared_observation_pcenter_normal[...,1,:,:] is from isensor1
         # where isensor0 < isensor1
-        shared_observation_pcenter = [ np.zeros((16,2,3), dtype=float) \
-                                       for i in range(pairwise_N()) ]
+        # shape (Npairs,Nbuffer,Nsensors=2,pcenter_normal=2,3)
+        shared_observation_pcenter_normal = [ np.zeros((16,2,2,3), dtype=float) \
+                                              for i in range(pairwise_N()) ]
 
-        def get_pcloud_next(idx):
+        def get_pcloud_normal_next(idx):
             i = shared_observation_counts[idx]
-            Nbuffer = shared_observation_pcenter[idx].shape[0]
+            Nbuffer = shared_observation_pcenter_normal[idx].shape[0]
             if i >= Nbuffer:
                 # need to grow buffer
-                x = np.zeros((Nbuffer*2,*shared_observation_pcenter[idx].shape[1:]),
+                x = np.zeros((Nbuffer*2,*shared_observation_pcenter_normal[idx].shape[1:]),
                              dtype=float)
-                x[:Nbuffer] = shared_observation_pcenter[idx]
-                shared_observation_pcenter[idx] = x
-            return shared_observation_pcenter[idx][i]
+                x[:Nbuffer] = shared_observation_pcenter_normal[idx]
+                shared_observation_pcenter_normal[idx] = x
+            return shared_observation_pcenter_normal[idx][i]
 
 
         for cameras,lidars,iboard in observation_sets():
@@ -341,26 +359,25 @@ def fit_estimate( joint_observations,
             for ic0 in range(len(cameras)-1):
                 icamera0,q_observed0 = cameras[ic0]
 
-                pcenter_camera0 = \
-                    pcenter_camera(q_observed0,
-                                   iboard,
-                                   icamera0,
-                                   what = f"{iboard=},icamera={icamera0}")
-
+                pcenter_normal_camera0 = \
+                    pcenter_normal_camera(q_observed0,
+                                          iboard,
+                                          icamera0,
+                                          what = f"{iboard=},icamera={icamera0}")
                 for ic1 in range(ic0+1,len(cameras)):
                     icamera1,q_observed1 = cameras[ic1]
 
                     idx = pairwise_index(Nlidars+icamera0,
                                          Nlidars+icamera1)
 
-                    # shape (2,3)
-                    pcloud_next = get_pcloud_next(idx)
-                    pcloud_next[0] = pcenter_camera0
-                    pcenter_camera(q_observed1,
-                                   iboard,
-                                   icamera1,
-                                   what = f"{iboard=},icamera={icamera1}",
-                                   out = pcloud_next[1])
+                    # shape (Nsensors=2,pcenter_normal=2,3)
+                    pcloud_normal_next = get_pcloud_normal_next(idx)
+                    pcloud_normal_next[0] = pcenter_normal_camera0
+                    pcenter_normal_camera(q_observed1,
+                                          iboard,
+                                          icamera1,
+                                          what = f"{iboard=},icamera={icamera1}",
+                                          out = pcloud_normal_next[1])
 
                     shared_observation_counts[idx] += 1
 
@@ -369,8 +386,8 @@ def fit_estimate( joint_observations,
             for il0 in range(len(lidars)-1):
                 ilidar0,plidar0 = lidars[il0]
 
-                pcenter_lidar0 = \
-                    pcenter_lidar(plidar0)
+                pcenter_normal_lidar0 = \
+                    pcenter_normal_lidar(plidar0)
 
                 for il1 in range(il0+1,len(lidars)):
                     ilidar1,plidar1 = lidars[il1]
@@ -378,11 +395,11 @@ def fit_estimate( joint_observations,
                     idx = pairwise_index(ilidar1,
                                          ilidar0)
 
-                    # shape (2,3)
-                    pcloud_next = get_pcloud_next(idx)
-                    pcloud_next[0] = pcenter_lidar0
-                    pcenter_lidar(plidar1,
-                                  out = pcloud_next[1])
+                    # shape (Nsensors=2,pcenter_normal=2,3)
+                    pcloud_normal_next = get_pcloud_normal_next(idx)
+                    pcloud_normal_next[0] = pcenter_normal_lidar0
+                    pcenter_normal_lidar(plidar1,
+                                         out = pcloud_normal_next[1])
 
                     shared_observation_counts[idx] += 1
 
@@ -390,11 +407,11 @@ def fit_estimate( joint_observations,
             for ic in range(len(cameras)):
                 icamera,q_observed = cameras[ic]
 
-                pcenter_camera0 = \
-                    pcenter_camera(q_observed,
-                                   iboard,
-                                   icamera,
-                                   what = f"{iboard=},icamera={icamera}")
+                pcenter_normal_camera0 = \
+                    pcenter_normal_camera(q_observed,
+                                          iboard,
+                                          icamera,
+                                          what = f"{iboard=},icamera={icamera}")
 
                 for il in range(len(lidars)):
                     ilidar,plidar = lidars[il]
@@ -402,49 +419,64 @@ def fit_estimate( joint_observations,
                     idx = pairwise_index(ilidar,
                                          Nlidars+icamera)
 
-                    # shape (2,3)
-                    pcloud_next = get_pcloud_next(idx)
+                    # shape (Nsensors=2,pcenter_normal=2,3)
+                    pcloud_normal_next = get_pcloud_normal_next(idx)
                     # isensor(camera) > isensor(lidar) always, so I store the
-                    # camera into pcloud_next[1] and the lidar into
-                    # pcloud_next[0]
-                    pcloud_next[1] = pcenter_camera0
-                    pcenter_lidar(plidar,
-                                  out = pcloud_next[0])
+                    # camera into pcloud_normal_next[1] and the lidar into
+                    # pcloud_normal_next[0]
+                    pcloud_normal_next[1] = pcenter_normal_camera0
+                    pcenter_normal_lidar(plidar,
+                                         out = pcloud_normal_next[0])
 
                     shared_observation_counts[idx] += 1
 
 
-        return shared_observation_counts, shared_observation_pcenter
+        return shared_observation_counts, shared_observation_pcenter_normal
 
     def align_point_clouds(isensor0,isensor1):
 
         idx = pairwise_index(isensor1,isensor0)
 
-        # shape (Nbuffer,2,3)
-        pclouds = shared_observation_pcenter[idx]
+        # shape (Nbuffer,Nsensors=2,pcenter_normal=2,3)
+        pcloud_normals = shared_observation_pcenter_normal[idx]
 
         # Nbuffer > N; I cut it down to the real data
         N = shared_observation_counts[idx]
-        pclouds = pclouds[:N]
+        pcloud_normals = pcloud_normals[:N]
 
         if isensor1 > isensor0:
-            pcloud0 = pclouds[...,0,:]
-            pcloud1 = pclouds[...,1,:]
+            pcloud_normals0 = pcloud_normals[...,0,:,:]
+            pcloud_normals1 = pcloud_normals[...,1,:,:]
         else:
-            pcloud0 = pclouds[...,1,:]
-            pcloud1 = pclouds[...,0,:]
+            pcloud_normals0 = pcloud_normals[...,1,:,:]
+            pcloud_normals1 = pcloud_normals[...,0,:,:]
 
-        if not np.all(nps.norm2(pcloud0)) or \
-           not np.all(nps.norm2(pcloud1)):
+        pcloud0 = pcloud_normals0[:,0,:]
+        pcloud1 = pcloud_normals1[:,0,:]
+
+        normals0 = pcloud_normals0[:,1,:]
+        normals1 = pcloud_normals1[:,1,:]
+
+        # If I had lots of points, I'd do a procrustes fit, and I'd be done. But
+        # I have few points, so I do this in two steps:
+        # - I align the normals to get a high-confidence rotation
+        # - I lock down this rotation, and find the best translation
+        if not np.all(nps.norm2(pcloud_normals0)) or \
+           not np.all(nps.norm2(pcloud_normals1)):
             raise Exception("Aligning uninitialized data")
 
-        Rt01 = \
-            mrcal.align_procrustes_points_Rt01(pcloud0, pcloud1)
+        Rt01 = np.zeros((4,3), dtype=float)
 
+        Rt01[:3,:] = \
+            mrcal.align_procrustes_vectors_R01(normals0, normals1)
         # Errors are reported this way (Rt01=0) in the bleeding-edge mrcal only.
         # So I also check for N
-        if len(pclouds) < 3 or not np.any(Rt01):
+        if len(pcloud_normals) < 2 or not np.any(Rt01[:3,:]):
             raise Exception(f"Insufficient overlap between sensors {isensor0} and {isensor1}")
+
+        # Now the translation. R01 x1 + t01 ~ x0
+        Rt01[3,:] = np.mean(pcloud0 - mrcal.rotate_point_R(Rt01[:3,:], pcloud1),
+                            axis = -2)
 
         return Rt01
 
@@ -522,7 +554,7 @@ def fit_estimate( joint_observations,
                 continue
             yield isensor1
 
-    shared_observation_counts, shared_observation_pcenter = connectivity_matrices()
+    shared_observation_counts, shared_observation_pcenter_normal = connectivity_matrices()
 
     mrcal.calibration._traverse_sensor_connections \
         ( Nsensors,
