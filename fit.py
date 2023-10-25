@@ -162,7 +162,6 @@ SCALE_MEASUREMENT_REGULARIZATION_rt = np.array((SCALE_MEASUREMENT_REGULARIZATION
 
 
 def observations_camera(joint_observations):
-    iobservation = 0
     for iboard in range(len(joint_observations)):
         q_observed_all = joint_observations[iboard][0]
         for icamera in range(len(q_observed_all)):
@@ -170,12 +169,9 @@ def observations_camera(joint_observations):
             if q_observed is None:
                 continue
 
-            yield (q_observed,iboard,icamera,iobservation)
-
-            iobservation += 1
+            yield (q_observed,iboard,icamera)
 
 def observations_lidar(joint_observations):
-    iobservation = 0
     for iboard in range(len(joint_observations)):
         plidar_all = joint_observations[iboard][1]
         for ilidar in range(len(plidar_all)):
@@ -183,9 +179,7 @@ def observations_lidar(joint_observations):
             if plidar is None:
                 continue
 
-            yield (plidar,iboard,ilidar,iobservation)
-
-            iobservation += 1
+            yield (plidar,iboard,ilidar)
 
 def fit_estimate( joint_observations,
                   Nboards, Ncameras, Nlidars,
@@ -915,21 +909,27 @@ def plot_geometry(filename,
     points_camera_observations = \
         [ mrcal.transform_point_rt(rt_ref_board[iboard],
                                    nps.clump(p_board_local,n=2) ) \
-          for (q_observed,iboard,icamera,iobservation) in observations_camera(joint_observations) ]
+          for (q_observed,iboard,icamera) in observations_camera(joint_observations) ]
+    legend_camera_observations = \
+        [ f"{iboard=} {icamera=}" \
+          for (q_observed,iboard,icamera) in observations_camera(joint_observations) ]
     points_lidar_observations = \
         [ mrcal.transform_point_rt(mrcal.invert_rt(rt_lidar_ref[ilidar]),
                                    plidar) \
-                for (plidar,iboard,ilidar,iobservation) in observations_lidar(joint_observations) ]
+                for (plidar,iboard,ilidar) in observations_lidar(joint_observations) ]
+    legend_lidar_observations = \
+        [ f"{iboard=} {ilidar=}" \
+          for (plidar,iboard,ilidar) in observations_lidar(joint_observations) ]
 
     gp.plot(*data_tuples,
             *[ (points_camera_observations[i],
                 dict(_with     = 'lines',
-                     legend    = f"Points from camera observation {i}",
+                     legend    = legend_camera_observations[i],
                      tuplesize = -3)) \
                for i in range(len(points_camera_observations)) ],
             *[ (points_lidar_observations[i],
                 dict(_with     = 'points',
-                     legend    = f"Points from lidar observation {i}",
+                     legend    = legend_lidar_observations[i],
                      tuplesize = -3)) \
                for i in range(len(points_lidar_observations)) ],
             **plot_options,
