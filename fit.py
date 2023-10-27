@@ -126,6 +126,7 @@ import numpysane as nps
 import gnuplotlib as gp
 import scipy.optimize
 import pickle
+import io
 
 sys.path[:0] = '/home/dima/projects/mrcal',
 import mrcal
@@ -1080,6 +1081,165 @@ def plot_geometry(filename,
             hardcopy = filename)
     print(f"Wrote '{filename}'")
 
+def find_multisense_units_lra(topics):
+    r'''Converts unordered camera topics into multisense sets
+
+Each multisense unit consists of 3 cameras (listed in their physical order from
+left to right):
+
+- "left": monochrome camera
+- "aux": color camera (immediately to the right of the "left" camera). Wider FOV
+  than the others
+- "right": monochrome camera; same sensor, lens as the "left". Placed far to the
+  right of the other two
+
+We offload the stereo processing to the multisense hardware, so we must send out
+the calibration data to that hardware. It expects results in multisense sets,
+not as individual camera units, so we must find the multisense sets in the
+topics we read
+
+Each of our camera topics has the form
+
+  PREFIX/multisenseSUFFIX/CAMERA/image_DEPTH
+
+The PREFIX doesn't matter. The SUFFIX identifies the multisense unit. The CAMERA
+is one of ("left","aux","right"). The DEPTH is either "mono" or "color". It
+doesn't matter
+
+This function returns a dict such as
+
+  dict(multisense_front = np.array((0,5,-1)),
+       multisense_left  = np.array((1,2,4)) )
+
+This indicates that we have two multisense units. The "multisense_left" unit has
+the left camera in topics[1], the right camera in topics[2] and the aux camera
+in topics[4]. The "multisense_front" unit doesn't have an aux camera specified
+
+    '''
+
+    matches = [ re.search("/(multisense[a-zA-Z0-9_]+)/([a-zA-Z0-9_]+)/image", topic) \
+                for topic in topics ]
+
+    unit_list = [ m.group(1) if m is not None else None for m in matches ]
+
+    units = set([u for u in unit_list if u is not None])
+
+    units_lra = dict()
+    for u in units:
+        # initialize all the cameras to -1: none exist until we see them
+        units_lra[u] = -np.ones( (3,), dtype=int)
+
+    for i,m in enumerate(matches):
+        if m is None: continue
+        u = m.group(1)
+        c = m.group(2)
+        if   c == "left":  units_lra[u][0] = i
+        elif c == "right": units_lra[u][1] = i
+        elif c == "aux":   units_lra[u][2] = i
+        else:
+            raise Exception(f"Topic {topics[i]} has an unknown multisense camera: '{c}'. I only know about 'left','right','aux'")
+
+    return units_lra
+
+def write_multisense_calibration(topics):
+
+    multisense_units_lra = find_multisense_units_lra(topics)
+
+    for unit in multisense_units_lra.keys():
+        lra = multisense_units_lra[unit]
+        if np.any(lra < 0):
+            print(f"Multisense unit '{unit}' doesn't have ALL the cameras specified: lra = {lra}. I'm not writing its calibration file",
+                  file = sys.stderr)
+            continue
+
+        if not all(models[i].intrinsics()[0] == 'LENSMODEL_OPENCV8' for i in lra):
+            print(f"Multisense unit '{unit}' doesn't have ALL the cameras follow the LENSMODEL_OPENCV8 model. The multisense requires this (I think?). So I'm not writing its calibration file",
+                  file = sys.stderr)
+            continue
+
+        # The multisense files are order by
+        #
+        # - left
+        # - right
+        # - aux
+        #
+        # And the have the left camera at the identity transform (I don't know if
+        # this is a requirement or convention). I do this as well. In particular, I
+        # write the results to the same directory as the "left" camera
+        root,extension = os.path.splitext(args.models[lra[0]])
+        D              = os.path.split(root)[0]
+        if len(D) == 0: D = '.'
+
+        # I mimic the intrinsics files I see in the factory multisense unit:
+        # %YAML:1.0
+        # M1: !!opencv-matrix
+        #    rows: 3
+        #    cols: 3
+        #    dt: d
+        #    data: [ 1287.92260742187500000,    0.00000000000000000,  927.83203125000000000,
+        #               0.00000000000000000, 1287.85131835937500000,  611.74780273437500000,
+        #               0.00000000000000000,    0.00000000000000000,    1.00000000000000000 ]
+        # D1: !!opencv-matrix
+        #    rows: 1
+        #    cols: 8
+        #    dt: d
+        #    data: [   -0.12928095459938049,   -0.36398330330848694,    0.00021414959337562,    0.00007285172614502,   -0.02243571542203426,    0.30014526844024658,   -0.52040416002273560,   -0.12218914926052094 ]
+        # M2: !!opencv-matrix
+        #    rows: 3
+        #    cols: 3
+        #    dt: d
+        #    data: [ 1290.11486816406250000,    0.00000000000000000,  925.88769531250000000,
+        #               0.00000000000000000, 1290.20703125000000000,  610.00817871093750000,
+        #               0.00000000000000000,    0.00000000000000000,    1.00000000000000000 ]
+        # D2: !!opencv-matrix
+        #    rows: 1
+        #    cols: 8
+        #    dt: d
+        #    data: [   -0.44484668970108032,   -0.25598752498626709,    0.00005418056753115,    0.00011601681035245,    0.00710464408621192,   -0.01624384894967079,   -0.54431200027465820,   -0.02376704663038254 ]
+        # M3: !!opencv-matrix
+        #    rows: 3
+        #    cols: 3
+        #    dt: d
+        #    data: [  837.97216796875000000,    0.00000000000000000,  992.33569335937500000,
+        #               0.00000000000000000,  837.97766113281250000,  593.07342529296875000,
+        #               0.00000000000000000,    0.00000000000000000,    1.00000000000000000 ]
+        # D3: !!opencv-matrix
+        #    rows: 1
+        #    cols: 8
+        #    dt: d
+        #    data: [   -0.18338683247566223,   -0.37549209594726562,    0.00007732228550594,   -0.00011700890900102,   -0.01655971631407738,    0.18460999429225922,   -0.53588074445724487,   -0.09533628821372986 ]
+        def intrinsics_definition(i):
+            intrinsics = models[lra[i]].intrinsics()[1]
+            fx,fy,cx,cy = intrinsics[:4]
+
+            f = io.StringIO()
+            np.savetxt(f,
+                       nps.atleast_dims(intrinsics[4:], -2),
+                       delimiter=',',
+                       fmt='%.12f')
+
+            return \
+    f"""M{i+1}: !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: d
+   data: [ {fx},   0.0,    {cx},
+           0.0,   {fy},    {cy},
+           0.0,    0.0,    1.0 ]
+D{i+1}: !!opencv-matrix
+   rows: 1
+   cols: 8
+   dt: d
+   data: [ {f.getvalue()} ]
+    """
+
+        filename = f"{D}/multisense-intrinsics.yaml"
+        with open(filename, "w") as f:
+            f.write("%YAML:1.0\n" + ''.join( (intrinsics_definition(i) for i in range(3)) ))
+        print(f"Wrote '{filename}'")
+
+
+
 
 
 
@@ -1239,3 +1399,5 @@ for iobservation in range(len(joint_observations)):
                      yinv    = True,
                      hardcopy = filename)
             print(f"Wrote '{filename}'")
+
+write_multisense_calibration(args.camera_topic)
