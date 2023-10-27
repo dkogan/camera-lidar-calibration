@@ -564,11 +564,11 @@ def fit_estimate( joint_observations,
 
     for i in range(len(Rt_lidar0_camera)):
         if not np.any(Rt_lidar0_camera[i]):
-            raise Exception(f"ERROR: Don't have complete observations overlap: camera {i} not connected")
+            raise Exception(f"ERROR: Don't have complete observations overlap: camera {i} ({args.camera_topic[i]}) not connected")
 
     for i in range(len(Rt_lidar0_lidar)):
         if not np.any(Rt_lidar0_lidar[i]):
-            raise Exception(f"ERROR: Don't have complete observations overlap: lidar {i+1} not connected")
+            raise Exception(f"ERROR: Don't have complete observations overlap: lidar {i+1} ({args.lidar_topic[i+1]}) not connected")
 
 
     for iboard in range(len(joint_observations)):
