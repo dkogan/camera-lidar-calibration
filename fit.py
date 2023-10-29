@@ -1220,10 +1220,283 @@ D{i+1}: !!opencv-matrix
         print(f"Wrote '{filename}'")
 
 
+    def write_extrinsics(D, unit, lra, models):
+        # Currently I see this on the multisense:
+        #
+        # %YAML:1.0
+        # R1: !!opencv-matrix
+        #    rows: 3
+        #    cols: 3
+        #    dt: d
+        #    data: [    0.99998009204864502,   -0.00628566369414330,   -0.00054030440514907,
+        #               0.00628599477931857,    0.99998003244400024,    0.00061379116959870,
+        #               0.00053643551655114,   -0.00061717530479655,    0.99999964237213135 ]
+        # P1: !!opencv-matrix
+        #    rows: 3
+        #    cols: 4
+        #    dt: d
+        #    data: [ 1200.00000000000000000,    0.00000000000000000,  960.00000000000000000,    0.00000000000000000,
+        #               0.00000000000000000, 1200.00000000000000000,  600.00000000000000000,    0.00000000000000000,
+        #               0.00000000000000000,    0.00000000000000000,    1.00000000000000000,    0.00000000000000000 ]
+        # R2: !!opencv-matrix
+        #    rows: 3
+        #    cols: 3
+        #    dt: d
+        #    data: [    0.99999642372131348,    0.00264605483971536,    0.00032660007127561,
+        #              -0.00264585344120860,    0.99999630451202393,   -0.00061591889243573,
+        #              -0.00032822860521264,    0.00061505258781835,    0.99999976158142090 ]
+        # P2: !!opencv-matrix
+        #    rows: 3
+        #    cols: 4
+        #    dt: d
+        #    data: [ 1200.00000000000000000,    0.00000000000000000,  960.00000000000000000, -323.95281982421875000,
+        #               0.00000000000000000, 1200.00000000000000000,  600.00000000000000000,    0.00000000000000000,
+        #               0.00000000000000000,    0.00000000000000000,    1.00000000000000000,    0.00000000000000000 ]
+        # R3: !!opencv-matrix
+        #    rows: 3
+        #    cols: 3
+        #    dt: d
+        #    data: [    0.99995851516723633,    0.00857812166213989,   -0.00305829849094152,
+        #              -0.00857601314783096,    0.99996298551559448,    0.00070187030360103,
+        #               0.00306420610286295,   -0.00067561317700893,    0.99999505281448364 ]
+        # P3: !!opencv-matrix
+        #    rows: 3
+        #    cols: 4
+        #    dt: d
+        #    data: [ 1200.00000000000000000,    0.00000000000000000,  960.00000000000000000,  -40.03798675537109375,
+        #               0.00000000000000000, 1200.00000000000000000,  600.00000000000000000,    0.00302204862236977,
+        #               0.00000000000000000,    0.00000000000000000,    1.00000000000000000,   -0.00060220796149224 ]
+        #
+        # This is weird. I THINK this is describing a rectified system, NOT the
+        # geometry of the actual cameras. The order is probably like in the
+        # intrinsics: (left,right,aux). The rectified cameras should be in the
+        # same location as the input cameras, and looking at the tranlations we
+        # have the left camera at the origin. This makes sense. Reverse
+        # engineering tells me:
+        #
+        # - P[:,3] are scaled translations: t*fx as described here:
+        #
+        #     https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html#stereorectify
+        #
+        #   Both the yaml data above and the calibrated result tell me that the
+        #   left-right separation is 27cm. This is consistent, so that's the
+        #   meaning of P[:,3]
+        #
+        # - These translations in P[:,3]/fx are t_rightrect_leftrect and
+        #   t_rightrect_auxrect. Because the physical order in the unit is
+        #   left-aux-looooonggap-right. And the fact that the P2[:,3] is [x,0,0]
+        #   tells me that P1-P2 are a rectified system: the rightrect camera is
+        #   located at a perfect along-the-x-axis translation from the left
+        #   camera. So t_rightrect_leftrect and not t_right_left.
+        #
+        # - The rotations in R are R_camrect_cam. Verified by writing test code
+        #   for rectification, and comparing with the rectified images report by
+        #   the camera:
+        #
+        #     imagersize_rectified = np.array((1920,1200), dtype=int)
+        #     filenames_input = \
+        #         ('/tmp/multisense/left_camera_frame/image00000.png',
+        #          '/tmp/multisense/right_camera_frame/image00000.png',
+        #          '/tmp/multisense/aux_camera_frame/image00000.png')
+        #     qrect = \
+        #         np.ascontiguousarray(nps.mv(nps.cat(*np.meshgrid(np.arange(imagersize_rectified[0], dtype=float),
+        #                                                          np.arange(imagersize_rectified[1], dtype=float))),
+        #                                     0,-1))
+        #     for i in range(3):
+        #         intrinsics = np.zeros((12,), dtype=float)
+        #         intrinsics[0]  = M[i,0,0]
+        #         intrinsics[1]  = M[i,1,1]
+        #         intrinsics[2]  = M[i,0,2]
+        #         intrinsics[3]  = M[i,1,2]
+        #         intrinsics[4:] = D[i]
+        #         # shape (3,3)
+        #         Phere = P[i,:,:3]
+        #         R_cam_camrect = nps.transpose(R[i])
+        #         t_cam_camrect = P[i,:,3]*0
+        #         # assuming Phere[:2,:2] is 1200*I
+        #         p_camrect = (qrect - Phere[:2,2])/1200
+        #         p_camrect = nps.glue(p_camrect, np.ones(p_camrect.shape[:-1] + (1,)),
+        #                              axis = -1)
+        #         pcam = mrcal.rotate_point_R(R_cam_camrect, p_camrect) + t_cam_camrect
+        #         q = mrcal.project(pcam, 'LENSMODEL_OPENCV8', intrinsics)
+        #         image = mrcal.load_image(filenames_input[i])
+        #         image_rect = mrcal.transform_image(image,q.astype(np.float32))
+        #         filename_rect = f"/tmp/rect-{i}.jpg"
+        #         mrcal.save_image(filename_rect, image_rect)
+        #         print(f"Wrote '{filename_rect}")
+        #
+        # - So the P matrices are exactly what's described in the docs:
+        #
+        #     https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html#stereorectify
+        #
+        #   Note that this is consistent for a left/right stereo pair. It is NOT
+        #   consistent for any other stereo pairs: the aux camera does NOT have
+        #   P[:,3] in the form [xxx,0,0]. Perhaps this is pinholed in the same
+        #   way, but not epipolar-line aligned? This sorta makes sense. The
+        #   topics published by the multisense driver:
+        #
+        #     dima@fatty:~$ ROS_MASTER_URI=http://128.149.135.71:11311 rostopic list | egrep '(image_rect|disparity)$'
+        #
+        #     /multisense/left/image_rect
+        #     /multisense/right/image_rect
+        #     /multisense/aux/image_rect
+        #     /multisense/left/disparity
+        #     /multisense/right/disparity
+        #
+        #   So we have "rectified" all 3 cameras but we only have disparities
+        #   for the left/right pair. What is a "right" disparity? I looked at
+        #   both of these. The left disparity makes sense and looks reasonable.
+        #   The right disparity is a mess. I'm guessing this isn't working right
+        #   and that nobody is using it. So yes. They are "rectifying"
+        #   (pinhoing, really) all 3 cameras, but only use the left/right
+        #   cameras as a stereo pair
+        #
+        # This is all enough to write out comparable data for my calibration.
+
+        if np.any(models[lra[0]].imagersize() - np.array((1920,1200))):
+            raise Exception("The rectification routine assumes we're looking at full-res left camera data, but we're not")
+        if np.any(models[lra[1]].imagersize() - np.array((1920,1200))):
+            raise Exception("The rectification routine assumes we're looking at full-res right camera data, but we're not")
+        if np.any(models[lra[2]].imagersize() - np.array((1920,1188))):
+            raise Exception("The rectification routine assumes we're looking at full-res aux camera data, but we're not")
+
+        # Matching up what I currently see on their hardware
+        fx_rect = 1200
+        fy_rect = 1200
+        cx_rect = 960
+        cy_rect = 600
+
+        # I compute the rectified system geometry. Logic stolen from
+        # mrcal.stereo._rectified_system_python()
+
+        ileft  = lra[0]
+        iright = lra[1]
+        iaux   = lra[2]
+
+        # Compute the rectified system. I do this to get the geometry ONLY
+        models_rectified = \
+            mrcal.rectified_system( (models[ileft], models[iright]),
+
+                                    # FOV numbers are made-up. These are
+                                    # used to compute the rectified
+                                    # intrinsics, but I use what multisense
+                                    # has seen previously instead
+                                    az_fov_deg        = 30,
+                                    el_fov_deg        = 30,
+                                    pixels_per_deg_az = 1000,
+                                    pixels_per_deg_el = 1000 )
+
+        Rt_leftrect_left = \
+            mrcal.compose_Rt( models_rectified[0].extrinsics_Rt_fromref(),
+                              models[ileft].extrinsics_Rt_toref())
+        Rt_rightrect_right = \
+            mrcal.compose_Rt( models_rectified[1].extrinsics_Rt_fromref(),
+                              models[iright].extrinsics_Rt_toref())
+        Rt_rightrect_leftrect = \
+            mrcal.compose_Rt( models_rectified[1].extrinsics_Rt_fromref(),
+                              models_rectified[0].extrinsics_Rt_toref())
+
+        if np.any(np.abs(Rt_rightrect_leftrect[:3,:] - np.eye(3)) > 1e-8):
+            raise Exception("Logic error: Rt_rightrect_leftrect should have an identity rotation")
+        if np.any(np.abs(Rt_rightrect_leftrect[3,1:]) > 1e-8):
+            raise Exception("Logic error: Rt_rightrect_leftrect should have a purely-x translation")
+
+        # results
+        R = np.zeros((3,3,3), dtype=float)
+        P = np.zeros((3,3,4), dtype=float)
+
+
+        # The R matrices are R_camrect_cam
+        R[0] = Rt_leftrect_left  [:3,:]
+        R[1] = Rt_rightrect_right[:3,:]
+
+        Pbase = np.array(((fx_rect, 0,       cx_rect),
+                          (      0, fy_rect, cy_rect),
+                          (      0, 0,       1,),),)
+
+        P[0] = nps.glue(Pbase,
+                        np.zeros((3,1),),
+                        axis = -1)
+        P[1] = nps.glue(Pbase,
+                        nps.dummy(Rt_rightrect_leftrect[3,:],
+                                  -1) * fx_rect,
+                        axis = -1)
+
+        # Done with the stereo pair I have: (left,right). As described above,
+        # "aux" isn't a part of any stereo pair (the left camera would need a
+        # different R for that stereo pair). So what exactly is this? I make an
+        # educated guess. I need an "auxrect" coordinate system. I translate the
+        # aux camera to sit colinearly with l,r.
+        Rt_ref_left  = models[ileft ].extrinsics_Rt_toref()
+        Rt_ref_right = models[iright].extrinsics_Rt_toref()
+        Rt_ref_aux   = models[iaux  ].extrinsics_Rt_toref()
+
+        vbaseline = Rt_ref_right[3,:] - Rt_ref_left[3,:]
+        vbaseline /= nps.mag(vbaseline)
+
+        caux           = Rt_ref_aux[3,:] - Rt_ref_left[3,:]
+        caux_projected = nps.inner(caux,vbaseline) * vbaseline
+        Rt_ref_aux[3,:] = Rt_ref_left[3,:] + caux_projected
+        print(f"Translated aux camera by {nps.mag(caux - caux_projected):.3f}m to sit on the left-right baseline.")
+        print("  This is completely made-up, but we have to do this to fit into multisense's internal representation.")
+
+        # We now have a compatible aux pose. I rectify it: I reuse the
+        # left-rectified rotation (because I'm only allowed to have one, and
+        # cannot recompute a better one for the (left,aux) pair)
+        baseline_aux = nps.mag(caux_projected)
+        Rt_leftrect_auxrect = mrcal.identity_Rt()
+        Rt_leftrect_auxrect[3,0] = baseline_aux
+
+        Rt_auxrect_aux = \
+            mrcal.compose_Rt( mrcal.invert_Rt(Rt_leftrect_auxrect),
+                              Rt_leftrect_left,
+                              mrcal.invert_Rt(Rt_ref_left),
+                              Rt_ref_aux )
+        Rt_auxrect_leftrect = mrcal.invert_Rt(Rt_leftrect_auxrect)
+
+        R[2] = Rt_auxrect_aux[:3,:]
+        P[2] = nps.glue(Pbase,
+                        nps.dummy(Rt_auxrect_leftrect[3,:],
+                                  -1) * fx_rect,
+                        axis = -1)
 
 
 
 
+        def extrinsics_definition(i):
+            f = io.StringIO()
+            np.savetxt(f,
+                       nps.atleast_dims(R[i].ravel(), -2),
+                       delimiter=',',
+                       newline  = '',
+                       fmt='%.12f')
+            Rstring = f.getvalue()
+
+            f = io.StringIO()
+            np.savetxt(f,
+                       nps.atleast_dims(P[i].ravel(), -2),
+                       delimiter=',',
+                       newline  = '',
+                       fmt='%.12f')
+            Pstring = f.getvalue()
+
+            return \
+    f"""R{i+1}: !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: d
+   data: [ {Rstring} ]
+P{i+1}: !!opencv-matrix
+   rows: 3
+   cols: 4
+   dt: d
+   data: [ {Pstring} ]
+"""
+
+        filename = f"{D}/multisense-extrinsics.yaml"
+        with open(filename, "w") as f:
+            f.write("%YAML:1.0\n" + ''.join( (extrinsics_definition(i) for i in range(3)) ))
+        print(f"Wrote '{filename}'")
 
 
 
@@ -1253,6 +1526,7 @@ D{i+1}: !!opencv-matrix
         if len(D) == 0: D = '.'
 
         write_intrinsics(D, unit, lra, models)
+        write_extrinsics(D, unit, lra, models)
 
 def open_model(f):
     try: return mrcal.cameramodel(f)
