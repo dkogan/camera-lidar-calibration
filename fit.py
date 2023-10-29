@@ -1212,7 +1212,7 @@ D{i+1}: !!opencv-matrix
    cols: 8
    dt: d
    data: [ {f.getvalue()} ]
-    """
+"""
 
         filename = f"{D}/multisense-intrinsics.yaml"
         with open(filename, "w") as f:
