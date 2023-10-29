@@ -1218,6 +1218,7 @@ D{i+1}: !!opencv-matrix
         with open(filename, "w") as f:
             f.write("%YAML:1.0\n" + ''.join( (intrinsics_definition(i) for i in range(3)) ))
         print(f"Wrote '{filename}'")
+        return filename
 
 
     def write_extrinsics(D, unit, lra, models):
@@ -1497,13 +1498,10 @@ P{i+1}: !!opencv-matrix
         with open(filename, "w") as f:
             f.write("%YAML:1.0\n" + ''.join( (extrinsics_definition(i) for i in range(3)) ))
         print(f"Wrote '{filename}'")
-
+        return filename
 
 
     multisense_units_lra = find_multisense_units_lra(topics)
-
-
-
 
     for unit in multisense_units_lra.keys():
         lra = multisense_units_lra[unit]
@@ -1525,8 +1523,13 @@ P{i+1}: !!opencv-matrix
         D              = os.path.split(root)[0]
         if len(D) == 0: D = '.'
 
-        write_intrinsics(D, unit, lra, models)
-        write_extrinsics(D, unit, lra, models)
+        filename_intrinsics = write_intrinsics(D, unit, lra, models)
+        filename_extrinsics = write_extrinsics(D, unit, lra, models)
+
+        print("Send like this:")
+        print(f"  rosrun multisense_lib ImageCalUtility -e {filename_extrinsics} -e {filename_intrinsics} -a IP")
+
+
 
 def open_model(f):
     try: return mrcal.cameramodel(f)
