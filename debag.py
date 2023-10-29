@@ -269,12 +269,17 @@ def _sub_str_plot(val, field_filter, output_directory):
                     raise Exception("Need valid --output-directory to write out the image vnl")
 
                 if not (val.encoding == 'mono8' or \
+                        val.encoding == 'mono16' or \
                         val.encoding == 'bgr8'):
-                    raise Exception(f"I only support mono8 and bgr8 images for now. Got {val.encoding=}")
+                    raise Exception(f"I only support mono8 and mono16 and bgr8 images for now. Got {val.encoding=}")
 
                 if   val.encoding == 'mono8':
                     bytes_per_pixel = 1
                     dtype           = np.uint8
+                    shape_suffix    = ()
+                elif val.encoding == 'mono16':
+                    bytes_per_pixel = 2
+                    dtype           = np.uint16
                     shape_suffix    = ()
                 else:
                     bytes_per_pixel = 3
