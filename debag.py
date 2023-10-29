@@ -260,7 +260,10 @@ def _sub_str_plot(val, field_filter, output_directory):
     elif hasattr(val, "_slot_types"):
         if field_filter is not None:
 
-            if type(val).__name__ == '_sensor_msgs__Image':
+            # I get _sensors_msgs_xxx when reading bags and xxx when reading
+            # data live. Who knows why
+            if type(val).__name__ == '_sensor_msgs__Image' or \
+               type(val).__name__ == 'Image':
 
                 if output_directory is None:
                     raise Exception("Need valid --output-directory to write out the image vnl")
@@ -305,7 +308,10 @@ def _sub_str_plot(val, field_filter, output_directory):
 
                 else:
                     raise Exception(f"I only support mono8 and bgr8 images for now. Got {val.encoding=}")
-            elif type(val).__name__ == '_sensor_msgs__PointCloud2':
+            # I get _sensors_msgs_xxx when reading bags and xxx when reading
+            # data live. Who knows why
+            elif type(val).__name__ == '_sensor_msgs__PointCloud2' or \
+                 type(val).__name__ == 'PointCloud2':
 
                 if output_directory is None:
                     raise Exception("Need valid --output-directory to write out the lidar points vnl")
