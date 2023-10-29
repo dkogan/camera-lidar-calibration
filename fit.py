@@ -1143,34 +1143,14 @@ in topics[4]. The "multisense_front" unit doesn't have an aux camera specified
 
 def write_multisense_calibration(topics):
 
-    multisense_units_lra = find_multisense_units_lra(topics)
-
-    for unit in multisense_units_lra.keys():
-        lra = multisense_units_lra[unit]
-        if np.any(lra < 0):
-            print(f"Multisense unit '{unit}' doesn't have ALL the cameras specified: lra = {lra}. I'm not writing its calibration file",
-                  file = sys.stderr)
-            continue
-
+    def write_intrinsics(D, unit, lra, models):
         if not all(models[i].intrinsics()[0] == 'LENSMODEL_OPENCV8' for i in lra):
             print(f"Multisense unit '{unit}' doesn't have ALL the cameras follow the LENSMODEL_OPENCV8 model. The multisense requires this (I think?). So I'm not writing its calibration file",
                   file = sys.stderr)
-            continue
-
-        # The multisense files are order by
-        #
-        # - left
-        # - right
-        # - aux
-        #
-        # And the have the left camera at the identity transform (I don't know if
-        # this is a requirement or convention). I do this as well. In particular, I
-        # write the results to the same directory as the "left" camera
-        root,extension = os.path.splitext(args.models[lra[0]])
-        D              = os.path.split(root)[0]
-        if len(D) == 0: D = '.'
+            return
 
         # I mimic the intrinsics files I see in the factory multisense unit:
+        #
         # %YAML:1.0
         # M1: !!opencv-matrix
         #    rows: 3
@@ -1242,6 +1222,36 @@ D{i+1}: !!opencv-matrix
 
 
 
+
+
+
+
+    multisense_units_lra = find_multisense_units_lra(topics)
+
+
+
+
+    for unit in multisense_units_lra.keys():
+        lra = multisense_units_lra[unit]
+        if np.any(lra < 0):
+            print(f"Multisense unit '{unit}' doesn't have ALL the cameras specified: lra = {lra}. I'm not writing its calibration file",
+                  file = sys.stderr)
+            continue
+
+        # The multisense files are ordered by
+        #
+        # - left
+        # - right
+        # - aux
+        #
+        # And the have the left camera at the identity transform (I don't know if
+        # this is a requirement or convention). I do this as well. In particular, I
+        # write the results to the same directory as the "left" camera
+        root,extension = os.path.splitext(args.models[lra[0]])
+        D              = os.path.split(root)[0]
+        if len(D) == 0: D = '.'
+
+        write_intrinsics(D, unit, lra, models)
 
 def open_model(f):
     try: return mrcal.cameramodel(f)
