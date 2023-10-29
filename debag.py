@@ -268,46 +268,44 @@ def _sub_str_plot(val, field_filter, output_directory):
                 if output_directory is None:
                     raise Exception("Need valid --output-directory to write out the image vnl")
 
-                if val.encoding == 'mono8' or \
-                   val.encoding == 'bgr8':
-
-                    if val.encoding == 'mono8':
-                        if val.step != val.width:
-                            raise Exception(f"Got _sensor_msgs__Image.encoding == mono8. Expecting dense storage, but step != width: {val.step} != {val.width}")
-                        if len(val.data) != val.width*val.height:
-                            raise Exception(f"Got _sensor_msgs__Image.encoding == mono8. Expecting dense storage, but len(data) != width*height: {len(val.data)} != {val.width}*{val.height}")
-
-                        image = \
-                            np.frombuffer(val.data,
-                                          dtype = np.uint8).reshape((val.height, val.width),)
-
-                    else:
-                        if val.step != val.width*3:
-                            raise Exception(f"Got _sensor_msgs__Image.encoding == bgr8. Expecting dense storage, but step != width*3: {val.step} != {val.width*3}")
-                        if len(val.data) != val.width*val.height*3:
-                            raise Exception(f"Got _sensor_msgs__Image.encoding == bgr8. Expecting dense storage, but len(data) != width*height*3: {len(val.data)} != {val.width}*{val.height}*3")
-
-                        image = \
-                            np.frombuffer(val.data,
-                                          dtype = np.uint8).reshape((val.height, val.width, 3),)
-
-                    directory      = f"{output_directory}/{val.header.frame_id}"
-                    os.makedirs(directory, exist_ok = True)
-
-                    try:    i_image = _sub_str_plot.i_image
-                    except: i_image = 0
-                    filename = f"{directory}/image{i_image:05d}.png"
-                    mrcal.save_image(filename, image)
-                    _sub_str_plot.i_image = i_image + 1
-
-                    fields = ['header', 'image']
-
-                    return \
-                        _sub_str_plot(_convert_getattr(val, 'header', 'std_msgs/Header'), field_filter, output_directory) + \
-                        ' ' + filename
-
-                else:
+                if not (val.encoding == 'mono8' or \
+                        val.encoding == 'bgr8'):
                     raise Exception(f"I only support mono8 and bgr8 images for now. Got {val.encoding=}")
+
+                if   val.encoding == 'mono8':
+                    bytes_per_pixel = 1
+                    dtype           = np.uint8
+                    shape_suffix    = ()
+                else:
+                    bytes_per_pixel = 3
+                    dtype           = np.uint8
+                    shape_suffix    = (3,)
+
+                if val.step != val.width*bytes_per_pixel:
+                    raise Exception(f"Got _sensor_msgs__Image.encoding == {val.encoding}. Expecting dense storage, but step != width*{bytes_per_pixel}: {val.step} != {val.width*bytes_per_pixel}")
+                if len(val.data) != val.width*val.height*bytes_per_pixel:
+                    raise Exception(f"Got _sensor_msgs__Image.encoding == {val.encoding}. Expecting dense storage, but len(data) != width*height*{bytes_per_pixel}: {len(val.data)} != {val.width}*{val.height}*{bytes_per_pixel}")
+
+                image = \
+                    np.frombuffer(val.data,
+                                  dtype = dtype).reshape((val.height, val.width) + shape_suffix,)
+
+                directory      = f"{output_directory}/{val.header.frame_id}"
+                os.makedirs(directory, exist_ok = True)
+
+                try:    i_image = _sub_str_plot.i_image
+                except: i_image = 0
+                filename = f"{directory}/image{i_image:05d}.png"
+                mrcal.save_image(filename, image)
+                _sub_str_plot.i_image = i_image + 1
+
+                fields = ['header', 'image']
+
+                return \
+                    _sub_str_plot(_convert_getattr(val, 'header', 'std_msgs/Header'), time_offset, field_filter, output_directory) + \
+                    ' ' + filename
+
+
             # I get _sensors_msgs_xxx when reading bags and xxx when reading
             # data live. Who knows why
             elif type(val).__name__ == '_sensor_msgs__PointCloud2' or \
