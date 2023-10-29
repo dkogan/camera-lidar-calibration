@@ -1196,6 +1196,7 @@ def write_multisense_calibration(topics):
             np.savetxt(f,
                        nps.atleast_dims(intrinsics[4:], -2),
                        delimiter=',',
+                       newline  = '',
                        fmt='%.12f')
 
             return \
