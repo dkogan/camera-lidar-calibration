@@ -1141,7 +1141,7 @@ in topics[4]. The "multisense_front" unit doesn't have an aux camera specified
 
     return units_lra
 
-def write_multisense_calibration(topics):
+def write_multisense_calibration(multisense_units_lra):
 
     def write_intrinsics(D, unit, lra, models):
         if not all(models[i].intrinsics()[0] == 'LENSMODEL_OPENCV8' for i in lra):
@@ -1501,8 +1501,6 @@ P{i+1}: !!opencv-matrix
         return filename
 
 
-    multisense_units_lra = find_multisense_units_lra(topics)
-
     for unit in multisense_units_lra.keys():
         lra = multisense_units_lra[unit]
         if np.any(lra < 0):
@@ -1688,4 +1686,5 @@ for iobservation in range(len(joint_observations)):
                      hardcopy = filename)
             print(f"Wrote '{filename}'")
 
-write_multisense_calibration(args.camera_topic)
+multisense_units_lra = find_multisense_units_lra(args.camera_topic)
+write_multisense_calibration(multisense_units_lra)
