@@ -307,7 +307,7 @@ def _sub_str_plot(val, field_filter, output_directory):
                 fields = ['header', 'image']
 
                 return \
-                    _sub_str_plot(_convert_getattr(val, 'header', 'std_msgs/Header'), time_offset, field_filter, output_directory) + \
+                    _sub_str_plot(_convert_getattr(val, 'header', 'std_msgs/Header'), field_filter, output_directory) + \
                     ' ' + filename
 
 
