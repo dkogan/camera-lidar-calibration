@@ -1662,15 +1662,22 @@ Nmeas_lidar_observation_all = \
 with open(args.cache, "wb") as f:
     pickle.dump(cache, f)
 
+NcameraObservations = [sum(0 if o[0][icamera] is None else 1 for o in joint_observations) \
+                       for icamera in range(Ncameras)]
+NlidarObservations = [sum(0 if o[1][ilidar] is None else 1 for o in joint_observations) \
+                      for ilidar in range(Nlidars)]
+print(f"Got {NcameraObservations=}")
+print(f"Got {NlidarObservations=}")
 
 for icamera in range(Ncameras):
-    NcameraObservations_this = sum(0 if o[0][icamera] is None else 1 for o in joint_observations)
+    NcameraObservations_this = NcameraObservations[icamera]
     if NcameraObservations_this == 0:
         print(f"I need at least 1 observation of each camera. Got only {NcameraObservations_this} for camera {icamera} from {args.camera_topic[icamera]}",
               file=sys.stderr)
         sys.exit(1)
+
 for ilidar in range(Nlidars):
-    NlidarObservations_this = sum(0 if o[1][ilidar] is None else 1 for o in joint_observations)
+    NlidarObservations_this = NlidarObservations[ilidar]
     if NlidarObservations_this < 3:
         print(f"I need at least 3 observations of each lidar to unambiguously set the translation (the set of all plane normals must span R^3). Got only {NlidarObservations_this} for lidar {ilidar} from {args.lidar_topic[ilidar]}",
               file=sys.stderr)
