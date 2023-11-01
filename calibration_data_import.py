@@ -349,6 +349,13 @@ def find_chessboard_in_plane_fit(points, ring, th,
             mask_keep[i <            0] = 0
             mask_keep[i >= len(points)] = 0
 
+            # out-of-bounds i are set to 0 to make ring[i] and such always
+            # return valid values. But maks_keep is already False for those, so
+            # they will be ignored anyway. I'm just doing this to avoid Python
+            # barfing at me
+            i[i <  0          ] = 0
+            i[i >= len(points)] = 0
+
             # Throw away any that are on a different ring
             mask_keep[ ring[i0] != ring[i] ] = 0
 
