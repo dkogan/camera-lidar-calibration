@@ -1648,8 +1648,9 @@ for i,o in enumerate(joint_observations):
 joint_observations = [o for i,o in enumerate(joint_observations) \
                       if mask_observations[i]]
 
-for iboard in np.nonzero(mask_observations)[0]:
-    print(f"{iboard=} corresponds to {args.bag[iboard]}")
+idx_observations = np.nonzero(mask_observations)[0]
+for iboard in np.arange(len(joint_observations)):
+    print(f"{iboard=} (pre-filter iboard={idx_observations[iboard]}) corresponds to {args.bag[idx_observations[iboard]]}")
 
 # joint_observations is now
 # [ obs0, obs1, obs2, ... ] where each observation corresponds to a board pose
