@@ -1659,8 +1659,10 @@ Nmeas_lidar_observation_all = \
         for o in joint_observations \
         for x in o[1])
 
-with open(args.cache, "wb") as f:
-    pickle.dump(cache, f)
+if not args.read_cache:
+    with open(args.cache, "wb") as f:
+        pickle.dump(cache, f)
+
 
 NcameraObservations = [sum(0 if o[0][icamera] is None else 1 for o in joint_observations) \
                        for icamera in range(Ncameras)]
