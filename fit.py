@@ -64,7 +64,7 @@ def parse_args():
 
     parser.add_argument('--exclude-bag',
                         type=str,
-                        nargs='*',
+                        action = 'append',
                         help = '''Bags to exclude from the processing. These are
                         treated as a regex match against the bag paths''')
 
