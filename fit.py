@@ -1639,9 +1639,17 @@ joint_observations = [get_joint_observation(bag, cache=cache) for bag in args.ba
 def num_sensors_observed(o):
     return \
         sum(0 if x is None else 1 for qp in o for x in qp)
-joint_observations = [o for o in joint_observations \
-                      if o is not None and num_sensors_observed(o) > 1]
 
+mask_observations = np.ones( (len(joint_observations),), dtype=bool)
+for i,o in enumerate(joint_observations):
+    if o is None or num_sensors_observed(o) <= 1:
+        mask_observations[i] = 0
+
+joint_observations = [o for i,o in enumerate(joint_observations) \
+                      if mask_observations[i]]
+
+for iboard in np.nonzero(mask_observations)[0]:
+    print(f"{iboard=} corresponds to {args.bag[iboard]}")
 
 # joint_observations is now
 # [ obs0, obs1, obs2, ... ] where each observation corresponds to a board pose
