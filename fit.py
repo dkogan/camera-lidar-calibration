@@ -1790,7 +1790,7 @@ for unit in multisense_units_lra.keys():
     topic = args.camera_topic[l]
 
     rpy = rpy_from_r(rt_multisenseleft_lidar0[:3])
-    xyz = rpy_from_r(rt_multisenseleft_lidar0[3:])
+    xyz = rt_multisenseleft_lidar0[3:]
     print(f"Pose for {topic}: {rpy=} {xyz=}")
 
 
@@ -1800,5 +1800,5 @@ for ilidar in range(Nlidars):
     topic = args.lidar_topic[ilidar]
 
     rpy = rpy_from_r(rt_lidar_lidar0[:3])
-    xyz = rpy_from_r(rt_lidar_lidar0[3:])
+    xyz = rt_lidar_lidar0[3:]
     print(f"Pose for {topic}: {rpy=} {xyz=}")
