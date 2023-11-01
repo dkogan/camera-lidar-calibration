@@ -117,6 +117,14 @@ def parse_args():
         sys.exit(1)
     args.bag = bags
 
+
+    # import pprint
+    # pprint.pprint(args.exclude_bag)
+
+    # print("BAGS:")
+    # pprint.pprint(args.bag)
+    # sys.exit()
+
     args.lidar_topic  = args.lidar_topic.split(',')
     args.camera_topic = args.camera_topic.split(',')
 
@@ -1569,8 +1577,7 @@ def rpy_from_r(r):
 
     R = mrcal.R_from_r(r)
 
-    def asin(s): return np.arcsin(s, -1,1)
-    def acos(c): return np.arccos(c, -1,1)
+    def asin(s): return np.arcsin(np.clip(s,-1,1))
 
     if True:
         # the first representation
