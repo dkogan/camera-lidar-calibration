@@ -300,7 +300,7 @@ def _sub_str_plot(val, field_filter, output_directory):
 
                 try:    i_image = _sub_str_plot.i_image
                 except: i_image = 0
-                filename = f"{directory}/image{i_image:05d}.png"
+                filename = f"{directory}/image{i_image:05d}.jpg"
                 mrcal.save_image(filename, image)
                 _sub_str_plot.i_image = i_image + 1
 
