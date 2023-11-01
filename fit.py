@@ -1786,19 +1786,29 @@ for unit in multisense_units_lra.keys():
     if l < 0:
         continue
 
-    rt_multisenseleft_lidar0 = models[l].extrinsics_rt_fromref()
     topic = args.camera_topic[l]
 
+    rt_multisenseleft_lidar0 = models[l].extrinsics_rt_fromref()
     rpy = rpy_from_r(rt_multisenseleft_lidar0[:3])
     xyz = rt_multisenseleft_lidar0[3:]
-    print(f"Pose for {topic}: {rpy=} {xyz=}")
+    print(f"rt_multisenseleft_lidar0 pose for {topic}: rt_multisenseleft_lidar0={rt_multisenseleft_lidar0} {rpy=} {xyz=}")
+
+    rt_lidar0_multisenseleft = mrcal.invert_rt(rt_multisenseleft_lidar0)
+    rpy = rpy_from_r(rt_lidar0_multisenseleft[:3])
+    xyz = rt_lidar0_multisenseleft[3:]
+    print(f"rt_lidar0_multisenseleft pose for {topic}: rt_lidar0_multisenseleft={rt_lidar0_multisenseleft} {rpy=} {xyz=}")
 
 
 # Write the inter-multisense lidar
 for ilidar in range(Nlidars):
-    rt_lidar_lidar0 = solved_state['rt_lidar_ref'][ilidar]
     topic = args.lidar_topic[ilidar]
 
+    rt_lidar_lidar0 = solved_state['rt_lidar_ref'][ilidar]
     rpy = rpy_from_r(rt_lidar_lidar0[:3])
     xyz = rt_lidar_lidar0[3:]
-    print(f"Pose for {topic}: {rpy=} {xyz=}")
+    print(f"rt_lidar_lidar0 pose for {topic}: rt_lidar_lidar0={rt_lidar_lidar0} {rpy=} {xyz=}")
+
+    rt_lidar0_lidar = mrcal.invert_rt(rt_lidar_lidar0)
+    rpy = rpy_from_r(rt_lidar0_lidar[:3])
+    xyz = rt_lidar0_lidar[3:]
+    print(f"rt_lidar0_lidar pose for {topic}: rt_lidar0_lidar={rt_lidar0_lidar} {rpy=} {xyz=}")
