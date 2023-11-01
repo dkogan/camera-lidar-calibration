@@ -62,6 +62,12 @@ def parse_args():
                         help = '''Glob for the rosbag that contains the lidar
                         and camera data. This can match multiple files''')
 
+    parser.add_argument('--exclude-bag',
+                        type=str,
+                        nargs='*',
+                        help = '''Bags to exclude from the processing. These are
+                        treated as a regex match against the bag paths''')
+
     parser.add_argument('--viz',
                         action='store_true',
                         help = '''Visualize the LIDAR point cloud as we search
@@ -98,13 +104,18 @@ def parse_args():
     args = parser.parse_args()
 
     import glob
-    f = glob.glob(args.bag)
+    import re
+    bags = glob.glob(args.bag)
 
-    if len(f) < 3:
-        print(f"--bag '{args.bag}' must match at least 3 files. Instead this matched {len(f)} files",
+    if args.exclude_bag is not None:
+        for ex in args.exclude_bag:
+            bags = [b for b in bags if not re.search(ex, b)]
+
+    if len(bags) < 3:
+        print(f"--bag '{args.bag}' must match at least 3 files. Instead this matched {len(bags)} files",
               file=sys.stderr)
         sys.exit(1)
-    args.bag = f
+    args.bag = bags
 
     args.lidar_topic  = args.lidar_topic.split(',')
     args.camera_topic = args.camera_topic.split(',')
