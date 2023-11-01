@@ -309,6 +309,18 @@ def fit_estimate( joint_observations,
         # the linear array
         return N*(N-1)//2
 
+    def full_symmetric_matrix_from_upper_triangle(U, N = Nsensors):
+        # I have an (N,N) symmetric matrix with a 0 diagonal. I store only the
+        # upper triangle: (N*(N-1)/2) values. This function returns the full
+        # symmetric array. For debugging
+        M = np.zeros((N,N), dtype=U.dtype)
+        iu = 0
+        for i in range(N):
+            M[i,i+1:] = U[iu:iu+N-i-1]
+            M[i+1:,i] = U[iu:iu+N-i-1]
+            iu += N-i-1
+        return M
+
     def connectivity_matrices():
         r'''Returns a connectivity matrix of sensor observations
 
@@ -556,6 +568,9 @@ def fit_estimate( joint_observations,
             yield isensor1
 
     shared_observation_counts, shared_observation_pcenter_normal = connectivity_matrices()
+
+    print(f"Sensor shared-observations matrix for {Nlidars=} followed by {Ncameras=}:")
+    print(full_symmetric_matrix_from_upper_triangle(shared_observation_counts))
 
     mrcal.calibration._traverse_sensor_connections \
         ( Nsensors,
