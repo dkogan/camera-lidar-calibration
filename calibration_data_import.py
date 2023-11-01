@@ -390,7 +390,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
         mask_plane_keep_per_ring[iring][idx_ring] = True
 
     # I want at least some number of contiguous rings to have data on my plane
-    Nrings_min_threshold = 4
+    Nrings_min_threshold = 3
     iring_hasdata_start,iring_hasdata_end = longest_run_of_0(~mask_ring_accepted)
     if iring_hasdata_start is None or iring_hasdata_end is None:
         print(f"Ignoring plane on line {line_number()}")
@@ -469,10 +469,13 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     ring   = ring  [i]
     th     = th    [i]
 
-    # Ignore all points <1m or >8m away
+    # Ignore all points too close or too far away
+    far_distance_threshold_m  = 12
+    near_distance_threshold_m = 1
+
     range_sq = nps.norm2(points)
-    mask_near     = (1.*1. > range_sq)
-    mask_far      = (range_sq > 8.*8.)
+    mask_near     = (near_distance_threshold_m*near_distance_threshold_m > range_sq)
+    mask_far      = (range_sq > far_distance_threshold_m*far_distance_threshold_m)
     mask_midrange = (~mask_near) * (~mask_far)
     idx_midrange  = np.nonzero(mask_midrange)[0]
 
