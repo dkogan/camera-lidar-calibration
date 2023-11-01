@@ -675,6 +675,10 @@ def chessboard_corners(bag, camera_topic,
 
     metadata = read_first_message_in_bag(bag, camera_topic)
 
+    if len(metadata) == 0:
+        print(f"NO images in '{bag}', so no chessboard observations")
+        return None
+
     image_filename = metadata[0]['image']
 
     image_filename_target = \
