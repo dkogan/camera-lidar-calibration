@@ -1151,7 +1151,7 @@ in topics[4]. The "multisense_front" unit doesn't have an aux camera specified
 
     '''
 
-    matches = [ re.search("/(multisense[a-zA-Z0-9_]+)/([a-zA-Z0-9_]+)/image", topic) \
+    matches = [ re.search("/(multisense[a-zA-Z0-9_]*)/([a-zA-Z0-9_]+)/image", topic) \
                 for topic in topics ]
 
     unit_list = [ m.group(1) if m is not None else None for m in matches ]
