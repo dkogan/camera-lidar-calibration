@@ -1527,6 +1527,43 @@ P{i+1}: !!opencv-matrix
         print("Send like this:")
         print(f"  rosrun multisense_lib ImageCalUtility -e {filename_extrinsics} -e {filename_intrinsics} -a IP")
 
+def rpy_from_r(r):
+    # Wikipedia has some rotation matrix representations of euler angle rotations:
+    #
+    #     [ ca cb   ca sb sy - sa cy   ca sb cy + sa sy ]
+    # R = [ sa cb   sa sb sy + ca cy   sa sb cy - ca sy ]
+    #     [ -sb     cb sy              cb cy            ]
+    #
+    #
+    #     [ cb cy   sa sb cy - ca sy   ca sb cy + sa sy ]
+    # R = [ cb sy   sa sb sy + ca cy   ca sb sy - sa cy ]
+    #     [ -sb     sa cb              ca cb            ]
+    #
+    # where yaw,pitch,roll = a,b,y
+
+    R = mrcal.R_from_r(r)
+
+    def asin(s): return np.arcsin(s, -1,1)
+    def acos(c): return np.arccos(c, -1,1)
+
+    if True:
+        # the first representation
+        b = -asin(R[2,0])
+        y = np.arctan2(R[2,1], R[2,2])
+        a = np.arctan2(R[1,0], R[0,0])
+
+    else:
+        # the second representation
+        b = -asin(R[2,0])
+        a = np.arctan2(R[2,1], R[2,2])
+        y = np.arctan2(R[1,0], R[0,0])
+
+    yaw,pitch,roll = a,b,y
+
+    return np.array((roll,pitch,yaw),)
+
+
+
 
 
 def open_model(f):
@@ -1686,5 +1723,31 @@ for iobservation in range(len(joint_observations)):
                      hardcopy = filename)
             print(f"Wrote '{filename}'")
 
+# Write the intra-multisense calibration
 multisense_units_lra = find_multisense_units_lra(args.camera_topic)
 write_multisense_calibration(multisense_units_lra)
+
+
+# Write the inter-multisense extrinsics
+for unit in multisense_units_lra.keys():
+    lra = multisense_units_lra[unit]
+    l = lra[0]
+    if l < 0:
+        continue
+
+    rt_multisenseleft_lidar0 = models[l].extrinsics_rt_fromref()
+    topic = args.camera_topic[l]
+
+    rpy = rpy_from_r(rt_multisenseleft_lidar0[:3])
+    xyz = rpy_from_r(rt_multisenseleft_lidar0[3:])
+    print(f"Pose for {topic}: {rpy=} {xyz=}")
+
+
+# Write the inter-multisense lidar
+for ilidar in range(Nlidars):
+    rt_lidar_lidar0 = solved_state['rt_lidar_ref'][ilidar]
+    topic = args.lidar_topic[ilidar]
+
+    rpy = rpy_from_r(rt_lidar_lidar0[:3])
+    xyz = rpy_from_r(rt_lidar_lidar0[3:])
+    print(f"Pose for {topic}: {rpy=} {xyz=}")
