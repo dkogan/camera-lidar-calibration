@@ -389,12 +389,13 @@ def find_chessboard_in_plane_fit(points, ring, th,
         mask_plane_keep_per_ring[iring] = np.zeros( (len(points_plane),), dtype=bool)
         mask_plane_keep_per_ring[iring][idx_ring] = True
 
-    # I want at least 4 contiguous rings to have data on my plane
+    # I want at least some number of contiguous rings to have data on my plane
+    Nrings_min_threshold = 4
     iring_hasdata_start,iring_hasdata_end = longest_run_of_0(~mask_ring_accepted)
     if iring_hasdata_start is None or iring_hasdata_end is None:
         print(f"Ignoring plane on line {line_number()}")
         return None
-    if iring_hasdata_end-iring_hasdata_start < 4:
+    if iring_hasdata_end-iring_hasdata_start < Nrings_min_threshold:
         print(f"Ignoring plane on line {line_number()}")
         return None
 
