@@ -468,10 +468,10 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     ring   = ring  [i]
     th     = th    [i]
 
-    # Ignore all points <1m or >5m away
+    # Ignore all points <1m or >8m away
     range_sq = nps.norm2(points)
     mask_near     = (1.*1. > range_sq)
-    mask_far      = (range_sq > 5.*5.)
+    mask_far      = (range_sq > 8.*8.)
     mask_midrange = (~mask_near) * (~mask_far)
     idx_midrange  = np.nonzero(mask_midrange)[0]
 
