@@ -479,19 +479,56 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     mask_midrange = (~mask_near) * (~mask_far)
     idx_midrange  = np.nonzero(mask_midrange)[0]
 
-    cloud_midrange = pcl.PointCloud(points[mask_midrange].astype(np.float32))
+    result = cluster_and_find_planes(points, idx_midrange,
+                                     what                         = what,
+                                     viz                          = viz,
+                                     viz_show_only_accepted       = viz_show_only_accepted,
+                                     viz_show_point_cloud_context = viz_show_point_cloud_context,
+                                     mask_far                     = mask_far,
+                                     p__estimate                  = p__estimate,
+                                     p_center__estimate           = p_center__estimate,
+                                     n__estimate                  = n__estimate,
+                                     ring                         = ring,
+                                     th                           = th)
 
-    p_accepted = None
+
+
+
+    if result['p_accepted_multiple']:
+        print("More than one cluster found that observes a board")
+        return None
+    if result['p_accepted'] is None:
+        print("No chessboard found in view")
+        return None
+
+    print(f"Accepted cluster={result['i_cluster_accepted']} subcluster={result['i_subcluster_accepted']}")
+    return result['p_accepted']
+
+def cluster_and_find_planes(points, idx,
+                            *,
+                            what,
+                            viz,
+                            viz_show_only_accepted,
+                            viz_show_point_cloud_context,
+                            mask_far,
+                            p__estimate,
+                            p_center__estimate,
+                            n__estimate,
+                            ring,
+                            th):
+
+    p_accepted          = None
     p_accepted_multiple = False
 
     i_cluster             = -1
     i_cluster_accepted    = None
     i_subcluster_accepted = None
-    for idx_cluster in cluster_points(cloud_midrange,
+
+    for idx_cluster in cluster_points(pcl.PointCloud(points[idx].astype(np.float32)),
                                       cluster_tolerance = 0.5):
-        # idx_cluster indexes points[idx_midrange]
+        # idx_cluster indexes points[idx]
         # Convert it to index points[]
-        idx_cluster = idx_midrange[idx_cluster]
+        idx_cluster = idx[idx_cluster]
         mask_cluster = np.zeros( (len(points),), dtype=bool)
         mask_cluster[idx_cluster] = 1
 
@@ -640,21 +677,11 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                 i_cluster_accepted    = i_cluster
                 i_subcluster_accepted = i_subcluster
 
-
-
-
-
-
-
-    if p_accepted_multiple:
-        print("More than one cluster found that observes a board")
-        return None
-    if p_accepted is None:
-        print("No chessboard found in view")
-        return None
-
-    print(f"Accepted cluster={i_cluster_accepted} subcluster={i_subcluster_accepted}")
-    return p_accepted
+    return \
+        dict(p_accepted            = p_accepted,
+             p_accepted_multiple   = p_accepted_multiple,
+             i_cluster_accepted    = i_cluster_accepted,
+             i_subcluster_accepted = i_subcluster_accepted)
 
 def read_first_message_in_bag(bag, topic,
                               filter = None):
