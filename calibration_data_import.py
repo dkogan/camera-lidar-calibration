@@ -488,7 +488,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     i_cluster_accepted    = None
     i_subcluster_accepted = None
     for idx_cluster in cluster_points(cloud_midrange,
-                                      cluster_tolerance = 1.0):
+                                      cluster_tolerance = 0.5):
         # idx_cluster indexes points[idx_midrange]
         # Convert it to index points[]
         idx_cluster = idx_midrange[idx_cluster]
