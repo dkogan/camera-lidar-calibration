@@ -310,7 +310,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
                     points_plane[idx_ring[ 0]])
         if len_segment < 0.7*expected_board_size or \
            len_segment > np.sqrt(2)*expected_board_size:
-            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
+            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}: {len_segment=}")
             continue
 
         # I look at a few LIDAR returns past the edges. The board should be in
