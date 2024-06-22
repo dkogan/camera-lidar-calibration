@@ -20,7 +20,9 @@ import io
 import cv2
 import inspect
 
-import debag
+import rosbags.rosbag2
+import rosbags.typesys
+
 
 import mrgingham
 if not hasattr(mrgingham, "find_board"):
@@ -429,7 +431,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
     return mask_plane_keep
 
 def find_chessboard_in_view(rt_lidar_board__estimate,
-                            lidar_points_vnl,
+                            points, ring,
                             *,
                             p_board_local = None,
                             # identifying string
@@ -458,8 +460,6 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
         p_center__estimate = None
         n__estimate        = None
 
-
-    points, ring = load_lidar_points(lidar_points_vnl)
     th           = np.arctan2( points[:,1], points[:,0] )
 
     # I sort the points by ring and angle so that I can easily look at the
@@ -702,18 +702,116 @@ def cluster_and_find_planes(*,
              i_cluster_accepted    = i_cluster_accepted,
              i_subcluster_accepted = i_subcluster_accepted)
 
-def read_first_message_in_bag(bag, topic,
-                              filter = None):
 
-    pipe = io.StringIO()
-    debag.debag(bag = bag,
-                topic = topic,
-                filter_expr         = filter,
-                msg_count           = 1,
-                output_directory    = "/tmp",
-                output_pipe         = pipe)
-    pipe.seek(0)
-    return list(vnlog.vnlog(pipe))
+def bag_messages_generator(bag, topic):
+
+    dtype_cache = dict()
+
+
+    # Read-only stuff for reading rosbags. Used by bag_messages_generator() only. I
+    # want to evaluate this stuff only once
+    typestore = rosbags.typesys.get_typestore(rosbags.typesys.Stores.LATEST)
+    name_from_type = { np.float32: 'FLOAT32',
+                       np.float64: 'FLOAT64',
+                       np.int16:   'INT16',
+                       np.int32:   'INT32',
+                       np.int8:    'INT8',
+                       np.uint16:  'UINT16',
+                       np.uint32:  'UINT32',
+                       np.uint8:   'UINT8' }
+    # These are what I always see, so I hard-code it. I make sure it's right in
+    # bag_messages_generator(). If it's ever wrong, I will need to parse it at
+    # runtime
+    types = { 1: np.int8,
+              2: np.uint8,
+              3: np.int16,
+              4: np.uint16,
+              5: np.int32,
+              6: np.uint32,
+              7: np.float32,
+              8: np.float64 }
+
+
+    def dtype_from_msg(msg, key_cache):
+
+        nonlocal dtype_cache
+        if key_cache in dtype_cache: return dtype_cache[key_cache]
+
+        dtype_dict = dict()
+
+        # I want to be able to look at xyz points as a dense units, so I
+        # special-case that
+        if \
+           types[7] is np.float32 and \
+           msg.fields[0].name == 'x' and msg.fields[0].offset == 0 and msg.fields[0].datatype == 7 and \
+           msg.fields[1].name == 'y' and msg.fields[1].offset == 4 and msg.fields[1].datatype == 7 and \
+           msg.fields[2].name == 'z' and msg.fields[2].offset == 8 and msg.fields[2].datatype == 7:
+            dtype_dict['xyz'] = ( (np.float32, (3,)), 0)
+
+        for i,f in enumerate(msg.fields):
+            if i < 3 and 'xyz' in dtype_dict:
+                # special-case xyz type handled above
+                continue
+
+            T = types[f.datatype]
+            datatype_lookup = getattr(f,name_from_type[T],-1)
+            if datatype_lookup != f.datatype:
+                raise Exception(f"Couldn't confirm type id, or mismatch: {f=} {types=}")
+            if f.count == 1:
+                dtype_dict[f.name] = (T, f.offset)
+            else:
+                dtype_dict[f.name] = ((T, (f.count,)), f.offset)
+
+        dtype = np.dtype(dtype_dict)
+
+        # This is a hack. I don't know how to detect this reliably. So
+        # far I've seen two different LIDAR data formats:
+        #
+        #   itemsize = 22: requires no alignment or padding
+        #   itemsize = 34: requires padding up to the next multiple of 16: until 48
+        #
+        # I support those cases explicitly. Other cases may not work
+        has_padding = False
+        if dtype.itemsize == 34:
+            has_padding = True
+            dtype_dict['_padding'] = (np.uint8,47)
+            dtype = np.dtype(dtype_dict)
+
+        if not (msg.point_step == dtype.itemsize and \
+                msg.width * msg.point_step == msg.row_step and \
+                msg.is_dense and \
+                not msg.is_bigendian and \
+                msg.data.dtype == np.uint8 and \
+                msg.data.size == msg.row_step * msg.height):
+            raise Exception(f"Unexpected data layout: {msg=}")
+
+        dtype_cache[key_cache] = dtype
+
+        return dtype
+
+
+    # High-level structure from the "rosbag2" sample:
+    #   https://ternaris.gitlab.io/rosbags/topics/rosbag2.html
+    with rosbags.rosbag2.Reader(bag) as reader:
+
+        connections = [c for c in reader.connections \
+                       if c.topic == topic]
+
+        for connection, time_ns, rawdata in \
+                reader.messages( connections = connections ):
+
+            msg   = typestore.deserialize_cdr(rawdata, connection.msgtype)
+            dtype = dtype_from_msg(msg, connection.msgtype)
+            data  = np.frombuffer(msg.data, dtype = dtype)
+
+            yield msg.header, data
+
+
+
+def read_first_message_in_bag(bag, topic):
+    return \
+        next(bag_messages_generator(bag, topic),
+             (None, None))
 
 def chessboard_corners(bag, camera_topic,
                        *,
@@ -723,6 +821,7 @@ def chessboard_corners(bag, camera_topic,
     if cache is not None and camera_topic in cache:
         return cache[camera_topic]
 
+    raise Exception("THIS IS CURRENTLY UNIMPLEMENTED. debag -> rosbags conversion broke it. Bring it back")
     metadata = read_first_message_in_bag(bag, camera_topic)
 
     if len(metadata) == 0:
@@ -774,18 +873,13 @@ def get_lidar_observation(bag, lidar_topic,
         return cache[lidar_topic]
 
 
-    lidar_metadata = read_first_message_in_bag(bag, lidar_topic)
-    if len(lidar_metadata) == 0:
+    header,data = read_first_message_in_bag(bag, lidar_topic)
+    if header is None:
         raise Exception(f"Couldn't find lidar scan")
-    if len(lidar_metadata) != 1:
-        raise Exception(f"Found multiple lidar scans. I asked for exactly 1")
-    lidar_metadata = lidar_metadata[0]
-
-    lidar_points_filename = lidar_metadata['points']
 
     p_lidar = \
         find_chessboard_in_view(None,
-                                lidar_points_filename,
+                                data['xyz'].astype(np.float64), data['ring'],
                                 p_board_local = p_board_local,
                                 what          = what,
                                 viz                          = viz,
