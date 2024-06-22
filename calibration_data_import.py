@@ -224,7 +224,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
     # integers with this plot:
     #   gp.plot(np.diff(th_plane/dth))
 
-    expected_board_size = 1.0 # 1m across
+    expected_board_size = 1.0 # meters across
 
     rings_plane_min = rings_plane[ 0]
     rings_plane_max = rings_plane[-1]
