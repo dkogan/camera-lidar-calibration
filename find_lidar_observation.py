@@ -304,7 +304,8 @@ for lidar_topic in lidar_topics:
                                         what                         = what,
                                         viz                          = viz,
                                         viz_show_only_accepted       = False,
-                                        viz_show_point_cloud_context = args.viz_show_point_cloud_context)
+                                        viz_show_point_cloud_context = args.viz_show_point_cloud_context,
+                                        board_size                   = args.board_size)
 
             if args.generate_ground_truth:
                 if lidar_topic not in expected: expected[lidar_topic] = dict()
