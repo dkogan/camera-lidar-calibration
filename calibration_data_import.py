@@ -204,24 +204,43 @@ def find_chessboard_in_plane_fit(points, ring, th,
                                  board_size,
                                  # for diagnostics
                                  i_cluster    = None,
-                                 i_subcluster = None):
+                                 i_subcluster = None,
+
+                                 # Any gap of > 1*dth means there was a gap in
+                                 # the plane scan. I look for the biggest
+                                 # interval with no BIG gaps. I allow small gaps
+                                 # (hence 4.5 and not 1.5)
+                                 max_acceptable_scan_gap = 4.5,
+
+                                 # I examined the data to confirm that the
+                                 # points come regularly at an even interval of:
+                                 dth = 0.2 * np.pi/180.,
+                                 # Validated by making this plot, observing that
+                                 # with this dth I get integers with this plot:
+                                 # gp.plot(np.diff(th_plane/dth))
+
+
+                                 # I look at a few LIDAR returns past the edges.
+                                 # The board should be in front of everything,
+                                 # not behind. So these adjacent LIDAR cannot
+                                 # have a shorter range. I look at NscansAtEdge
+                                 # LIDAR returns off to either side. This is set
+                                 # to a high number: I cannot be near anything
+                                 # that might be occluding. Such a high number
+                                 # is required to catch the roll cage bars that
+                                 # might split a view of a wall
+                                 NscansAtEdge = 20,
+                                 max_range_ahead_allowed = 0.2,
+
+                                 distance_threshold = 1.0,
+                                 offplane_threshold = 0.5,
+                                 min_points_in_ring = 20,
+                                 min_ratio_of_contiguous_points_in_ring = 0.7,
+                                 max_cos_lidar_axis_to_plane_normal = np.cos(30.*np.pi/180.)):
 
     points_plane = points[idx_plane]
     rings_plane  = ring  [idx_plane]
     th_plane     = th    [idx_plane]
-
-    # I examined the data to confirm that the points come regularly at an
-    # even interval of:
-    dth = 0.2 * np.pi/180.
-    # Validated by making this plot, observing that with this dth I get
-    # integers with this plot:
-    #   gp.plot(np.diff(th_plane/dth))
-
-    # Any gap of > 1*dth means there was a gap in the plane scan. I look for the
-    # biggest interval with no BIG gaps. I allow small gaps (hence 4.5 and not
-    # 1.5)
-    max_acceptable_scan_gap = 4.5
-
 
     rings_plane_min = rings_plane[ 0]
     rings_plane_max = rings_plane[-1]
@@ -238,7 +257,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
         # shape (Npoints_plane,); indexes_plane
         idx_ring = np.nonzero(rings_plane ==
                               iring + rings_plane_min)[0]
-        if len(idx_ring) < 20:
+        if len(idx_ring) < min_points_in_ring:
             print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
             continue
 
@@ -246,8 +265,6 @@ def find_chessboard_in_plane_fit(points, ring, th,
         # chessboard to be
         if p_center__estimate is not None and \
            n__estimate is not None:
-            distance_threshold = 1.0
-            offplane_threshold = 0.5
 
             # shape (Npoints_ring,)
             points_ring_off_center = points_plane[idx_ring] - p_center__estimate
@@ -288,7 +305,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
         # get a python-style range I use i1+1
         i1 += 1
 
-        if (i1 - i0) / len(large_diff_ring_plane_gap) < 0.7:
+        if (i1 - i0) / len(large_diff_ring_plane_gap) < min_ratio_of_contiguous_points_in_ring:
             # most of the planar section of a ring's data should be in the
             # chessboard. If there's a big chunk off the plane NOT on my
             # chessboard, I ignore it
@@ -307,15 +324,6 @@ def find_chessboard_in_plane_fit(points, ring, th,
         if len_segment > np.sqrt(2)*board_size:
             print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}: {len_segment=}")
             continue
-
-        # I look at a few LIDAR returns past the edges. The board should be in
-        # front of everything, not behind. So these adjacent LIDAR cannot have a
-        # shorter range. I look at NscansAtEdge LIDAR returns off to either
-        # side. This is set to a high number: I cannot be near anything that
-        # might be occluding. Such a high number is required to catch the roll
-        # cage bars that might split a view of a wall
-        NscansAtEdge = 20
-        max_range_ahead_allowed = 0.2
 
         i0 = idx_plane[idx_ring[ 0]] # first point index in this segment
         i1 = idx_plane[idx_ring[-1]] # last  point index in this segment
@@ -416,7 +424,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
     pmean = np.mean(p, axis=-2)
     p = p - pmean
     n = mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
-    if abs(n[2]) > np.cos(30.*np.pi/180.):
+    if abs(n[2]) > max_cos_lidar_axis_to_plane_normal:
         print(f"Ignoring plane on line {line_number()}")
         return None
 
@@ -437,7 +445,10 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                             board_size,
                             viz                          = False,
                             viz_show_only_accepted       = False,
-                            viz_show_point_cloud_context = False):
+                            viz_show_point_cloud_context = False,
+
+                            far_distance_threshold_m  = 12,
+                            near_distance_threshold_m = 1):
 
     if rt_lidar_board__estimate is not None:
         if p_board_local is None:
@@ -467,10 +478,6 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     points = points[i]
     ring   = ring  [i]
     th     = th    [i]
-
-    # Ignore all points too close or too far away
-    far_distance_threshold_m  = 12
-    near_distance_threshold_m = 1
 
     range_sq = nps.norm2(points)
     mask_near     = (near_distance_threshold_m*near_distance_threshold_m > range_sq)
