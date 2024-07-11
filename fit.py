@@ -113,7 +113,7 @@ def parse_args():
 
     import glob
     import re
-    bags = glob.glob(args.bag)
+    bags = sorted(glob.glob(args.bag))
 
     if args.exclude_bag is not None:
         for ex in args.exclude_bag:
