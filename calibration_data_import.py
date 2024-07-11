@@ -19,6 +19,7 @@ import pcl
 import io
 import cv2
 import inspect
+import re
 
 import rosbags.rosbag2
 import rosbags.typesys
@@ -889,3 +890,12 @@ def get_lidar_observation(bag, lidar_topic,
 
     if cache is not None: cache[lidar_topic] = p_lidar
     return p_lidar
+
+
+
+def canonical_lidar_topic_name(topic):
+    # remove leading and trailing /
+    topic = re.match('/*(.*?)/*$', topic).group(1)
+
+    return topic.replace('/', '-')
+

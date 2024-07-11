@@ -283,7 +283,7 @@ for lidar_topic in lidar_topics:
         bagname = os.path.split(os.path.splitext(os.path.basename(bag))[0])[1]
         print(f"===== Looking for observations of {lidar_topic} in '{bagname}'")
 
-        what = f"{bagname}-{os.path.split(lidar_topic)[1]}"
+        what = f"{bagname}-{calibration_data_import.canonical_lidar_topic_name(lidar_topic)}"
 
         if not args.check:
             plidar = \
