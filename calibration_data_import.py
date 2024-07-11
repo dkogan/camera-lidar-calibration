@@ -510,7 +510,6 @@ def cluster_and_find_planes(*,
                             p__estimate,
                             p_center__estimate,
                             n__estimate,
-                            *,
                             # "width", but assumes the board is square. Will
                             # mostly work for non-square boards, but the logic
                             # could be improved in those cases
