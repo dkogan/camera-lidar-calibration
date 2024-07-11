@@ -198,6 +198,10 @@ def find_chessboard_in_plane_fit(points, ring, th,
                                  p_center__estimate,
                                  n__estimate,
                                  *,
+                                 # "width", but assumes the board is square.
+                                 # Will mostly work for non-square boards, but
+                                 # the logic could be improved in those cases
+                                 board_size,
                                  # for diagnostics
                                  i_cluster    = None,
                                  i_subcluster = None):
@@ -212,8 +216,6 @@ def find_chessboard_in_plane_fit(points, ring, th,
     # Validated by making this plot, observing that with this dth I get
     # integers with this plot:
     #   gp.plot(np.diff(th_plane/dth))
-
-    expected_board_size = 1.0 # meters across
 
     rings_plane_min = rings_plane[ 0]
     rings_plane_max = rings_plane[-1]
@@ -297,8 +299,8 @@ def find_chessboard_in_plane_fit(points, ring, th,
         len_segment = \
             nps.mag(points_plane[idx_ring[-1]] - \
                     points_plane[idx_ring[ 0]])
-        if len_segment < 0.7*expected_board_size or \
-           len_segment > np.sqrt(2)*expected_board_size:
+        if len_segment < 0.7*board_size or \
+           len_segment > np.sqrt(2)*board_size:
             print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}: {len_segment=}")
             continue
 
@@ -402,7 +404,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
     # skewed scans
     p = points_plane[mask_plane_keep]
     d = distance_between_furthest_pair_of_points(p)
-    if d > (np.sqrt(2) + 0.1)*expected_board_size:
+    if d > (np.sqrt(2) + 0.1)*board_size:
         print(f"Ignoring plane on line {line_number()}")
         return None
 
@@ -425,6 +427,10 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                             p_board_local = None,
                             # identifying string
                             what,
+                            # "width", but assumes the board is square. Will
+                            # mostly work for non-square boards, but the logic
+                            # could be improved in those cases
+                            board_size,
                             viz                          = False,
                             viz_show_only_accepted       = False,
                             viz_show_point_cloud_context = False):
@@ -479,7 +485,9 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                                      mask_far                     = mask_far,
                                      p__estimate                  = p__estimate,
                                      p_center__estimate           = p_center__estimate,
-                                     n__estimate                  = n__estimate)
+                                     n__estimate                  = n__estimate,
+
+                                     board_size = board_size)
 
     if result['p_accepted_multiple']:
         print("More than one cluster found that observes a board")
@@ -502,6 +510,11 @@ def cluster_and_find_planes(*,
                             p__estimate,
                             p_center__estimate,
                             n__estimate,
+                            *,
+                            # "width", but assumes the board is square. Will
+                            # mostly work for non-square boards, but the logic
+                            # could be improved in those cases
+                            board_size,
                             i_cluster    = None,
                             i_subcluster = 0):
 
@@ -558,6 +571,7 @@ def cluster_and_find_planes(*,
                                          idx_plane,
                                          p_center__estimate,
                                          n__estimate,
+                                         board_size   = board_size,
                                          # for diagnostics
                                          i_cluster    = i_cluster,
                                          i_subcluster = i_subcluster)
@@ -676,7 +690,8 @@ def cluster_and_find_planes(*,
                                         p_center__estimate           = p_center__estimate,
                                         n__estimate                  = n__estimate,
                                         i_cluster                    = i_cluster,
-                                        i_subcluster                 = i_subcluster + 1)
+                                        i_subcluster                 = i_subcluster + 1,
+                                        board_size = board_size)
             if p_accepted is not None and result['p_accepted'] is not None:
                 p_accepted_multiple = True
 
@@ -866,7 +881,11 @@ def get_lidar_observation(bag, lidar_topic,
                           cache                        = None,
                           viz                          = False,
                           viz_show_only_accepted       = False,
-                          viz_show_point_cloud_context = False):
+                          viz_show_point_cloud_context = False,
+                          # "width", but assumes the board is square. Will
+                          # mostly work for non-square boards, but the logic
+                          # could be improved in those cases
+                          board_size):
 
     if cache is not None and lidar_topic in cache:
         return cache[lidar_topic]
@@ -885,7 +904,8 @@ def get_lidar_observation(bag, lidar_topic,
                                 what          = what,
                                 viz                          = viz,
                                 viz_show_only_accepted       = viz_show_only_accepted,
-                                viz_show_point_cloud_context = viz_show_point_cloud_context)
+                                viz_show_point_cloud_context = viz_show_point_cloud_context,
+                                board_size = board_size)
 
     if cache is not None: cache[lidar_topic] = p_lidar
     return p_lidar

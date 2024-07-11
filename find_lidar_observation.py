@@ -4,18 +4,21 @@ r'''Calibrate a set of cameras and LIDARs into a common coordinate system
 
 SYNOPSIS
 
-  $ ./find_lidar_observation.py \
-      camera-lidar.bag          \
+  $ ./find_lidar_observation.py     \
+      --board-size 1                \
+      camera-lidar.bag              \
       /lidar/vl_points_0
     [runs through this one scenario]
 
   $ ./find_lidar_observation.py     \
+      --board-size 1                \
       --check                       \
       'camera-lidar*.bag'           \
       /lidar/vl_points_{0,1,2}
     [unit test to make sure this scenario works properly]
 
   $ ./find_lidar_observation.py     \
+      --board-size 1                \
       --generate-ground-truth       \
       'camera-lidar*.bag'           \
       /lidar/vl_points_{0,1,2}
@@ -40,6 +43,13 @@ def parse_args():
     parser = \
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+
+    parser.add_argument('--board-size',
+                        required = True,
+                        help = '''Must be given. This is the "width", but
+                        assumes the board is square. Will mostly work for
+                        non-square boards also, but the logic could be improved
+                        in those cases''')
 
     parser.add_argument('--viz',
                         action = argparse.BooleanOptionalAction,
@@ -320,7 +330,8 @@ for lidar_topic in lidar_topics:
                                             what                         = what,
                                             viz                          = viz,
                                             viz_show_only_accepted       = False,
-                                            viz_show_point_cloud_context = args.viz_show_point_cloud_context)
+                                            viz_show_point_cloud_context = args.viz_show_point_cloud_context,
+                                            board_size                   = args.board_size)
             except Exception as e:
                 fail(f"Exception={e}")
                 continue

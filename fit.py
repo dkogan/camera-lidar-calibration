@@ -93,6 +93,14 @@ def parse_args():
                         help = '''If given, we don't run the slow computation,
                         but read it from the file given in --cache''')
 
+    parser.add_argument('--board-size',
+                        help = '''Must be given with LIDAR-only solves. Must NOT
+                        be given if any cameras are being calibrated as well,
+                        since this information is available in the models. This
+                        is the "width", but assumes the board is square. Will
+                        mostly work for non-square boards also, but the logic
+                        could be improved in those cases''')
+
     parser.add_argument('models',
                         type = str,
                         nargs='*',
@@ -125,8 +133,18 @@ def parse_args():
     # sys.exit()
 
     args.lidar_topic  = args.lidar_topic.split(',')
-    if args.camera_topic is not None: args.camera_topic = args.camera_topic.split(',')
-    else:                             args.camera_topic = []
+    if args.camera_topic is not None:
+        args.camera_topic = args.camera_topic.split(',')
+        if args.board_size is not None:
+            print(f"--board-size must NOT be given if any cameras are being calibrated",
+                  file=sys.stderr)
+            sys.exit(1)
+    else:
+        args.camera_topic = []
+        if args.board_size is None:
+            print(f"--board-size MUST be given if no cameras are being calibrated",
+                  file=sys.stderr)
+            sys.exit(1)
 
     if len(args.models) != len(args.camera_topic):
         print(f"The number of models given must match the number of --camera-topic EXACTLY",
@@ -376,11 +394,19 @@ def fit_estimate( joint_observations,
 
 
 
-    # The estimate of the center of the board, in board coords. This doesn't
-    # need to be precise. If the board has an even number of corners, I just
-    # take the nearest one'''
-    Nh,Nw = p_board_local.shape[:2]
-    p_center_board = p_board_local[Nh//2,Nw//2,:]
+    if Ncameras > 0:
+        # The estimate of the center of the board, in board coords. This doesn't
+        # need to be precise. If the board has an even number of corners, I just
+        # take the nearest one'''
+        Nh,Nw = p_board_local.shape[:2]
+        p_center_board = p_board_local[Nh//2,Nw//2,:]
+
+    else:
+        # LIDAR-only solve. I don't have the board geometry and I don't know how
+        # big the board is. But I eventually only look at distances to an
+        # infinite plane (the LIDAR error metric), so it doesn't matter. I set
+        # the board origin to 0
+        p_center_board = np.zeros((3,), dtype=float)
 
 
 
@@ -1103,6 +1129,7 @@ def fit( joint_observations,
 
 def get_joint_observation(bag,
                           *,
+                          board_size,
                           # Both input and output
                           cache = None):
     r'''Compute ONE lidar observation and/or ONE camera observation
@@ -1137,7 +1164,8 @@ def get_joint_observation(bag,
                                 cache = cache,
                                 viz                          = args.viz,
                                 viz_show_only_accepted       = args.viz_show_only_accepted,
-                                viz_show_point_cloud_context = args.viz_show_point_cloud_context) \
+                                viz_show_point_cloud_context = args.viz_show_point_cloud_context,
+                                board_size                   = board_size) \
           for ilidar in range(Nlidars)]
 
     if all(x is None for x in q_observed) and \
@@ -1708,8 +1736,13 @@ if args.models:
     p_board_local = p_board_local__all[0]
     p_board_local[...,2] = 0 # assume flat. calobject_warp may differ between samples
 
+    # width
+    board_size = p_board_local[-1,-1,0] - p_board_local[0,0,0]
+    print(f"Detected {board_size=}")
+
 else:
     p_board_local = None
+    board_size = args.board_size
 
 
 
@@ -1722,7 +1755,8 @@ else:
     cache = dict()
 
 # read AND write the cache dict
-joint_observations = [get_joint_observation(bag, cache=cache) for bag in args.bag ]
+joint_observations = [get_joint_observation(bag, cache=cache,
+                                            board_size = board_size) for bag in args.bag ]
 
 # Any boards observed by a single sensor aren't useful, and I get rid of
 # them
