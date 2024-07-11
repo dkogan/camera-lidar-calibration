@@ -4,6 +4,8 @@ r'''Display a set of LIDAR point clouds in an aligned coordinate system
 SYNOPSIS
 
   $ ./show-aligned-lidar-pointclouds.py \
+      --rt-lidar-ref 0,0,0,0,0,0 \
+      --rt-lidar-ref 0.1,0,0.2,1,2,3 \
       camera-lidar.bag          \
       /lidar/vl_points_0        \
       /lidar/vl_points_1        \
@@ -43,7 +45,7 @@ def parse_args():
                         type = str,
                         action = 'append',
                         help = '''Transforms for each LIDAR. Each transform is
-                        given as r,r,r,t,t,t. Exactly as many --rt-lidar-ref
+                        given as r,r,r,t,t,t. Exactly as many --rt-ref-lidar
                         arguments must be given as LIDAR topics. This is
                         exclusive with --rt-lidar-ref''')
 
@@ -115,17 +117,16 @@ import mrcal
 import gnuplotlib as gp
 
 import calibration_data_import
-import debag
 
 try:
     pointcloud_msgs = \
         [ next(calibration_data_import.bag_messages_generator(args.bag, (topic,))) \
           for topic in args.lidar_topics ]
 except:
-    raise Exception(f"Bag '{args.bag}' doesn't have at least one message of {topic=}")
+    raise Exception(f"Bag '{args.bag}' doesn't have at least one message for each of {args.lidar_topics}")
 
 # Package into a numpy array
-pointclouds = [ msg['array']['xyz'] \
+pointclouds = [ msg['array']['xyz'].astype(float) \
                 for msg in pointcloud_msgs ]
 
 # Throw out everything that's too far, in the LIDAR's own frame
