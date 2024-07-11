@@ -45,6 +45,7 @@ def parse_args():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument('--board-size',
+                        type = float,
                         required = True,
                         help = '''Must be given. This is the "width", but
                         assumes the board is square. Will mostly work for

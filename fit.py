@@ -94,6 +94,7 @@ def parse_args():
                         but read it from the file given in --cache''')
 
     parser.add_argument('--board-size',
+                        type = float,
                         help = '''Must be given with LIDAR-only solves. Must NOT
                         be given if any cameras are being calibrated as well,
                         since this information is available in the models. This
