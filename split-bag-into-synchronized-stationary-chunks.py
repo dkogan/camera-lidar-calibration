@@ -98,7 +98,8 @@ def write(msgs_now_from_topic,
     print(f"Writing '{bagfile}'")
 
     with rosbags.rosbag2.Writer(bagfile,
-                                version = 9) as writer:
+                                version = rosbags.rosbag2.Writer.VERSION_LATEST) \
+                                as writer:
         for topic in topics:
             msg = msgs_now_from_topic[topic]
             connection = writer.add_connection(topic,

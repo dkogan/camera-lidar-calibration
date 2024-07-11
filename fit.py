@@ -50,11 +50,10 @@ def parse_args():
 
     parser.add_argument('--camera-topic',
                         type=str,
-                        required = True,
                         help = '''The topic that contains the images. This is a
-                        comma-separated list of topics. Any number of cameras >=
-                        1 is supported. The number of camera topics must match
-                        the number of given models EXACTLY''')
+                        comma-separated list of topics. Any number of cameras
+                        (including none) is supported. The number of camera
+                        topics must match the number of given models EXACTLY''')
 
     parser.add_argument('--bag',
                         type=str,
@@ -96,7 +95,7 @@ def parse_args():
 
     parser.add_argument('models',
                         type = str,
-                        nargs='+',
+                        nargs='*',
                         help='''Camera model for the optical calibration. Only
                         the intrinsics are used. The number of models given must
                         match the number of --camera-topic EXACTLY''')
@@ -126,7 +125,8 @@ def parse_args():
     # sys.exit()
 
     args.lidar_topic  = args.lidar_topic.split(',')
-    args.camera_topic = args.camera_topic.split(',')
+    if args.camera_topic is not None: args.camera_topic = args.camera_topic.split(',')
+    else:                             args.camera_topic = []
 
     if len(args.models) != len(args.camera_topic):
         print(f"The number of models given must match the number of --camera-topic EXACTLY",
@@ -1037,7 +1037,6 @@ def get_joint_observation(bag,
     print(f"===== Looking for joint observations in '{bagname}'")
 
     Ncameras = len(args.camera_topic)
-
     q_observed = \
         [ calibration_data_import.chessboard_corners( \
                              bag,
@@ -1045,7 +1044,6 @@ def get_joint_observation(bag,
                              bagname = bagname,
                              cache   = cache ) \
           for icamera in range(Ncameras) ]
-
 
     Nlidars = len(args.lidar_topic)
     p_lidar = \
@@ -1598,35 +1596,38 @@ def rpy_from_r(r):
 
 
 
+if args.models:
 
-def open_model(f):
-    try: return mrcal.cameramodel(f)
-    except:
-        print(f"Couldn't open '{f}' as a camera model",
-              file=sys.stderr)
+    def open_model(f):
+        try: return mrcal.cameramodel(f)
+        except:
+            print(f"Couldn't open '{f}' as a camera model",
+                  file=sys.stderr)
+            sys.exit(1)
+    models = [open_model(f) for f in args.models]
+
+    # I assume each model used the same calibration object
+    # shape (Ncameras, Nh,Nw,3)
+    p_board_local__all = \
+        [mrcal.ref_calibration_object(optimization_inputs =
+                                      m.optimization_inputs()) \
+         for m in models]
+    def is_different(x,y):
+        try:    return nps.norm2((x-y).ravel()) > 1e-12
+        except: return True
+    if any(is_different(p_board_local__all[0][...,:2],
+                        p_board_local__all[i][...,:2]) \
+           for i in range(1,len(models))):
+        print("Each model should have been made with the same chessboard, but some are different. I use this calibration-time chessboard for the camera-lidar calibration",
+              file = sys.stderr)
         sys.exit(1)
-models = [open_model(f) for f in args.models]
 
-# I assume each model used the same calibration object
-# shape (Ncameras, Nh,Nw,3)
-p_board_local__all = \
-    [mrcal.ref_calibration_object(optimization_inputs =
-                                  m.optimization_inputs()) \
-     for m in models]
-def is_different(x,y):
-    try:    return nps.norm2((x-y).ravel()) > 1e-12
-    except: return True
-if any(is_different(p_board_local__all[0][...,:2],
-                    p_board_local__all[i][...,:2]) \
-       for i in range(1,len(models))):
-    print("Each model should have been made with the same chessboard, but some are different. I use this calibration-time chessboard for the camera-lidar calibration",
-          file = sys.stderr)
-    sys.exit(1)
+    # shape (Nh,Nw,3)
+    p_board_local = p_board_local__all[0]
+    p_board_local[...,2] = 0 # assume flat. calobject_warp may differ between samples
 
-# shape (Nh,Nw,3)
-p_board_local = p_board_local__all[0]
-p_board_local[...,2] = 0 # assume flat. calobject_warp may differ between samples
-
+else:
+    p_board_local = None
 
 
 
@@ -1674,8 +1675,12 @@ Nobservations_camera = sum(0 if x is None else 1 \
                            for o in joint_observations \
                            for x in o[0])
 
-Nmeas_camera_observation = p_board_local.shape[-3]*p_board_local.shape[-2]*2
-Nmeas_camera_observation_all = Nobservations_camera * Nmeas_camera_observation
+if p_board_local is not None:
+    Nmeas_camera_observation = p_board_local.shape[-3]*p_board_local.shape[-2]*2
+    Nmeas_camera_observation_all = Nobservations_camera * Nmeas_camera_observation
+else:
+    Nmeas_camera_observation     = 0
+    Nmeas_camera_observation_all = 0
 
 Nobservations_lidar  = \
     sum(0 if x is None else 1 \
