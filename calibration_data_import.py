@@ -11,7 +11,6 @@ import numpy as np
 import numpysane as nps
 import gnuplotlib as gp
 
-sys.path[:0] = '/home/dima/projects/mrcal',
 import mrcal
 
 import vnlog

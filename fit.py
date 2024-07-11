@@ -147,7 +147,6 @@ import scipy.optimize
 import pickle
 import io
 
-sys.path[:0] = '/home/dima/projects/mrcal',
 import mrcal
 import mrcal.calibration
 
@@ -205,6 +204,89 @@ def normal(p):
     p_mean = np.mean(p, axis=-2)
     p = p - p_mean
     return mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
+
+
+
+# Copy from mrcal/mrcal/calibration.py. Please consolidate
+def _traverse_sensor_connections( Nsensors,
+                                  callback__neighbors,
+                                  callback__cost_edge,
+                                  callback__found_best_path_to_sensor ):
+    '''Traverses a connectivity graph of sensors
+
+    Starts from the root sensor, and visits each one in order of total distance
+    from the root. Useful to evaluate the whole set of sensors using pairwise
+    metrics, building the network up from the best-connected, to the
+    worst-connected. Any sensor not connected to the root at all will NOT be
+    visited. The caller should check for any unvisited sensors.
+
+    We have Nsensors sensors. Each one is identified by an integer in
+    [0,Nsensors). The root is defined to be sensor 0.
+
+    Three callbacks must be passed in:
+
+    - callback__neighbors (i)
+      An iterable returning each neigbor of sensor i.
+
+    - callback__cost_edge(i, i_parent)
+      The cost between two adjacent nodes
+
+    - callback__found_best_path_to_sensor(i, i_parent)
+      Called when the best path to node i is found. This path runs through
+      i_parent as the previous sensor
+
+    '''
+
+    import heapq
+
+    class Node:
+        def __init__(self, idx):
+            self.idx        = idx
+            self.idx_parent = -1
+            self.cost       = None
+            self.done       = False
+
+        def __lt__(self, other):
+            return self.cost < other.cost
+
+        def visit(self):
+            callback__found_best_path_to_sensor(self.idx,
+                                                self.idx_parent)
+            self.done = True
+
+            for neighbor_idx in callback__neighbors(self.idx):
+                neighbor = nodes[neighbor_idx]
+
+                if neighbor.done:
+                    continue
+
+                cost_to_neighbor_via_node = \
+                    self.cost + \
+                    callback__cost_edge(neighbor_idx,self.idx)
+
+                if neighbor.cost is None:
+                    # Haven't seen this node yet
+                    neighbor.cost = cost_to_neighbor_via_node
+                    neighbor.idx_parent     = self.idx
+                    heapq.heappush(heap, neighbor)
+                else:
+                    # This node is already in the heap, ready to be processed.
+                    # If this new path to this node is better, use it
+                    if cost_to_neighbor_via_node < neighbor.cost:
+                        neighbor.cost = cost_to_neighbor_via_node
+                        neighbor.idx_parent     = self.idx
+                        heapq.heapify(heap) # is this the most efficient "update" call?
+
+
+    nodes = [Node(i) for i in range(Nsensors)]
+    nodes[0].cost = 0
+    heap = []
+
+    nodes[0].visit()
+    while heap:
+        node_top = heapq.heappop(heap)
+        node_top.visit()
+
 
 def fit_estimate( joint_observations,
                   Nboards, Ncameras, Nlidars,
@@ -591,7 +673,7 @@ def fit_estimate( joint_observations,
     print(f"Sensor shared-observations matrix for {Nlidars=} followed by {Ncameras=}:")
     print(full_symmetric_matrix_from_upper_triangle(shared_observation_counts))
 
-    mrcal.calibration._traverse_sensor_connections \
+    _traverse_sensor_connections \
         ( Nsensors,
           neighbors,
           cost_edge,
