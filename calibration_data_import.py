@@ -299,8 +299,10 @@ def find_chessboard_in_plane_fit(points, ring, th,
         len_segment = \
             nps.mag(points_plane[idx_ring[-1]] - \
                     points_plane[idx_ring[ 0]])
-        if len_segment < 0.7*board_size or \
-           len_segment > np.sqrt(2)*board_size:
+        if len_segment < 0.7*board_size:
+            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}: {len_segment=}")
+            continue
+        if len_segment > np.sqrt(2)*board_size:
             print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}: {len_segment=}")
             continue
 
