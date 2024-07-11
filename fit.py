@@ -1902,36 +1902,55 @@ multisense_units_lra = find_multisense_units_lra(args.camera_topic)
 write_multisense_calibration(multisense_units_lra)
 
 
-# Write the inter-multisense extrinsics
-for unit in multisense_units_lra.keys():
-    lra = multisense_units_lra[unit]
-    l = lra[0]
-    if l < 0:
-        continue
+print("The poses follow. The reference is defined to sit at lidar0\n")
+print("The below is passable directly to show-aligned-lidar-pointclouds.py")
 
-    topic = args.camera_topic[l]
+if Ncameras > 0:
+    # Write the inter-multisense extrinsics
+    multisense_topics          = []
+    str_multisense_poses       = ''
+    str_multisense_poses_other = ''
+    for unit in multisense_units_lra.keys():
+        lra = multisense_units_lra[unit]
+        l = lra[0]
+        if l < 0:
+            continue
 
-    rt_multisenseleft_lidar0 = models[l].extrinsics_rt_fromref()
-    rpy = rpy_from_r(rt_multisenseleft_lidar0[:3])
-    xyz = rt_multisenseleft_lidar0[3:]
-    print(f"rt_multisenseleft_lidar0 pose for {topic}: rt_multisenseleft_lidar0={rt_multisenseleft_lidar0} {rpy=} {xyz=}")
+        topic = args.camera_topic[l]
+        multisense_topics.append(topic)
 
-    rt_lidar0_multisenseleft = mrcal.invert_rt(rt_multisenseleft_lidar0)
-    rpy = rpy_from_r(rt_lidar0_multisenseleft[:3])
-    xyz = rt_lidar0_multisenseleft[3:]
-    print(f"rt_lidar0_multisenseleft pose for {topic}: rt_lidar0_multisenseleft={rt_lidar0_multisenseleft} {rpy=} {xyz=}")
+        rt_multisenseleft_lidar0 = models[l].extrinsics_rt_fromref()
+        str_multisense_poses += \
+            f"  --rt-multisenseleft-ref {','.join(list(str(x) for x in rt_multisenseleft_lidar0))} \\\n"
+
+        rpy = rpy_from_r(rt_multisenseleft_lidar0[:3])
+        xyz = rt_multisenseleft_lidar0[3:]
+        str_multisense_poses_other += \
+            f"  {rpy=} {xyz=}\n"
+    print(f"  --multisense-topic {','.join(multisense_topics)} \\")
+    print(str_multisense_poses)
+    print("other poses:")
+    print(str_multisense_poses_other)
+    print('\n')
 
 
 # Write the inter-multisense lidar
+lidar_topics          = []
+str_lidar_poses       = ''
+str_lidar_poses_other = ''
 for ilidar in range(Nlidars):
     topic = args.lidar_topic[ilidar]
+    lidar_topics.append(topic)
 
     rt_lidar_lidar0 = solved_state['rt_lidar_ref'][ilidar]
+    str_lidar_poses += \
+        f"  --rt-lidar-ref {','.join(list(str(x) for x in rt_lidar_lidar0))} \\\n"
+
     rpy = rpy_from_r(rt_lidar_lidar0[:3])
     xyz = rt_lidar_lidar0[3:]
-    print(f"rt_lidar_lidar0 pose for {topic}: rt_lidar_lidar0={rt_lidar_lidar0} {rpy=} {xyz=}")
-
-    rt_lidar0_lidar = mrcal.invert_rt(rt_lidar_lidar0)
-    rpy = rpy_from_r(rt_lidar0_lidar[:3])
-    xyz = rt_lidar0_lidar[3:]
-    print(f"rt_lidar0_lidar pose for {topic}: rt_lidar0_lidar={rt_lidar0_lidar} {rpy=} {xyz=}")
+    str_lidar_poses_other += \
+        f"  {rpy=} {xyz=}\n"
+print(f"  --lidar-topic {','.join(lidar_topics)} \\")
+print(str_lidar_poses)
+print("other poses:")
+print(str_lidar_poses_other)

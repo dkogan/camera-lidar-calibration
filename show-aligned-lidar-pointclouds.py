@@ -3,13 +3,12 @@ r'''Display a set of LIDAR point clouds in an aligned coordinate system
 
 SYNOPSIS
 
-  $ ./show-aligned-lidar-pointclouds.py \
-      --rt-lidar-ref 0,0,0,0,0,0 \
-      --rt-lidar-ref 0.1,0,0.2,1,2,3 \
-      camera-lidar.bag          \
-      /lidar/vl_points_0        \
-      /lidar/vl_points_1        \
-    [runs through this one scenario]
+  $ ./show-aligned-lidar-pointclouds.py                   \
+      --rt-lidar-ref 0,0,0,0,0,0                          \
+      --rt-lidar-ref 0.1,0,0.2,1,2,3                      \
+      --bag camera-lidar.bag                              \
+      --lidar-topic /lidar/vl_points_0,/lidar/vl_points_1
+    [plot pops up to show the aligned results]
 
 Displays aligned point clouds. Useful for debugging
 
@@ -49,19 +48,21 @@ def parse_args():
                         arguments must be given as LIDAR topics. This is
                         exclusive with --rt-lidar-ref''')
 
-    parser.add_argument('bag',
+    parser.add_argument('--lidar-topic',
                         type=str,
-                        help = '''Glob for the rosbags that contains the lidar data''')
+                        required = True,
+                        help = '''The LIDAR topic to visualize. This is a
+                        comma-separated list of topics''')
 
-    parser.add_argument('lidar-topics',
+    parser.add_argument('--bag',
                         type=str,
-                        nargs = '+',
-                        help = '''The LIDAR topics we're looking at. At least one must be given''')
+                        required = True,
+                        help = '''The one bag we're visualizing''')
 
 
     args = parser.parse_args()
 
-    args.lidar_topics = getattr(args, 'lidar-topics')
+    args.lidar_topic = args.lidar_topic.split(',')
 
     if args.rt_lidar_ref is None and \
        args.rt_ref_lidar is None:
@@ -88,7 +89,7 @@ def parse_args():
             sys.exit(1)
         return s
 
-    Nlidar = len(args.lidar_topics)
+    Nlidar = len(args.lidar_topic)
     if args.rt_lidar_ref is not None:
         if len(args.rt_lidar_ref) != Nlidar:
             print(f"MUST have been given a matching number of --rt-lidar-ref and topics. Got {len(args.rt_lidar_ref)} and {Nlidar} respectively instead",
@@ -121,9 +122,9 @@ import calibration_data_import
 try:
     pointcloud_msgs = \
         [ next(calibration_data_import.bag_messages_generator(args.bag, (topic,))) \
-          for topic in args.lidar_topics ]
+          for topic in args.lidar_topic ]
 except:
-    raise Exception(f"Bag '{args.bag}' doesn't have at least one message for each of {args.lidar_topics}")
+    raise Exception(f"Bag '{args.bag}' doesn't have at least one message for each of {args.lidar_topic}")
 
 # Package into a numpy array
 pointclouds = [ msg['array']['xyz'].astype(float) \
@@ -138,7 +139,7 @@ if args.rt_lidar_ref is not None:
 pointclouds = [ mrcal.transform_point_rt(args.rt_ref_lidar[i],p) for i,p in enumerate(pointclouds) ]
 
 data_tuples = [ ( p, dict( tuplesize = -3,
-                           legend    = args.lidar_topics[i],
+                           legend    = args.lidar_topic[i],
                            _with     = 'points pt 7 ps 1')) \
                 for i,p in enumerate(pointclouds) ]
 
