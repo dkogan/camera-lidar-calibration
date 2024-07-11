@@ -9,7 +9,7 @@ SYNOPSIS
       /lidar/vl_points_1        \
     [runs through this one scenario]
 
-Displays aligned point clouds. Usefule for debugging
+Displays aligned point clouds. Useful for debugging
 
 '''
 
