@@ -217,6 +217,12 @@ def find_chessboard_in_plane_fit(points, ring, th,
     # integers with this plot:
     #   gp.plot(np.diff(th_plane/dth))
 
+    # Any gap of > 1*dth means there was a gap in the plane scan. I look for the
+    # biggest interval with no BIG gaps. I allow small gaps (hence 4.5 and not
+    # 1.5)
+    max_acceptable_scan_gap = 4.5
+
+
     rings_plane_min = rings_plane[ 0]
     rings_plane_max = rings_plane[-1]
 
@@ -263,11 +269,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
 
         # Below is logic to look for long continuous scans. Any missing points
         # indicate that we're in a noisy area that maybe isn't in the plane.
-
-        # Any gap of > 1*dth means there was a gap in the plane scan. I look
-        # for the biggest interval with no BIG gaps. I allow small gaps
-        # (hence 4.5 and not 1.5)
-        large_diff_ring_plane_gap = np.diff(th_ring/dth) > 4.5
+        large_diff_ring_plane_gap = np.diff(th_ring/dth) > max_acceptable_scan_gap
 
         # I look for the largest run of False in large_diff_ring_plane_gap
         # These are inclusive indices into diff(th)
