@@ -1117,7 +1117,8 @@ def fit( joint_observations,
             x[imeas_regularization_0:
               imeas_regularization_0+Nmeas_regularization]
         print(f"RMS fit error: {np.sqrt(np.mean(x*x)):.2f} normalized units")
-        print(f"RMS fit error (camera): {np.sqrt(np.mean(x_camera*x_camera))*SCALE_MEASUREMENT_PX:.3f} pixels")
+        if Ncameras > 0:
+            print(f"RMS fit error (camera): {np.sqrt(np.mean(x_camera*x_camera))*SCALE_MEASUREMENT_PX:.3f} pixels")
         print(f"RMS fit error (lidar): {(np.sqrt(np.mean(x_lidar *x_lidar ))*SCALE_MEASUREMENT_M):.3f} m")
         print(f"norm2(error_regularization)/norm2(error): {nps.norm2(x_regularization)/nps.norm2(x):.3f} m")
 
