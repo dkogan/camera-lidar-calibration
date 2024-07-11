@@ -117,14 +117,16 @@ import gnuplotlib as gp
 import calibration_data_import
 import debag
 
-# Read the data from the bag
-pointclouds = \
-    [ calibration_data_import.read_first_message_in_bag(args.bag, topic)
-      for topic in args.lidar_topics ]
+try:
+    pointcloud_msgs = \
+        [ next(calibration_data_import.bag_messages_generator(args.bag, (topic,))) \
+          for topic in args.lidar_topics ]
+except:
+    raise Exception(f"Bag '{args.bag}' doesn't have at least one message of {topic=}")
 
 # Package into a numpy array
-pointclouds = [ calibration_data_import.load_lidar_points(p[0]['points'])[0] \
-                for p in pointclouds ]
+pointclouds = [ msg['array']['xyz'] \
+                for msg in pointcloud_msgs ]
 
 # Throw out everything that's too far, in the LIDAR's own frame
 pointclouds = [ p[ nps.mag(p) < args.threshold ] for p in pointclouds ]

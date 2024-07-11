@@ -77,17 +77,6 @@ def find_stationary_frame(t, rt_rf):
 
     return idx
 
-def load_lidar_points(filename):
-
-    points,list_keys,dict_key_index = vnlog.slurp(filename)
-
-    points_xyz = points[:, (dict_key_index['x'],
-                            dict_key_index['y'],
-                            dict_key_index['z'])]
-    ring       = points[:, dict_key_index['ring']].astype(int)
-
-    return points_xyz, ring
-
 def cluster_points(cloud,
                    *,
                    cluster_tolerance = 0.4,
@@ -703,14 +692,15 @@ def cluster_and_find_planes(*,
              i_subcluster_accepted = i_subcluster_accepted)
 
 
-def bag_messages_generator(bag, topic):
+# Used by readers and writers. Imported by some other modules
+typestore = rosbags.typesys.get_typestore(rosbags.typesys.Stores.LATEST)
+
+def bag_messages_generator(bag, topics):
 
     dtype_cache = dict()
 
-
     # Read-only stuff for reading rosbags. Used by bag_messages_generator() only. I
     # want to evaluate this stuff only once
-    typestore = rosbags.typesys.get_typestore(rosbags.typesys.Stores.LATEST)
     name_from_type = { np.float32: 'FLOAT32',
                        np.float64: 'FLOAT64',
                        np.int16:   'INT16',
@@ -794,8 +784,8 @@ def bag_messages_generator(bag, topic):
     #   https://ternaris.gitlab.io/rosbags/topics/rosbag2.html
     with rosbags.rosbag2.Reader(bag) as reader:
 
-        connections = [c for c in reader.connections \
-                       if c.topic == topic]
+        connections = [ c for c in reader.connections \
+                        if c.topic in topics ]
 
         for connection, time_ns, rawdata in \
                 reader.messages( connections = connections ):
@@ -804,14 +794,21 @@ def bag_messages_generator(bag, topic):
             dtype = dtype_from_msg(msg, connection.msgtype)
             data  = np.frombuffer(msg.data, dtype = dtype)
 
-            yield msg.header, data
+            time_header_ns = msg.header.stamp.sec*1000000000 + msg.header.stamp.nanosec
+
+            yield dict( time_ns        = time_ns,
+                        time_header_ns = time_header_ns,
+                        frame_id       = msg.header.frame_id,
+                        topic          = connection.topic,
+                        msgtype        = connection.msgtype,
+                        array          = data,
+                        rawdata        = rawdata )
 
 
+def topics(bag):
+    with rosbags.rosbag2.Reader(bag) as reader:
+        return [c.topic for c in reader.connections]
 
-def read_first_message_in_bag(bag, topic):
-    return \
-        next(bag_messages_generator(bag, topic),
-             (None, None))
 
 def chessboard_corners(bag, camera_topic,
                        *,
@@ -822,7 +819,9 @@ def chessboard_corners(bag, camera_topic,
         return cache[camera_topic]
 
     raise Exception("THIS IS CURRENTLY UNIMPLEMENTED. debag -> rosbags conversion broke it. Bring it back")
-    metadata = read_first_message_in_bag(bag, camera_topic)
+    metadata = \
+        next(bag_messages_generator(bag, (camera_topic,)),
+             None)
 
     if len(metadata) == 0:
         print(f"NO images in '{bag}', so no chessboard observations")
@@ -873,13 +872,15 @@ def get_lidar_observation(bag, lidar_topic,
         return cache[lidar_topic]
 
 
-    header,data = read_first_message_in_bag(bag, lidar_topic)
-    if header is None:
-        raise Exception(f"Couldn't find lidar scan")
+    try:
+        msg = next(bag_messages_generator(bag, (lidar_topic,)))
+    except:
+        raise Exception(f"Bag '{bag}' doesn't have at least one message of {lidar_topic=}")
 
     p_lidar = \
         find_chessboard_in_view(None,
-                                data['xyz'].astype(np.float64), data['ring'],
+                                msg['array']['xyz'].astype(np.float64),
+                                msg['array']['ring'],
                                 p_board_local = p_board_local,
                                 what          = what,
                                 viz                          = viz,
