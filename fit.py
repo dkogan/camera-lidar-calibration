@@ -1760,16 +1760,41 @@ else:
 joint_observations = [get_joint_observation(bag, cache=cache,
                                             board_size = board_size) for bag in args.bag ]
 
-# Any boards observed by a single sensor aren't useful, and I get rid of
-# them
-def num_sensors_observed(o):
-    return \
-        sum(0 if x is None else 1 for qp in o for x in qp)
+def sensors_observing(o):
+    if o is None:
+        return []
+
+    q_observed,p_lidar = o
+    return                                 \
+        [ args.lidar_topic[i]              \
+          for i,x in enumerate(p_lidar)    \
+          if x is not None ] +             \
+        [ args.camera_topic[i]             \
+          for i,x in enumerate(q_observed) \
+          if x is not None ]
+
 
 mask_observations = np.ones( (len(joint_observations),), dtype=bool)
 for i,o in enumerate(joint_observations):
-    if o is None or num_sensors_observed(o) <= 1:
+    S = sensors_observing(o)
+    N = len(S)
+
+    if N == 0:
+        print(f"Bag {args.bag[i]} observed by sensors:\n" + \
+              "  NONE. Throwing out this bag\n",
+              end='')
         mask_observations[i] = 0
+    else:
+        print(f"Bag {args.bag[i]} observed by sensors:\n" + \
+              ''.join([f"  {s}\n" for s in S]),
+              end='')
+        if N == 1:
+            print(f"  ONLY ONE SENSOR IS NOT ENOUGH. Throwing out this bag\n",
+                  end='')
+            mask_observations[i] = 0
+        else:
+            print(f"  ACCEPTING this bag\n",
+                  end='')
 
 joint_observations = [o for i,o in enumerate(joint_observations) \
                       if mask_observations[i]]
