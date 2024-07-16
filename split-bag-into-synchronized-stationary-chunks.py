@@ -75,7 +75,7 @@ args = parse_args()
 import fnmatch
 import numpy as np
 import rosbags.rosbag2
-import calibration_data_import
+import bag_interface
 
 
 
@@ -104,13 +104,13 @@ def write(msgs_now_from_topic,
             msg = msgs_now_from_topic[topic]
             connection = writer.add_connection(topic,
                                                msg['msgtype'],
-                                               typestore = calibration_data_import.typestore)
+                                               typestore = bag_interface.typestore)
             writer.write(connection, msg['time_ns'], msg['rawdata'])
 
 
 
 
-topics_all = calibration_data_import.topics(args.bag)
+topics_all = bag_interface.topics(args.bag)
 topics     = fnmatch.filter(topics_all, args.lidar_topic)
 
 print(f"Reading topics {topics}")
@@ -121,7 +121,7 @@ i_period0 = -1
 # For each topic I take the first event in each period. I assume that the whole
 # sequence of events is monotonic, and that all the topics cross each period
 # threshold together
-for msg in calibration_data_import.bag_messages_generator(args.bag, topics):
+for msg in bag_interface.bag_messages_generator(args.bag, topics):
 
     i_period = msg['time_ns'] // args.period_ns
     if i_period0 > i_period:
