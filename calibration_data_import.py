@@ -243,13 +243,33 @@ def find_chessboard_in_plane_fit(points, ring, th,
     mask_plane_keep_per_ring = [None] * Nrings
 
 
+    ring_msgs = dict()
+    plane_msg = None
+    def reject_ring_if(condition, msg, ring, line):
+        nonlocal ring_msgs
+        if not condition: return False
+
+        print(f"Rejecting ring {ring} on line {line}: {msg}")
+        ring_msgs[ring] = f"{ring} rejected: {msg}"
+        return True
+    def reject_plane_if(condition, msg, line):
+        nonlocal plane_msg
+        if not condition: return False
+
+        print(f"Rejecting plane on line {line_number()}: {msg}")
+        plane_msg = f"Plane rejected: {msg}"
+        return True
+
+
     # For each ring I find the longest contiguous section on my plane
     for iring in range(Nrings):
         # shape (Npoints_plane,); indexes_plane
         idx_ring = np.nonzero(rings_plane ==
                               iring + rings_plane_min)[0]
-        if len(idx_ring) < min_points_in_ring:
-            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
+        if reject_ring_if(len(idx_ring) < min_points_in_ring,
+                          f"len(idx_ring) < min_points_in_ring ~~~ {len(idx_ring)} < {min_points_in_ring}",
+                          iring+rings_plane_min,
+                          line_number()):
             continue
 
         # Throw out all points that are too far from where we expect the
@@ -267,8 +287,10 @@ def find_chessboard_in_plane_fit(points, ring, th,
                 (nps.norm2(points_ring_off_center) < distance_threshold*distance_threshold)
 
             idx_ring = idx_ring[mask_near_estimate]
-            if len(idx_ring) == 0:
-                print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
+            if reject_ring_if(len(idx_ring) == 0,
+                              "len(idx_ring) == 0",
+                              iring+rings_plane_min,
+                              line_number()):
                 continue
 
         th_ring = th_plane[idx_ring]
@@ -281,11 +303,15 @@ def find_chessboard_in_plane_fit(points, ring, th,
 
         # I look for the largest run of False in large_diff_ring_plane_gap
         # These are inclusive indices into diff(th)
-        if len(large_diff_ring_plane_gap) == 0:
-            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
+        if reject_ring_if(len(large_diff_ring_plane_gap) == 0,
+                          "len(large_diff_ring_plane_gap) == 0",
+                          iring+rings_plane_min,
+                          line_number()):
             continue
-        if np.all(large_diff_ring_plane_gap):
-            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
+        if reject_ring_if(np.all(large_diff_ring_plane_gap),
+                          "np.all(large_diff_ring_plane_gap)",
+                          iring+rings_plane_min,
+                          line_number()):
             continue
 
         # i0,i1 are python-style ranges indexing diff(th_ring)
@@ -296,11 +322,10 @@ def find_chessboard_in_plane_fit(points, ring, th,
         # get a python-style range I use i1+1
         i1 += 1
 
-        if (i1 - i0) / len(large_diff_ring_plane_gap) < min_ratio_of_contiguous_points_in_ring:
-            # most of the planar section of a ring's data should be in the
-            # chessboard. If there's a big chunk off the plane NOT on my
-            # chessboard, I ignore it
-            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
+        if reject_ring_if((i1 - i0) / len(large_diff_ring_plane_gap) < min_ratio_of_contiguous_points_in_ring,
+                          f"(i1 - i0) / len(large_diff_ring_plane_gap) < min_ratio_of_contiguous_points_in_ring ~~~ ({i1} - {i0}) / {len(large_diff_ring_plane_gap)} < {min_ratio_of_contiguous_points_in_ring}",
+                          iring+rings_plane_min,
+                          line_number()):
             continue
 
         idx_ring = idx_ring[i0:i1]
@@ -309,11 +334,15 @@ def find_chessboard_in_plane_fit(points, ring, th,
         len_segment = \
             nps.mag(points_plane[idx_ring[-1]] - \
                     points_plane[idx_ring[ 0]])
-        if len_segment < 0.7*board_size:
-            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}: {len_segment=}")
+        if reject_ring_if(len_segment < 0.7*board_size,
+                          f"len_segment < 0.7*board_size ~~~ len_segment < 0.7*board_size",
+                          iring+rings_plane_min,
+                          line_number()):
             continue
-        if len_segment > np.sqrt(2)*board_size:
-            print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}: {len_segment=}")
+        if reject_ring_if(len_segment > np.sqrt(2)*board_size,
+                          f"len_segment > np.sqrt(2)*board_size ~~~ len_segment > np.sqrt(2)*board_size",
+                          iring+rings_plane_min,
+                          line_number()):
             continue
 
         i0 = idx_plane[idx_ring[ 0]] # first point index in this segment
@@ -366,16 +395,20 @@ def find_chessboard_in_plane_fit(points, ring, th,
         if i.size:
             range0  = nps.mag(points[i0])
             _range  = nps.mag(points[i ])
-            if np.any(range0 - _range > max_range_ahead_allowed):
-                print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
+            if reject_ring_if(np.any(range0 - _range > max_range_ahead_allowed),
+                              f"np.any(range0 - _range > max_range_ahead_allowed) ~~~ np.any({range0} - {_range} > {max_range_ahead_allowed})",
+                              iring+rings_plane_min,
+                              line_number()):
                 continue
 
         i = scan_indices_off_edge(i1, NscansAtEdge)
         if i.size:
             range0  = nps.mag(points[i1])
             _range  = nps.mag(points[i ])
-            if np.any(range0 - _range > max_range_ahead_allowed):
-                print(f"Ignoring ring {iring+rings_plane_min} on line {line_number()}")
+            if reject_ring_if(np.any(range0 - _range > max_range_ahead_allowed),
+                              f"np.any(range0 - _range > max_range_ahead_allowed) ~~~ np.any({range0} - {_range} > {max_range_ahead_allowed})",
+                              iring+rings_plane_min,
+                              line_number()):
                 continue
 
 
@@ -385,15 +418,19 @@ def find_chessboard_in_plane_fit(points, ring, th,
         mask_plane_keep_per_ring[iring] = np.zeros( (len(points_plane),), dtype=bool)
         mask_plane_keep_per_ring[iring][idx_ring] = True
 
+        ring_msgs[iring+rings_plane_min] = f"{iring+rings_plane_min}: accepted"
+
     # I want at least some number of contiguous rings to have data on my plane
     Nrings_min_threshold = 3
     iring_hasdata_start,iring_hasdata_end = longest_run_of_0(~mask_ring_accepted)
-    if iring_hasdata_start is None or iring_hasdata_end is None:
-        print(f"Ignoring plane on line {line_number()}")
-        return None
-    if iring_hasdata_end-iring_hasdata_start < Nrings_min_threshold:
-        print(f"Ignoring plane on line {line_number()}")
-        return None
+    if reject_plane_if(iring_hasdata_start is None or iring_hasdata_end is None,
+                       f"iring_hasdata_start is None or iring_hasdata_end is None ~~~ {iring_hasdata_start} is None or {iring_hasdata_end} is None",
+                       line_number()):
+        return None,ring_msgs,plane_msg
+    if reject_plane_if(iring_hasdata_end-iring_hasdata_start < Nrings_min_threshold,
+                       f"iring_hasdata_end-iring_hasdata_start < Nrings_min_threshold ~~~ {iring_hasdata_end}-{iring_hasdata_start} < {Nrings_min_threshold}",
+                       line_number()):
+        return None,ring_msgs,plane_msg
 
     # Join all the masks of the ring I'm keeping
     # Start with mask_plane_keep_per_ring[iring_hasdata_start], and add to it
@@ -407,22 +444,24 @@ def find_chessboard_in_plane_fit(points, ring, th,
     # skewed scans
     p = points_plane[mask_plane_keep]
     d = distance_between_furthest_pair_of_points(p)
-    if d > (np.sqrt(2) + 0.1)*board_size:
-        print(f"Ignoring plane on line {line_number()}")
-        return None
+    if reject_plane_if(d > (np.sqrt(2) + 0.1)*board_size,
+                       f"d > (np.sqrt(2) + 0.1)*board_size ~~~ {d} > {(np.sqrt(2) + 0.1)}*{board_size}",
+                       line_number()):
+        return None,ring_msgs,plane_msg
 
     # The angle of the plane off the lidar plane should be > some threshold. cos(th) = inner(normal,z)
     pmean = np.mean(p, axis=-2)
     p = p - pmean
     n = mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
-    if abs(n[2]) > max_cos_lidar_axis_to_plane_normal:
-        print(f"Ignoring plane on line {line_number()}")
-        return None
+    if reject_plane_if(abs(n[2]) > max_cos_lidar_axis_to_plane_normal,
+                       f"abs(n[2]) > max_cos_lidar_axis_to_plane_normal ~~~ abs({n[2]}) > {max_cos_lidar_axis_to_plane_normal}",
+                       line_number()):
+        return None,ring_msgs,plane_msg
 
 
 
 
-    return mask_plane_keep
+    return mask_plane_keep,ring_msgs,plane_msg
 
 def find_chessboard_in_view(rt_lidar_board__estimate,
                             points, ring,
@@ -567,7 +606,7 @@ def cluster_and_find_planes(*,
         points_plane = points[idx_plane]
         rings_plane  = ring  [idx_plane]
 
-        mask_plane_keep = \
+        mask_plane_keep,ring_msgs,plane_msg = \
             find_chessboard_in_plane_fit(points, ring, th,
                                          idx_plane,
                                          p_center__estimate,
@@ -602,6 +641,7 @@ def cluster_and_find_planes(*,
                 p_center_of_rings[i] = \
                     np.mean(points_cluster[ring_cluster == r],
                             axis=-2)
+            ring_labels = np.array([ring_msgs.get(r,str(r)) for r in rings_here])
 
             plot_tuples = \
                 [
@@ -614,9 +654,9 @@ def cluster_and_find_planes(*,
                   ( points[mask_plane_keep],
                     dict(_with  = 'points pt 4 ps 1 lc "red"',
                          legend = 'ACCEPTED') ),
-                  ( *p_center_of_rings.T, rings_here,
+                  ( *p_center_of_rings.T, ring_labels,
                     dict(_with  = 'labels',
-                         legend = 'ring',
+                         legend = "ring annotations",
                          tuplesize = 4) ),
                 ]
 
@@ -626,6 +666,8 @@ def cluster_and_find_planes(*,
                                           legend = 'Assuming old calibration')),
                                    )
 
+            title = f"{what}: {i_cluster=} {i_subcluster=}"
+            if plane_msg is not None: title += f". {plane_msg}"
             plot_options = \
                 dict(cbmin     = 0,
                      cbmax     = 5,
@@ -633,7 +675,7 @@ def cluster_and_find_planes(*,
                      xlabel = 'x',
                      ylabel = 'y',
                      zlabel = 'z',
-                     title = f"{what}: {i_cluster=} {i_subcluster=}",
+                     title = title,
                      _3d       = True,
                      square    = True,
                      wait      = True)
