@@ -28,10 +28,7 @@ STATIONARY scene. This would be an excellent extension to this tool
 
 '''
 
-import sys
 import argparse
-import re
-import os
 
 
 def parse_args():
@@ -73,7 +70,6 @@ args = parse_args()
 
 
 import fnmatch
-import numpy as np
 import rosbags.rosbag2
 import bag_interface
 
