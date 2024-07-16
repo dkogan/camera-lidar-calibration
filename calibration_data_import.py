@@ -20,12 +20,6 @@ import cv2
 import inspect
 import re
 
-import mrgingham
-if not hasattr(mrgingham, "find_board"):
-    print("mrginham too old. Need at least 1.24",
-          file=sys.stderr)
-    sys.exit(1)
-
 from bag_interface import bag_messages_generator
 
 def find_stationary_frame(t, rt_rf):
@@ -717,6 +711,19 @@ def chessboard_corners(bag, camera_topic,
                        *,
                        bagname,
                        cache = None):
+
+    try:
+        import mrgingham
+    except:
+        print("processing chessboard images requires the 'mrgingham' library",
+              file=sys.stderr)
+        sys.exit(1)
+    if not hasattr(mrgingham, "find_board"):
+        print("mrginham too old. Need at least 1.24",
+              file=sys.stderr)
+        sys.exit(1)
+
+
 
     if cache is not None and camera_topic in cache:
         return cache[camera_topic]
