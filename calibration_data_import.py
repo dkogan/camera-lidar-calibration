@@ -515,10 +515,7 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     mask_midrange = (~mask_near) * (~mask_far)
     idx_midrange  = np.nonzero(mask_midrange)[0]
 
-    result = cluster_and_find_planes(points                       = points,
-                                     ring                         = ring,
-                                     th                           = th,
-                                     idx                          = idx_midrange,
+    result = cluster_and_find_planes(points, idx_midrange,
                                      what                         = what,
                                      viz                          = viz,
                                      viz_show_only_accepted       = viz_show_only_accepted,
@@ -527,6 +524,8 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
                                      p__estimate                  = p__estimate,
                                      p_center__estimate           = p_center__estimate,
                                      n__estimate                  = n__estimate,
+                                     ring                         = ring,
+                                     th                           = th,
 
                                      board_size = board_size)
 
@@ -540,9 +539,8 @@ def find_chessboard_in_view(rt_lidar_board__estimate,
     print(f"Accepted cluster={result['i_cluster_accepted']} subcluster={result['i_subcluster_accepted']}")
     return result['p_accepted']
 
-def cluster_and_find_planes(*,
-                            points, ring, th,
-                            idx,
+def cluster_and_find_planes(points, idx,
+                            *,
                             what,
                             viz,
                             viz_show_only_accepted,
@@ -555,17 +553,13 @@ def cluster_and_find_planes(*,
                             # mostly work for non-square boards, but the logic
                             # could be improved in those cases
                             board_size,
-                            i_cluster    = None,
-                            i_subcluster = 0):
+                            ring,
+                            th):
 
     p_accepted          = None
     p_accepted_multiple = False
 
-    fixed_i_cluster = i_cluster is not None
-
-    if not fixed_i_cluster:
-        i_cluster = -1
-
+    i_cluster             = -1
     i_cluster_accepted    = None
     i_subcluster_accepted = None
 
@@ -577,126 +571,144 @@ def cluster_and_find_planes(*,
         mask_cluster = np.zeros( (len(points),), dtype=bool)
         mask_cluster[idx_cluster] = 1
 
-        if not fixed_i_cluster:
-            i_cluster += 1
+        i_cluster += 1
+        i_subcluster = -1
 
         points_cluster = points[mask_cluster]
         ring_cluster   = ring  [mask_cluster]
 
+        mask_plane = None
+        while True:
+
+            i_subcluster += 1
+
+            # Remove the previous plane found in this cluster, and go again.
+            # This is required if a cluster contains multiple planes
+            if mask_plane is not None:
+
+                mask_cluster *= ~mask_plane
+                idx_cluster = np.nonzero(mask_cluster)[0]
+                points_cluster = points[mask_cluster]
+                ring_cluster   = ring  [mask_cluster]
+
+                print(f"{len(points_cluster)} points remaining")
+
+                if len(points_cluster) < 20:
+                    break
 
 
+            print(f"looking for plane within {len(points_cluster)} points ({i_cluster=}, {i_subcluster=})")
+            idx_plane = find_plane(points_cluster,
+                                   distance_threshold     = 0.05,
+                                   ksearch                = -1,
+                                   search_radius          = 0.3,
+                                   normal_distance_weight = 0.1)
+            if len(idx_plane) == 0:
+                break
 
-
-        print(f"looking for plane within {len(points_cluster)} points ({i_cluster=}, {i_subcluster=})")
-        idx_plane = find_plane(points_cluster,
-                               distance_threshold     = 0.05,
-                               ksearch                = -1,
-                               search_radius          = 0.3,
-                               normal_distance_weight = 0.1)
-        if len(idx_plane) == 0:
-            break
-
-        # idx_plane indexes points[idx_cluster]
-        # Convert it to index points[]
-        idx_plane = idx_cluster[idx_plane]
-
-        mask_plane = np.zeros( (len(points),), dtype=bool)
-        mask_plane[idx_plane] = True
-
-        points_plane = points[idx_plane]
-        rings_plane  = ring  [idx_plane]
-
-        mask_plane_keep,ring_msgs,plane_msg = \
-            find_chessboard_in_plane_fit(points, ring, th,
-                                         idx_plane,
-                                         p_center__estimate,
-                                         n__estimate,
-                                         board_size   = board_size,
-                                         # for diagnostics
-                                         i_cluster    = i_cluster,
-                                         i_subcluster = i_subcluster)
-        if mask_plane_keep is None:
-            mask_plane_keep = np.zeros( (len(points),), dtype=bool)
-            have_acceptable_plane = False
-        else:
-            have_acceptable_plane = np.any(mask_plane_keep)
-
-            idx_plane_keep = np.nonzero(mask_plane_keep)[0]
-            # idx_plane_keep indexes points[idx_plane]
+            # idx_plane indexes points[idx_cluster]
             # Convert it to index points[]
-            idx_plane_keep = idx_plane[idx_plane_keep]
-            mask_plane_keep = np.zeros( (len(points),), dtype=bool)
-            mask_plane_keep[idx_plane_keep] = 1
+            idx_plane = idx_cluster[idx_plane]
 
-        if viz and \
-           (not viz_show_only_accepted or have_acceptable_plane):
+            mask_plane = np.zeros( (len(points),), dtype=bool)
+            mask_plane[idx_plane] = True
 
-            if have_acceptable_plane: any_accepted = "-SOMEACCEPTED"
-            else:                     any_accepted = ""
-            hardcopy = f'/tmp/lidar-{what}-{i_cluster}-{i_subcluster}{any_accepted}.gp'
+            points_plane = points[idx_plane]
+            rings_plane  = ring  [idx_plane]
 
-            rings_here = np.unique(ring_cluster)
-            p_center_of_rings = np.zeros((len(rings_here),3), dtype=float)
-            for i,r in enumerate(rings_here):
-                p_center_of_rings[i] = \
-                    np.mean(points_cluster[ring_cluster == r],
-                            axis=-2)
-            ring_labels = np.array([ring_msgs.get(r,str(r)) for r in rings_here])
+            mask_plane_keep,ring_msgs,plane_msg = \
+                find_chessboard_in_plane_fit(points, ring, th,
+                                             idx_plane,
+                                             p_center__estimate,
+                                             n__estimate,
+                                         board_size   = board_size,
+                                             # for diagnostics
+                                             i_cluster    = i_cluster,
+                                             i_subcluster = i_subcluster)
+            if mask_plane_keep is None:
+                mask_plane_keep = np.zeros( (len(points),), dtype=bool)
+                have_acceptable_plane = False
+            else:
+                have_acceptable_plane = np.any(mask_plane_keep)
 
-            plot_tuples = \
-                [
-                  ( points[mask_cluster * ~mask_plane],
-                    dict(_with  = 'points pt 1 ps 1',
-                         legend = 'In cluster, not in plane') ),
-                  ( points[mask_plane * ~mask_plane_keep],
-                    dict(_with  = 'points pt 2 ps 1',
-                         legend = 'In cluster, in plane, rejected by find_chessboard_in_plane_fit()') ),
-                  ( points[mask_plane_keep],
-                    dict(_with  = 'points pt 4 ps 1 lc "red"',
-                         legend = 'ACCEPTED') ),
-                  ( *p_center_of_rings.T, ring_labels,
-                    dict(_with  = 'labels',
-                         legend = "ring annotations",
-                         tuplesize = 4) ),
-                ]
+                idx_plane_keep = np.nonzero(mask_plane_keep)[0]
+                # idx_plane_keep indexes points[idx_plane]
+                # Convert it to index points[]
+                idx_plane_keep = idx_plane[idx_plane_keep]
+                mask_plane_keep = np.zeros( (len(points),), dtype=bool)
+                mask_plane_keep[idx_plane_keep] = 1
 
-            if p__estimate is not None:
-                plot_tuples.append( (p__estimate,
-                                     dict(_with  = 'points pt 3 ps 1',
-                                          legend = 'Assuming old calibration')),
-                                   )
+            if viz and \
+               (not viz_show_only_accepted or have_acceptable_plane):
 
-            title = f"{what}: {i_cluster=} {i_subcluster=}"
-            if plane_msg is not None: title += f". {plane_msg}"
-            plot_options = \
-                dict(cbmin     = 0,
-                     cbmax     = 5,
-                     tuplesize = -3,
-                     xlabel = 'x',
-                     ylabel = 'y',
-                     zlabel = 'z',
-                     title = title,
-                     _3d       = True,
-                     square    = True,
-                     wait      = True)
+                if have_acceptable_plane: any_accepted = "-SOMEACCEPTED"
+                else:                     any_accepted = ""
+                hardcopy = f'/tmp/lidar-{what}-{i_cluster}-{i_subcluster}{any_accepted}.gp'
 
+                rings_here = np.unique(ring_cluster)
+                p_center_of_rings = np.zeros((len(rings_here),3), dtype=float)
+                for i,r in enumerate(rings_here):
+                    p_center_of_rings[i] = \
+                        np.mean(points_cluster[ring_cluster == r],
+                                axis=-2)
+                ring_labels = np.array([ring_msgs.get(r,str(r)) for r in rings_here])
 
-            if viz_show_point_cloud_context:
                 plot_tuples = \
                     [
-                        ( points[ ~mask_cluster * (~mask_far) ],
-                          dict(_with  = 'dots',
-                               legend = 'Not in cluster; cutting off far points') ),
-                        *plot_tuples
+                      ( points[mask_cluster * ~mask_plane],
+                        dict(_with  = 'points pt 1 ps 1',
+                             legend = 'In cluster, not in plane') ),
+                      ( points[mask_plane * ~mask_plane_keep],
+                        dict(_with  = 'points pt 2 ps 1',
+                             legend = 'In cluster, in plane, rejected by find_chessboard_in_plane_fit()') ),
+                      ( points[mask_plane_keep],
+                        dict(_with  = 'points pt 4 ps 1 lc "red"',
+                             legend = 'ACCEPTED') ),
+                      ( *p_center_of_rings.T, ring_labels,
+                        dict(_with  = 'labels',
+                             legend = "ring annotations",
+                             tuplesize = 4) ),
                     ]
 
-            if hardcopy is not None:
-                plot_options['hardcopy'] = hardcopy
-            gp.plot( *plot_tuples, **plot_options)
-            if hardcopy is not None:
-                print(f"Wrote '{hardcopy}'")
+                if p__estimate is not None:
+                    plot_tuples.append( (p__estimate,
+                                         dict(_with  = 'points pt 3 ps 1',
+                                              legend = 'Assuming old calibration')),
+                                       )
 
-        if have_acceptable_plane:
+                title = f"{what}: {i_cluster=} {i_subcluster=}"
+                if plane_msg is not None: title += f". {plane_msg}"
+                plot_options = \
+                    dict(cbmin     = 0,
+                         cbmax     = 5,
+                         tuplesize = -3,
+                         xlabel = 'x',
+                         ylabel = 'y',
+                         zlabel = 'z',
+                         title = title,
+                         _3d       = True,
+                         square    = True,
+                         wait      = True)
+
+
+                if viz_show_point_cloud_context:
+                    plot_tuples = \
+                        [
+                            ( points[ ~mask_cluster * (~mask_far) ],
+                              dict(_with  = 'dots',
+                                   legend = 'Not in cluster; cutting off far points') ),
+                            *plot_tuples
+                        ]
+
+                if hardcopy is not None:
+                    plot_options['hardcopy'] = hardcopy
+                gp.plot( *plot_tuples, **plot_options)
+                if hardcopy is not None:
+                    print(f"Wrote '{hardcopy}'")
+
+            if not have_acceptable_plane:
+                continue
+
             # Found an acceptable set of points on the chessboard in this cluster!
 
             if p_accepted is not None:
@@ -707,41 +719,6 @@ def cluster_and_find_planes(*,
                 p_accepted = points[mask_plane_keep]
                 i_cluster_accepted    = i_cluster
                 i_subcluster_accepted = i_subcluster
-
-
-        if len(points_cluster) > 20:
-            # Remove the previous plane found in this cluster and go again. I don't
-            # just find the new plane, I re-cluster the points. This is necessary
-            # because removing some points might break up a large cluster into
-            # smaller ones, preventing future cross-cluster planes from being found
-            mask_cluster  *= ~mask_plane
-            idx_cluster    = np.nonzero(mask_cluster)[0]
-
-            print(f"{len(idx_cluster)} points remaining")
-
-            result = \
-                cluster_and_find_planes(points                       = points,
-                                        ring                         = ring,
-                                        th                           = th,
-                                        idx                          = idx_cluster,
-                                        what                         = what,
-                                        viz                          = viz,
-                                        viz_show_only_accepted       = viz_show_only_accepted,
-                                        viz_show_point_cloud_context = viz_show_point_cloud_context,
-                                        mask_far                     = mask_far,
-                                        p__estimate                  = p__estimate,
-                                        p_center__estimate           = p_center__estimate,
-                                        n__estimate                  = n__estimate,
-                                        i_cluster                    = i_cluster,
-                                        i_subcluster                 = i_subcluster + 1,
-                                        board_size = board_size)
-            if p_accepted is not None and result['p_accepted'] is not None:
-                p_accepted_multiple = True
-
-            if result['p_accepted'] is not None:
-                p_accepted            = result['p_accepted']
-                i_cluster_accepted    = result['i_cluster_accepted']
-                i_subcluster_accepted = result['i_subcluster_accepted']
 
     return \
         dict(p_accepted            = p_accepted,
