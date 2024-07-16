@@ -250,7 +250,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
         if not condition: return False
 
         print(f"Rejecting ring {ring} on line {line}: {msg}")
-        ring_msgs[ring] = f"{ring} rejected: {msg}"
+        ring_msgs[ring] = f"{ring} rejected on line {line}: {msg}"
         return True
     def reject_plane_if(condition, msg, line):
         nonlocal plane_msg
