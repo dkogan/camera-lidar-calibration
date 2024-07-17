@@ -48,23 +48,30 @@ def parse_args():
         default=1.0,
         type=float,
         help="""The period for the split bag output. We write
-                        out one bag for each time interval of this length. By
-                        default we use a period of 1sec""",
+                out one bag for each time interval of this length. By
+                default we use a period of 1sec""",
+    )
+
+    parser.add_argument(
+        "--timestamp-file",
+        default=None,
+        type=str,
+        help="""Optionally pass a text file containing timestamps in seconds
+                with one timestamp on each line, where one timestamp corresponds
+                to a stationary board position""",
     )
 
     parser.add_argument("bag", type=str, help="""The rosbag that should be split""")
 
     parser.add_argument(
         "lidar-topic",
+        dest="lidar_topic",
         type=str,
         help="""The LIDAR topic glob pattern we're looking at""",
     )
 
     args = parser.parse_args()
-
-    args.lidar_topic = getattr(args, "lidar-topic")
     args.period_ns = args.period * 1e9
-
     return args
 
 
