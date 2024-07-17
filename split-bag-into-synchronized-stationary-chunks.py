@@ -29,6 +29,9 @@ STATIONARY scene. This would be an excellent extension to this tool
 """
 
 import argparse
+import fnmatch
+import rosbags.rosbag2
+import bag_interface
 
 
 def parse_args():
@@ -55,7 +58,7 @@ def parse_args():
     parser.add_argument(
         "--timestamp-file",
         default=None,
-        type=str,
+        dest="timestamp_file",
         help="""Optionally pass a text file containing timestamps in seconds
                 with one timestamp on each line, where one timestamp corresponds
                 to a stationary board position""",
@@ -64,8 +67,8 @@ def parse_args():
     parser.add_argument("bag", type=str, help="""The rosbag that should be split""")
 
     parser.add_argument(
-        "lidar-topic",
-        dest="lidar_topic",
+        "lidar_topic",
+        metavar="lidar-topic",
         type=str,
         help="""The LIDAR topic glob pattern we're looking at""",
     )
@@ -75,29 +78,13 @@ def parse_args():
     return args
 
 
-args = parse_args()
-
-
-import fnmatch
-import rosbags.rosbag2
-import bag_interface
-
-
-def write(msgs_now_from_topic, outdir="."):
+def write(msgs_now_from_topic, topics, outdir="."):
 
     if len(msgs_now_from_topic) != len(topics):
         return
 
-    # Get the relative timestamp for the purposes of output naming
-    time_ns = msgs_now_from_topic[topics[0]]["time_ns"]
-    i_period = time_ns // args.period_ns
-    time_ns = i_period * args.period_ns
-    if not hasattr(write, "time_ns0"):
-        write.time_ns0 = time_ns
-    t = (time_ns - write.time_ns0) / 1e9
-
-    bagfile = f"{outdir}/{t:07.1f}.bag"
-
+    time_s = msgs_now_from_topic[topics[0]]["time_ns"] / 1e9
+    bagfile = f"{outdir}/{time_s:07.6f}.bag"
     print(f"Writing '{bagfile}'")
 
     with rosbags.rosbag2.Writer(
@@ -111,33 +98,59 @@ def write(msgs_now_from_topic, outdir="."):
             writer.write(connection, msg["time_ns"], msg["rawdata"])
 
 
-topics_all = bag_interface.topics(args.bag)
-topics = fnmatch.filter(topics_all, args.lidar_topic)
+if __name__ == "__main__":
+    args = parse_args()
+    topics_all = bag_interface.topics(args.bag)
+    topics = fnmatch.filter(topics_all, args.lidar_topic)
+    print(f"Reading topics {topics}")
 
-print(f"Reading topics {topics}")
+    timestamps_ns = []
+    if args.timestamp_file:
+        with open(args.timestamp_file, "r") as f:
+            for line in f:
+                timestamps_ns.append(float(line.strip()) * 1.0e9)
+    timestamps_ns = iter(timestamps_ns)
 
-msgs_now_from_topic = dict()
-i_period0 = -1
+    msg_dict = dict()
+    t_0 = None
+    t_threshold = None
+    t_prev = -1
 
-# For each topic I take the first event in each period. I assume that the whole
-# sequence of events is monotonic, and that all the topics cross each period
-# threshold together
-for msg in bag_interface.bag_messages_generator(args.bag, topics):
-
-    i_period = msg["time_ns"] // args.period_ns
-    if i_period0 > i_period:
-        raise Exception(
-            "This implementation assumes a strictly monotonic sequence of i_period"
-        )
-
-    if i_period0 < i_period:
-        write(msgs_now_from_topic, outdir=args.outdir)
-
-        msgs_now_from_topic = dict()
-        i_period0 = i_period
-
-    topic = msg["topic"]
-    if not topic in msgs_now_from_topic:
-        msgs_now_from_topic[topic] = msg
-
-write(msgs_now_from_topic, outdir=args.outdir)
+    # For each topic I take the first event in each period. I assume that the whole
+    # sequence of events is monotonic, and that all the topics cross each period
+    # threshold together
+    for msg in bag_interface.bag_messages_generator(args.bag, topics):
+        t = msg["time_ns"]
+        if not t_0:
+            t_0 = t
+            if args.timestamp_file:
+                try:
+                    t_threshold = next(timestamps_ns)
+                except StopIteration:
+                    break
+            else:
+                t_threshold = t_0 + args.period_ns
+        if t_prev > t:
+            raise Exception(
+                "Messages were found out of order; this implementation assumes strictly "
+                + "monotonically increasing timestamps"
+            )
+        if t > t_threshold:
+            topic = msg["topic"]
+            if topic not in msg_dict:
+                msg_dict[topic] = msg
+            if set(topics).issubset(msg_dict):
+                write(
+                    msg_dict,
+                    topics,
+                    outdir=args.outdir,
+                )
+                msg_dict = dict()
+                if args.timestamp_file:
+                    try:
+                        t_threshold = next(timestamps_ns)
+                    except StopIteration:
+                        break
+                else:
+                    t_threshold = t_threshold + args.period_ns
+        t_prev = t
