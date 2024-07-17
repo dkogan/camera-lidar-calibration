@@ -109,6 +109,7 @@ if __name__ == "__main__":
         with open(args.timestamp_file, "r") as f:
             for line in f:
                 timestamps_ns.append(float(line.strip()) * 1.0e9)
+        timestamps_ns.sort()
     timestamps_ns = iter(timestamps_ns)
 
     msg_dict = dict()
