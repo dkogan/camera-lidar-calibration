@@ -44,14 +44,16 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
+    #### identical logic to fit.py. please consolidate
     parser.add_argument('--board-size',
-                        type = float,
+                        type = str,
                         required = True,
                         help = '''Must be given. This is the "width", but
                         assumes the board is square. Will mostly work for
                         non-square boards also, but the logic could be improved
-                        in those cases''')
-
+                        in those cases. In rare cases we want separate board
+                        sizes for min and max checks; if we need that, specify
+                        --board-size MIN,MAX''')
     parser.add_argument('--viz',
                         action = argparse.BooleanOptionalAction,
                         help = '''By default, we produce visualizations ONLY if
@@ -92,6 +94,25 @@ def parse_args():
         print("--check and --viz are mutually exclusive",
               file = sys.stderr)
         sys.exit(1)
+
+    args.board_size_for_min,args.board_size_for_max = None,None
+    if args.board_size is not None:
+        try:
+            args.board_size_for_min = args.board_size_for_max = float(args.board_size)
+        except:
+            pass
+        if args.board_size_for_min is None:
+            minmax = args.board_size.split(',')
+            if len(minmax) != 2:
+                print("--board-size must be either a number OR a string MIN,MAX: exactly TWO ,-separated numbers",
+                      file=sys.stderr)
+                sys.exit(1)
+            try:
+                args.board_size_for_min,args.board_size_for_max = [float(x) for x in minmax]
+            except:
+                print("--board-size must be either a number OR a string MIN,MAX: exactly two ,-separated NUMBERS",
+                      file=sys.stderr)
+                sys.exit(1)
 
     return args
 
@@ -305,7 +326,8 @@ for lidar_topic in lidar_topics:
                                         viz                          = viz,
                                         viz_show_only_accepted       = False,
                                         viz_show_point_cloud_context = args.viz_show_point_cloud_context,
-                                        board_size                   = args.board_size)
+                                        board_size_for_min           = args.board_size_for_min,
+                                        board_size_for_max           = args.board_size_for_max)
 
             if args.generate_ground_truth:
                 if lidar_topic not in expected: expected[lidar_topic] = dict()
@@ -333,7 +355,8 @@ for lidar_topic in lidar_topics:
                                             viz                          = viz,
                                             viz_show_only_accepted       = False,
                                             viz_show_point_cloud_context = args.viz_show_point_cloud_context,
-                                            board_size                   = args.board_size)
+                                            board_size_for_min           = args.board_size_for_min,
+                                            board_size_for_max           = args.board_size_for_max)
             except Exception as e:
                 fail(f"Exception={e}")
                 continue

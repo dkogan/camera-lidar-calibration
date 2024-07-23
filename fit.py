@@ -93,14 +93,17 @@ def parse_args():
                         help = '''If given, we don't run the slow computation,
                         but read it from the file given in --cache''')
 
+    #### identical logic to find_lidar_observation.py. please consolidate
     parser.add_argument('--board-size',
-                        type = float,
-                        help = '''Must be given with LIDAR-only solves. Must NOT
-                        be given if any cameras are being calibrated as well,
+                        type = str,
+                        help = '''Must be given with LIDAR-only solves. May be
+                        omitted if any cameras are being calibrated as well,
                         since this information is available in the models. This
                         is the "width", but assumes the board is square. Will
                         mostly work for non-square boards also, but the logic
-                        could be improved in those cases''')
+                        could be improved in those cases. In rare cases we want
+                        separate board sizes for min and max checks; if we need
+                        that, specify --board-size MIN,MAX''')
 
     parser.add_argument('models',
                         type = str,
@@ -136,10 +139,6 @@ def parse_args():
     args.lidar_topic  = args.lidar_topic.split(',')
     if args.camera_topic is not None:
         args.camera_topic = args.camera_topic.split(',')
-        if args.board_size is not None:
-            print(f"--board-size must NOT be given if any cameras are being calibrated",
-                  file=sys.stderr)
-            sys.exit(1)
     else:
         args.camera_topic = []
         if args.board_size is None:
@@ -151,6 +150,27 @@ def parse_args():
         print(f"The number of models given must match the number of --camera-topic EXACTLY",
               file=sys.stderr)
         sys.exit(1)
+
+
+    #### identical logic to find_lidar_observation.py. please consolidate
+    args.board_size_for_min,args.board_size_for_max = None,None
+    if args.board_size is not None:
+        try:
+            args.board_size_for_min = args.board_size_for_max = float(args.board_size)
+        except:
+            pass
+        if args.board_size_for_min is None:
+            minmax = args.board_size.split(',')
+            if len(minmax) != 2:
+                print("--board-size must be either a number OR a string MIN,MAX: exactly TWO ,-separated numbers",
+                      file=sys.stderr)
+                sys.exit(1)
+            try:
+                args.board_size_for_min,args.board_size_for_max = [float(x) for x in minmax]
+            except:
+                print("--board-size must be either a number OR a string MIN,MAX: exactly two ,-separated NUMBERS",
+                      file=sys.stderr)
+                sys.exit(1)
 
     return args
 
@@ -1133,7 +1153,8 @@ def fit( joint_observations,
 
 def get_joint_observation(bag,
                           *,
-                          board_size,
+                          board_size_for_min,
+                          board_size_for_max,
                           # Both input and output
                           cache = None):
     r'''Compute ONE lidar observation and/or ONE camera observation
@@ -1169,7 +1190,8 @@ def get_joint_observation(bag,
                                 viz                          = args.viz,
                                 viz_show_only_accepted       = args.viz_show_only_accepted,
                                 viz_show_point_cloud_context = args.viz_show_point_cloud_context,
-                                board_size                   = board_size) \
+                                board_size_for_min           = board_size_for_min,
+                                board_size_for_max           = board_size_for_max) \
           for ilidar in range(Nlidars)]
 
     if all(x is None for x in q_observed) and \
@@ -1741,12 +1763,18 @@ if args.models:
     p_board_local[...,2] = 0 # assume flat. calobject_warp may differ between samples
 
     # width
-    board_size = p_board_local[-1,-1,0] - p_board_local[0,0,0]
-    print(f"Detected {board_size=}")
+    if args.board_size_for_min is None:
+        board_size = p_board_local[-1,-1,0] - p_board_local[0,0,0]
+        print(f"Detected {board_size=}")
+        board_size_for_min = board_size_for_max = board_size
+    else:
+        board_size_for_min = args.board_size_for_min
+        board_size_for_max = args.board_size_for_max
 
 else:
     p_board_local = None
-    board_size = args.board_size
+    board_size_for_min = args.board_size_for_min
+    board_size_for_max = args.board_size_for_max
 
 
 
@@ -1760,7 +1788,9 @@ else:
 
 # read AND write the cache dict
 joint_observations = [get_joint_observation(bag, cache=cache,
-                                            board_size = board_size) for bag in args.bag ]
+                                            board_size_for_min = board_size_for_min,
+                                            board_size_for_max = board_size_for_max) \
+                      for bag in args.bag ]
 
 def sensors_observing(o):
     if o is None:
