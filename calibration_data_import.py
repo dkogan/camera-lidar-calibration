@@ -350,12 +350,12 @@ def find_chessboard_in_plane_fit(points, ring, th,
             nps.mag(points_plane[idx_ring[-1]] - \
                     points_plane[idx_ring[ 0]])
         if reject_ring_if(len_segment < 0.7*board_size,
-                          f"len_segment < 0.7*board_size ~~~ len_segment < 0.7*board_size",
+                          f"len_segment < 0.7*board_size ~~~ {len_segment} < {0.7*board_size}",
                           iring+rings_plane_min,
                           line_number()):
             continue
         if reject_ring_if(len_segment > np.sqrt(2)*board_size,
-                          f"len_segment > np.sqrt(2)*board_size ~~~ len_segment > np.sqrt(2)*board_size",
+                          f"len_segment > np.sqrt(2)*board_size ~~~ {len_segment} > {np.sqrt(2)*board_size}",
                           iring+rings_plane_min,
                           line_number()):
             continue
