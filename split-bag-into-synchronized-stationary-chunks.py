@@ -32,6 +32,10 @@ import argparse
 import fnmatch
 import rosbags.rosbag2
 import bag_interface
+from typing import TypeVar
+import importlib
+from sensor_msgs_py import point_cloud2
+import numpy as np
 
 
 def parse_args():
@@ -78,24 +82,85 @@ def parse_args():
     return args
 
 
-def write(msgs_now_from_topic, topics, outdir="."):
+def write(
+    msgs_now_from_topic,
+    topics,
+    tf_msg,
+    tf_msg_qs,
+    tf_static_msgs,
+    tf_static_qos,
+    outdir=".",
+):
 
     if len(msgs_now_from_topic) != len(topics):
         return
 
-    time_s = msgs_now_from_topic[topics[0]]["time_ns"] / 1e9
+    from rosbags.rosbag2.metadata import dump_qos_v8, dump_qos_v9
+
+    time_ns = msgs_now_from_topic[topics[0]]["time_ns"]
+    time_s = time_ns / 1e9
     bagfile = f"{outdir}/{time_s:07.6f}.bag"
     print(f"Writing '{bagfile}'")
 
     with rosbags.rosbag2.Writer(
-        bagfile, version=rosbags.rosbag2.Writer.VERSION_LATEST
+        bagfile, version=8
     ) as writer:
+        # Version 8 is needed because the structure of offered_qos_profiles in V9 is not
+        # compatible with ROS2 HUMBLE for ros2 play
         for topic in topics:
             msg = msgs_now_from_topic[topic]
             connection = writer.add_connection(
-                topic, msg["msgtype"], typestore=bag_interface.typestore
+                topic, msg["msgtype"], typestore=bag_interface.typestore,
+                offered_qos_profiles=msg["qos"],
             )
             writer.write(connection, msg["time_ns"], msg["rawdata"])
+        connection = writer.add_connection(
+            "/tf", "tf2_msgs/msg/TFMessage", typestore=bag_interface.typestore,
+            offered_qos_profiles=tf_qos
+        )
+        writer.write(connection, time_ns, tf_msg)
+        connection = writer.add_connection(
+            "/tf_static", "tf2_msgs/msg/TFMessage", typestore=bag_interface.typestore,
+            offered_qos_profiles=tf_static_qos
+        )
+        for tf_static_msg in tf_static_msgs:
+            writer.write(connection, time_ns, tf_static_msg)
+
+
+# T = TypeVar('T')
+NATIVE_CLASSES: dict[str, type] = {}
+
+
+def to_native(msg: object) -> object:
+    """Convert rosbags message to native message.
+
+    Args:
+        msg: Rosbags message.
+
+    Returns:
+        Native message.
+
+    """
+    msgtype: str = msg.__msgtype__  # type: ignore[attr-defined]
+    if msgtype not in NATIVE_CLASSES:
+        pkg, name = msgtype.rsplit('/', 1)
+        NATIVE_CLASSES[msgtype] = (
+            getattr(importlib.import_module(pkg.replace('/', '.')), name)
+        )
+    fields = {}
+
+    for name, field in msg.__dataclass_fields__.items():  # type: ignore[attr-defined]
+        if 'ClassVar' in field.type:
+            continue
+        value = getattr(msg, name)
+        if isinstance(value, list):
+            value = [to_native(x) for x in value]
+        elif isinstance(value, np.ndarray):
+            value = value.tolist()
+        elif '__msg__' in field.type:
+            value = to_native(value)
+        fields[name] = value
+    return NATIVE_CLASSES[msgtype](**fields)
 
 
 if __name__ == "__main__":
@@ -117,9 +182,32 @@ if __name__ == "__main__":
     t_threshold = None
     t_prev = -1
 
+    # High-level structure from the "rosbag2" sample:
+    #   https://ternaris.gitlab.io/rosbags/topics/rosbag2.html
+    tf_msg = None
+    tf_msg_qos = None
+    tf_static_msgs = []
+    tf_static_qos = None
+    with rosbags.rosbag2.Reader(args.bag) as reader:
+        connections = [
+            c for c in reader.connections if c.topic in ["/tf", "/tf_static"]
+        ]
+        for connection, time_ns, rawdata in reader.messages(
+                connections=connections):
+            msg = bag_interface.typestore.deserialize_cdr(rawdata, connection.msgtype)
+            if not tf_msg and connection.topic == "/tf":
+                tf_msg = rawdata
+                tf_qos = connection.ext.offered_qos_profiles
+            if connection.topic == "/tf_static":
+                tf_static_msgs.append(rawdata)
+                tf_static_qos = connection.ext.offered_qos_profiles
+            if tf_msg:
+                continue
+
     # For each topic I take the first event in each period. I assume that the whole
-    # sequence of events is monotonic, and that all the topics cross each period
-    # threshold together
+    # sequence of events is monotonically increasing, and that all the topics
+    # cross each period threshold together
+    print(topics)
     for msg in bag_interface.bag_messages_generator(args.bag, topics):
         t = msg["time_ns"]
         if not t_0:
@@ -144,6 +232,10 @@ if __name__ == "__main__":
                 write(
                     msg_dict,
                     topics,
+                    tf_msg,
+                    tf_qos,
+                    tf_static_msgs,
+                    tf_static_qos,
                     outdir=args.outdir,
                 )
                 msg_dict = dict()
