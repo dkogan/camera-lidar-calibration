@@ -1978,7 +1978,7 @@ if Ncameras > 0:
 
         rt_multisenseleft_lidar0 = models[l].extrinsics_rt_fromref()
         str_multisense_poses += \
-            f"  --rt-multisenseleft-ref {','.join(list(str(x) for x in rt_multisenseleft_lidar0))} \\\n"
+            f"  --rt-multisenseleft-ref \" {','.join(list(str(x) for x in rt_multisenseleft_lidar0))}\" \\\n"
 
         rpy = rpy_from_r(rt_multisenseleft_lidar0[:3])
         xyz = rt_multisenseleft_lidar0[3:]
@@ -2001,7 +2001,7 @@ for ilidar in range(Nlidars):
 
     rt_lidar_lidar0 = solved_state['rt_lidar_ref'][ilidar]
     str_lidar_poses += \
-        f"  --rt-lidar-ref {','.join(list(str(x) for x in rt_lidar_lidar0))} \\\n"
+        f"  --rt-lidar-ref \" {','.join(list(str(x) for x in rt_lidar_lidar0))}\" \\\n"
 
     rpy = rpy_from_r(rt_lidar_lidar0[:3])
     xyz = rt_lidar_lidar0[3:]
