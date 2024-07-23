@@ -690,8 +690,10 @@ def fit_estimate( joint_observations,
 
     def neighbors(isensor0):
         for isensor1 in range(Nsensors):
+            # We need at least 2 shared observations to be useful; otherwise
+            # align_point_clouds() complains about insufficient overlap
             if isensor1 == isensor0 or \
-               shared_observation_counts[pairwise_index(isensor1,isensor0)] == 0:
+               shared_observation_counts[pairwise_index(isensor1,isensor0)] < 2:
                 continue
             yield isensor1
 
