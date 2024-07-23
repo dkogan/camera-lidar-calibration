@@ -85,11 +85,11 @@ def cluster_points(cloud,
 
 def find_plane(points,
                *,
-               ksearch                = -1,
-               search_radius          = 0.1,
-               max_iterations         = 100,
-               distance_threshold     = 0.2,
-               normal_distance_weight = 0.1):
+               ksearch,
+               search_radius,
+               distance_threshold,
+               normal_distance_weight,
+               max_iterations = 100):
 
 
     # The logic around ksearch and search_radius is apparently not in libpcl at
