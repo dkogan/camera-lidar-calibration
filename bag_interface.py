@@ -7,7 +7,8 @@ import rosbags.rosbag2
 import rosbags.typesys
 
 # Used by readers and writers. Imported by some other modules
-typestore = rosbags.typesys.get_typestore(rosbags.typesys.Stores.LATEST)
+typestore = rosbags.typesys.get_typestore(rosbags.typesys.Stores.ROS2_HUMBLE)
+
 
 def bag_messages_generator(bag, topics):
 
@@ -37,7 +38,6 @@ def bag_messages_generator(bag, topics):
 
 
     def dtype_from_msg(msg, key_cache):
-
         nonlocal dtype_cache
         if key_cache in dtype_cache: return dtype_cache[key_cache]
 
@@ -104,6 +104,7 @@ def bag_messages_generator(bag, topics):
         for connection, time_ns, rawdata in \
                 reader.messages( connections = connections ):
 
+            qos = connection.ext.offered_qos_profiles
             msg   = typestore.deserialize_cdr(rawdata, connection.msgtype)
             dtype = dtype_from_msg(msg, connection.msgtype)
             data  = np.frombuffer(msg.data, dtype = dtype)
@@ -116,7 +117,11 @@ def bag_messages_generator(bag, topics):
                         topic          = connection.topic,
                         msgtype        = connection.msgtype,
                         array          = data,
-                        rawdata        = rawdata )
+                        rawdata        = rawdata,
+                        msg            = msg,
+                        qos            = qos,
+                        )
+
 
 def topics(bag):
     with rosbags.rosbag2.Reader(bag) as reader:
