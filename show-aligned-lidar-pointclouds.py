@@ -54,9 +54,7 @@ def parse_args():
                         help = '''The LIDAR topic to visualize. This is a
                         comma-separated list of topics''')
 
-    parser.add_argument('--bag',
-                        type=str,
-                        required = True,
+    parser.add_argument('bag',
                         help = '''The one bag we're visualizing''')
 
 
