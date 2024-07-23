@@ -628,7 +628,7 @@ def cluster_and_find_planes(points, idx,
             idx_plane = find_plane(points_cluster,
                                    distance_threshold     = 0.05,
                                    ksearch                = -1,
-                                   search_radius          = 0.3,
+                                   search_radius          = 0.4,
                                    normal_distance_weight = 0.1)
             if len(idx_plane) == 0:
                 break
