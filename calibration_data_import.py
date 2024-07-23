@@ -96,11 +96,26 @@ def find_plane(points,
     # all, but in the Python wrapper:
     #
     #   https://sources.debian.org/src/python-pcl/0.3.0~rc1%2Bdfsg-14/pcl/minipcl.cpp/#L17
+    #
+    # The relevant logic:
+    #
+    #   pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
+    #   if (ksearch >= 0)
+    #       ne.setKSearch (ksearch);
+    #   if (searchRadius >= 0.0)
+    #       ne.setRadiusSearch (searchRadius);
+    #
+    # The meaning of these is in the PCL docs; for instance:
+    #   https://pcl.readthedocs.io/projects/tutorials/en/latest/normal_estimation.html
     seg = pcl.PointCloud(points.astype(np.float32)). \
         make_segmenter_normals(ksearch      = ksearch,
                                searchRadius = search_radius)
 
     seg.set_optimize_coefficients(True)
+
+    # The PCL docs describing SACMODEL_NORMAL_PLANE, and the relevant "weight" parameter:
+    #   https://pointclouds.org/documentation/classpcl_1_1_sample_consensus_model_normal_plane.html#details
+    #   https://pointclouds.org/documentation/classpcl_1_1_s_a_c_segmentation_from_normals.html#adffe38382fbb0b511764faf9490140ca
     seg.set_model_type(pcl.SACMODEL_NORMAL_PLANE)
     seg.set_method_type(pcl.SAC_RANSAC)
     seg.set_max_iterations(max_iterations)
