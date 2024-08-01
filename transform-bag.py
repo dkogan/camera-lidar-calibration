@@ -14,13 +14,10 @@ SYNOPSIS
 
 """
 
-import sys
 import argparse
 import ast
 import rosbags.rosbag2
 import bag_interface
-from typing import TypeVar
-from sensor_msgs_py import point_cloud2
 import transforms3d
 from pathlib import Path
 import numpy as np
@@ -136,14 +133,10 @@ def ros_transform_to_affine(transform):
 
 def affine_to_ros_transform(affine, ros_transform):
     q = transforms3d.quaternions.mat2quat(affine[:3, :3])
-    print("q", q)
     ros_transform.transform.rotation.w = q[0]
     ros_transform.transform.rotation.x = q[1]
     ros_transform.transform.rotation.y = q[2]
     ros_transform.transform.rotation.z = q[3]
-    print(affine[0, 3])
-    print(affine[1, 3])
-    print(affine[2, 3])
     ros_transform.transform.translation.x = affine[0, 3]
     ros_transform.transform.translation.y = affine[1, 3]
     ros_transform.transform.translation.z = affine[2, 3]
@@ -172,9 +165,6 @@ if __name__ == "__main__":
         raise Exception("Could not find transform for frame {args.reference}")
     reference_transform = ros_transform_to_affine(reference_transform)
 
-    print("reference transform")
-    print(reference_transform)
-
     # get other topics' reference/parent frames
     topic_parent_frames = []
     for topic in args.topics:
@@ -194,9 +184,6 @@ if __name__ == "__main__":
                 transform[3], transform[4], transform[5],
             )
         )
-
-    for transform in topic_transforms:
-        print(transform)
 
     connections = {}
     with rosbags.rosbag2.Reader(args.bag) as reader:
@@ -226,11 +213,12 @@ if __name__ == "__main__":
                             index = topic_parent_frames.index(transform.child_frame_id)
                             topic_transform = topic_transforms[index]
                             new_transform = reference_transform.dot(topic_transform)
-                            print(new_transform)
                             affine_to_ros_transform(
                                 new_transform,
                                 transform
                             )
+                            print("\nGenerated new tranform:")
+                            print(transform)
                     cdr_bytes = bag_interface.typestore.serialize_cdr(
                         msg, connection.msgtype
                     )
