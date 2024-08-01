@@ -217,7 +217,7 @@ if __name__ == "__main__":
                                 new_transform,
                                 transform
                             )
-                            print("\nGenerated new tranform:")
+                            print("\nGenerated new transform:")
                             print(transform)
                     cdr_bytes = bag_interface.typestore.serialize_cdr(
                         msg, connection.msgtype
