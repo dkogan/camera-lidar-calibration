@@ -14,13 +14,11 @@ SYNOPSIS
 
 """
 
+
+import sys
 import argparse
-import ast
-import rosbags.rosbag2
-import bag_interface
-import transforms3d
-from pathlib import Path
-import numpy as np
+import re
+import os
 
 
 def parse_args():
@@ -78,6 +76,17 @@ def parse_args():
             )
     args.transforms = transforms
     return args
+
+args = parse_args()
+
+
+
+import ast
+import rosbags.rosbag2
+import bag_interface
+import transforms3d
+from pathlib import Path
+import numpy as np
 
 
 def get_msgs(bag, topic, limit=None):
@@ -142,7 +151,6 @@ def affine_to_ros_transform(affine, ros_transform):
     ros_transform.transform.translation.z = affine[2, 3]
 
 
-args = parse_args()
 
 # get reference topic
 reference_msg = get_msgs(args.bag, args.reference, limit=1)

@@ -28,14 +28,10 @@ STATIONARY scene. This would be an excellent extension to this tool
 
 """
 
+import sys
 import argparse
-import fnmatch
-import rosbags.rosbag2
-import bag_interface
-from typing import TypeVar
-import importlib
-from sensor_msgs_py import point_cloud2
-import numpy as np
+import re
+import os
 
 
 def parse_args():
@@ -80,6 +76,19 @@ def parse_args():
     args = parser.parse_args()
     args.period_ns = args.period * 1e9
     return args
+
+
+args = parse_args()
+
+
+
+import fnmatch
+import rosbags.rosbag2
+import bag_interface
+from typing import TypeVar
+import importlib
+from sensor_msgs_py import point_cloud2
+import numpy as np
 
 
 def write(
@@ -163,7 +172,8 @@ def to_native(msg: object) -> object:
     return NATIVE_CLASSES[msgtype](**fields)
 
 
-args = parse_args()
+
+
 topics_all = bag_interface.topics(args.bag)
 topics = fnmatch.filter(topics_all, args.lidar_topic)
 print(f"Reading topics {topics}")
