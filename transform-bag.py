@@ -83,10 +83,16 @@ args = parse_args()
 
 import ast
 import rosbags.rosbag2
-import bag_interface
-import transforms3d
 from pathlib import Path
 import numpy as np
+
+try:
+    import bag_interface
+    import transforms3d
+except Exception as e:
+    print(f"This tool requires ROS2 to be installed and configured:\n\n{e}",
+          file=sys.stderr)
+    sys.exit(1)
 
 
 def get_msgs(bag, topic, limit=None):
