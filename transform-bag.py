@@ -142,86 +142,85 @@ def affine_to_ros_transform(affine, ros_transform):
     ros_transform.transform.translation.z = affine[2, 3]
 
 
-if __name__ == "__main__":
-    args = parse_args()
+args = parse_args()
 
-    # get reference topic
-    reference_msg = get_msgs(args.bag, args.reference, limit=1)
-    if not reference_msg:
+# get reference topic
+reference_msg = get_msgs(args.bag, args.reference, limit=1)
+if not reference_msg:
+    raise Exception(
+        f"Topic {args.reference} was not found in {args.bag}"
+    )
+reference_msg = reference_msg[0]["msg"]
+
+# get reference frame of reference lidar
+tf_static_msgs = get_msgs(args.bag, "/tf_static")
+reference_transform = None
+for tf_static_msg in tf_static_msgs:
+    for transform in tf_static_msg["msg"].transforms:
+        if transform.child_frame_id == reference_msg.header.frame_id:
+            reference_transform = transform
+            break
+if reference_transform is None:
+    raise Exception("Could not find transform for frame {args.reference}")
+reference_transform = ros_transform_to_affine(reference_transform)
+
+# get other topics' reference/parent frames
+topic_parent_frames = []
+for topic in args.topics:
+    msg = get_msgs(args.bag, topic, limit=1)
+    if not topic:
         raise Exception(
-            f"Topic {args.reference} was not found in {args.bag}"
+            f"Topic {topic} was not found in {args.bag}"
         )
-    reference_msg = reference_msg[0]["msg"]
+    msg = msg[0]["msg"]
+    topic_parent_frames.append(msg.header.frame_id)
 
-    # get reference frame of reference lidar
-    tf_static_msgs = get_msgs(args.bag, "/tf_static")
-    reference_transform = None
-    for tf_static_msg in tf_static_msgs:
-        for transform in tf_static_msg["msg"].transforms:
-            if transform.child_frame_id == reference_msg.header.frame_id:
-                reference_transform = transform
-                break
-    if reference_transform is None:
-        raise Exception("Could not find transform for frame {args.reference}")
-    reference_transform = ros_transform_to_affine(reference_transform)
-
-    # get other topics' reference/parent frames
-    topic_parent_frames = []
-    for topic in args.topics:
-        msg = get_msgs(args.bag, topic, limit=1)
-        if not topic:
-            raise Exception(
-                f"Topic {topic} was not found in {args.bag}"
-            )
-        msg = msg[0]["msg"]
-        topic_parent_frames.append(msg.header.frame_id)
-
-    topic_transforms = []
-    for transform in args.transforms:
-        topic_transforms.append(
-            rpyxyz_to_affine(
-                transform[0], transform[1], transform[2],
-                transform[3], transform[4], transform[5],
-            )
+topic_transforms = []
+for transform in args.transforms:
+    topic_transforms.append(
+        rpyxyz_to_affine(
+            transform[0], transform[1], transform[2],
+            transform[3], transform[4], transform[5],
         )
+    )
 
-    connections = {}
-    with rosbags.rosbag2.Reader(args.bag) as reader:
-        with rosbags.rosbag2.Writer(
-            Path(args.outdir) / (str(Path(f"{args.bag}").stem) + ".bag"),
-            version=8
-        ) as writer:
+connections = {}
+with rosbags.rosbag2.Reader(args.bag) as reader:
+    with rosbags.rosbag2.Writer(
+        Path(args.outdir) / (str(Path(f"{args.bag}").stem) + ".bag"),
+        version=8
+    ) as writer:
 
-            # Version 8 is needed because the structure of offered_qos_profiles
-            # is not compatible with ROS2 HUMBLE for ros2 play
-            for connection, time_ns, rawdata in reader.messages(
-                    connections=reader.connections):
-                if connection.topic not in connections:
-                    qos = connection.ext.offered_qos_profiles
-                    connections[connection.topic] = writer.add_connection(
-                        connection.topic,
-                        connection.msgtype,
-                        typestore=bag_interface.typestore,
-                        offered_qos_profiles=qos,
-                    )
-                if connection.topic == "/tf_static":
-                    msg = bag_interface.typestore.deserialize_cdr(
-                        rawdata, connection.msgtype
-                    )
-                    for transform in msg.transforms:
-                        if transform.child_frame_id in topic_parent_frames:
-                            index = topic_parent_frames.index(transform.child_frame_id)
-                            topic_transform = topic_transforms[index]
-                            new_transform = reference_transform.dot(topic_transform)
-                            affine_to_ros_transform(
-                                new_transform,
-                                transform
-                            )
-                            print("\nGenerated new transform:")
-                            print(transform)
-                    cdr_bytes = bag_interface.typestore.serialize_cdr(
-                        msg, connection.msgtype
-                    )
-                    writer.write(connections[connection.topic], time_ns, cdr_bytes)
-                else:
-                    writer.write(connections[connection.topic], time_ns, rawdata)
+        # Version 8 is needed because the structure of offered_qos_profiles
+        # is not compatible with ROS2 HUMBLE for ros2 play
+        for connection, time_ns, rawdata in reader.messages(
+                connections=reader.connections):
+            if connection.topic not in connections:
+                qos = connection.ext.offered_qos_profiles
+                connections[connection.topic] = writer.add_connection(
+                    connection.topic,
+                    connection.msgtype,
+                    typestore=bag_interface.typestore,
+                    offered_qos_profiles=qos,
+                )
+            if connection.topic == "/tf_static":
+                msg = bag_interface.typestore.deserialize_cdr(
+                    rawdata, connection.msgtype
+                )
+                for transform in msg.transforms:
+                    if transform.child_frame_id in topic_parent_frames:
+                        index = topic_parent_frames.index(transform.child_frame_id)
+                        topic_transform = topic_transforms[index]
+                        new_transform = reference_transform.dot(topic_transform)
+                        affine_to_ros_transform(
+                            new_transform,
+                            transform
+                        )
+                        print("\nGenerated new transform:")
+                        print(transform)
+                cdr_bytes = bag_interface.typestore.serialize_cdr(
+                    msg, connection.msgtype
+                )
+                writer.write(connections[connection.topic], time_ns, cdr_bytes)
+            else:
+                writer.write(connections[connection.topic], time_ns, rawdata)

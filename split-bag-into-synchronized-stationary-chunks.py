@@ -163,87 +163,86 @@ def to_native(msg: object) -> object:
     return NATIVE_CLASSES[msgtype](**fields)
 
 
-if __name__ == "__main__":
-    args = parse_args()
-    topics_all = bag_interface.topics(args.bag)
-    topics = fnmatch.filter(topics_all, args.lidar_topic)
-    print(f"Reading topics {topics}")
+args = parse_args()
+topics_all = bag_interface.topics(args.bag)
+topics = fnmatch.filter(topics_all, args.lidar_topic)
+print(f"Reading topics {topics}")
 
-    timestamps_ns = []
-    if args.timestamp_file:
-        with open(args.timestamp_file, "r") as f:
-            for line in f:
-                timestamps_ns.append(float(line.strip()) * 1.0e9)
-        timestamps_ns.sort()
-    timestamps_ns = iter(timestamps_ns)
+timestamps_ns = []
+if args.timestamp_file:
+    with open(args.timestamp_file, "r") as f:
+        for line in f:
+            timestamps_ns.append(float(line.strip()) * 1.0e9)
+    timestamps_ns.sort()
+timestamps_ns = iter(timestamps_ns)
 
-    msg_dict = dict()
-    t_0 = None
-    t_threshold = None
-    t_prev = -1
+msg_dict = dict()
+t_0 = None
+t_threshold = None
+t_prev = -1
 
-    # High-level structure from the "rosbag2" sample:
-    #   https://ternaris.gitlab.io/rosbags/topics/rosbag2.html
-    tf_msg = None
-    tf_msg_qos = None
-    tf_static_msgs = []
-    tf_static_qos = None
-    with rosbags.rosbag2.Reader(args.bag) as reader:
-        connections = [
-            c for c in reader.connections if c.topic in ["/tf", "/tf_static"]
-        ]
-        for connection, time_ns, rawdata in reader.messages(
-                connections=connections):
-            msg = bag_interface.typestore.deserialize_cdr(rawdata, connection.msgtype)
-            if not tf_msg and connection.topic == "/tf":
-                tf_msg = rawdata
-                tf_qos = connection.ext.offered_qos_profiles
-            if connection.topic == "/tf_static":
-                tf_static_msgs.append(rawdata)
-                tf_static_qos = connection.ext.offered_qos_profiles
-            if tf_msg:
-                continue
+# High-level structure from the "rosbag2" sample:
+#   https://ternaris.gitlab.io/rosbags/topics/rosbag2.html
+tf_msg = None
+tf_msg_qos = None
+tf_static_msgs = []
+tf_static_qos = None
+with rosbags.rosbag2.Reader(args.bag) as reader:
+    connections = [
+        c for c in reader.connections if c.topic in ["/tf", "/tf_static"]
+    ]
+    for connection, time_ns, rawdata in reader.messages(
+            connections=connections):
+        msg = bag_interface.typestore.deserialize_cdr(rawdata, connection.msgtype)
+        if not tf_msg and connection.topic == "/tf":
+            tf_msg = rawdata
+            tf_qos = connection.ext.offered_qos_profiles
+        if connection.topic == "/tf_static":
+            tf_static_msgs.append(rawdata)
+            tf_static_qos = connection.ext.offered_qos_profiles
+        if tf_msg:
+            continue
 
-    # For each topic I take the first event in each period. I assume that the whole
-    # sequence of events is monotonically increasing, and that all the topics
-    # cross each period threshold together
-    print(topics)
-    for msg in bag_interface.bag_messages_generator(args.bag, topics):
-        t = msg["time_ns"]
-        if not t_0:
-            t_0 = t
+# For each topic I take the first event in each period. I assume that the whole
+# sequence of events is monotonically increasing, and that all the topics
+# cross each period threshold together
+print(topics)
+for msg in bag_interface.bag_messages_generator(args.bag, topics):
+    t = msg["time_ns"]
+    if not t_0:
+        t_0 = t
+        if args.timestamp_file:
+            try:
+                t_threshold = next(timestamps_ns)
+            except StopIteration:
+                break
+        else:
+            t_threshold = t_0 + args.period_ns
+    if t_prev > t:
+        raise Exception(
+            "Messages were found out of order; this implementation assumes strictly "
+            + "monotonically increasing timestamps"
+        )
+    if t > t_threshold:
+        topic = msg["topic"]
+        if topic not in msg_dict:
+            msg_dict[topic] = msg
+        if set(topics).issubset(msg_dict):
+            write(
+                msg_dict,
+                topics,
+                tf_msg,
+                tf_qos,
+                tf_static_msgs,
+                tf_static_qos,
+                outdir=args.outdir,
+            )
+            msg_dict = dict()
             if args.timestamp_file:
                 try:
                     t_threshold = next(timestamps_ns)
                 except StopIteration:
                     break
             else:
-                t_threshold = t_0 + args.period_ns
-        if t_prev > t:
-            raise Exception(
-                "Messages were found out of order; this implementation assumes strictly "
-                + "monotonically increasing timestamps"
-            )
-        if t > t_threshold:
-            topic = msg["topic"]
-            if topic not in msg_dict:
-                msg_dict[topic] = msg
-            if set(topics).issubset(msg_dict):
-                write(
-                    msg_dict,
-                    topics,
-                    tf_msg,
-                    tf_qos,
-                    tf_static_msgs,
-                    tf_static_qos,
-                    outdir=args.outdir,
-                )
-                msg_dict = dict()
-                if args.timestamp_file:
-                    try:
-                        t_threshold = next(timestamps_ns)
-                    except StopIteration:
-                        break
-                else:
-                    t_threshold = t_threshold + args.period_ns
-        t_prev = t
+                t_threshold = t_threshold + args.period_ns
+    t_prev = t
