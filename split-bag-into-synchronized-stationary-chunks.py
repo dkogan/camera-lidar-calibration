@@ -87,7 +87,6 @@ import rosbags.rosbag2
 import bag_interface
 from typing import TypeVar
 import importlib
-from sensor_msgs_py import point_cloud2
 import numpy as np
 
 
