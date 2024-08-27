@@ -136,12 +136,181 @@ if args.rt_lidar_ref is not None:
     args.rt_ref_lidar = mrcal.invert_rt(args.rt_lidar_ref)
 pointclouds = [ mrcal.transform_point_rt(args.rt_ref_lidar[i],p) for i,p in enumerate(pointclouds) ]
 
+
+# from "gnuplot -e 'show linetype'"
+color_sequence_rgb = (
+    "#9400d3",
+    "#009e73",
+    "#56b4e9",
+    "#e69f00",
+    "#f0e442",
+    "#0072b2",
+    "#e51e10",
+    "#000000"
+)
+
 data_tuples = [ ( p, dict( tuplesize = -3,
                            legend    = args.lidar_topic[i],
-                           _with     = 'points pt 7 ps 1')) \
+                           _with     = f'points pt 7 ps 1 lc rgb "{color_sequence_rgb[i%len(color_sequence_rgb)]}"')) \
                 for i,p in enumerate(pointclouds) ]
 
-gp.plot(*data_tuples,
-        _3d = True,
-        square = True,
-        wait = True)
+
+
+
+Ncameras = 0
+Nlidars  = 3
+istate_camera_pose_0 = 0
+Nstate_camera_pose   = 6 * Ncameras
+istate_lidar_pose_0  = istate_camera_pose_0 + Nstate_camera_pose
+Nstate_lidar_pose    = 6 * (Nlidars-1) # lidar0 is the reference coord system
+
+import pickle
+with open("/tmp/Var_state_poses.pickle", "rb") as f:
+    Var_state_poses = pickle.load(f)
+
+
+x_sample = np.linspace(-20,20,25)
+y_sample = np.linspace(-20,20,25)
+z_sample = 1
+
+Nxsample = len(x_sample)
+Nysample = len(y_sample)
+
+# Each has shape (Ny_sample,Nx_sample)
+px0, py0 = np.meshgrid(x_sample,y_sample)
+pz0 = z_sample * np.ones(px0.shape, dtype=float)
+# shape (Nysample, Nxsample,3)
+p0 = nps.mv(nps.cat(px0,py0,pz0),
+            0,-1)
+if Ncameras:
+    raise Exception(f"Hard-coded {Ncameras=} is wrong: I'm assuming ilidar = isensor below")
+if len(args.rt_ref_lidar) != Nlidars:
+    raise Exception(f"Hard-coded {Nlidars=} is wrong")
+if nps.norm2(args.rt_ref_lidar[0]):
+    raise Exception("The first rt_ref_lidar must be 0")
+
+az = np.linspace(-np.pi, np.pi,20, endpoint = False)
+el = nps.mv(np.linspace(-np.pi/2., np.pi/2., 10), -1,-2)
+caz = np.cos(az)
+saz = np.sin(az)
+cel = np.cos(el)
+sel = np.sin(el)
+
+
+do_plot_ellipsoids               = False
+do_plot_worst_eigenvalue_heatmap = True
+
+
+if do_plot_ellipsoids:
+    # shape (Npoints,3)
+    psphere = nps.clump(nps.mv(nps.cat(caz*cel, saz*cel, sel*np.ones(az.shape)),
+                               0,-1),
+                        n=2)
+
+    # 1. is "to scale". Higher numbers improve legibility
+    ellipse_scale = 10.
+
+
+
+
+def plot(*args,
+         hardcopy = None,
+         **kwargs):
+    r'''Wrapper for gp.plot(), but printing out where the hardcopy went'''
+    gp.plot(*args, **kwargs,
+            hardcopy = hardcopy)
+    if hardcopy is not None:
+        print(f"Wrote '{hardcopy}'")
+
+
+for ilidar,rt_ref_lidar in enumerate(args.rt_ref_lidar):
+    if ilidar == 0: continue
+
+    # shape (Nysample,Nxsample,3)
+    p1 = \
+        mrcal.transform_point_rt(rt_ref_lidar, p0,
+                                 inverted = True)
+
+    rt_lidar_ref = mrcal.invert_rt(rt_ref_lidar)
+
+    # shape (Nysample,Nxsample,3,6)
+    _,dp0__drt_lidar_ref,_ = \
+        mrcal.transform_point_rt(rt_lidar_ref, p1,
+                                 inverted      = True,
+                                 get_gradients = True)
+    # shape (6,6)
+    Var_rt_lidar_ref = Var_state_poses[ilidar-1,:,ilidar-1,:]
+
+    # shape (Nysample,Nxsample,3,3)
+    Var_p0 = nps.matmult(dp0__drt_lidar_ref,
+                         Var_rt_lidar_ref,
+                         nps.transpose(dp0__drt_lidar_ref))
+
+    # shape (Nysample,Nxsample,3) and (Nysample,Nxsample,3,3)
+    l,v = np.linalg.eig(Var_p0)
+    stdev = np.sqrt(l)
+
+    if do_plot_ellipsoids:
+        # shape (Nspherepoints,Nysample,Nxsample,3)
+        pellipsoid = \
+            p0 + \
+            ellipse_scale * \
+            nps.matmult(# shape (Nspherepoints,1,1,1,3) * (Nysample,Nxsample,1,3)
+                        nps.dummy(psphere, -2,-2,-2) * nps.dummy(stdev, axis=-2),
+                        nps.transpose(v))[...,0,:]
+
+        data_tuples.append( ( nps.clump(pellipsoid, n=3),
+                              dict( tuplesize = -3,
+                                    _with     = f'dots lc rgb "{color_sequence_rgb[ilidar%len(color_sequence_rgb)]}"',
+                                    legend = f'1-sigma uncertainty for lidar {ilidar}')), )
+
+    if do_plot_worst_eigenvalue_heatmap:
+        # shape (Nysample,Nxsample)
+
+        iworst  = np.argmax(stdev,axis=-1, keepdims=True)
+        uncertainty_1sigma = np.take_along_axis(stdev,iworst, -1)[...,0]
+
+        eigv_worst = np.take_along_axis(v,nps.dummy(iworst,-1), -1)[...,0]
+        cos_vertical = np.abs(eigv_worst[...,2])
+        thdeg_vertical = np.arccos(np.clip(cos_vertical,-1,1)) * 180./np.pi
+
+        using = f'({x_sample[0]} + $1*({x_sample[-1]-x_sample[0]})/{Nxsample-1}):({y_sample[0]} + $2*({y_sample[-1]-y_sample[0]})/{Nysample-1}):3'
+
+        plot(uncertainty_1sigma,
+             tuplesize = 3,
+             _with = 'image',
+             using = using,
+             cbmin = 0,
+             square = True,
+             wait = True,
+             xlabel = 'x',
+             ylabel = 'y',
+             title = f'Worst-case 1-sigma transform uncertainty for lidar {ilidar}',
+             ascii = 1, # needed for the "using" scale
+             _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
+             hardcopy=f'/tmp/uncertainty-1sigma-{ilidar=}.gp')
+
+        plot(thdeg_vertical,
+             tuplesize = 3,
+             _with = 'image',
+             using = using,
+             cbmin = 0,
+             cbmax = 30,
+             square = True,
+             wait = True,
+             xlabel = 'x',
+             ylabel = 'y',
+             title = f'Worst-case transform uncertainty for lidar {ilidar}: angle off vertical (deg)',
+             ascii = 1, # needed for the "using" scale
+             _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
+             hardcopy=f'/tmp/uncertainty-direction-1sigma-{ilidar=}.gp')
+
+if do_plot_ellipsoids:
+    plot(*data_tuples,
+         _3d = True,
+         square = True,
+         wait = True,
+         xlabel = 'x',
+         ylabel = 'y',
+         zlabel = 'z',
+         hardcopy='/tmp/ellipsoids.gp')

@@ -1124,6 +1124,66 @@ def fit( joint_observations,
                                        kwargs = dict(use_distance_to_plane = False))
     b = res.x
 
+    # I propagate uncertainty. This is similar to what I do in mrcal, but much
+    # simpler. In mrcal, every camera is described by its intrinsics and
+    # extrinsics, and much effort goes into disentangling the two. Here we have
+    # only the poses.
+    #
+    # The blueprint of what to do is in https://mrcal.secretsauce.net/uncertainty.html
+    #
+    # I assume SCALE_MEASUREMENT_PX and SCALE_MEASUREMENT_M are the stdev of the
+    # measurement. So
+    # Var(qref) = I. The scale is applied in the cost function, so W = I also. So
+    #
+    # Var(b) = inv(JtJ) JobsT_Jobs inv(JtJ)
+    J = res.jac
+    JtJ        = nps.matmult(J.T,J)
+
+    Jobs       = J[:-Nmeas_regularization,:]
+    JobsT_Jobs = nps.matmult(Jobs.T,Jobs)
+
+    L,islower          = scipy.linalg.cho_factor(JtJ)
+    inv_JtJ_JobsT_Jobs = scipy.linalg.cho_solve((L,islower), JobsT_Jobs)
+    Var_b              = scipy.linalg.cho_solve((L,islower), inv_JtJ_JobsT_Jobs.T)
+
+    inv_JtJ = np.linalg.inv(JtJ)
+    Var_b_direct = nps.matmult(inv_JtJ, JobsT_Jobs, inv_JtJ)
+
+    pinv = np.linalg.pinv(J)[:-Nmeas_regularization]
+    Var_b_pinv = nps.matmult(pinv, pinv.T)
+
+    # I don't care about the poses of the chessboards, so I pull out the
+    # variance of the poses of the sensors only.
+    istate_sensors_0 = min(istate_camera_pose_0,istate_lidar_pose_0)
+    Nstate_sensors   = Nstate_camera_pose + Nstate_lidar_pose
+    istatesensors_camera_pose_0 = istate_camera_pose_0 - istate_sensors_0
+    istatesensors_lidar_pose_0  = istate_lidar_pose_0  - istate_sensors_0
+    if not \
+       (istatesensors_camera_pose_0 + Nstate_camera_pose == istatesensors_lidar_pose_0 or \
+        istatesensors_lidar_pose_0  + Nstate_lidar_pose  == istatesensors_camera_pose_0 ):
+        raise Exception("Uncertainty code assumes the camera and lidar pose states live next to each other")
+    Var_b = Var_b[istate_sensors_0:istate_sensors_0+Nstate_sensors,
+                  istate_sensors_0:istate_sensors_0+Nstate_sensors]
+
+    Nsensors_in_state     = Nstate_sensors//6
+    Var_b = Var_b.reshape(Nsensors_in_state,6,Nsensors_in_state,6)
+
+    # J uses packed state. I need to unpack it; J has state in the denominator,
+    # so I unpack it by PACKING (/SCALE). Var(b) ~ inv(JtJ), so this is
+    # inverted, and I UNPACK (*SCALE) in both dimensions.
+    slice_state_cameras = \
+        slice(istatesensors_camera_pose_0//6,
+              (istatesensors_camera_pose_0+Nstate_camera_pose)//6)
+    slice_state_lidars = \
+        slice(istatesensors_lidar_pose_0//6,
+              (istatesensors_lidar_pose_0+Nstate_lidar_pose)//6)
+
+    Var_b[slice_state_cameras,:,:,:] *= nps.mv(SCALE_RT_CAMERA_REF,-1,-3)
+    Var_b[:,:,slice_state_cameras,:] *= SCALE_RT_CAMERA_REF
+    Var_b[slice_state_lidars,:,:,:] *= nps.mv(SCALE_RT_LIDAR_REF,-1,-3)
+    Var_b[:,:,slice_state_lidars,:] *= SCALE_RT_LIDAR_REF
+
+
     state = unpack_state(b)
 
 
@@ -1149,7 +1209,7 @@ def fit( joint_observations,
                        x_lidar          = x_lidar,
                        x_regularization = x_regularization)
 
-    return state
+    return state,Var_b
 
 def get_joint_observation(bag,
                           *,
@@ -1907,7 +1967,7 @@ plot_geometry("/tmp/geometry-seed-onlyaxes.gp",
               **seed_state)
 
 
-solved_state = \
+solved_state,Var_state_poses = \
     fit( joint_observations,
          Nboards, Ncameras, Nlidars,
          Nmeas_camera_observation,
@@ -1920,6 +1980,11 @@ plot_geometry("/tmp/geometry.gp",
 plot_geometry("/tmp/geometry-onlyaxes.gp",
               only_axes = True,
               **solved_state)
+with open("/tmp/Var_state_poses.pickle", "wb") as f:
+    pickle.dump(Var_state_poses, f)
+
+
+
 
 for imodel in range(len(args.models)):
     models[imodel].extrinsics_rt_fromref(solved_state['rt_camera_ref'][imodel])
