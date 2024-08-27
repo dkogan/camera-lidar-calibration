@@ -1960,7 +1960,7 @@ write_multisense_calibration(multisense_units_lra)
 
 
 print("The poses follow. The reference is defined to sit at lidar0\n")
-print("The below is passable directly to show-aligned-lidar-pointclouds.py")
+print("To visualized an aligned bag, run:\n\n./show-aligned-lidar-pointclouds.py \\")
 
 if Ncameras > 0:
     # Write the inter-multisense extrinsics
@@ -2008,6 +2008,9 @@ for ilidar in range(Nlidars):
     str_lidar_poses_other += \
         f"  {rpy=} {xyz=}\n"
 print(f"  --lidar-topic {','.join(lidar_topics)} \\")
-print(str_lidar_poses)
+print(str_lidar_poses, end='')
+print('  ' + args.bag[0])
+print('\nOr pass in any of the other bags\n')
+
 print("other poses:")
 print(str_lidar_poses_other)
