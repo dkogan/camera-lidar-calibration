@@ -223,6 +223,36 @@ def plot(*args,
         print(f"Wrote '{hardcopy}'")
 
 
+
+print("WARNING: the uncertainty propagation should be cameras AND lidars")
+rt_lidar0_lidar = np.array(args.rt_ref_lidar, dtype=float)
+
+lidars_origin  = rt_lidar0_lidar[:,3:]
+lidars_forward = mrcal.rotate_point_r(rt_lidar0_lidar[:,:3], np.array((1.,0,0)))
+
+lidars_forward_xy = np.array(lidars_forward[...,:2])
+# to avoid /0 for straight-up vectors
+mag_lidars_forward_xy = nps.mag(lidars_forward_xy)
+i = mag_lidars_forward_xy>0
+lidars_forward_xy[i,:] /= nps.dummy(mag_lidars_forward_xy[i], axis=-1)
+lidars_forward_xy[~i,:] = 0
+lidar_forward_arrow_length = 4.
+data_tuples_lidar_forward_vectors = \
+    ( (nps.glue( lidars_origin [...,:2],
+                 lidars_forward_xy * lidar_forward_arrow_length,
+                 axis = -1 ),
+       dict(_with = 'vectors lw 2 lc "black"',
+            tuplesize = -4) ),
+
+      ( lidars_origin[...,0],
+        lidars_origin[...,1],
+        np.array([f"Lidar {i}" for i in range(Nlidars)]),
+        dict(_with = 'labels textcolor "red"',
+             tuplesize = 3))
+     )
+
+
+
 for ilidar,rt_ref_lidar in enumerate(args.rt_ref_lidar):
     if ilidar == 0: continue
 
@@ -276,31 +306,35 @@ for ilidar,rt_ref_lidar in enumerate(args.rt_ref_lidar):
 
         using = f'({x_sample[0]} + $1*({x_sample[-1]-x_sample[0]})/{Nxsample-1}):({y_sample[0]} + $2*({y_sample[-1]-y_sample[0]})/{Nysample-1}):3'
 
-        plot(uncertainty_1sigma,
-             tuplesize = 3,
-             _with = 'image',
-             using = using,
+        plot((uncertainty_1sigma,
+              dict(tuplesize = 3,
+                   _with = 'image',
+                   using = using),
+              ),
+             *data_tuples_lidar_forward_vectors,
              cbmin = 0,
              square = True,
              wait = True,
              xlabel = 'x',
              ylabel = 'y',
-             title = f'Worst-case 1-sigma transform uncertainty for lidar {ilidar}',
+             title = f'Worst-case 1-sigma transform uncertainty for lidar {ilidar} (top-down view)',
              ascii = 1, # needed for the "using" scale
              _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
              hardcopy=f'/tmp/uncertainty-1sigma-{ilidar=}.gp')
 
-        plot(thdeg_vertical,
-             tuplesize = 3,
-             _with = 'image',
-             using = using,
+        plot((thdeg_vertical,
+              dict(tuplesize = 3,
+                   _with = 'image',
+                   using = using),
+              ),
+             *data_tuples_lidar_forward_vectors,
              cbmin = 0,
              cbmax = 30,
              square = True,
              wait = True,
              xlabel = 'x',
              ylabel = 'y',
-             title = f'Worst-case transform uncertainty for lidar {ilidar}: angle off vertical (deg)',
+             title = f'Worst-case transform uncertainty for lidar {ilidar} (top-down view): angle off vertical (deg)',
              ascii = 1, # needed for the "using" scale
              _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
              hardcopy=f'/tmp/uncertainty-direction-1sigma-{ilidar=}.gp')
