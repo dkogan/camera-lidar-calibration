@@ -238,11 +238,18 @@ lidars_forward_xy[i,:] /= nps.dummy(mag_lidars_forward_xy[i], axis=-1)
 lidars_forward_xy[~i,:] = 0
 lidar_forward_arrow_length = 4.
 data_tuples_lidar_forward_vectors = \
-    ( (nps.glue( lidars_origin [...,:2],
+    (
+      # LIDAR positions AND their forward vectors
+      (nps.glue( lidars_origin [...,:2],
                  lidars_forward_xy * lidar_forward_arrow_length,
                  axis = -1 ),
        dict(_with = 'vectors lw 2 lc "black"',
             tuplesize = -4) ),
+
+      # # JUST the LIDAR positions
+      # ( lidars_origin [...,:2],
+      #   dict(_with = 'points pt 2 lc "black"',
+      #        tuplesize = -2) ),
 
       ( lidars_origin[...,0],
         lidars_origin[...,1],
