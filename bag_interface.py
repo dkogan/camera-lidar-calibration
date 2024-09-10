@@ -75,12 +75,17 @@ def bag_messages_generator(bag, topics):
         #   itemsize = 28: requires padding up to the next multiple of 16: until 32
         #   itemsize = 34: requires padding up to the next multiple of 16: until 48
         #
-        # I support those cases explicitly. Other cases may not work
-        has_padding = False
-        if dtype.itemsize == 28 or dtype.itemsize == 34:
-            has_padding = True
-            ilast_before_48 = ((dtype.itemsize // 16) + 1) * 16 - 1
-            dtype_dict['_padding'] = (np.uint8, ilast_before_48)
+        # I add padding-to-16 if it looks like it needs it. Might be the right
+        # thing to do...
+        if dtype.itemsize > msg.point_step:
+            raise Exception(f"Unexpected data layout: itemsize > point_step ({dtype.itemsize}>{msg.point_step}) in {msg=}")
+        if dtype.itemsize != msg.point_step:
+            if msg.point_step%16 != 0:
+                raise Exception(f"Unexpected data layout: itemsize<point_step, so I assume we need to pad to 16-byte boundaries (because that's what I've seen before), but this data has {msg.point_step=}, which isn't divisible by 16 in {msg=}")
+
+            # pad to multiple of 16
+            ilast_before_x16 = msg.point_step-1
+            dtype_dict['_padding'] = (np.uint8, ilast_before_x16)
             dtype = np.dtype(dtype_dict)
 
         if not (msg.point_step == dtype.itemsize and \
