@@ -68,22 +68,23 @@ def bag_messages_generator(bag, topics):
 
         dtype = np.dtype(dtype_dict)
 
-        # This is a hack. I don't know how to detect this reliably. So
-        # far I've seen two different LIDAR data formats:
+        # This is a hack. I don't know how to detect this reliably, so I work
+        # off of the LIDAR data formats that I have seen:
         #
         #   itemsize = 22: requires no alignment or padding
+        #   itemsize = 28: requires padding up to the next multiple of 16: until 32
         #   itemsize = 34: requires padding up to the next multiple of 16: until 48
         #
         # I support those cases explicitly. Other cases may not work
         has_padding = False
-        if dtype.itemsize == 34:
+        if dtype.itemsize == 28 or dtype.itemsize == 34:
             has_padding = True
-            dtype_dict['_padding'] = (np.uint8,47)
+            ilast_before_48 = ((dtype.itemsize // 16) + 1) * 16 - 1
+            dtype_dict['_padding'] = (np.uint8, ilast_before_48)
             dtype = np.dtype(dtype_dict)
 
         if not (msg.point_step == dtype.itemsize and \
                 msg.width * msg.point_step == msg.row_step and \
-                msg.is_dense and \
                 not msg.is_bigendian and \
                 msg.data.dtype == np.uint8 and \
                 msg.data.size == msg.row_step * msg.height):
