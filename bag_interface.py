@@ -3,11 +3,9 @@
 import sys
 import numpy as np
 
-import rosbags.rosbag2
+import pathlib
+import rosbags.highlevel.anyreader
 import rosbags.typesys
-
-# Used by readers and writers. Imported by some other modules
-typestore = rosbags.typesys.get_typestore(rosbags.typesys.Stores.ROS2_HUMBLE)
 
 
 def bag_messages_generator(bag, topics):
@@ -102,8 +100,7 @@ def bag_messages_generator(bag, topics):
 
     # High-level structure from the "rosbag2" sample:
     #   https://ternaris.gitlab.io/rosbags/topics/rosbag2.html
-    with rosbags.rosbag2.Reader(bag) as reader:
-
+    with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
         connections = [ c for c in reader.connections \
                         if c.topic in topics ]
 
@@ -111,7 +108,7 @@ def bag_messages_generator(bag, topics):
                 reader.messages( connections = connections ):
 
             qos = connection.ext.offered_qos_profiles
-            msg   = typestore.deserialize_cdr(rawdata, connection.msgtype)
+            msg   = reader.deserialize(rawdata, connection.msgtype)
             dtype = dtype_from_msg(msg, connection.msgtype)
             data  = np.frombuffer(msg.data, dtype = dtype)
 
@@ -129,5 +126,5 @@ def bag_messages_generator(bag, topics):
                         )
 
 def topics(bag):
-    with rosbags.rosbag2.Reader(bag) as reader:
+    with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
         return [c.topic for c in reader.connections]

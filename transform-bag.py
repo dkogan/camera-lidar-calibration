@@ -82,6 +82,7 @@ args = parse_args()
 
 
 import ast
+import rosbags
 import rosbags.rosbag2
 from pathlib import Path
 import numpy as np
@@ -93,6 +94,11 @@ except Exception as e:
     print(f"This tool requires ROS2 to be installed and configured:\n\n{e}",
           file=sys.stderr)
     sys.exit(1)
+
+
+typestore = rosbags.typesys.get_typestore(rosbags.typesys.Stores.ROS2_HUMBLE)
+
+
 
 
 def get_msgs(bag, topic, limit=None):
@@ -107,7 +113,7 @@ def get_msgs(bag, topic, limit=None):
                 )):
             if limit and i >= limit:
                 break
-            msg = bag_interface.typestore.deserialize_cdr(rawdata, connection.msgtype)
+            msg = typestore.deserialize_cdr(rawdata, connection.msgtype)
             msgs.append(
                 {
                     "rawdata": rawdata,
@@ -214,11 +220,11 @@ with rosbags.rosbag2.Reader(args.bag) as reader:
                 connections[connection.topic] = writer.add_connection(
                     connection.topic,
                     connection.msgtype,
-                    typestore=bag_interface.typestore,
+                    typestore=typestore,
                     offered_qos_profiles=qos,
                 )
             if connection.topic == "/tf_static":
-                msg = bag_interface.typestore.deserialize_cdr(
+                msg = typestore.deserialize_cdr(
                     rawdata, connection.msgtype
                 )
                 for transform in msg.transforms:
@@ -232,7 +238,7 @@ with rosbags.rosbag2.Reader(args.bag) as reader:
                         )
                         print("\nGenerated new transform:")
                         print(transform)
-                cdr_bytes = bag_interface.typestore.serialize_cdr(
+                cdr_bytes = typestore.serialize_cdr(
                     msg, connection.msgtype
                 )
                 writer.write(connections[connection.topic], time_ns, cdr_bytes)

@@ -83,11 +83,15 @@ args = parse_args()
 
 
 import fnmatch
+import rosbags
 import rosbags.rosbag2
 import bag_interface
 from typing import TypeVar
 import importlib
 import numpy as np
+
+
+typestore = rosbags.typesys.get_typestore(rosbags.typesys.Stores.ROS2_HUMBLE)
 
 
 def write(
@@ -118,17 +122,17 @@ def write(
         for topic in topics:
             msg = msgs_now_from_topic[topic]
             connection = writer.add_connection(
-                topic, msg["msgtype"], typestore=bag_interface.typestore,
+                topic, msg["msgtype"], typestore=typestore,
                 offered_qos_profiles=msg["qos"],
             )
             writer.write(connection, msg["time_ns"], msg["rawdata"])
         connection = writer.add_connection(
-            "/tf", "tf2_msgs/msg/TFMessage", typestore=bag_interface.typestore,
+            "/tf", "tf2_msgs/msg/TFMessage", typestore=typestore,
             offered_qos_profiles=tf_qos
         )
         writer.write(connection, time_ns, tf_msg)
         connection = writer.add_connection(
-            "/tf_static", "tf2_msgs/msg/TFMessage", typestore=bag_interface.typestore,
+            "/tf_static", "tf2_msgs/msg/TFMessage", typestore=typestore,
             offered_qos_profiles=tf_static_qos
         )
         for tf_static_msg in tf_static_msgs:
@@ -202,7 +206,7 @@ with rosbags.rosbag2.Reader(args.bag) as reader:
     ]
     for connection, time_ns, rawdata in reader.messages(
             connections=connections):
-        msg = bag_interface.typestore.deserialize_cdr(rawdata, connection.msgtype)
+        msg = typestore.deserialize_cdr(rawdata, connection.msgtype)
         if not tf_msg and connection.topic == "/tf":
             tf_msg = rawdata
             tf_qos = connection.ext.offered_qos_profiles
