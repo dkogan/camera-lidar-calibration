@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-r'''Calibrate a set of cameras and LIDARs into a common coordinate system
+r'''Find the calibration board in the LIDAR point cloud
 
 SYNOPSIS
 

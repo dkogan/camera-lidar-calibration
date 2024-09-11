@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-r'''Utilities to extract chessboard data from ROS bags
+r'''Utilities to extract chessboard data from 
 
 Used by the higher-level calibration routines
 '''
@@ -13,7 +13,6 @@ import gnuplotlib as gp
 
 import mrcal
 
-import vnlog
 import pcl
 import io
 import cv2

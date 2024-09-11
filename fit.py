@@ -65,7 +65,7 @@ def parse_args():
                         type=str,
                         action = 'append',
                         help = '''Bags to exclude from the processing. These are
-                        treated as a regex match against the bag paths''')
+                        a regex match against the bag paths''')
 
     parser.add_argument('--viz',
                         action='store_true',
@@ -219,34 +219,9 @@ SCALE_MEASUREMENT_REGULARIZATION_rt = np.array((SCALE_MEASUREMENT_REGULARIZATION
                                                 SCALE_MEASUREMENT_REGULARIZATION_t))
 
 
-def observations_camera(joint_observations):
-    for iboard in range(len(joint_observations)):
-        q_observed_all = joint_observations[iboard][0]
-        for icamera in range(len(q_observed_all)):
-            q_observed = q_observed_all[icamera]
-            if q_observed is None:
-                continue
 
-            yield (q_observed,iboard,icamera)
-
-def observations_lidar(joint_observations):
-    for iboard in range(len(joint_observations)):
-        plidar_all = joint_observations[iboard][1]
-        for ilidar in range(len(plidar_all)):
-            plidar = plidar_all[ilidar]
-            if plidar is None:
-                continue
-
-            yield (plidar,iboard,ilidar)
-
-def normal(p):
-    p_mean = np.mean(p, axis=-2)
-    p = p - p_mean
-    return mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
-
-
-
-# Copy from mrcal/mrcal/calibration.py. Please consolidate
+# Copy from mrcal/mrcal/calibration.py. mrcal will export this in the next
+# release. Use the exported function when that happens
 def _traverse_sensor_connections( Nsensors,
                                   callback__neighbors,
                                   callback__cost_edge,
@@ -327,16 +302,23 @@ def _traverse_sensor_connections( Nsensors,
         node_top.visit()
 
 
-def fit_estimate( joint_observations,
-                  Nboards, Ncameras, Nlidars,
-                  Nmeas_camera_observation,
-                  Nmeas_camera_observation_all,
-                  Nmeas_lidar_observation_all,
-                  p_board_local):
+def fit_seed( joint_observations,
+              Nboards, Ncameras, Nlidars,
+              Nmeas_camera_observation,
+              Nmeas_camera_observation_all,
+              Nmeas_lidar_observation_all,
+              p_board_local):
 
     r'''Simplified fit() used to produce a seed for fit() to refine
 
     Same arguments as fit()'''
+
+
+    def normal(p):
+        p_mean = np.mean(p, axis=-2)
+        p = p - p_mean
+        return mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
+
 
     # joint_observations is
     # [ obs0, obs1, obs2, ... ] where each observation corresponds to a board pose
@@ -1266,6 +1248,29 @@ def plot_geometry(filename,
                   rt_camera_ref,
                   rt_lidar_ref,
                   only_axes = False):
+
+
+    def observations_camera(joint_observations):
+        for iboard in range(len(joint_observations)):
+            q_observed_all = joint_observations[iboard][0]
+            for icamera in range(len(q_observed_all)):
+                q_observed = q_observed_all[icamera]
+                if q_observed is None:
+                    continue
+
+                yield (q_observed,iboard,icamera)
+
+    def observations_lidar(joint_observations):
+        for iboard in range(len(joint_observations)):
+            plidar_all = joint_observations[iboard][1]
+            for ilidar in range(len(plidar_all)):
+                plidar = plidar_all[ilidar]
+                if plidar is None:
+                    continue
+
+                yield (plidar,iboard,ilidar)
+
+
     data_tuples, plot_options = \
         mrcal.show_geometry(nps.glue(rt_camera_ref,
                                      rt_lidar_ref,
@@ -1953,28 +1958,22 @@ for ilidar in range(Nlidars):
         sys.exit(1)
 
 
-seed_state = \
-    fit_estimate( joint_observations,
-                  Nboards, Ncameras, Nlidars,
-                  Nmeas_camera_observation,
-                  Nmeas_camera_observation_all,
-                  Nmeas_lidar_observation_all,
-                  p_board_local )
+fit_args = ( joint_observations,
+             Nboards, Ncameras, Nlidars,
+             Nmeas_camera_observation,
+             Nmeas_camera_observation_all,
+             Nmeas_lidar_observation_all,
+             p_board_local )
+
+seed_state = fit_seed(*fit_args)
 plot_geometry("/tmp/geometry-seed.gp",
               **seed_state)
 plot_geometry("/tmp/geometry-seed-onlyaxes.gp",
               only_axes = True,
               **seed_state)
 
-
 solved_state,Var_state_poses = \
-    fit( joint_observations,
-         Nboards, Ncameras, Nlidars,
-         Nmeas_camera_observation,
-         Nmeas_camera_observation_all,
-         Nmeas_lidar_observation_all,
-         p_board_local,
-         seed_state )
+    fit(*fit_args, seed_state )
 plot_geometry("/tmp/geometry.gp",
               **solved_state)
 plot_geometry("/tmp/geometry-onlyaxes.gp",
