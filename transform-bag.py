@@ -86,9 +86,9 @@ import rosbags
 import rosbags.rosbag2
 from pathlib import Path
 import numpy as np
+import bag_interface
 
 try:
-    import bag_interface
     import transforms3d
 except Exception as e:
     print(f"This tool requires ROS2 to be installed and configured:\n\n{e}",
