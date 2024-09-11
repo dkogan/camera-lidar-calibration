@@ -128,7 +128,6 @@ def bag_messages_generator(bag, topics):
                         qos            = qos,
                         )
 
-
 def topics(bag):
     with rosbags.rosbag2.Reader(bag) as reader:
         return [c.topic for c in reader.connections]
