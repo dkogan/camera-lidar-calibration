@@ -839,8 +839,8 @@ def get_lidar_observation(bag, lidar_topic,
 
     try:
         msg = next(bag_messages_generator(bag, (lidar_topic,)))
-    except:
-        raise Exception(f"Bag '{bag}' doesn't have at least one message of {lidar_topic=}")
+    except Exception as e:
+        raise Exception(f"Error parsing message of {lidar_topic=} from {bag=}: {e}")
 
     p_lidar = \
         find_chessboard_in_view(None,

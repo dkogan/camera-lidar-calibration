@@ -2025,7 +2025,7 @@ write_multisense_calibration(multisense_units_lra)
 
 
 print("The poses follow. The reference is defined to sit at lidar0\n")
-print("To visualized an aligned bag, run:\n\n./show-aligned-lidar-pointclouds.py \\")
+print("To visualize an aligned bag, run:\n\n./show-aligned-lidar-pointclouds.py \\")
 
 if Ncameras > 0:
     # Write the inter-multisense extrinsics
