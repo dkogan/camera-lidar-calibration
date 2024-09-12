@@ -81,17 +81,31 @@ def bag_messages_generator(bag, topics):
             if msg.point_step%16 != 0:
                 raise Exception(f"Unexpected data layout: itemsize<point_step, so I assume we need to pad to 16-byte boundaries (because that's what I've seen before), but this data has {msg.point_step=}, which isn't divisible by 16 in {msg=}")
 
+            # msg.is_dense isn't reliable it looks like, so I don't check this.
+            # In the 2023-09-26 dataset is_dense is True, but extra padding is
+            # clearly required
+            #
+            # if msg.is_dense:
+            #     raise Exception(f"Unexpected data layout: itemsize != point_step ({dtype.itemsize}!={msg.point_step}) but {msg.is_dense=} in {msg=}")
+
             # pad to multiple of 16
             ilast_before_x16 = msg.point_step-1
             dtype_dict['_padding'] = (np.uint8, ilast_before_x16)
             dtype = np.dtype(dtype_dict)
 
         if not (msg.point_step == dtype.itemsize and \
-                msg.width * msg.point_step == msg.row_step and \
                 not msg.is_bigendian and \
-                msg.data.dtype == np.uint8 and \
-                msg.data.size == msg.row_step * msg.height):
+                msg.data.dtype == np.uint8):
             raise Exception(f"Unexpected data layout: {msg=}")
+
+        if msg.row_step == 0:
+            if not msg.is_dense:
+                raise Exception(f"{msg.row_step=} but {msg.is_dense}; these shouldn't go together")
+        else:
+            if not (msg.width * msg.point_step == msg.row_step and \
+                    msg.data.size == msg.row_step * msg.height):
+                raise Exception(f"Unexpected data layout: {msg=}")
+
 
         dtype_cache[key_cache] = dtype
 
