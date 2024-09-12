@@ -129,14 +129,6 @@ def parse_args():
         sys.exit(1)
     args.bag = bags
 
-
-    # import pprint
-    # pprint.pprint(args.exclude_bag)
-
-    # print("BAGS:")
-    # pprint.pprint(args.bag)
-    # sys.exit()
-
     args.lidar_topic  = args.lidar_topic.split(',')
     if args.camera_topic is not None:
         args.camera_topic = args.camera_topic.split(',')
