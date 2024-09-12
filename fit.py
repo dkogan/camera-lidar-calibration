@@ -1108,6 +1108,7 @@ def fit( joint_observations,
     verbose = 2
 
     # Crude pre-solve
+    print("Starting pre-solve")
     res = scipy.optimize.least_squares(cost,
                                        seed,
                                        max_nfev = 20,
@@ -1115,6 +1116,7 @@ def fit( joint_observations,
                                        verbose  = verbose,
                                        kwargs   = dict(use_distance_to_plane = True))
 
+    print("Finished pre-solve; started full solve;")
     # Fine refinement. Note: verbosity doesn't work (see note above about 'lm')
     res = scipy.optimize.least_squares(cost,
                                        res.x,
@@ -1122,6 +1124,8 @@ def fit( joint_observations,
                                        ftol    = 1e-8,
                                        verbose = verbose,
                                        kwargs = dict(use_distance_to_plane = False))
+    print("Finished full solve")
+
     b = res.x
 
     # I propagate uncertainty. This is similar to what I do in mrcal, but much
