@@ -97,12 +97,23 @@ def bag_messages_generator(bag, topics):
 
         return dtype
 
+    def connection_from_topic(connections, topic):
+        connections = [ c for c in connections \
+                        if c.topic == topic ]
+
+        if len(connections) == 0:
+            raise Exception(f"Topic '{topic}' not found in '{bag}'; the available topics are {globals()['topics'](bag)}")
+        if len(connections) > 1:
+            raise Exception(f"Multiple connections for topic '{topic}' found in '{bag}'; I expect exactly one")
+        return connections[0]
 
     # High-level structure from the "rosbag2" sample:
     #   https://ternaris.gitlab.io/rosbags/topics/rosbag2.html
     with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
-        connections = [ c for c in reader.connections \
-                        if c.topic in topics ]
+
+        # I expect exactly one matching connection for each topic given
+        connections = [ connection_from_topic(reader.connections, topic) \
+                        for topic in topics ]
 
         for connection, time_ns, rawdata in \
                 reader.messages( connections = connections ):
