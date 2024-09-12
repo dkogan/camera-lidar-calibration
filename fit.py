@@ -1050,20 +1050,37 @@ def fit( joint_observations,
         print(f"Wrote '{filename}'")
 
         filename = f'{filename_base}-histogram.gp'
-        gp.plot( (x_camera*SCALE_MEASUREMENT_PX,
-                  dict(histogram=True,
-                       binwidth = SCALE_MEASUREMENT_PX/10,
-                       xrange   = (-3*SCALE_MEASUREMENT_PX,3*SCALE_MEASUREMENT_PX),
-                       xlabel   = "Camera residual (px)",
-                       ylabel   = "frequency")),
-                 (x_lidar*SCALE_MEASUREMENT_M,
-                  dict(histogram=True,
-                       binwidth = SCALE_MEASUREMENT_M/10,
-                       xrange   = (-3*SCALE_MEASUREMENT_M,3*SCALE_MEASUREMENT_M),
-                       xlabel   = "LIDAR residual (m)",
-                       ylabel   = "frequency")),
-                 multiplot='title "LIDAR-camera calibration residuals" layout 2,1',
-                 hardcopy = filename)
+        if x_camera.size:
+            data_tuple_cameras = \
+                (x_camera*SCALE_MEASUREMENT_PX,
+                 dict(histogram=True,
+                      binwidth = SCALE_MEASUREMENT_PX/10,
+                      xrange   = (-3*SCALE_MEASUREMENT_PX,3*SCALE_MEASUREMENT_PX),
+                      xlabel   = "Camera residual (px)",
+                      ylabel   = "frequency"))
+        else:
+            data_tuple_cameras = None
+
+        data_tuple_lidars = \
+            (x_lidar*SCALE_MEASUREMENT_M,
+             dict(histogram=True,
+                  binwidth = SCALE_MEASUREMENT_M/10,
+                  xrange   = (-3*SCALE_MEASUREMENT_M,3*SCALE_MEASUREMENT_M),
+                  xlabel   = "LIDAR residual (m)",
+                  ylabel   = "frequency"))
+
+        if data_tuple_cameras is not None:
+            gp.plot( data_tuple_cameras,
+                     data_tuple_lidars,
+                     multiplot='title "LIDAR-camera calibration residuals" layout 2,1',
+                     hardcopy = filename)
+        else:
+            gp.plot( # Not a multiplot; pass the mixed plot/process options the
+                     # gp.plot(), and let it figure out what's what
+                     data_tuple_lidars[:-1],
+                     **data_tuple_lidars[-1],
+                     hardcopy = filename)
+
         print(f"Wrote '{filename}'")
 
     seed = pack_state(**seed_kwargs)
