@@ -835,11 +835,10 @@ def get_lidar_observation(bag, lidar_topic,
     if cache is not None and lidar_topic in cache:
         return cache[lidar_topic]
 
-
     try:
         msg = next(bag_messages_generator(bag, (lidar_topic,)))
     except Exception as e:
-        raise Exception(f"Error parsing message of {lidar_topic=} from {bag=}: {e}")
+        raise Exception(f"Error parsing message of {lidar_topic=} from {bag=}") from e
 
     p_lidar = \
         find_chessboard_in_view(None,
