@@ -137,9 +137,7 @@ def bag_messages_generator(bag, topics):
                         msgtype        = connection.msgtype,
                         array          = data,
                         rawdata        = rawdata,
-                        msg            = msg,
-                        qos            = qos,
-                        )
+                        qos            = qos )
 
 def topics(bag):
     with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
