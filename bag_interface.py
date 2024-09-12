@@ -118,7 +118,12 @@ def bag_messages_generator(bag, topics):
         for connection, time_ns, rawdata in \
                 reader.messages( connections = connections ):
 
-            qos = connection.ext.offered_qos_profiles
+            try:
+                qos = connection.ext.offered_qos_profiles
+            except:
+                # Sometimes we don't have this, like when looking at ros1 data
+                qos = None
+
             msg   = reader.deserialize(rawdata, connection.msgtype)
             dtype = dtype_from_msg(msg, connection.msgtype)
             data  = np.frombuffer(msg.data, dtype = dtype)
