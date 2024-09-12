@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-r'''Utilities to extract chessboard data from 
+r'''Utilities to extract chessboard data from ros bags
 
 Used by the higher-level calibration routines
 '''
