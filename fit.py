@@ -116,6 +116,7 @@ def parse_args():
 
     import glob
     import re
+    args.bag = args.bag.rstrip('/') # to not confuse os.path.splitext()
     bags = sorted(glob.glob(args.bag))
 
     if args.exclude_bag is not None:

@@ -114,6 +114,7 @@ def parse_args():
                       file=sys.stderr)
                 sys.exit(1)
 
+    args.bag = args.bag.rstrip('/') # to not confuse os.path.splitext()
     return args
 
 
