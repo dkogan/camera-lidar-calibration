@@ -341,7 +341,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
         i1 += 1
 
         if reject_ring_if((i1 - i0) / len(large_diff_ring_plane_gap) < min_ratio_of_contiguous_points_in_ring,
-                          f"(i1 - i0) / len(large_diff_ring_plane_gap) < min_ratio_of_contiguous_points_in_ring ~~~ ({i1} - {i0}) / {len(large_diff_ring_plane_gap)} < {min_ratio_of_contiguous_points_in_ring}",
+                          f"(i1 - i0) / len(large_diff_ring_plane_gap) < min_ratio_of_contiguous_points_in_ring ~~~ ({i1} - {i0}) / {len(large_diff_ring_plane_gap)} < {min_ratio_of_contiguous_points_in_ring:.2f}",
                           iring+rings_plane_min,
                           line_number()):
             continue
@@ -353,12 +353,12 @@ def find_chessboard_in_plane_fit(points, ring, th,
             nps.mag(points_plane[idx_ring[-1]] - \
                     points_plane[idx_ring[ 0]])
         if reject_ring_if(len_segment < 0.7*board_size_for_min,
-                          f"len_segment < 0.7*board_size_for_min ~~~ {len_segment} < {0.7*board_size_for_min}",
+                          f"len_segment < 0.7*board_size_for_min ~~~ {len_segment:.2f} < {0.7*board_size_for_min:.2f}",
                           iring+rings_plane_min,
                           line_number()):
             continue
         if reject_ring_if(len_segment > np.sqrt(2)*board_size_for_max,
-                          f"len_segment > np.sqrt(2)*board_size_for_max ~~~ {len_segment} > {np.sqrt(2)*board_size_for_max}",
+                          f"len_segment > np.sqrt(2)*board_size_for_max ~~~ {len_segment:.2f} > {np.sqrt(2)*board_size_for_max:.2f}",
                           iring+rings_plane_min,
                           line_number()):
             continue
@@ -414,7 +414,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
             range0  = nps.mag(points[i0])
             _range  = nps.mag(points[i ])
             if reject_ring_if(np.any(range0 - _range > max_range_ahead_allowed),
-                              f"np.any(range0 - _range > max_range_ahead_allowed) ~~~ np.any({range0} - {_range} > {max_range_ahead_allowed})",
+                              f"np.any(range0 - _range > max_range_ahead_allowed)",
                               iring+rings_plane_min,
                               line_number()):
                 continue
@@ -424,7 +424,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
             range0  = nps.mag(points[i1])
             _range  = nps.mag(points[i ])
             if reject_ring_if(np.any(range0 - _range > max_range_ahead_allowed),
-                              f"np.any(range0 - _range > max_range_ahead_allowed) ~~~ np.any({range0} - {_range} > {max_range_ahead_allowed})",
+                              f"np.any(range0 - _range > max_range_ahead_allowed)",
                               iring+rings_plane_min,
                               line_number()):
                 continue
