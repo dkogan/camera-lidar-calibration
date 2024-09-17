@@ -1079,6 +1079,7 @@ def fit( joint_observations,
     seed = pack_state(**seed_kwargs)
 
     x = cost(seed, use_distance_to_plane = False, report_imeas = True)
+
     x_camera = \
         x[imeas_camera_0:
           imeas_camera_0+Nmeas_camera_observation_all]
@@ -1093,6 +1094,10 @@ def fit( joint_observations,
                    x_lidar          = x_lidar,
                    x_regularization = x_regularization)
 
+    if np.any(np.abs(x)*SCALE_MEASUREMENT_PX > 1000) or \
+       np.any(np.abs(x)*SCALE_MEASUREMENT_M  > 100):
+        print("Error: seed has unbelievably-high errors. Giving up")
+        sys.exit(1)
 
     # Docs say:
     # * 0 (default) : work silently.
