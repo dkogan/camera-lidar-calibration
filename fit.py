@@ -1035,7 +1035,8 @@ def fit( joint_observations,
                  x_regularization*SCALE_MEASUREMENT_PX,
                  dict(legend = "Regularization residuals; plotted in pixels on the left y axis")),
                 _with = 'points',
-                _set  = measurement_boundaries,
+                _set  = measurement_boundaries + \
+                        [f'link y2 via y/{SCALE_MEASUREMENT_PX}*{SCALE_MEASUREMENT_M} inverse y*{SCALE_MEASUREMENT_PX}/{SCALE_MEASUREMENT_M}'],
                 ylabel  = 'Camera fit residual (pixels)',
                 y2label = 'LIDAR fit residual (m)',
                 hardcopy = filename)
