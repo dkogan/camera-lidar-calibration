@@ -411,20 +411,20 @@ def find_chessboard_in_plane_fit(points, ring, th,
 
         i = scan_indices_off_edge(i0, -NscansAtEdge)
         if i.size:
-            range0  = nps.mag(points[i0])
-            _range  = nps.mag(points[i ])
-            if reject_ring_if(np.any(range0 - _range > max_range_ahead_allowed),
-                              f"np.any(range0 - _range > max_range_ahead_allowed)",
+            range_at_scan_edge  = nps.mag(points[i0])
+            ange_off_scan_edge  = nps.mag(points[i ])
+            if reject_ring_if(range_at_scan_edge - np.min(ange_off_scan_edge) > max_range_ahead_allowed,
+                              f"range_at_scan_edge - np.min(ange_off_scan_edge) > max_range_ahead_allowed ~~~ {range_at_scan_edge:.2f} - {np.min(ange_off_scan_edge):.2f} > {max_range_ahead_allowed:.2f})",
                               iring+rings_plane_min,
                               line_number()):
                 continue
 
         i = scan_indices_off_edge(i1, NscansAtEdge)
         if i.size:
-            range0  = nps.mag(points[i1])
-            _range  = nps.mag(points[i ])
-            if reject_ring_if(np.any(range0 - _range > max_range_ahead_allowed),
-                              f"np.any(range0 - _range > max_range_ahead_allowed)",
+            range_at_scan_edge  = nps.mag(points[i1])
+            ange_off_scan_edge  = nps.mag(points[i ])
+            if reject_ring_if(range_at_scan_edge - np.min(ange_off_scan_edge) > max_range_ahead_allowed,
+                              f"range_at_scan_edge - np.min(ange_off_scan_edge) > max_range_ahead_allowed ~~~ {range_at_scan_edge:.2f} - {np.min(ange_off_scan_edge):.2f} > {max_range_ahead_allowed:.2f})",
                               iring+rings_plane_min,
                               line_number()):
                 continue
