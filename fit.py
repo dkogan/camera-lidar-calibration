@@ -1001,10 +1001,6 @@ def fit( joint_observations,
             (state['rt_ref_board'] / SCALE_MEASUREMENT_REGULARIZATION_rt).ravel()
         imeas += Nmeas_here
 
-        for iboard in range(len(joint_observations)):
-                rt_ref_board = state['rt_ref_board'][iboard]
-
-
         if imeas != Nmeasurements:
             raise Exception(f"cost() wrote an unexpected number of measurements: {imeas=}, {Nmeasurements=}")
 
