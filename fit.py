@@ -1879,6 +1879,12 @@ joint_observations = [get_joint_observation(bag, cache=cache,
                                             board_size_for_max = board_size_for_max) \
                       for bag in args.bag ]
 
+if not args.read_cache:
+    with open(args.cache, "wb") as f:
+        pickle.dump(cache, f)
+
+
+
 def sensors_observing(o):
     if o is None:
         return []
@@ -1952,11 +1958,6 @@ Nmeas_lidar_observation_all = \
     sum(0 if x is None else len(x) \
         for o in joint_observations \
         for x in o[1])
-
-if not args.read_cache:
-    with open(args.cache, "wb") as f:
-        pickle.dump(cache, f)
-
 
 NcameraObservations = [sum(0 if o[0][icamera] is None else 1 for o in joint_observations) \
                        for icamera in range(Ncameras)]
