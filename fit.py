@@ -295,6 +295,18 @@ def _traverse_sensor_connections( Nsensors,
         node_top.visit()
 
 
+
+def observation_sets(joint_observations):
+    for iboard in range(len(joint_observations)):
+        q_observed_all,plidar_all = joint_observations[iboard]
+        cameras = [(i,q_observed_all[i]) for i in range(len(q_observed_all)) \
+                   if q_observed_all[i] is not None]
+        lidars  = [(i,plidar_all[i]) for i in range(len(plidar_all)) \
+                   if plidar_all [i] is not None]
+
+        yield (cameras,lidars,iboard)
+
+
 def fit_seed( joint_observations,
               Nboards, Ncameras, Nlidars,
               Nmeas_camera_observation,
@@ -454,17 +466,6 @@ def fit_seed( joint_observations,
 
         '''
 
-        def observation_sets():
-            for iboard in range(len(joint_observations)):
-                q_observed_all,plidar_all = joint_observations[iboard]
-                cameras = [(i,q_observed_all[i]) for i in range(len(q_observed_all)) \
-                           if q_observed_all[i] is not None]
-                lidars  = [(i,plidar_all[i]) for i in range(len(plidar_all)) \
-                           if plidar_all [i] is not None]
-
-                yield (cameras,lidars,iboard)
-
-
         shared_observation_counts = np.zeros( (pairwise_N(),), dtype=int )
 
         # I preallocate too many. I will grow the buffer as I need to. The
@@ -489,7 +490,7 @@ def fit_seed( joint_observations,
             return shared_observation_pcenter_normal[idx][i]
 
 
-        for cameras,lidars,iboard in observation_sets():
+        for cameras,lidars,iboard in observation_sets(joint_observations):
 
             for ic0 in range(len(cameras)-1):
                 icamera0,q_observed0 = cameras[ic0]
