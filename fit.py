@@ -692,6 +692,58 @@ def fit_seed( joint_observations,
                 continue
             yield isensor1
 
+
+    def compute_board_poses():
+        Rt_lidar0_board  = np.zeros((Nboards,  4,3), dtype=float)
+
+        for iboard in range(len(joint_observations)):
+            q_observed_all = joint_observations[iboard][0]
+
+            icamera_first = \
+                next((i for i in range(len(q_observed_all)) if q_observed_all[i] is not None),
+                     None)
+            if icamera_first is not None:
+                # We have some camera observation. I arbitrarily use the first one
+
+                if not np.any(Rt_camera_board_cache[iboard,icamera_first]):
+                    raise Exception(f"Rt_camera_board_cache[{iboard=},{icamera_first=}] uninitialized")
+                Rt_lidar0_board[iboard] = \
+                    mrcal.compose_Rt(Rt_lidar0_camera[icamera_first],
+                                     Rt_camera_board_cache[iboard,icamera_first])
+
+            else:
+                # This board is observed only by LIDARs
+                plidar_all = joint_observations[iboard][1]
+                ilidar_first = \
+                    next((i for i in range(len(plidar_all)) if plidar_all[i] is not None),
+                         None)
+                if ilidar_first is None:
+                    raise Exception(f"Getting here is a bug: no camera or lidar observations for {iboard=}")
+
+                # I'm looking at the first LIDAR in the list. This is arbitrary. Any
+                # LIDAR will do
+                plidar = plidar_all[ilidar_first]
+                n = normal(plidar)
+                plidar_mean = np.mean(plidar, axis=-2)
+                # I have the normal to the board, in lidar coordinates. Compute an
+                # arbitrary rotation that matches this normal. This is unique only
+                # up to yaw
+                Rt_board_lidar = np.zeros((4,3), dtype=float)
+                Rt_board_lidar[:3,:] = mrcal.R_aligned_to_vector(n)
+                # I want p_center_board to map to plidar_mean: R_board_lidar
+                # plidar_mean + t_board_lidar = p_center_board
+                Rt_board_lidar[3,:] = p_center_board - mrcal.rotate_point_R(Rt_board_lidar[:3,:],plidar_mean)
+
+                if ilidar_first == 0:
+                    Rt_lidar0_board[iboard] = mrcal.invert_Rt(Rt_board_lidar)
+                else:
+                    Rt_lidar0_board[iboard] = \
+                        mrcal.compose_Rt(Rt_lidar0_lidar[ilidar_first - 1],
+                                         mrcal.invert_Rt(Rt_board_lidar))
+
+        return Rt_lidar0_board
+
+
     shared_observation_counts, shared_observation_pcenter_normal = connectivity_matrices()
 
     print(f"Sensor shared-observations matrix for {Nlidars=} followed by {Ncameras=}:")
@@ -713,52 +765,7 @@ def fit_seed( joint_observations,
 
     # All the sensor-sensor transforms computed. I compute the pose of the
     # boards
-    Rt_lidar0_board  = np.zeros((Nboards,  4,3), dtype=float)
-
-    for iboard in range(len(joint_observations)):
-        q_observed_all = joint_observations[iboard][0]
-
-        icamera_first = \
-            next((i for i in range(len(q_observed_all)) if q_observed_all[i] is not None),
-                 None)
-        if icamera_first is not None:
-            # We have some camera observation. I arbitrarily use the first one
-
-            if not np.any(Rt_camera_board_cache[iboard,icamera_first]):
-                raise Exception(f"Rt_camera_board_cache[{iboard=},{icamera_first=}] uninitialized")
-            Rt_lidar0_board[iboard] = \
-                mrcal.compose_Rt(Rt_lidar0_camera[icamera_first],
-                                 Rt_camera_board_cache[iboard,icamera_first])
-
-        else:
-            # This board is observed only by LIDARs
-            plidar_all = joint_observations[iboard][1]
-            ilidar_first = \
-                next((i for i in range(len(plidar_all)) if plidar_all[i] is not None),
-                     None)
-            if ilidar_first is None:
-                raise Exception(f"Getting here is a bug: no camera or lidar observations for {iboard=}")
-
-            # I'm looking at the first LIDAR in the list. This is arbitrary. Any
-            # LIDAR will do
-            plidar = plidar_all[ilidar_first]
-            n = normal(plidar)
-            plidar_mean = np.mean(plidar, axis=-2)
-            # I have the normal to the board, in lidar coordinates. Compute an
-            # arbitrary rotation that matches this normal. This is unique only
-            # up to yaw
-            Rt_board_lidar = np.zeros((4,3), dtype=float)
-            Rt_board_lidar[:3,:] = mrcal.R_aligned_to_vector(n)
-            # I want p_center_board to map to plidar_mean: R_board_lidar
-            # plidar_mean + t_board_lidar = p_center_board
-            Rt_board_lidar[3,:] = p_center_board - mrcal.rotate_point_R(Rt_board_lidar[:3,:],plidar_mean)
-
-            if ilidar_first == 0:
-                Rt_lidar0_board[iboard] = mrcal.invert_Rt(Rt_board_lidar)
-            else:
-                Rt_lidar0_board[iboard] = \
-                    mrcal.compose_Rt(Rt_lidar0_lidar[ilidar_first - 1],
-                                     mrcal.invert_Rt(Rt_board_lidar))
+    Rt_lidar0_board = compute_board_poses()
 
     return \
         dict(rt_ref_board  = \
