@@ -319,7 +319,7 @@ def fit_seed( joint_observations,
     Same arguments as fit()'''
 
 
-    def normal(p):
+    def normal_pointcloud(p):
         p_mean = np.mean(p, axis=-2)
         p = p - p_mean
         return mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
@@ -393,7 +393,7 @@ def fit_seed( joint_observations,
             out = np.zeros((2,3),dtype=float)
         np.mean(plidar, axis=-2,
                 out = out[0])
-        out[1] = normal(plidar)
+        out[1] = normal_pointcloud(plidar)
         # I make sure that the normal points towards the sensor; for consistency
         if nps.inner(out[0],out[1]) > 0:
             out[1] *= -1
@@ -723,7 +723,7 @@ def fit_seed( joint_observations,
                 # I'm looking at the first LIDAR in the list. This is arbitrary. Any
                 # LIDAR will do
                 plidar = plidar_all[ilidar_first]
-                n = normal(plidar)
+                n = normal_pointcloud(plidar)
                 plidar_mean = np.mean(plidar, axis=-2)
                 # I have the normal to the board, in lidar coordinates. Compute an
                 # arbitrary rotation that matches this normal. This is unique only
