@@ -409,7 +409,6 @@ def fit_seed( joint_observations,
     # results go here
     Rt_lidar0_camera = np.zeros((Ncameras, 4,3), dtype=float)
     Rt_lidar0_lidar  = np.zeros((Nlidars-1,4,3), dtype=float)
-    Rt_lidar0_board  = np.zeros((Nboards,  4,3), dtype=float)
 
     Rt_camera_board_cache = np.zeros((Nboards,Ncameras,4,3),
                                      dtype = float)
@@ -711,6 +710,9 @@ def fit_seed( joint_observations,
         if not np.any(Rt_lidar0_lidar[i]):
             raise Exception(f"ERROR: Don't have complete observations overlap: lidar {i+1} ({args.lidar_topic[i+1]}) not connected")
 
+    # All the sensor-sensor transforms computed. I compute the pose of the
+    # boards
+    Rt_lidar0_board  = np.zeros((Nboards,  4,3), dtype=float)
 
     for iboard in range(len(joint_observations)):
         q_observed_all = joint_observations[iboard][0]
