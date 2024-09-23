@@ -123,6 +123,12 @@ def find_plane(points,
 
     idx_plane, coefficients = seg.segment()
 
+    # # I want to compute the residual for each point. The model plane is defined
+    # # as all points p where inner(n,p)=d (assuming mag(n)=1)
+    # n = np.array(coefficients[:3])
+    # d = -coefficients[3]
+    # residuals = nps.inner(n,points) - d
+
     return idx_plane if len(idx_plane) else None
 
 def longest_run_of_0(x):
