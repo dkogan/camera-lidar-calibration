@@ -123,7 +123,7 @@ def find_plane(points,
 
     idx_plane, coefficients = seg.segment()
 
-    return idx_plane
+    return idx_plane if len(idx_plane) else None
 
 def longest_run_of_0(x):
     r'''Returns the start and end (exclusive) of the largest contiguous run of 0
@@ -629,8 +629,7 @@ def cluster_and_find_planes(points, idx,
                                    ksearch                = -1,
                                    search_radius          = 0.4,
                                    normal_distance_weight = 0.1)
-            if len(idx_plane) == 0:
-                break
+            if idx_plane is None: break
 
             # idx_plane indexes points[idx_cluster]
             # Convert it to index points[]
