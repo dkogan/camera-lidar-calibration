@@ -236,16 +236,14 @@ def find_chessboard_in_plane_fit(points, ring, th,
 
 
                                  # I look at a few LIDAR returns past the edges.
-                                 # The board should be in front of everything,
-                                 # not behind. So these adjacent LIDAR cannot
-                                 # have a shorter range. I look at NscansAtEdge
-                                 # LIDAR returns off to either side. This is set
-                                 # to a high number: I cannot be near anything
-                                 # that might be occluding. Such a high number
-                                 # is required to catch the roll cage bars that
-                                 # might split a view of a wall
-                                 NscansAtEdge = 20,
-                                 max_range_ahead_allowed = 0.2,
+                                 # If we're truly seeing the flat chessboard,
+                                 # everything off the edges should have a
+                                 # significantly different range. If not, we
+                                 # might be looking at part of some more complex
+                                 # shape. I look at NscansAtEdge LIDAR
+                                 # returns off to either side
+                                 NscansAtEdge               = 10,
+                                 min_abs_rangediff_off_edge = 0.5,
 
                                  distance_threshold = 1.0,
                                  offplane_threshold = 0.5,
@@ -381,6 +379,10 @@ def find_chessboard_in_plane_fit(points, ring, th,
                     _set=(f'arrow from {th[i0]},   graph 0 to {th[i0]},   graph 1 nohead',
                           f'arrow from {th[i1-1]}, graph 0 to {th[i1-1]}, graph 1 nohead'))
 
+        # I look at a few points past the edge of where we think the ring
+        # touched the edge of the board. I want the board to be clearly defined,
+        # so the ranges of all these points should be significantly different
+        # from the range to the board.
         def scan_indices_off_edge(i0, N):
 
             # I keep those indices. Initially I keep all of them
@@ -414,25 +416,22 @@ def find_chessboard_in_plane_fit(points, ring, th,
 
             return i[mask_keep]
 
-
-        i = scan_indices_off_edge(i0, -NscansAtEdge)
-        if i.size:
-            diff_range_off_scan_edge = nps.mag(points[i ]) - nps.mag(points[i0])
-            if reject_ring_if(np.min(diff_range_off_scan_edge) < -max_range_ahead_allowed,
-                              f"np.min(diff_range_off_scan_edge) < -max_range_ahead_allowed ~~~ {np.min(diff_range_off_scan_edge):.2f} < {-max_range_ahead_allowed:.2f})",
+        i01_offedge = \
+            ( scan_indices_off_edge(i0, -NscansAtEdge),
+              scan_indices_off_edge(i1, NscansAtEdge) )
+        reject = False
+        for i in i01_offedge:
+            if i.size == 0:
+                continue
+            abs_diff_range_off_scan_edge = np.abs(nps.mag(points[i ]) - nps.mag(points[i0]))
+            if reject_ring_if(np.min(abs_diff_range_off_scan_edge) < min_abs_rangediff_off_edge,
+                              f"np.min(abs_diff_range_off_scan_edge) < min_abs_rangediff_off_edge ~~~ {np.min(abs_diff_range_off_scan_edge):.2f} < {min_abs_rangediff_off_edge:.2f})",
                               iring+rings_plane_min,
                               line_number()):
-                continue
-
-        i = scan_indices_off_edge(i1, NscansAtEdge)
-        if i.size:
-            diff_range_off_scan_edge = nps.mag(points[i ]) - nps.mag(points[i1])
-            if reject_ring_if(np.min(diff_range_off_scan_edge) < -max_range_ahead_allowed,
-                              f"np.min(diff_range_off_scan_edge) < -max_range_ahead_allowed ~~~ {np.min(diff_range_off_scan_edge):.2f} < {-max_range_ahead_allowed:.2f})",
-                              iring+rings_plane_min,
-                              line_number()):
-                continue
-
+                reject = True
+                break
+        if reject:
+            continue
 
 
         mask_ring_accepted[iring] = 1
