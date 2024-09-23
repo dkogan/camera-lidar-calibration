@@ -405,7 +405,7 @@ def fit_seed( joint_observations,
     if Ncameras > 0:
         # The estimate of the center of the board, in board coords. This doesn't
         # need to be precise. If the board has an even number of corners, I just
-        # take the nearest one'''
+        # take the nearest one
         Nh,Nw = p_board_local.shape[:2]
         p_center_board = p_board_local[Nh//2,Nw//2,:]
 
