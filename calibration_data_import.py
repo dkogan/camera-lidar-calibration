@@ -376,8 +376,8 @@ def find_chessboard_in_plane_fit(points, ring, th,
                     nps.mag(points[ring == iring + rings_plane_min]),
                     xlabel = "Azimuth (rad)",
                     ylabel = "Range (m)",
-                    _set=(f'arrow from {th[i0]},   graph 0 to {th[i0]},   graph 1 nohead',
-                          f'arrow from {th[i1-1]}, graph 0 to {th[i1-1]}, graph 1 nohead'))
+                    _set=(f'arrow from {th[i0]}, graph 0 to {th[i0]}, graph 1 nohead',
+                          f'arrow from {th[i1]}, graph 0 to {th[i1]}, graph 1 nohead'))
 
         # I look at a few points past the edge of where we think the ring
         # touched the edge of the board. I want the board to be clearly defined,
