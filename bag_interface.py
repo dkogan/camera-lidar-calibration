@@ -142,6 +142,14 @@ def bag_messages_generator(bag, topics):
             dtype = dtype_from_msg(msg, connection.msgtype)
             data  = np.frombuffer(msg.data, dtype = dtype)
 
+            # 2023-11-01 dataset contains data that is almost completely
+            # comprised of duplicated points. The only difference in these
+            # duplicates is the 'ret' field. This is always 0 or 1. Mostly these
+            # alternate, with a small period of all 1. I have no idea what this
+            # means, so I only take ret==0; this suppresses the duplicates
+            if 'ret' in dtype.fields:
+                data = data[data['ret'] == 0]
+
             time_header_ns = msg.header.stamp.sec*1000000000 + msg.header.stamp.nanosec
 
             yield dict( time_ns        = time_ns,
