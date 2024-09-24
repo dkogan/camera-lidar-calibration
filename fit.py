@@ -322,7 +322,12 @@ def fit_seed( joint_observations,
     def normal_pointcloud(p):
         p_mean = np.mean(p, axis=-2)
         p = p - p_mean
-        return mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
+        v = mrcal.sorted_eig(nps.matmult(nps.transpose(p),p))[1][:,0]
+
+        # I point v outwards, to match the coordinate system of chessboards
+        if nps.inner(p_mean,v) < 0:
+            return -v
+        return v
 
 
     # joint_observations is
