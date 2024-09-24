@@ -243,7 +243,7 @@ def find_chessboard_in_plane_fit(points, ring, th,
                                  # shape. I look at NscansAtEdge LIDAR
                                  # returns off to either side
                                  NscansAtEdge               = 10,
-                                 min_abs_rangediff_off_edge = 0.5,
+                                 min_abs_rangediff_off_edge = 0.2,
 
                                  distance_threshold = 1.0,
                                  offplane_threshold = 0.5,
