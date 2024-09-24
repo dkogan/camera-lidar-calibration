@@ -772,6 +772,59 @@ def fit_seed( joint_observations,
     # boards
     Rt_lidar0_board = compute_board_poses()
 
+    # And now I confirm to make sure the seed is reasonable. At each instant in
+    # time I make sure that all sensors are observing the board at roughly the
+    # same location, orientation. It will be rough, since here we're checking a
+    # seed solve
+    validation_msgs = []
+    bag_exclusions  = ''
+
+    validation_failed = False
+    for iboard in range(len(joint_observations)):
+        q_observed_all = joint_observations[iboard][0]
+        if any(q is not None for q in q_observed_all):
+            raise Exception("Camera observations not supported here at this time; LIDAR only")
+        # Looking at LIDAR only
+
+
+        n_lidar0_should  = Rt_lidar0_board[iboard][:3,2]
+        p0_lidar0_should = Rt_lidar0_board[iboard][ 3,:]
+
+        plidar_all = joint_observations[iboard][1]
+
+        for ilidar,plidar in enumerate(plidar_all):
+            if plidar is None: continue
+
+            n           = normal_pointcloud(plidar)
+            plidar_mean = np.mean(plidar, axis=-2)
+
+            if ilidar == 0:
+                n_lidar0_observed  = n
+                p0_lidar0_observed = plidar_mean
+
+            else:
+                n_lidar0_observed  = mrcal.rotate_point_R(Rt_lidar0_lidar[ilidar-1,:3,:], n)
+                p0_lidar0_observed = mrcal.transform_point_Rt(Rt_lidar0_lidar[ilidar-1], plidar_mean)
+
+            cos_err = np.clip(nps.inner(n_lidar0_observed, n_lidar0_should), -1., 1.)
+            th_err_deg = np.arccos(cos_err) * 180./np.pi
+            p0_err = nps.mag(p0_lidar0_should - p0_lidar0_observed)
+
+            msg = f"{iboard=} {p0_err=:.2f} {th_err_deg=:.2f}"
+            if p0_err > 4. or th_err_deg > 20.:
+                validation_failed = True
+                validation_msgs.append(f"FAILED: {msg}")
+                bag_exclusions += f"  --exclude-bag '{args.bag[idx_observations[iboard]]}' \\\n"
+            else:
+                validation_msgs.append(f"{msg}")
+
+    if validation_failed:
+        for msg in validation_msgs:
+            print(msg)
+        print("To exclude the really bad bags:")
+        print(bag_exclusions)
+        raise Exception(f"ERROR: seed pose inconsistent. Giving up")
+
     return \
         dict(rt_ref_board  = \
                  nps.atleast_dims(mrcal.rt_from_Rt(Rt_lidar0_board),
