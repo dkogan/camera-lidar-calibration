@@ -32,6 +32,9 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
+    parser.add_argument('--maxrange',
+                        type=float,
+                        help = '''If given, cut off the points at this range''')
     parser.add_argument('--period',
                         type=float,
                         default = 0,
@@ -85,6 +88,12 @@ for bag_glob in args.bags:
 
         xyz       = p['xyz']
         intensity = p['intensity']
+
+        if args.maxrange is not None:
+            i = nps.norm2(xyz) <= args.maxrange * args.maxrange
+            xyz       = xyz[i]
+            intensity = intensity[i]
+
         gp.plot(xyz[:,0], xyz[:,1], xyz[:,2], intensity,
                 tuplesize = 4,
                 _with  = 'dots',
