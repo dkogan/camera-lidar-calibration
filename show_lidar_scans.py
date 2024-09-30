@@ -10,8 +10,8 @@ SYNOPSIS
       --set "xrange [-20:20]" \
       --set "yrange [-20:20]" \
       --set "zrange [-2:2]"   \
-      'camera-lidar*.bag'     \
-      /lidar/vl_points_1
+      /lidar/vl_points_1      \
+      'camera-lidar*.bag'
     [A plot pops up showing the scans from the bags, updating every 2 sec]
 
 This is a display tool to show the LIDAR scans one at a time. It's a very poor
