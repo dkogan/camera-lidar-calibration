@@ -96,7 +96,7 @@ for bag_glob in args.bags:
 
         gp.plot(xyz[:,0], xyz[:,1], xyz[:,2], intensity,
                 tuplesize = 4,
-                _with  = 'dots',
+                _with  = 'dots palette',
                 square = True,
                 _3d    = True,
                 _set   = args.set,
