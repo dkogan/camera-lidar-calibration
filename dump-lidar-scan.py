@@ -6,7 +6,8 @@ SYNOPSIS
 
   $ ./dump-lidar-scan.py     \
       /lidar/vl_points_1     \
-      'camera-lidar*.bag' > lidar.dump
+      'camera-lidar*.bag'
+  Wrote '/tmp/tst.dat'
 
 This tool is primarily for developing and debugging C code that interacts with
 the LIDAR data. This tool makes various assumptions. Read the code before
@@ -27,6 +28,10 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
+    parser.add_argument('--dense',
+                        action = 'store_true',
+                        help = '''If given, generate dense data. This includes
+                        (0,0,0) points in the no-data spots''')
     parser.add_argument('lidar-topic',
                         type=str,
                         help = '''The LIDAR topic we're looking at''')
@@ -57,9 +62,24 @@ points    = array['xyz']
 intensity = array['intensity']
 ring      = array['ring']
 
+
 if not (np.min(ring) == 0 and np.max(ring) == 31):
     raise Exception("I assume EXACTLY 32 rings for now")
 Nrings = 32
+
+
+if not args.dense:
+    for iring in range(Nrings):
+        idx = ring==iring
+        filename = f"/tmp/tst-{iring:02d}.dat"
+        points[idx].tofile(filename)
+        print(f"Wrote '{filename}'")
+
+    sys.exit(0)
+
+
+
+
 
 th = np.arctan2( points[:,1], points[:,0] )
 
@@ -94,4 +114,6 @@ for iring in range(Nrings):
 
     points_dense[iring,ith,:] = points_here
 
-points_dense.tofile(sys.stdout)
+filename = "/tmp/tst.dat"
+points_dense.tofile(filename)
+print(f"Wrote '{filename}'")
