@@ -35,6 +35,10 @@ def parse_args():
     parser.add_argument('--maxrange',
                         type=float,
                         help = '''If given, cut off the points at this range''')
+    parser.add_argument('--ring',
+                        type=int,
+                        help = '''If given, show ONLY data from this ring.
+                        Otherwise, display all of them''')
     parser.add_argument('--period',
                         type=float,
                         default = 0,
@@ -88,6 +92,11 @@ for bag_glob in args.bags:
 
         xyz       = p['xyz']
         intensity = p['intensity']
+
+        if args.ring is not None:
+            i = p['ring'] == args.ring
+            xyz       = xyz[i]
+            intensity = intensity[i]
 
         if args.maxrange is not None:
             i = nps.norm2(xyz) <= args.maxrange * args.maxrange
