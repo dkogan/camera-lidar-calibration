@@ -39,6 +39,9 @@ def parse_args():
                         type=int,
                         help = '''If given, show ONLY data from this ring.
                         Otherwise, display all of them''')
+    parser.add_argument('--xy',
+                        action='store_true',
+                        help = '''If given, I make a 2D plot, ignoring the z axis''')
     parser.add_argument('--period',
                         type=float,
                         default = 0,
@@ -103,11 +106,16 @@ for bag_glob in args.bags:
             xyz       = xyz[i]
             intensity = intensity[i]
 
-        gp.plot(xyz[:,0], xyz[:,1], xyz[:,2], intensity,
-                tuplesize = 4,
+        if not args.xy:
+            data_tuple = (xyz[:,0], xyz[:,1], xyz[:,2])
+        else:
+            data_tuple = (xyz[:,0], xyz[:,1])
+        gp.plot(*data_tuple,
+                intensity,
+                tuplesize = len(data_tuple)+1,
                 _with  = 'dots palette',
                 square = True,
-                _3d    = True,
+                _3d    = not args.xy,
                 _set   = args.set,
                 _unset = args.unset,
                 title  = f"{bag=} {lidar_topic=}",
