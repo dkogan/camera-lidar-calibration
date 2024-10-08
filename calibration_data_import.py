@@ -839,20 +839,25 @@ def get_lidar_observation(bag, lidar_topic,
 
     try:
         msg = next(bag_messages_generator(bag, (lidar_topic,)))
+    except StopIteration:
+        msg = None
     except Exception as e:
         raise Exception(f"Error parsing message of {lidar_topic=} from {bag=}") from e
 
-    p_lidar = \
-        find_chessboard_in_view(None,
-                                msg['array']['xyz'].astype(np.float64),
-                                msg['array']['ring'],
-                                p_board_local = p_board_local,
-                                what          = what,
-                                viz                          = viz,
-                                viz_show_only_accepted       = viz_show_only_accepted,
-                                viz_show_point_cloud_context = viz_show_point_cloud_context,
-                                board_size_for_max = board_size_for_max,
-                                board_size_for_min = board_size_for_min)
+    if msg is not None:
+        p_lidar = \
+            find_chessboard_in_view(None,
+                                    msg['array']['xyz'].astype(np.float64),
+                                    msg['array']['ring'],
+                                    p_board_local = p_board_local,
+                                    what          = what,
+                                    viz                          = viz,
+                                    viz_show_only_accepted       = viz_show_only_accepted,
+                                    viz_show_point_cloud_context = viz_show_point_cloud_context,
+                                    board_size_for_max = board_size_for_max,
+                                    board_size_for_min = board_size_for_min)
+    else:
+        p_lidar = None
 
     if cache is not None: cache[lidar_topic] = p_lidar
     return p_lidar
