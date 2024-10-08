@@ -27,6 +27,9 @@ static const float threshold_min_cos_angle_error_same_direction = 0.996194698092
 // round up
 static const int Nsegments_per_rotation = (int)((Npoints_per_rotation + Npoints_per_segment-1) / Npoints_per_segment);
 
+static const int threshold_min_Nsegments_in_chunk = 5;
+
+
 typedef union
 {
     struct
@@ -416,6 +419,12 @@ typedef struct
     int n;
 } stack_t;
 
+typedef struct
+{
+    node_t segments[128];
+    int n;
+} segment_list_t;
+
 static bool stack_empty(stack_t* stack)
 {
     return (stack->n == 0);
@@ -502,7 +511,7 @@ static bool plane_compatible(const plane_t*         plane,
 
 static void try_visit(stack_t* stack,
                       // out
-                      int* Nsegments_in_component,
+                      segment_list_t* segment_list,
                       // what we're trying
                       const int iring, const int isegment,
                       // context
@@ -522,15 +531,21 @@ static void try_visit(stack_t* stack,
         node_t* node = stack_push(stack);
         if(node == NULL)
         {
-            MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of the 'stack' variable");
+            MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of 'stack_t.nodes'");
             return;
         }
+        if(segment_list->n == (int)(sizeof(segment_list->segments)/sizeof(segment_list->segments[0])))
+        {
+            MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of 'segment_list_t.segments'");
+            return;
+        }
+
         node->isegment = isegment;
         node->iring    = iring;
 
         segment->visited = true;
 
-        (*Nsegments_in_component)++;
+        segment_list->segments[segment_list->n++] = *node;
     }
 }
 
@@ -579,29 +594,33 @@ static void boards_from_segments(plane_segment_t* segments, // non-const to be a
             segment ->visited = true;
             segment1->visited = true;
 
-            int Nsegments_in_component = 2;
+            segment_list_t segment_list = {.n = 2,
+                                           .segments = {[0] = {.isegment = isegment,
+                                                               .iring    = iring},
+                                                        [1] = {.isegment = isegment,
+                                                               .iring    = iring1}}};
             while(!stack_empty(&stack))
             {
                 node_t* node = stack_pop(&stack);
                 try_visit(&stack,
-                          &Nsegments_in_component,
+                          &segment_list,
                           node->iring-1, node->isegment, &plane,
                           segments, Nrings, Nsegments_per_rotation);
                 try_visit(&stack,
-                          &Nsegments_in_component,
+                          &segment_list,
                           node->iring+1, node->isegment, &plane,
                           segments, Nrings, Nsegments_per_rotation);
                 try_visit(&stack,
-                          &Nsegments_in_component,
+                          &segment_list,
                           node->iring, node->isegment-1, &plane,
                           segments, Nrings, Nsegments_per_rotation);
                 try_visit(&stack,
-                          &Nsegments_in_component,
+                          &segment_list,
                           node->iring, node->isegment+1, &plane,
                           segments, Nrings, Nsegments_per_rotation);
             }
 
-            if(Nsegments_in_component == 2)
+            if(segment_list.n == 2)
             {
                 // This hypothetical ring-ring component is too small. The
                 // next-ring segment might still be valid in another component,
@@ -609,7 +628,17 @@ static void boards_from_segments(plane_segment_t* segments, // non-const to be a
                 segment1->visited = false;
             }
 
-            printf("## Nsegments_in_component = %d\n", Nsegments_in_component);
+            printf("## Nsegments_in_component = %d\n", segment_list.n);
+
+            if(dump)
+            {
+            }
+
+
+            if(segment_list.n >= threshold_min_Nsegments_in_chunk)
+            {
+                //////
+            }
         }
     }
 }
@@ -696,7 +725,7 @@ int main(void)
                 if(!(segments[iring*Nsegments_per_rotation + i].v.x == 0 &&
                      segments[iring*Nsegments_per_rotation + i].v.y == 0 &&
                      segments[iring*Nsegments_per_rotation + i].v.z == 0))
-                    printf("%f %f %d %f\n",
+                    printf("%f %f segment-ring-%02d %f\n",
                            segments[iring*Nsegments_per_rotation + i].p.x,
                            segments[iring*Nsegments_per_rotation + i].p.y,
                            iring,
