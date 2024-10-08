@@ -582,6 +582,11 @@ static void try_visit(stack_t* stack,
        plane_compatible(plane, segment))
     {
         node_t* node = stack_push(stack);
+
+        // Do this before the error checking; otherwise the error conditions may
+        // go into an infinite loop
+        segment->visited = true;
+
         if(node == NULL)
         {
             MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of 'stack_t.nodes'");
@@ -595,8 +600,6 @@ static void try_visit(stack_t* stack,
 
         node->isegment = isegment;
         node->iring    = iring;
-
-        segment->visited = true;
 
         segment_list->segments[segment_list->n++] = *node;
     }
