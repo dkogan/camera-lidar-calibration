@@ -412,7 +412,7 @@ typedef struct
 
 typedef struct
 {
-    node_t nodes[32];
+    node_t nodes[128];
     int n;
 } stack_t;
 
