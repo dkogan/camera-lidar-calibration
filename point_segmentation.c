@@ -32,7 +32,7 @@ static const int   threshold_max_Ngap                       = 2;
 static const float threshold_max_deviation_off_segment_line = 0.05f;
 static const int   Nrings                                   = 32;
 
-static const float threshold_max_cos_angle_error_normal         = 0.0871557427476; // cos(90-5deg)
+static const float threshold_max_cos_angle_error_normal         = 0.087155742747f; // cos(90-5deg)
 static const float threshold_min_cos_angle_error_same_direction = 0.996194698092f; // cos(5deg)
 // round up
 static const int Nsegments_per_rotation = (int)((Npoints_per_rotation + Npoints_per_segment-1) / Npoints_per_segment);
