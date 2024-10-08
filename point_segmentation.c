@@ -22,6 +22,8 @@ static const int   threshold_max_Ngap                       = 2;
 static const float threshold_max_deviation_off_segment_line = 0.05f;
 static const int   Nrings                                   = 32;
 
+static const float threshold_max_cos_angle_error_normal         = 0.0871557427476; // cos(90-5deg)
+static const float threshold_min_cos_angle_error_same_direction = 0.996194698092f; // cos(5deg)
 // round up
 static const int Nsegments_per_rotation = (int)((Npoints_per_rotation + Npoints_per_segment-1) / Npoints_per_segment);
 
@@ -73,6 +75,12 @@ static point3f_t sub(const point3f_t a, const point3f_t b)
                         .y = a.y - b.y,
                         .z = a.z - b.z };
 }
+static point3f_t cross(const point3f_t a, const point3f_t b)
+{
+    return (point3f_t){ .x = a.y*b.z - a.z*b.y,
+                        .y = a.z*b.x - a.x*b.z,
+                        .z = a.x*b.y - a.y*b.x };
+}
 
 
 
@@ -80,7 +88,18 @@ typedef struct
 {
     point3f_t p; // the center
     point3f_t v; // a direction vector in the plane; may not be normalized
+
+    bool visited : 1;
 } plane_segment_t;
+
+typedef struct
+{
+    point3f_t p; // A point somewhere on the plane
+
+    // A normal to the plane direction vector in the plane; not necessarily
+    // normalized
+    point3f_t n;
+} plane_t;
 
 
 static
@@ -122,6 +141,13 @@ bool point_is_valid(const point3f_t* p,
     return true;
 }
 
+static
+bool segment_is_valid(const plane_segment_t* segment)
+{
+    return !(segment->v.x == 0 &&
+             segment->v.y == 0 &&
+             segment->v.z == 0);
+}
 
 
 /* bitarray. Test it like this:
@@ -379,6 +405,214 @@ fit_plane_from_ring(// out
                    p, ipoint0, Npoints-1);
 }
 
+typedef struct
+{
+    uint16_t isegment, iring;
+} node_t;
+
+typedef struct
+{
+    node_t nodes[32];
+    int n;
+} stack_t;
+
+static bool stack_empty(stack_t* stack)
+{
+    return (stack->n == 0);
+}
+// returns the node to fill in, or NULL if full
+static node_t* stack_push(stack_t* stack)
+{
+    if(stack->n == (int)(sizeof(stack->nodes)/sizeof(stack->nodes[0])))
+        return NULL;
+    return &stack->nodes[stack->n++];
+}
+// returns the node, or NULL if empty
+static node_t* stack_pop(stack_t* stack)
+{
+    if(stack->n == 0)
+        return NULL;
+    return &stack->nodes[--stack->n];
+}
+
+static bool is_normal(const point3f_t v,
+                      const point3f_t n)
+{
+    // inner(v,n) = cos magv magn ->
+    // cos = inner / (magv magn) ->
+    // cos^2 = inner^2 / (norm2v norm2n) ->
+    // cos^2 norm2v norm2n = inner^2
+    float cos_mag_mag = inner(n,v);
+
+    return
+        cos_mag_mag*cos_mag_mag <
+        threshold_max_cos_angle_error_normal*threshold_max_cos_angle_error_normal*norm2(n)*norm2(v);
+}
+
+static bool is_same_direction(const point3f_t a,
+                              const point3f_t b)
+{
+    // inner(a,b) = cos maga magb ->
+    // cos = inner / (maga magb) ->
+    // cos^2 = inner^2 / (norm2a norm2b) ->
+    // cos^2 norm2a norm2b = inner^2
+    float cos_mag_mag = inner(a,b);
+
+    return
+        cos_mag_mag > 0.0f &&
+        cos_mag_mag*cos_mag_mag >
+        threshold_min_cos_angle_error_same_direction*threshold_min_cos_angle_error_same_direction*norm2(a)*norm2(b);
+}
+
+static bool plane_from_segment_segment(// out
+                                       plane_t* plane,
+                                       // in
+                                       const plane_segment_t* s0,
+                                       const plane_segment_t* s1)
+{
+    // I want:
+    //   inner(p1-p0, n=cross(v0,v1)) = 0
+    point3f_t dp = sub(s1->p, s0->p);
+
+    // The two normal estimates must be close
+    point3f_t n0 = cross(dp,s0->v);
+    point3f_t n1 = cross(dp,s1->v);
+
+    if(!is_same_direction(n0,n1))
+        return false;
+
+    plane->n = mean(n0,n1);
+    plane->p = mean(s0->p, s1->p);
+    return true;
+}
+
+
+static bool plane_compatible(const plane_t*         plane,
+                             const plane_segment_t* segment)
+{
+    // both segment->p and segment->v must lie in the plane
+
+    // I want:
+    //   inner(segv,   n) = 0
+    //   inner(segp-p, n) = 0
+    return
+        is_normal(segment->v, plane->n) &&
+        is_normal(sub(segment->p, plane->p), plane->n);
+}
+
+static void try_visit(stack_t* stack,
+                      // out
+                      int* Nsegments_in_component,
+                      // what we're trying
+                      const int iring, const int isegment,
+                      // context
+                      const plane_t* plane,
+                      plane_segment_t* segments, // non-const to be able to set "visited"
+                      const int Nrings, const int Nsegments_per_rotation)
+{
+    if(iring    < 0 || iring    >= Nrings                ) return;
+    if(isegment < 0 || isegment >= Nsegments_per_rotation) return;
+
+    plane_segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
+
+    if(segment_is_valid(segment) &&
+       !segment->visited &&
+       plane_compatible(plane, segment))
+    {
+        node_t* node = stack_push(stack);
+        if(node == NULL)
+        {
+            MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of the 'stack' variable");
+            return;
+        }
+        node->isegment = isegment;
+        node->iring    = iring;
+
+        segment->visited = true;
+
+        (*Nsegments_in_component)++;
+    }
+}
+
+static void boards_from_segments(plane_segment_t* segments, // non-const to be able to set "visited"
+                                 const int Nrings, const int Nsegments_per_rotation)
+{
+    for(int iring = 0; iring < Nrings-1; iring++)
+    {
+        for(int isegment = 0; isegment < Nsegments_per_rotation; isegment++)
+        {
+            plane_segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
+            if(!(segment_is_valid(segment) && !segment->visited))
+                continue;
+
+            // A single segment has only a direction. To define a plane I need
+            // another non-colinear segment, and I can get it from one of the
+            // two adjacent rings. Once I get a plane I find the biggest
+            // connected component of plane-consistent segments around this one
+            //
+            // The biggest-connected-component routine is traditionally done
+            // with recursion, but setting it up manually allows me to better
+            // control exactly what is pushed onto the stack, and minimize it
+
+
+            const int iring1 = iring+1;
+
+            plane_segment_t* segment1 = &segments[iring1*Nsegments_per_rotation + isegment];
+            if(!(segment_is_valid(segment1) && !segment1->visited))
+                continue;
+
+            plane_t plane;
+            if(!plane_from_segment_segment(&plane,
+                                           segment,segment1))
+                continue;
+
+            stack_t stack = {};
+
+            node_t* node0 = stack_push(&stack);
+            node0->iring    = iring;
+            node0->isegment = isegment;
+
+            node_t* node1 = stack_push(&stack);
+            node1->iring    = iring1;
+            node1->isegment = isegment;
+
+            segment ->visited = true;
+            segment1->visited = true;
+
+            int Nsegments_in_component = 2;
+            while(!stack_empty(&stack))
+            {
+                node_t* node = stack_pop(&stack);
+                try_visit(&stack,
+                          &Nsegments_in_component,
+                          node->iring-1, node->isegment, &plane,
+                          segments, Nrings, Nsegments_per_rotation);
+                try_visit(&stack,
+                          &Nsegments_in_component,
+                          node->iring+1, node->isegment, &plane,
+                          segments, Nrings, Nsegments_per_rotation);
+                try_visit(&stack,
+                          &Nsegments_in_component,
+                          node->iring, node->isegment-1, &plane,
+                          segments, Nrings, Nsegments_per_rotation);
+                try_visit(&stack,
+                          &Nsegments_in_component,
+                          node->iring, node->isegment+1, &plane,
+                          segments, Nrings, Nsegments_per_rotation);
+            }
+
+            if(Nsegments_in_component == 2)
+            {
+                // This hypothetical ring-ring component is too small. The
+                // next-ring segment might still be valid in another component,
+                // with a different plane, without segment. So I allow it again.
+                segment1->visited = false;
+            }
+
+            printf("## Nsegments_in_component = %d\n", Nsegments_in_component);
+        }
+    }
+}
 
 
 
@@ -470,6 +704,9 @@ int main(void)
             }
         }
     }
+
+    boards_from_segments(segments,
+                         Nrings, Nsegments_per_rotation);
 
     return 0;
 }
