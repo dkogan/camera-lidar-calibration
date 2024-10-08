@@ -12,6 +12,16 @@
 #define MSG(fmt, ...) fprintf(stderr, "%s(%d): " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
 
+static bool dump = true;
+
+
+
+
+
+
+
+
+
 
 static const int   threshold_min_Npoints_in_segment         = 10;
 static const int   threshold_max_Npoints_invalid_segment    = 5;
@@ -632,6 +642,21 @@ static void boards_from_segments(plane_segment_t* segments, // non-const to be a
 
             if(dump)
             {
+                static int icluster = 0;
+
+                for(int i=0; i<segment_list.n; i++)
+                {
+                    const node_t* node = &segment_list.segments[i];
+                    const plane_segment_t* segment = &segments[node->iring*Nsegments_per_rotation + node->isegment];
+
+                    printf("%f %f cluster-%02d %f\n",
+                           segment->p.x,
+                           segment->p.y,
+                           icluster,
+                           segment->p.z);
+                }
+
+                icluster++;
             }
 
 
@@ -645,8 +670,6 @@ static void boards_from_segments(plane_segment_t* segments, // non-const to be a
 
 
 
-static bool dump = true;
-
 int main(void)
 {
     // from dump-lidar-scan.py
@@ -656,7 +679,7 @@ int main(void)
     plane_segment_t segments[Nrings*Nsegments_per_rotation] = {};
 
     if(dump)
-        printf("# x y iring z\n");
+        printf("# x y what z\n");
 
     for(int iring=0; iring<Nrings; iring++)
     {
