@@ -13,7 +13,21 @@
 
 
 static bool dump = true;
+static int debug_iring = 10;
+static float debug_xmin = -1e6f;
+static float debug_xmax =  1e6f;
+static float debug_ymin = -1e6f;
+static float debug_ymax =  -3.f;
 
+#define DEBUG_ERR_ON_TRUE(what, p, fmt, ...)                            \
+    ({  if(debug && (what))                                             \
+        {                                                               \
+            MSG("REJECTED (%.2f %.2f %.2f) at %s():%d because " #what ": " fmt, \
+                (p)->x,(p)->y,(p)->z,                                   \
+                __func__, __LINE__, ##__VA_ARGS__);                     \
+        }                                                               \
+        what;                                                           \
+    })
 
 
 
@@ -139,16 +153,20 @@ int isegment_from_th(const float th_rad)
 }
 static
 bool point_is_valid(const point3f_t* p,
-                    const float dth_rad)
+                    const float dth_rad,
+                    const bool debug)
 {
-    if(norm2(*p) > threshold_max_range*threshold_max_range)
+    if( DEBUG_ERR_ON_TRUE( norm2(*p) > threshold_max_range*threshold_max_range,
+                           p,
+                           "%f > %f", norm2(*p), threshold_max_range*threshold_max_range ))
         return false;
-
 
     const int Ngap = (int)( 0.5f + fabsf(dth_rad) * (float)Npoints_per_rotation / (2.0f*M_PI) );
 
     // Ngap==1 is the expected, normal value. Anything larger is a gap
-    if((Ngap-1) > threshold_max_Ngap)
+    if( DEBUG_ERR_ON_TRUE((Ngap-1) > threshold_max_Ngap,
+                          p,
+                          "%d > %d", Ngap-1, threshold_max_Ngap))
         return false;
 
     return true;
@@ -336,13 +354,20 @@ void finish_segment(// out
                     const uint64_t* bitarray_invalid,
                     const point3f_t* p,
                     const int ipoint0,
-                    const int ipoint1)
+                    const int ipoint1,
+                    const bool debug)
 {
     const int Npoints = ipoint1 - ipoint0 + 1 - Npoints_invalid_in_segment;
 
-    if(Npoints_invalid_in_segment > threshold_max_Npoints_invalid_segment ||
-       Npoints < threshold_min_Npoints_in_segment ||
-       !planar(p,ipoint0,ipoint1,bitarray_invalid))
+    if(DEBUG_ERR_ON_TRUE(Npoints_invalid_in_segment > threshold_max_Npoints_invalid_segment,
+                         &p[ipoint0],
+                         "%d > %d", Npoints_invalid_in_segment, threshold_max_Npoints_invalid_segment) ||
+       DEBUG_ERR_ON_TRUE(Npoints < threshold_min_Npoints_in_segment,
+                         &p[ipoint0],
+                         "%d < %d", Npoints, threshold_min_Npoints_in_segment) ||
+       DEBUG_ERR_ON_TRUE(!planar(p,ipoint0,ipoint1,bitarray_invalid),
+                         &p[ipoint0],
+                         ""))
     {
         *segment = (plane_segment_t){};
         return;
@@ -359,7 +384,8 @@ fit_plane_from_ring(// out
 
                     // in
                     const point3f_t* p,
-                    const int Npoints)
+                    const int Npoints,
+                    const bool debug_this_ring)
 {
     // I want this to be fast, and I'm looking for very clear planes, so I do a
     // crude thing here:
@@ -389,6 +415,13 @@ fit_plane_from_ring(// out
 
     for(int ipoint=1; ipoint<Npoints; ipoint++)
     {
+        const bool debug =
+            debug_this_ring &&
+            ((debug_xmin < p[ipoint0 ].x && p[ipoint0 ].x < debug_xmax &&
+              debug_ymin < p[ipoint0 ].y && p[ipoint0 ].y < debug_ymax) ||
+             (debug_xmin < p[ipoint-1].x && p[ipoint-1].x < debug_xmax &&
+              debug_ymin < p[ipoint-1].y && p[ipoint-1].y < debug_ymax));
+
         const float th_rad = th_from_point(&p[ipoint]);
         const int isegment = isegment_from_th(th_rad);
         if(isegment != isegment0)
@@ -396,7 +429,8 @@ fit_plane_from_ring(// out
             finish_segment(&segments[isegment0],
                            Npoints_invalid_in_segment,
                            bitarray_invalid,
-                           p, ipoint0, ipoint-1);
+                           p, ipoint0, ipoint-1,
+                           debug);
 
             ipoint0   = ipoint;
             isegment0 = isegment;
@@ -404,7 +438,8 @@ fit_plane_from_ring(// out
             memset(bitarray_invalid, 0, Nwords_bitarray_invalid*sizeof(uint64_t));
         }
 
-        if(!point_is_valid(&p[ipoint], th_rad - th_rad_prev))
+        if(!point_is_valid(&p[ipoint], th_rad - th_rad_prev,
+                           debug))
         {
             Npoints_invalid_in_segment++;
             bitarray64_set(bitarray_invalid, ipoint-ipoint0);
@@ -412,10 +447,18 @@ fit_plane_from_ring(// out
 
         th_rad_prev = th_rad;
     }
+
+    const bool debug =
+        debug_this_ring &&
+        ((debug_xmin < p[ipoint0  ].x && p[ipoint0  ].x < debug_xmax &&
+          debug_ymin < p[ipoint0  ].y && p[ipoint0  ].y < debug_ymax) ||
+         (debug_xmin < p[Npoints-1].x && p[Npoints-1].x < debug_xmax &&
+          debug_ymin < p[Npoints-1].y && p[Npoints-1].y < debug_ymax));
     finish_segment(&segments[isegment0],
                    Npoints_invalid_in_segment,
                    bitarray_invalid,
-                   p, ipoint0, Npoints-1);
+                   p, ipoint0, Npoints-1,
+                   debug);
 }
 
 typedef struct
@@ -728,7 +771,8 @@ int main(void)
         fit_plane_from_ring(// out
                             &segments[Nsegments_per_rotation*iring],
                             // in
-                            p, Npoints);
+                            p, Npoints,
+                            iring == debug_iring);
 
         if(dump)
         {
