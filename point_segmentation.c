@@ -459,11 +459,18 @@ fit_plane_from_ring(// out
             memset(bitarray_invalid, 0, Nwords_bitarray_invalid*sizeof(uint64_t));
         }
 
-        if(!point_is_valid(&points[ipoint], th_rad - th_rad_prev,
-                           debug))
+        // This should ALWAYS be true. But some datasets are weird, and the
+        // azimuths don't changes as quickly as expected, and we have extra
+        // points in each segment. I ignore those; hopefully they're not
+        // important
+        if(ipoint-ipoint0 <= Npoints_per_segment)
         {
-            Npoints_invalid_in_segment++;
-            bitarray64_set(bitarray_invalid, ipoint-ipoint0);
+            if(!point_is_valid(&points[ipoint], th_rad - th_rad_prev,
+                               debug))
+            {
+                Npoints_invalid_in_segment++;
+                bitarray64_set(bitarray_invalid, ipoint-ipoint0);
+            }
         }
 
         th_rad_prev = th_rad;
