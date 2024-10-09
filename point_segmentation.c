@@ -130,6 +130,23 @@ typedef struct
     point3f_t n;
 } plane_t;
 
+typedef struct
+{
+    uint16_t isegment, iring;
+} node_t;
+
+typedef struct
+{
+    node_t nodes[128];
+    int n;
+} stack_t;
+
+typedef struct
+{
+    node_t segments[128];
+    int n;
+} cluster_t;
+
 
 static
 float th_from_point(const point3f_t* p)
@@ -464,23 +481,6 @@ fit_plane_from_ring(// out
                    points, ipoint0, Npoints-1,
                    debug);
 }
-
-typedef struct
-{
-    uint16_t isegment, iring;
-} node_t;
-
-typedef struct
-{
-    node_t nodes[128];
-    int n;
-} stack_t;
-
-typedef struct
-{
-    node_t segments[128];
-    int n;
-} segment_list_t;
 
 static bool stack_empty(stack_t* stack)
 {
