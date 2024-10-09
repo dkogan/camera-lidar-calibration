@@ -383,7 +383,7 @@ fit_plane_from_ring(// out
                     plane_segment_t* segments,
 
                     // in
-                    const point3f_t* p,
+                    const point3f_t* points,
                     const int Npoints,
                     const bool debug_this_ring)
 {
@@ -404,7 +404,7 @@ fit_plane_from_ring(// out
     uint64_t bitarray_invalid[Nwords_bitarray_invalid];
 
 
-    float th_rad0 = th_from_point(p);
+    float th_rad0 = th_from_point(points);
 
     int ipoint0   = 0;
     int isegment0 = isegment_from_th(th_rad0);
@@ -417,19 +417,19 @@ fit_plane_from_ring(// out
     {
         const bool debug =
             debug_this_ring &&
-            ((debug_xmin < p[ipoint0 ].x && p[ipoint0 ].x < debug_xmax &&
-              debug_ymin < p[ipoint0 ].y && p[ipoint0 ].y < debug_ymax) ||
-             (debug_xmin < p[ipoint-1].x && p[ipoint-1].x < debug_xmax &&
-              debug_ymin < p[ipoint-1].y && p[ipoint-1].y < debug_ymax));
+            ((debug_xmin < points[ipoint0 ].x && points[ipoint0 ].x < debug_xmax &&
+              debug_ymin < points[ipoint0 ].y && points[ipoint0 ].y < debug_ymax) ||
+             (debug_xmin < points[ipoint-1].x && points[ipoint-1].x < debug_xmax &&
+              debug_ymin < points[ipoint-1].y && points[ipoint-1].y < debug_ymax));
 
-        const float th_rad = th_from_point(&p[ipoint]);
+        const float th_rad = th_from_point(&points[ipoint]);
         const int isegment = isegment_from_th(th_rad);
         if(isegment != isegment0)
         {
             finish_segment(&segments[isegment0],
                            Npoints_invalid_in_segment,
                            bitarray_invalid,
-                           p, ipoint0, ipoint-1,
+                           points, ipoint0, ipoint-1,
                            debug);
 
             ipoint0   = ipoint;
@@ -438,7 +438,7 @@ fit_plane_from_ring(// out
             memset(bitarray_invalid, 0, Nwords_bitarray_invalid*sizeof(uint64_t));
         }
 
-        if(!point_is_valid(&p[ipoint], th_rad - th_rad_prev,
+        if(!point_is_valid(&points[ipoint], th_rad - th_rad_prev,
                            debug))
         {
             Npoints_invalid_in_segment++;
@@ -450,14 +450,14 @@ fit_plane_from_ring(// out
 
     const bool debug =
         debug_this_ring &&
-        ((debug_xmin < p[ipoint0  ].x && p[ipoint0  ].x < debug_xmax &&
-          debug_ymin < p[ipoint0  ].y && p[ipoint0  ].y < debug_ymax) ||
-         (debug_xmin < p[Npoints-1].x && p[Npoints-1].x < debug_xmax &&
-          debug_ymin < p[Npoints-1].y && p[Npoints-1].y < debug_ymax));
+        ((debug_xmin < points[ipoint0  ].x && points[ipoint0  ].x < debug_xmax &&
+          debug_ymin < points[ipoint0  ].y && points[ipoint0  ].y < debug_ymax) ||
+         (debug_xmin < points[Npoints-1].x && points[Npoints-1].x < debug_xmax &&
+          debug_ymin < points[Npoints-1].y && points[Npoints-1].y < debug_ymax));
     finish_segment(&segments[isegment0],
                    Npoints_invalid_in_segment,
                    bitarray_invalid,
-                   p, ipoint0, Npoints-1,
+                   points, ipoint0, Npoints-1,
                    debug);
 }
 
