@@ -116,6 +116,8 @@ typedef struct
     point3f_t p; // the center
     point3f_t v; // a direction vector in the plane; may not be normalized
 
+    int ipoint0;
+    int ipoint1  : sizeof(int)*8-1; // leave one bit for "visited"
     bool visited : 1;
 } plane_segment_t;
 
@@ -375,6 +377,8 @@ void finish_segment(// out
 
     segment->p = mean(p[ipoint1], p[ipoint0]);
     segment->v = sub( p[ipoint1], p[ipoint0]);
+    segment->ipoint0 = ipoint0;
+    segment->ipoint1 = ipoint1;
 }
 
 
