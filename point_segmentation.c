@@ -51,8 +51,8 @@ static const float threshold_min_cos_angle_error_same_direction = 0.996194698092
 // round up
 static const int Nsegments_per_rotation = (int)((Npoints_per_rotation + Npoints_per_segment-1) / Npoints_per_segment);
 
-static const int threshold_min_Nsegments_in_chunk = 5;
-
+static const int threshold_max_Nsegments_in_cluster = 40;
+static const int threshold_min_Nsegments_in_cluster = 5;
 
 typedef union
 {
@@ -616,9 +616,17 @@ static void try_visit(stack_t* stack,
     }
 }
 
-static void boards_from_segments(segment_t* segments, // non-const to be able to set "visited"
+static void boards_from_segments(// out
+                                 cluster_t* clusters,
+                                 int* Nclusters,
+                                 const int Nclusters_max, // size of clusters[]
+
+                                 // in
+                                 segment_t* segments, // non-const to be able to set "visited"
                                  const int Nrings, const int Nsegments_per_rotation)
 {
+    *Nclusters = 0;
+
     for(int iring = 0; iring < Nrings-1; iring++)
     {
         for(int isegment = 0; isegment < Nsegments_per_rotation; isegment++)
@@ -661,11 +669,17 @@ static void boards_from_segments(segment_t* segments, // non-const to be able to
             segment ->visited = true;
             segment1->visited = true;
 
-            cluster_t cluster = {.n = 2,
-                                 .segments = {[0] = {.isegment = isegment,
-                                                     .iring    = iring},
-                                              [1] = {.isegment = isegment,
-                                                     .iring    = iring1}}};
+            if(*Nclusters == Nclusters_max)
+            {
+                MSG("Too many flat objects in scene, exceeded Nclusters_max. Not reporting any more candidate planes. Bump Nclusters_max");
+                return;
+            }
+            cluster_t* cluster = &clusters[(*Nclusters)++];
+            *cluster = (cluster_t){.n = 2,
+                                   .segments = {[0] = {.isegment = isegment,
+                                                       .iring    = iring},
+                                                [1] = {.isegment = isegment,
+                                                       .iring    = iring1}}};
             while(!stack_empty(&stack))
             {
                 node_t* node = stack_pop(&stack);
@@ -695,12 +709,16 @@ static void boards_from_segments(segment_t* segments, // non-const to be able to
                 segment1->visited = false;
             }
 
-            printf("## Nsegments_in_component = %d\n", segment_list.n);
+            if(cluster->n < threshold_min_Nsegments_in_cluster ||
+               cluster->n > threshold_max_Nsegments_in_cluster)
+            {
+                (*Nclusters)--;
+                continue;
+            }
+
 
             if(dump)
             {
-                static int icluster = 0;
-
                 for(int i=0; i<cluster->n; i++)
                 {
                     const node_t* node = &cluster->segments[i];
@@ -709,17 +727,9 @@ static void boards_from_segments(segment_t* segments, // non-const to be able to
                     printf("%f %f cluster-%02d %f\n",
                            segment->p.x,
                            segment->p.y,
-                           icluster,
+                           *Nclusters - 1,
                            segment->p.z);
                 }
-
-                icluster++;
-            }
-
-
-            if(segment_list.n >= threshold_min_Nsegments_in_chunk)
-            {
-                //////
             }
         }
     }
@@ -900,7 +910,14 @@ int main(void)
         }
     }
 
-    boards_from_segments(segments,
+    // boards_from_segments() will return only clusters of an acceptable size,
+    // so there will not be a huge number of candidates
+    cluster_t clusters[10];
+    int Nclusters;
+    boards_from_segments(clusters,
+                         &Nclusters,
+                         (int)(sizeof(clusters)/sizeof(clusters[0])),
+                         segments,
                          Nrings, Nsegments_per_rotation);
 
     return 0;
