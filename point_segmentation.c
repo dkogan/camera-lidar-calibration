@@ -616,14 +616,14 @@ static void try_visit(stack_t* stack,
     }
 }
 
-static void boards_from_segments(// out
-                                 cluster_t* clusters,
-                                 int* Nclusters,
-                                 const int Nclusters_max, // size of clusters[]
+static void plane_clusters_from_segments(// out
+                                         cluster_t* clusters,
+                                         int* Nclusters,
+                                         const int Nclusters_max, // size of clusters[]
 
-                                 // in
-                                 segment_t* segments, // non-const to be able to set "visited"
-                                 const int Nrings, const int Nsegments_per_rotation)
+                                         // in
+                                         segment_t* segments, // non-const to be able to set "visited"
+                                         const int Nrings, const int Nsegments_per_rotation)
 {
     *Nclusters = 0;
 
@@ -910,15 +910,15 @@ int main(void)
         }
     }
 
-    // boards_from_segments() will return only clusters of an acceptable size,
+    // plane_clusters_from_segments() will return only clusters of an acceptable size,
     // so there will not be a huge number of candidates
     cluster_t clusters[10];
     int Nclusters;
-    boards_from_segments(clusters,
-                         &Nclusters,
-                         (int)(sizeof(clusters)/sizeof(clusters[0])),
-                         segments,
-                         Nrings, Nsegments_per_rotation);
+    plane_clusters_from_segments(clusters,
+                                 &Nclusters,
+                                 (int)(sizeof(clusters)/sizeof(clusters[0])),
+                                 segments,
+                                 Nrings, Nsegments_per_rotation);
 
     return 0;
 }
