@@ -568,7 +568,7 @@ static bool plane_compatible(const plane_t*         plane,
 
 static void try_visit(stack_t* stack,
                       // out
-                      segment_list_t* segment_list,
+                      cluster_t* cluster,
                       // what we're trying
                       const int iring, const int isegment,
                       // context
@@ -596,16 +596,16 @@ static void try_visit(stack_t* stack,
             MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of 'stack_t.nodes'");
             return;
         }
-        if(segment_list->n == (int)(sizeof(segment_list->segments)/sizeof(segment_list->segments[0])))
+        if(cluster->n == (int)(sizeof(cluster->segments)/sizeof(cluster->segments[0])))
         {
-            MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of 'segment_list_t.segments'");
+            MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of 'cluster_t.segments'");
             return;
         }
 
         node->isegment = isegment;
         node->iring    = iring;
 
-        segment_list->segments[segment_list->n++] = *node;
+        cluster->segments[cluster->n++] = *node;
     }
 }
 
@@ -654,33 +654,33 @@ static void boards_from_segments(segment_t* segments, // non-const to be able to
             segment ->visited = true;
             segment1->visited = true;
 
-            segment_list_t segment_list = {.n = 2,
-                                           .segments = {[0] = {.isegment = isegment,
-                                                               .iring    = iring},
-                                                        [1] = {.isegment = isegment,
-                                                               .iring    = iring1}}};
+            cluster_t cluster = {.n = 2,
+                                 .segments = {[0] = {.isegment = isegment,
+                                                     .iring    = iring},
+                                              [1] = {.isegment = isegment,
+                                                     .iring    = iring1}}};
             while(!stack_empty(&stack))
             {
                 node_t* node = stack_pop(&stack);
                 try_visit(&stack,
-                          &segment_list,
+                          cluster,
                           node->iring-1, node->isegment, &plane,
                           segments, Nrings, Nsegments_per_rotation);
                 try_visit(&stack,
-                          &segment_list,
+                          cluster,
                           node->iring+1, node->isegment, &plane,
                           segments, Nrings, Nsegments_per_rotation);
                 try_visit(&stack,
-                          &segment_list,
+                          cluster,
                           node->iring, node->isegment-1, &plane,
                           segments, Nrings, Nsegments_per_rotation);
                 try_visit(&stack,
-                          &segment_list,
+                          cluster,
                           node->iring, node->isegment+1, &plane,
                           segments, Nrings, Nsegments_per_rotation);
             }
 
-            if(segment_list.n == 2)
+            if(cluster->n == 2)
             {
                 // This hypothetical ring-ring component is too small. The
                 // next-ring segment might still be valid in another component,
@@ -694,9 +694,9 @@ static void boards_from_segments(segment_t* segments, // non-const to be able to
             {
                 static int icluster = 0;
 
-                for(int i=0; i<segment_list.n; i++)
+                for(int i=0; i<cluster->n; i++)
                 {
-                    const node_t* node = &segment_list.segments[i];
+                    const node_t* node = &cluster->segments[i];
                     const segment_t* segment = &segments[node->iring*Nsegments_per_rotation + node->isegment];
 
                     printf("%f %f cluster-%02d %f\n",
