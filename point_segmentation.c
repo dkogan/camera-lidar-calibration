@@ -119,7 +119,7 @@ typedef struct
     int ipoint0;
     int ipoint1  : sizeof(int)*8-1; // leave one bit for "visited"
     bool visited : 1;
-} plane_segment_t;
+} segment_t;
 
 typedef struct
 {
@@ -192,7 +192,7 @@ bool point_is_valid(const point3f_t* p,
 }
 
 static
-bool segment_is_valid(const plane_segment_t* segment)
+bool segment_is_valid(const segment_t* segment)
 {
     return !(segment->v.x == 0 &&
              segment->v.y == 0 &&
@@ -367,7 +367,7 @@ bool planar(const point3f_t* p,
 
 static
 void finish_segment(// out
-                    plane_segment_t* segment,
+                    segment_t* segment,
                     // in
                     const int Npoints_invalid_in_segment,
                     const uint64_t* bitarray_invalid,
@@ -388,7 +388,7 @@ void finish_segment(// out
                          &p[ipoint0],
                          ""))
     {
-        *segment = (plane_segment_t){};
+        *segment = (segment_t){};
         return;
     }
 
@@ -401,7 +401,7 @@ void finish_segment(// out
 
 static void
 fit_plane_from_ring(// out
-                    plane_segment_t* segments,
+                    segment_t* segments,
 
                     // in
                     const point3f_t* points,
@@ -533,8 +533,8 @@ static bool is_same_direction(const point3f_t a,
 static bool plane_from_segment_segment(// out
                                        plane_t* plane,
                                        // in
-                                       const plane_segment_t* s0,
-                                       const plane_segment_t* s1)
+                                       const segment_t* s0,
+                                       const segment_t* s1)
 {
     // I want:
     //   inner(p1-p0, n=cross(v0,v1)) = 0
@@ -554,7 +554,7 @@ static bool plane_from_segment_segment(// out
 
 
 static bool plane_compatible(const plane_t*         plane,
-                             const plane_segment_t* segment)
+                             const segment_t* segment)
 {
     // both segment->p and segment->v must lie in the plane
 
@@ -573,13 +573,13 @@ static void try_visit(stack_t* stack,
                       const int iring, const int isegment,
                       // context
                       const plane_t* plane,
-                      plane_segment_t* segments, // non-const to be able to set "visited"
+                      segment_t* segments, // non-const to be able to set "visited"
                       const int Nrings, const int Nsegments_per_rotation)
 {
     if(iring    < 0 || iring    >= Nrings                ) return;
     if(isegment < 0 || isegment >= Nsegments_per_rotation) return;
 
-    plane_segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
+    segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
 
     if(segment_is_valid(segment) &&
        !segment->visited &&
@@ -609,14 +609,14 @@ static void try_visit(stack_t* stack,
     }
 }
 
-static void boards_from_segments(plane_segment_t* segments, // non-const to be able to set "visited"
+static void boards_from_segments(segment_t* segments, // non-const to be able to set "visited"
                                  const int Nrings, const int Nsegments_per_rotation)
 {
     for(int iring = 0; iring < Nrings-1; iring++)
     {
         for(int isegment = 0; isegment < Nsegments_per_rotation; isegment++)
         {
-            plane_segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
+            segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
             if(!(segment_is_valid(segment) && !segment->visited))
                 continue;
 
@@ -632,7 +632,7 @@ static void boards_from_segments(plane_segment_t* segments, // non-const to be a
 
             const int iring1 = iring+1;
 
-            plane_segment_t* segment1 = &segments[iring1*Nsegments_per_rotation + isegment];
+            segment_t* segment1 = &segments[iring1*Nsegments_per_rotation + isegment];
             if(!(segment_is_valid(segment1) && !segment1->visited))
                 continue;
 
@@ -697,7 +697,7 @@ static void boards_from_segments(plane_segment_t* segments, // non-const to be a
                 for(int i=0; i<segment_list.n; i++)
                 {
                     const node_t* node = &segment_list.segments[i];
-                    const plane_segment_t* segment = &segments[node->iring*Nsegments_per_rotation + node->isegment];
+                    const segment_t* segment = &segments[node->iring*Nsegments_per_rotation + node->isegment];
 
                     printf("%f %f cluster-%02d %f\n",
                            segment->p.x,
@@ -726,7 +726,7 @@ int main(void)
     const char* filename = "/tmp/tst.dat";
 
 
-    plane_segment_t segments[Nrings*Nsegments_per_rotation] = {};
+    segment_t segments[Nrings*Nsegments_per_rotation] = {};
 
     if(dump)
         printf("# x y what z\n");
