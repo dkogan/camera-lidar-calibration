@@ -719,7 +719,7 @@ static void boards_from_segments(plane_segment_t* segments, // non-const to be a
 int main(void)
 {
     // from dump-lidar-scan.py
-    const char* filename_fmt = "/tmp/tst-%02d.dat";
+    const char* filename = "/tmp/tst.dat";
 
 
     plane_segment_t segments[Nrings*Nsegments_per_rotation] = {};
@@ -727,64 +727,149 @@ int main(void)
     if(dump)
         printf("# x y what z\n");
 
+
+    int fd = open(filename, O_RDONLY);
+    if(fd <= 0)
+    {
+        MSG("Error opening '%s'\n", filename);
+        return 1;
+    }
+
+    struct stat sb;
+    int res = fstat(fd, &sb);
+    if(res)
+    {
+        MSG("Error stat('%s')\n", filename);
+        return 1;
+    }
+    if(sb.st_size == 0)
+    {
+        MSG("stat('%s') says that st_size == 0\n", filename);
+        return 1;
+    }
+
+    char* data = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if(data == MAP_FAILED)
+    {
+        MSG("mmap('%s') failed\n", filename);
+        return 1;
+    }
+
+    int ibyte_data   = 0;
+    int version_read = -1;
+    int Nrings_read  = -1;
+    while(version_read < 0 || Nrings_read < 0)
+    {
+        // ignore comments
+        if(data[ibyte_data] == '#')
+        {
+            const char* newline = strchr(&data[ibyte_data], '\n');
+            if(newline == NULL)
+            {
+                MSG("Data parsing failed");
+                return 1;
+            }
+            ibyte_data = (int)(newline-data) + 1;
+            continue;
+        }
+
+#define READ_INTEGER_FIELD(x,  key)                             \
+        ({ int nbytes_read_here;                                \
+           bool result = ( 1 == sscanf(&data[ibyte_data],       \
+                                       key " = %d%n",           \
+                                       x, &nbytes_read_here)) ; \
+           if(result) {                                         \
+               ibyte_data += nbytes_read_here;                  \
+               ibyte_data += strspn(&data[ibyte_data], " "); /* ignore block of spaces */ \
+               if(data[ibyte_data] != '\n') result = false;     \
+               else ibyte_data++;                               \
+           }                                                    \
+           result;                                              \
+        })
+
+        if( !READ_INTEGER_FIELD(&version_read, "version") &&
+            !READ_INTEGER_FIELD(&Nrings_read,  "Nrings") )
+        {
+            MSG("ERROR: not a comment or any of the known fields, but some known fields are still incomplete, so we still need to parse the header");
+            return 1;
+        }
+
+        ///////// INCOMPLETE PARSING. NEED TO CHECK THAT ibyte_data<sb.st_size always
+    }
+
+    if(1 != version_read)
+    {
+        MSG("Currently I'm only accepting version=1 data, but this datafile has version = %d",
+            version_read);
+        return 1;
+    }
+    if(Nrings != Nrings_read)
+    {
+        MSG("Currently we're assuming a specific value of Nrings = %d, but this datafile has Nrings = %d",
+            Nrings, Nrings_read);
+        return 1;
+    }
+    // Done with the header. The file should be set up such that we're now at an
+    // aligned location
+    if(ibyte_data % 16)
+    {
+        MSG("ERROR: after reading the header we're not aligned at a multiple of 16. The data-file writing or parsing are buggy");
+        return 1;
+    }
+    if((uintptr_t)data % 16)
+    {
+        MSG("ERROR: the data buffer isn't aligned. mmap() SHOULD return aligned pointers. Something is wrong buggy");
+        return 1;
+    }
+
     for(int iring=0; iring<Nrings; iring++)
     {
-        char filename[32];
-        if((int)sizeof(filename) <= snprintf(filename, sizeof(filename),
-                                             filename_fmt, iring))
+        ///////// INCOMPLETE PARSING. NEED TO CHECK THAT ibyte_data<sb.st_size always
+
+
+        // We extract an ascii string representing Npoints in this ring. This
+        // lives in a 16-byte block
+        char buf[17] = {};
+        memcpy(buf, &data[ibyte_data], 16);
+        ibyte_data += 16;
+
+        int Npoints;
+        if(1 != sscanf(buf, "%d", &Npoints))
         {
-            MSG("Error: increase the size of filename[]");
+            MSG("Couldn't parse Npoints for iring=%d", iring);
             return 1;
         }
 
-        int fd = open(filename, O_RDONLY);
-        if(fd <= 0)
+        const int Nbytes_remaining = sb.st_size - ibyte_data;
+        if(Npoints * (int)sizeof(point3f_t) > Nbytes_remaining)
         {
-            MSG("Error opening '%s'\n", filename);
+            MSG("Not enough bytes in file for iring=%d", iring);
             return 1;
         }
 
-        struct stat sb;
-        int res = fstat(fd, &sb);
-        if(res)
-        {
-            MSG("Error stat('%s')\n", filename);
-            return 1;
-        }
-        if(sb.st_size == 0)
-        {
-            MSG("stat('%s') says that st_size == 0\n", filename);
-            return 1;
-        }
-
-        const int Npoints = (int)(sb.st_size / sizeof(point3f_t));
-        if(sb.st_size != Npoints*(int)sizeof(point3f_t))
-        {
-            MSG("size('%s') isn't an integer number of 3D points\n", filename);
-            return 1;
-        }
-
-        point3f_t* p = (point3f_t*)mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-        if(p == MAP_FAILED)
-        {
-            MSG("mmap('%s') failed\n", filename);
-            return 1;
-        }
-
+        const point3f_t* points = (const point3f_t*)&data[ibyte_data];
         fit_plane_from_ring(// out
                             &segments[Nsegments_per_rotation*iring],
                             // in
-                            p, Npoints,
+                            points, Npoints,
                             iring == debug_iring);
 
         if(dump)
         {
             for(int i=0; i<Npoints; i++)
                 printf("%f %f all %f\n",
-                       p[i].x, p[i].y, p[i].z);
+                       points[i].x, points[i].y, points[i].z);
         }
 
+        ibyte_data += Npoints * sizeof(point3f_t);
     }
+
+    if(sb.st_size != ibyte_data)
+    {
+        MSG("File has trailing bytes");
+        return 1;
+    }
+
 
     if(dump)
     {

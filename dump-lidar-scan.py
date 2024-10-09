@@ -52,6 +52,8 @@ import bag_interface
 import numpy as np
 import numpysane as nps
 import gnuplotlib as gp
+import time
+import shlex
 
 
 lidar_topic = getattr(args, 'lidar-topic')
@@ -69,16 +71,56 @@ Nrings = 32
 
 
 if not args.dense:
-    for iring in range(Nrings):
-        idx = ring==iring
-        filename = f"/tmp/tst-{iring:02d}.dat"
-        points[idx].tofile(filename)
-        print(f"Wrote '{filename}'")
+
+    filename = "/tmp/tst.dat"
+    with open(filename, "wb") as f:
+
+
+        f.write(f"# generated on {time.strftime('%Y-%m-%d %H:%M:%S')} with   {' '.join(shlex.quote(s) for s in sys.argv)}\n".encode())
+        f.write("version = 1\n".encode())
+        f.write(f"Nrings = {Nrings}".encode()) # no trailing \n is intentional. See following
+
+        # I want to align the data to 16 bytes (probably overkill, but why not).
+        # So I add (' '*N + '\n') to the text header to make it line up. The
+        # spaces are optional, but the newline is not, so after the spaces I
+        # want f.tell % 16 == 15.
+
+        # Might be needed for some weird architectures?
+        if len(' ') != 1 or len('\n') != 1:
+            raise Exception("I'm assuming spaces and newlines each weight in at 1 byte")
+
+        # I want
+        #
+        # f.tell%16 Nspaces_to_add
+        # 15        0
+        # 14        1
+        # ...
+        #  1        14
+        #  0        15
+        Nspaces = 15 - (f.tell() % 16)
+        f.write( (Nspaces * b' ') + b'\n')
+        if f.tell()%16:
+            raise Exception("Data not aligned as expected")
+
+        for iring in range(Nrings):
+            idx = ring==iring
+            points_thisring  = points[idx]
+            th_thisring = np.arctan2( points_thisring[:,1], points_thisring[:,0] )
+            points_thisring_sorted = points_thisring[np.argsort(th_thisring)]
+
+            # I write a 16-byte block containing the number of points in this
+            # ring, and then the point data itself
+            f.write(f'{len(points_thisring_sorted):<16}'.encode())
+            points_thisring_sorted.tofile(f)
+
+    print(f"Wrote '{filename}'")
 
     sys.exit(0)
 
 
 
+
+print("--dense is deprecated. I no longer use it, and it will probably be removed")
 
 
 th = np.arctan2( points[:,1], points[:,0] )
