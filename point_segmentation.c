@@ -736,18 +736,58 @@ static void plane_clusters_from_segments(// out
 }
 
 
-
-int main(void)
+static void segment(const point3f_t** points,
+                    const int* Npoints)
 {
-    // from dump-lidar-scan.py
-    const char* filename = "/tmp/tst.dat";
-
-
     segment_t segments[Nrings*Nsegments_per_rotation] = {};
 
     if(dump)
         printf("# x y what z\n");
 
+
+    for(int iring=0; iring<Nrings; iring++)
+    {
+        fit_plane_from_ring(// out
+                            &segments[Nsegments_per_rotation*iring],
+                            // in
+                            points[iring], Npoints[iring],
+                            iring == debug_iring);
+
+        if(dump)
+        {
+            for(int i=0; i<Npoints[iring]; i++)
+                printf("%f %f all %f\n",
+                       points[iring][i].x, points[iring][i].y, points[iring][i].z);
+
+            for(int i=0; i<Nsegments_per_rotation; i++)
+            {
+                if(!(segments[iring*Nsegments_per_rotation + i].v.x == 0 &&
+                     segments[iring*Nsegments_per_rotation + i].v.y == 0 &&
+                     segments[iring*Nsegments_per_rotation + i].v.z == 0))
+                    printf("%f %f segment-ring-%02d %f\n",
+                           segments[iring*Nsegments_per_rotation + i].p.x,
+                           segments[iring*Nsegments_per_rotation + i].p.y,
+                           iring,
+                           segments[iring*Nsegments_per_rotation + i].p.z);
+            }
+        }
+    }
+
+    // plane_clusters_from_segments() will return only clusters of an acceptable size,
+    // so there will not be a huge number of candidates
+    cluster_t clusters[10];
+    int Nclusters;
+    plane_clusters_from_segments(clusters,
+                                 &Nclusters,
+                                 (int)(sizeof(clusters)/sizeof(clusters[0])),
+                                 segments,
+                                 Nrings, Nsegments_per_rotation);
+}
+
+int main(void)
+{
+    // from dump-lidar-scan.py
+    const char* filename = "/tmp/tst.dat";
 
     int fd = open(filename, O_RDONLY);
     if(fd <= 0)
@@ -843,6 +883,12 @@ int main(void)
         return 1;
     }
 
+
+
+    const point3f_t* points[Nrings];
+    int Npoints[Nrings];
+
+
     for(int iring=0; iring<Nrings; iring++)
     {
         ///////// INCOMPLETE PARSING. NEED TO CHECK THAT ibyte_data<sb.st_size always
@@ -854,37 +900,23 @@ int main(void)
         memcpy(buf, &data[ibyte_data], 16);
         ibyte_data += 16;
 
-        int Npoints;
-        if(1 != sscanf(buf, "%d", &Npoints))
+        if(1 != sscanf(buf, "%d", &Npoints[iring]))
         {
             MSG("Couldn't parse Npoints for iring=%d", iring);
             return 1;
         }
 
         const int Nbytes_remaining = sb.st_size - ibyte_data;
-        if(Npoints * (int)sizeof(point3f_t) > Nbytes_remaining)
+        if(Npoints[iring] * (int)sizeof(point3f_t) > Nbytes_remaining)
         {
             MSG("Not enough bytes in file for iring=%d", iring);
             return 1;
         }
 
-        const point3f_t* points = (const point3f_t*)&data[ibyte_data];
-        fit_plane_from_ring(// out
-                            &segments[Nsegments_per_rotation*iring],
-                            // in
-                            points, Npoints,
-                            iring == debug_iring);
+        points[iring] = (const point3f_t*)&data[ibyte_data];
 
-        if(dump)
-        {
-            for(int i=0; i<Npoints; i++)
-                printf("%f %f all %f\n",
-                       points[i].x, points[i].y, points[i].z);
-        }
-
-        ibyte_data += Npoints * sizeof(point3f_t);
+        ibyte_data += Npoints[iring] * sizeof(point3f_t);
     }
-
     if(sb.st_size != ibyte_data)
     {
         MSG("File has trailing bytes");
@@ -892,33 +924,7 @@ int main(void)
     }
 
 
-    if(dump)
-    {
-        for(int iring=0; iring<Nrings; iring++)
-        {
-            for(int i=0; i<Nsegments_per_rotation; i++)
-            {
-                if(!(segments[iring*Nsegments_per_rotation + i].v.x == 0 &&
-                     segments[iring*Nsegments_per_rotation + i].v.y == 0 &&
-                     segments[iring*Nsegments_per_rotation + i].v.z == 0))
-                    printf("%f %f segment-ring-%02d %f\n",
-                           segments[iring*Nsegments_per_rotation + i].p.x,
-                           segments[iring*Nsegments_per_rotation + i].p.y,
-                           iring,
-                           segments[iring*Nsegments_per_rotation + i].p.z);
-            }
-        }
-    }
-
-    // plane_clusters_from_segments() will return only clusters of an acceptable size,
-    // so there will not be a huge number of candidates
-    cluster_t clusters[10];
-    int Nclusters;
-    plane_clusters_from_segments(clusters,
-                                 &Nclusters,
-                                 (int)(sizeof(clusters)/sizeof(clusters[0])),
-                                 segments,
-                                 Nrings, Nsegments_per_rotation);
+    segment(points, Npoints);
 
     return 0;
 }
