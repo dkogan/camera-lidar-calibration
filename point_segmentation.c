@@ -783,6 +783,31 @@ static void segment(const point3f_t** points,
                                  (int)(sizeof(clusters)/sizeof(clusters[0])),
                                  segments,
                                  Nrings, Nsegments_per_rotation);
+
+    if(dump)
+        for(int icluster=0; icluster<Nclusters; icluster++)
+        {
+            segment_cluster_t* cluster = &clusters[icluster];
+            for(int i=0; i<cluster->n; i++)
+            {
+                const int iring    = cluster->segments[i].iring;
+                const int isegment = cluster->segments[i].isegment;
+
+                segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
+
+                for(int ipoint=segment->ipoint0;
+                    ipoint <= segment->ipoint1;
+                    ipoint++)
+                {
+                    printf("%f %f cluster-points-raw-%d %f\n",
+                           points[iring][ipoint].x,
+                           points[iring][ipoint].y,
+                           icluster,
+                           points[iring][ipoint].z);
+                }
+            }
+        }
+
 }
 
 int main(void)
