@@ -133,19 +133,19 @@ typedef struct
 typedef struct
 {
     uint16_t isegment, iring;
-} node_t;
+} segmentref_t;
 
 typedef struct
 {
-    node_t nodes[128];
+    segmentref_t nodes[128];
     int n;
 } stack_t;
 
 typedef struct
 {
-    node_t segments[128];
+    segmentref_t segments[128];
     int n;
-} cluster_t;
+} segment_cluster_t;
 
 
 static
@@ -494,14 +494,14 @@ static bool stack_empty(stack_t* stack)
     return (stack->n == 0);
 }
 // returns the node to fill in, or NULL if full
-static node_t* stack_push(stack_t* stack)
+static segmentref_t* stack_push(stack_t* stack)
 {
     if(stack->n == (int)(sizeof(stack->nodes)/sizeof(stack->nodes[0])))
         return NULL;
     return &stack->nodes[stack->n++];
 }
 // returns the node, or NULL if empty
-static node_t* stack_pop(stack_t* stack)
+static segmentref_t* stack_pop(stack_t* stack)
 {
     if(stack->n == 0)
         return NULL;
@@ -575,7 +575,7 @@ static bool plane_compatible(const plane_t*         plane,
 
 static void try_visit(stack_t* stack,
                       // out
-                      cluster_t* cluster,
+                      segment_cluster_t* cluster,
                       // what we're trying
                       const int iring, const int isegment,
                       // context
@@ -592,7 +592,7 @@ static void try_visit(stack_t* stack,
        !segment->visited &&
        plane_compatible(plane, segment))
     {
-        node_t* node = stack_push(stack);
+        segmentref_t* node = stack_push(stack);
 
         // Do this before the error checking; otherwise the error conditions may
         // go into an infinite loop
@@ -617,7 +617,7 @@ static void try_visit(stack_t* stack,
 }
 
 static void plane_clusters_from_segments(// out
-                                         cluster_t* clusters,
+                                         segment_cluster_t* clusters,
                                          int* Nclusters,
                                          const int Nclusters_max, // size of clusters[]
 
@@ -658,11 +658,11 @@ static void plane_clusters_from_segments(// out
 
             stack_t stack = {};
 
-            node_t* node0 = stack_push(&stack);
+            segmentref_t* node0 = stack_push(&stack);
             node0->iring    = iring;
             node0->isegment = isegment;
 
-            node_t* node1 = stack_push(&stack);
+            segmentref_t* node1 = stack_push(&stack);
             node1->iring    = iring1;
             node1->isegment = isegment;
 
@@ -674,15 +674,15 @@ static void plane_clusters_from_segments(// out
                 MSG("Too many flat objects in scene, exceeded Nclusters_max. Not reporting any more candidate planes. Bump Nclusters_max");
                 return;
             }
-            cluster_t* cluster = &clusters[(*Nclusters)++];
-            *cluster = (cluster_t){.n = 2,
+            segment_cluster_t* cluster = &clusters[(*Nclusters)++];
+            *cluster = (segment_cluster_t){.n = 2,
                                    .segments = {[0] = {.isegment = isegment,
                                                        .iring    = iring},
                                                 [1] = {.isegment = isegment,
                                                        .iring    = iring1}}};
             while(!stack_empty(&stack))
             {
-                node_t* node = stack_pop(&stack);
+                segmentref_t* node = stack_pop(&stack);
                 try_visit(&stack,
                           cluster,
                           node->iring-1, node->isegment, &plane,
@@ -721,10 +721,10 @@ static void plane_clusters_from_segments(// out
             {
                 for(int i=0; i<cluster->n; i++)
                 {
-                    const node_t* node = &cluster->segments[i];
+                    const segmentref_t* node = &cluster->segments[i];
                     const segment_t* segment = &segments[node->iring*Nsegments_per_rotation + node->isegment];
 
-                    printf("%f %f cluster-%02d %f\n",
+                    printf("%f %f cluster-kernels-%02d %f\n",
                            segment->p.x,
                            segment->p.y,
                            *Nclusters - 1,
@@ -776,7 +776,7 @@ static void segment(const point3f_t** points,
 
     // plane_clusters_from_segments() will return only clusters of an acceptable size,
     // so there will not be a huge number of candidates
-    cluster_t clusters[10];
+    segment_cluster_t clusters[10];
     int Nclusters;
     plane_clusters_from_segments(clusters,
                                  &Nclusters,
