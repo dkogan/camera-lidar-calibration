@@ -745,6 +745,7 @@ static void segment(const point3f_t** points,
         printf("# x y what z\n");
 
 
+    // parsing complete. Do stuff
     for(int iring=0; iring<Nrings; iring++)
     {
         fit_plane_from_ring(// out
