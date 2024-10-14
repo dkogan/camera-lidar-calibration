@@ -1,27 +1,23 @@
-all: point-segmentation
-.PHONY: all
+include choose_mrbuild.mk
+include $(MRBUILD_MK)/Makefile.common.header
 
+PROJECT_NAME := camera_lidar_calibration
+ABI_VERSION  := 0
+TAIL_VERSION := 1
 
-LDLIBS = -lm
-CFLAGS = -Wall -Wextra -ggdb3 -O0
+LDLIBS += \
+  -lm
 
-CFLAGS += -Wno-unused-parameter -Wno-unused-function
+CFLAGS    += --std=gnu99
+CCXXFLAGS += -Wno-missing-field-initializers
 
-%: %.o
-	gcc $(LDFLAGS) -o $@ $^ $(LDLIBS)
-
-%.o: %.c
-	gcc -c $(CFLAGS) -o $@ $<
-
-
-
-point-segmentation: eig.o
+LIB_SOURCES += point_segmentation.c eig.c
 point-segmentation.o: point_segmentation.usage.h
-
-# Text-include rules. I construct these from plain ASCII files to handle line
-# wrapping
 %.usage.h: %.usage
 	< $^ sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$$/\\n"/;' > $@
 EXTRA_CLEAN += *.usage.h
 
-.SECONDARY:
+
+BIN_SOURCES += point-segmentation-test.c
+
+include $(MRBUILD_MK)/Makefile.common.footer
