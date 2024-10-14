@@ -1300,23 +1300,7 @@ int main(void)
     return 0;
 }
 
-
 /*
-The plan:
-
-report line segments: (p,v)
-
-I subdivide space into az chunks and el
-
-Then I find the largest connected component from each object
-
-*/
-
-
-
-
-/*
-
 The segment finder should use missing points or too-long ranges as breaks. The
 current implementation doesn't do this right: it throws out the point after a
 too-large gap, but then continues adding subsequent points to the segment
@@ -1331,5 +1315,10 @@ the edges at all: it sees a gap or a switch to another object, and it throws out
 the entire segment
 
 handle wraparound at th=180. All th - th math should be modulo 360
+
+For each ring segment, make sure that the local gradient is in-plane. This
+should throw out points at the edges. Or even better: if off-plane points exist
+at the edges, throw out the whole ring: we're looking at a wall instead of a
+plane floating in space
 
 */
