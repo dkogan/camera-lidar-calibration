@@ -128,7 +128,13 @@ typedef struct
 
     // A normal to the plane direction vector in the plane; not necessarily
     // normalized
-    point3f_t n;
+    point3f_t n_unnormalized;
+} plane_unnormalized_t;
+
+typedef struct
+{
+    point3f_t p; // A point somewhere on the plane
+    point3f_t n; // A normal to the plane
 } plane_t;
 
 typedef struct
@@ -144,6 +150,12 @@ typedef struct
 
 typedef struct
 {
+    union
+    {
+        plane_t              plane;
+        plane_unnormalized_t plane_unnormalized;
+    };
+
     segmentref_t segments[128];
     int n;
 } segment_cluster_t;
@@ -541,7 +553,7 @@ static bool is_same_direction(const point3f_t a,
 }
 
 static bool plane_from_segment_segment(// out
-                                       plane_t* plane,
+                                       plane_unnormalized_t* plane_unnormalized,
                                        // in
                                        const segment_t* s0,
                                        const segment_t* s1)
@@ -557,14 +569,14 @@ static bool plane_from_segment_segment(// out
     if(!is_same_direction(n0,n1))
         return false;
 
-    plane->n = mean(n0,n1);
-    plane->p = mean(s0->p, s1->p);
+    plane_unnormalized->n_unnormalized = mean(n0,n1);
+    plane_unnormalized->p              = mean(s0->p, s1->p);
     return true;
 }
 
 
-static bool plane_segment_compatible(const plane_t*   plane,
-                                     const segment_t* segment)
+static bool plane_segment_compatible(const plane_unnormalized_t* plane_unnormalized,
+                                     const segment_t*            segment)
 {
     // both segment->p and segment->v must lie in the plane
 
@@ -572,8 +584,8 @@ static bool plane_segment_compatible(const plane_t*   plane,
     //   inner(segv,   n) = 0
     //   inner(segp-p, n) = 0
     return
-        is_normal(segment->v, plane->n) &&
-        is_normal(sub(segment->p, plane->p), plane->n);
+        is_normal(segment->v, plane_unnormalized->n_unnormalized) &&
+        is_normal(sub(segment->p, plane_unnormalized->p), plane_unnormalized->n_unnormalized);
 }
 
 static void try_visit(stack_t* stack,
@@ -582,7 +594,7 @@ static void try_visit(stack_t* stack,
                       // what we're trying
                       const int iring, const int isegment,
                       // context
-                      const plane_t* plane,
+                      const plane_unnormalized_t* plane_unnormalized,
                       segment_t* segments, // non-const to be able to set "visited"
                       const int Nrings, const int Nsegments_per_rotation)
 {
@@ -593,7 +605,7 @@ static void try_visit(stack_t* stack,
 
     if(segment_is_valid(segment) &&
        !segment->visited &&
-       plane_segment_compatible(plane, segment))
+       plane_segment_compatible(plane_unnormalized, segment))
     {
         segmentref_t* node = stack_push(stack);
 
@@ -654,8 +666,8 @@ static void segment_clusters_from_segments(// out
             if(!(segment_is_valid(segment1) && !segment1->visited))
                 continue;
 
-            plane_t plane;
-            if(!plane_from_segment_segment(&plane,
+            plane_unnormalized_t plane_unnormalized;
+            if(!plane_from_segment_segment(&plane_unnormalized,
                                            segment,segment1))
                 continue;
 
@@ -688,19 +700,19 @@ static void segment_clusters_from_segments(// out
                 segmentref_t* node = stack_pop(&stack);
                 try_visit(&stack,
                           cluster,
-                          node->iring-1, node->isegment, &plane,
+                          node->iring-1, node->isegment, &plane_unnormalized,
                           segments, Nrings, Nsegments_per_rotation);
                 try_visit(&stack,
                           cluster,
-                          node->iring+1, node->isegment, &plane,
+                          node->iring+1, node->isegment, &plane_unnormalized,
                           segments, Nrings, Nsegments_per_rotation);
                 try_visit(&stack,
                           cluster,
-                          node->iring, node->isegment-1, &plane,
+                          node->iring, node->isegment-1, &plane_unnormalized,
                           segments, Nrings, Nsegments_per_rotation);
                 try_visit(&stack,
                           cluster,
-                          node->iring, node->isegment+1, &plane,
+                          node->iring, node->isegment+1, &plane_unnormalized,
                           segments, Nrings, Nsegments_per_rotation);
             }
 
