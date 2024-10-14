@@ -116,6 +116,7 @@ typedef struct
     point3f_t p; // the center
     point3f_t v; // a direction vector in the plane; may not be normalized
 
+    // point indices inside each ring
     int ipoint0;
     int ipoint1  : sizeof(int)*8-1; // leave one bit for "visited"
     bool visited : 1;
@@ -425,7 +426,7 @@ fit_plane_from_ring(// out
     uint64_t bitarray_invalid[Nwords_bitarray_invalid];
 
 
-    float th_rad0 = th_from_point(points);
+    const float th_rad0 = th_from_point(&points[0]);
 
     int ipoint0   = 0;
     int isegment0 = isegment_from_th(th_rad0);
@@ -511,6 +512,7 @@ static segmentref_t* stack_pop(stack_t* stack)
 static bool is_normal(const point3f_t v,
                       const point3f_t n)
 {
+#warning "it is weird to do this with an angle threshold. should be distance threshold"
     // inner(v,n) = cos magv magn ->
     // cos = inner / (magv magn) ->
     // cos^2 = inner^2 / (norm2v norm2n) ->
@@ -525,6 +527,7 @@ static bool is_normal(const point3f_t v,
 static bool is_same_direction(const point3f_t a,
                               const point3f_t b)
 {
+#warning "it is weird to do this with an angle threshold. should be distance threshold"
     // inner(a,b) = cos maga magb ->
     // cos = inner / (maga magb) ->
     // cos^2 = inner^2 / (norm2a norm2b) ->
@@ -881,7 +884,7 @@ int main(void)
             return 1;
         }
 
-        ///////// INCOMPLETE PARSING. NEED TO CHECK THAT ibyte_data<sb.st_size always
+#warning "INCOMPLETE PARSING. NEED TO CHECK THAT ibyte_data<sb.st_size always"
     }
 
     if(1 != version_read)
@@ -917,7 +920,7 @@ int main(void)
 
     for(int iring=0; iring<Nrings; iring++)
     {
-        ///////// INCOMPLETE PARSING. NEED TO CHECK THAT ibyte_data<sb.st_size always
+#warning "INCOMPLETE PARSING. NEED TO CHECK THAT ibyte_data<sb.st_size always"
 
 
         // We extract an ascii string representing Npoints in this ring. This
