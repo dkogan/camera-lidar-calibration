@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <limits.h>
 
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -48,11 +49,15 @@ static const int   Nrings                                   = 32;
 
 static const float threshold_max_cos_angle_error_normal         = 0.087155742747f; // cos(90-5deg)
 static const float threshold_min_cos_angle_error_same_direction = 0.996194698092f; // cos(5deg)
+static const float threshold_max_plane_point_error              = 0.15;
 // round up
 static const int Nsegments_per_rotation = (int)((Npoints_per_rotation + Npoints_per_segment-1) / Npoints_per_segment);
 
 static const int threshold_max_Nsegments_in_cluster = 40;
 static const int threshold_min_Nsegments_in_cluster = 5;
+
+// used in refinement
+static const float threshold_max_gap_th_rad         = 0.5f * M_PI/180.f;
 
 typedef union
 {
@@ -63,6 +68,13 @@ typedef union
     float xyz[3];
 } point3f_t;
 
+__attribute__((unused))
+static point3f_t point3f_from_double(const double* p)
+{
+    return (point3f_t){ .x = (float)p[0],
+                        .y = (float)p[1],
+                        .z = (float)p[2]};
+}
 __attribute__((unused))
 static float inner(const point3f_t a, const point3f_t b)
 {
@@ -160,6 +172,13 @@ typedef struct
     int n;
 } segment_cluster_t;
 
+typedef struct
+{
+    point3f_t p[4096];
+    int n;
+
+    plane_t plane;
+} point_cluster_t;
 
 static
 float th_from_point(const point3f_t* p)
@@ -588,6 +607,20 @@ static bool plane_segment_compatible(const plane_unnormalized_t* plane_unnormali
         is_normal(sub(segment->p, plane_unnormalized->p), plane_unnormalized->n_unnormalized);
 }
 
+
+static bool plane_point_compatible(const plane_t*   plane,
+                                   const point3f_t* point)
+{
+    // I want (point - p) to be perpendicular to n. I want this in terms of
+    // "distance-off-plane" so err = inner( (point - p), n) / mag(n)
+    //
+    // Accept if threshold > inner( (point - p), n) / mag(n)
+    // n is normalized here, so I omit the /magn
+    const point3f_t dp = sub(*point, plane->p);
+
+    return threshold_max_plane_point_error > fabsf(inner(dp, plane->n));
+}
+
 static void try_visit(stack_t* stack,
                       // out
                       segment_cluster_t* cluster,
@@ -646,6 +679,13 @@ static void segment_clusters_from_segments(// out
     {
         for(int isegment = 0; isegment < Nsegments_per_rotation; isegment++)
         {
+            if(*Nclusters == Nclusters_max)
+            {
+                MSG("Too many flat objects in scene, exceeded Nclusters_max. Not reporting any more candidate planes. Bump Nclusters_max");
+                return;
+            }
+            segment_cluster_t* cluster = &clusters[*Nclusters];
+
             segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
             if(!(segment_is_valid(segment) && !segment->visited))
                 continue;
@@ -662,12 +702,17 @@ static void segment_clusters_from_segments(// out
 
             const int iring1 = iring+1;
 
+            *cluster = (segment_cluster_t){.n = 2,
+                                           .segments = {[0] = {.isegment = isegment,
+                                                               .iring    = iring},
+                                                        [1] = {.isegment = isegment,
+                                                               .iring    = iring1}}};
+
             segment_t* segment1 = &segments[iring1*Nsegments_per_rotation + isegment];
             if(!(segment_is_valid(segment1) && !segment1->visited))
                 continue;
 
-            plane_unnormalized_t plane_unnormalized;
-            if(!plane_from_segment_segment(&plane_unnormalized,
+            if(!plane_from_segment_segment(&cluster->plane_unnormalized,
                                            segment,segment1))
                 continue;
 
@@ -684,35 +729,24 @@ static void segment_clusters_from_segments(// out
             segment ->visited = true;
             segment1->visited = true;
 
-            if(*Nclusters == Nclusters_max)
-            {
-                MSG("Too many flat objects in scene, exceeded Nclusters_max. Not reporting any more candidate planes. Bump Nclusters_max");
-                return;
-            }
-            segment_cluster_t* cluster = &clusters[(*Nclusters)++];
-            *cluster = (segment_cluster_t){.n = 2,
-                                           .segments = {[0] = {.isegment = isegment,
-                                                               .iring    = iring},
-                                                        [1] = {.isegment = isegment,
-                                                               .iring    = iring1}}};
             while(!stack_empty(&stack))
             {
                 segmentref_t* node = stack_pop(&stack);
                 try_visit(&stack,
                           cluster,
-                          node->iring-1, node->isegment, &plane_unnormalized,
+                          node->iring-1, node->isegment, &cluster->plane_unnormalized,
                           segments, Nrings, Nsegments_per_rotation);
                 try_visit(&stack,
                           cluster,
-                          node->iring+1, node->isegment, &plane_unnormalized,
+                          node->iring+1, node->isegment, &cluster->plane_unnormalized,
                           segments, Nrings, Nsegments_per_rotation);
                 try_visit(&stack,
                           cluster,
-                          node->iring, node->isegment-1, &plane_unnormalized,
+                          node->iring, node->isegment-1, &cluster->plane_unnormalized,
                           segments, Nrings, Nsegments_per_rotation);
                 try_visit(&stack,
                           cluster,
-                          node->iring, node->isegment+1, &plane_unnormalized,
+                          node->iring, node->isegment+1, &cluster->plane_unnormalized,
                           segments, Nrings, Nsegments_per_rotation);
             }
 
@@ -727,10 +761,17 @@ static void segment_clusters_from_segments(// out
             if(cluster->n < threshold_min_Nsegments_in_cluster ||
                cluster->n > threshold_max_Nsegments_in_cluster)
             {
-                (*Nclusters)--;
                 continue;
             }
 
+            // We're accepting this cluster. There won't be a lot of these, and
+            // we will be accessing the plane normal a lot, so I normalize the
+            // normal vector
+            const float magn = mag(cluster->plane_unnormalized.n_unnormalized);
+            for(int i=0; i<3;i++)
+                cluster->plane.n.xyz[i] = cluster->plane_unnormalized.n_unnormalized.xyz[i] / magn;
+
+            (*Nclusters)++;
 
             if(dump)
             {
@@ -750,6 +791,265 @@ static void segment_clusters_from_segments(// out
     }
 }
 
+
+// Returns true if we processed this point (maybe by accumulating it) and we
+// should keep going. Returns false if we should stop the iteration
+static bool accumulate_point(// out
+                             point_cluster_t* point_cluster,
+                             // in,out
+                             uint64_t* bitarray_visited,
+                             float* th_rad_last,
+                             // in
+                             const point3f_t* points,
+                             const plane_t* plane,
+                             const int ipoint)
+{
+    if(bitarray64_check(bitarray_visited, ipoint))
+        // We already processed this point, presumably from the other side.
+        // There's no reason to keep going, since we already approached from the
+        // other side
+        return false;
+
+    const float th_rad = th_from_point(&points[ipoint]);
+    if(*th_rad_last < 1e6f && // if we have a valid th_rad_last
+       fabsf(th_rad - *th_rad_last) > threshold_max_gap_th_rad)
+        return false;
+
+    // no threshold_max_range check here. This was already checked when
+    // constructing the candidate segments. So if we got this far, I assume it's
+    // good
+
+    if( plane_point_compatible(plane,
+                               &points[ipoint]) )
+    {
+        // I will be fitting a plane to a set of points. The most accurate way
+        // to do this is to minimize the observation errors (ranges; what the
+        // fit ingesting this data will be doing). But that's a nonlinear solve,
+        // and I avoid that here. I simply minimize the norm2 off-plane error
+        // instead:
+        //
+        // - compute pmean
+        // - compute M = sum(outer(p[i]-pmean,p[i]-pmean))
+        // - n = eigenvector of M corresponding to the smallest eigenvalue
+        //
+        // So to accumulate a point I would need two passes over the data: to
+        // compute pmean and then M. I might be able to expand the sum() in M to
+        // make it work in one pass, but that's very likely to produce high
+        // floating point round-off errors. So I actually accumulate the full
+        // points for now, and might do something more efficient later
+        if(point_cluster->n == (int)(sizeof(point_cluster->p)/sizeof(point_cluster->p[0])))
+        {
+            MSG("sizeof(point_cluster->p) exceeded. Skippping the reset of the point cluster. Increase the size of sizeof(point_cluster->p)");
+            return false;
+        }
+        point_cluster->p[ point_cluster->n++ ] = points[ipoint];
+
+        bitarray64_set(bitarray_visited, ipoint);
+        *th_rad_last = th_rad;
+    }
+    else
+    {
+        // Not accepting this point, but also not updating th_rad_last. So too
+        // many successive invalid points will create a too-large gap, failing
+        // the threshold_max_gap_th_rad check above
+    }
+
+    return true;
+}
+
+
+
+
+
+
+
+
+
+
+// A drop-in-able public implementation is needed
+void eig_smallest_real_symmetric_3x3( // out
+                                      double* v,
+                                      double* l,
+                                      // in
+                                      const double* M // shape (6,); packed storage; row-first
+                                      );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Ingests a point set, and write the fitted plane into point_cluster->plane.
+// Returns a fit cost.
+static float fit_plane_into_points(// in,out
+                                   point_cluster_t* point_cluster)
+{
+    // I fit a plane to a set of points. The most accurate way to do this is to
+    // minimize the observation errors (ranges; what the fit ingesting this data
+    // will be doing). But that's a nonlinear solve, and I avoid that here. I
+    // simply minimize the norm2 off-plane error instead:
+    //
+    // - compute pmean
+    // - compute M = sum(outer(p[i]-pmean,p[i]-pmean))
+    // - n = eigenvector of M corresponding to the smallest eigenvalue
+    //
+    // Derivation: plane is (p,n); points are in a (3,N) matrix P. I minimize
+    // E = sum(norm2( inner(n,Pi-p) ))
+    //   = norm2((Pt-pt) n )
+    //
+    // dE/dp ~ nt (P-p) n
+#warning "finish this. I believe the eigenvalue is the measure of tightness of fit; the derivation should show this"
+
+    point3f_t pmean = {};
+    for(int i=0; i<point_cluster->n; i++)
+        for(int j=0; j<3; j++)
+            pmean.xyz[j] += point_cluster->p[i].xyz[j];
+    for(int j=0; j<3; j++)
+        pmean.xyz[j] /= (float)(point_cluster->n);
+
+
+    // packed storage; row-first
+    // double-precision because this is potentially inaccurate
+    double M[3+2+1] = {};
+    for(int i=0; i<point_cluster->n; i++)
+    {
+        const point3f_t dp = sub(point_cluster->p[i], pmean);
+        M[0] += (double)(dp.xyz[0]*dp.xyz[0]);
+        M[1] += (double)(dp.xyz[0]*dp.xyz[1]);
+        M[2] += (double)(dp.xyz[0]*dp.xyz[2]);
+        M[3] += (double)(dp.xyz[1]*dp.xyz[1]);
+        M[4] += (double)(dp.xyz[1]*dp.xyz[2]);
+        M[5] += (double)(dp.xyz[2]*dp.xyz[2]);
+    }
+
+    double v[3];
+    double l;
+    eig_smallest_real_symmetric_3x3(v,&l,M);
+    point_cluster->plane.p = pmean;
+    point_cluster->plane.n = point3f_from_double(v);
+
+    return (float)l;
+}
+
+
+static float refine_point_cluster_from_segment_cluster(// out
+                                                       point_cluster_t* point_cluster,
+
+                                                       // in
+                                                       const segment_cluster_t* segment_cluster,
+                                                       const segment_t* segments,
+                                                       const int Nrings, const int Nsegments_per_rotation,
+                                                       const point3f_t** points,
+                                                       const int* Npoints)
+{
+    /* I have an approximate plane estimate.
+
+       while(...)
+       {
+         gather set of neighborhood points that match the current plane estimate
+         update plane estimate using this set of points
+       }
+     */
+
+    while(true)
+    {
+        point_cluster->n = 0;
+
+        // I find the min/max ring indices in the cluster
+        int iring0 = INT_MAX, iring1 = INT_MIN;
+        for(int isegment=0; isegment<segment_cluster->n; isegment++)
+        {
+            const segmentref_t* segmentref = &segment_cluster->segments[isegment];
+            const int           iring      = segmentref->iring;
+            if(iring < iring0) iring0 = iring;
+            if(iring > iring1) iring1 = iring;
+        }
+
+        // I consider the neighboring rings in the cluster, so I add padding on
+        // both sides
+        const int Nrings_pad = 5;
+        iring0 -= Nrings_pad;
+        iring1 += Nrings_pad;
+        const int Nrings_considered = iring1-iring0+1;
+
+        // I keep track of the already-visited points
+        const int Nwords_bitarray_visited = bitarray64_nwords(Npoints_per_rotation); // largest-possible size
+        uint64_t bitarray_visited[Nrings_considered][Nwords_bitarray_visited];
+        for(int i=0; i<Nrings_considered; i++)
+            memset(bitarray_visited[i], 0, Nwords_bitarray_visited*sizeof(uint64_t));
+
+        for(int isegment=0; isegment<segment_cluster->n; isegment++)
+        {
+            const segmentref_t* segmentref = &segment_cluster->segments[isegment];
+
+            const int iring    = segmentref->iring;
+            const int isegment = segmentref->isegment;
+
+            const segment_t* segment =
+                &segments[iring*Nsegments_per_rotation + isegment];
+
+            // I start in the center of each segment, and expand outwards to
+            // capture all the matching points
+            const int ipoint0 = (segment->ipoint0 + segment->ipoint1) / 2;
+
+            float th_rad_last;
+
+            th_rad_last = 1e6f; // indicate an invalid value initially
+            for(int ipoint = ipoint0;
+                ipoint < Npoints[iring];
+                ipoint++)
+            {
+                if(!accumulate_point(point_cluster,
+                                     bitarray_visited[iring-iring0],
+                                     &th_rad_last,
+                                     points[iring],
+                                     &segment_cluster->plane,
+                                     ipoint))
+                    break;
+            }
+
+            th_rad_last = 1e6f; // indicate an invalid value initially
+            for(int ipoint = ipoint0-1;
+                ipoint >= 0;
+                ipoint--)
+            {
+                if(!accumulate_point(point_cluster,
+                                     bitarray_visited[iring-iring0],
+                                     &th_rad_last,
+                                     points[iring],
+                                     &segment_cluster->plane,
+                                     ipoint))
+                    break;
+            }
+
+
+            // I don't bother to look in rings that don't appear in the
+            // segment_cluster. This will by contain not very much data (because
+            // the pre-solve didn't find it), and won't be of much value
+        }
+
+
+        // Got a set of points. Fit a plane. This sets point_cluster->plane
+        float fit_cost = fit_plane_into_points(point_cluster);
+#warning FOR NOW I JUST RUN A SINGLE ITERATION
+        return fit_cost;
+    }
+
+    return -1.0f;
+}
 
 static void point_segmentation(const point3f_t** points,
                                const int* Npoints)
@@ -791,22 +1091,23 @@ static void point_segmentation(const point3f_t** points,
 
     // plane_clusters_from_segments() will return only clusters of an acceptable size,
     // so there will not be a huge number of candidates
-    segment_cluster_t clusters[10];
+    const int Nmax_planes = 10;
+    segment_cluster_t segment_clusters[Nmax_planes];
     int Nclusters;
-    segment_clusters_from_segments(clusters,
+    segment_clusters_from_segments(segment_clusters,
                                    &Nclusters,
-                                   (int)(sizeof(clusters)/sizeof(clusters[0])),
+                                   (int)(sizeof(segment_clusters)/sizeof(segment_clusters[0])),
                                    segments,
                                    Nrings, Nsegments_per_rotation);
 
     if(dump)
         for(int icluster=0; icluster<Nclusters; icluster++)
         {
-            segment_cluster_t* cluster = &clusters[icluster];
-            for(int i=0; i<cluster->n; i++)
+            segment_cluster_t* segment_cluster = &segment_clusters[icluster];
+            for(int i=0; i<segment_cluster->n; i++)
             {
-                const int iring    = cluster->segments[i].iring;
-                const int isegment = cluster->segments[i].isegment;
+                const int iring    = segment_cluster->segments[i].iring;
+                const int isegment = segment_cluster->segments[i].isegment;
 
                 segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
 
@@ -823,6 +1124,35 @@ static void point_segmentation(const point3f_t** points,
             }
         }
 
+
+    for(int icluster=0; icluster<Nclusters; icluster++)
+    {
+        segment_cluster_t* segment_cluster = &segment_clusters[icluster];
+
+        point_cluster_t point_cluster;
+        float fit_cost =
+            refine_point_cluster_from_segment_cluster(&point_cluster,
+                                                      segment_cluster,
+                                                      segments,
+                                                      Nrings, Nsegments_per_rotation,
+                                                      points, Npoints);
+        if(fit_cost >= 0.0f && // acceptable plane
+#warning "made-up threshold"
+           fit_cost < 1.0)
+        {
+            if(dump)
+                for(int ipoint=0;
+                    ipoint < point_cluster.n;
+                    ipoint++)
+                {
+                    printf("%f %f cluster-points-refined-%d %f\n",
+                                   point_cluster.p[ipoint].x,
+                                   point_cluster.p[ipoint].y,
+                                   icluster,
+                                   point_cluster.p[ipoint].z);
+                }
+        }
+    }
 }
 
 int main(void)
