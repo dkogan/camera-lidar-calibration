@@ -1,0 +1,6 @@
+%s 
+   [--xxx]
+   INPUT_FILE
+
+Process the point cloud produced by dump-lidar-scan.py to find the boards shown
+by the user.
