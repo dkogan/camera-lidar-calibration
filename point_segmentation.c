@@ -1155,16 +1155,19 @@ static void point_segmentation(const point3f_t** points,
     }
 }
 
-int main(void)
-{
-    // from dump-lidar-scan.py
-    const char* filename = "/tmp/tst.dat";
 
+static bool parse_input_file( // out
+                              const point3f_t** points, // Nrings of these
+                              int* Npoints,             // Nrings of these
+                              // in
+                              const char* filename
+                              )
+{
     int fd = open(filename, O_RDONLY);
     if(fd <= 0)
     {
         MSG("Error opening '%s'\n", filename);
-        return 1;
+        return false;
     }
 
     struct stat sb;
@@ -1172,19 +1175,19 @@ int main(void)
     if(res)
     {
         MSG("Error stat('%s')\n", filename);
-        return 1;
+        return false;
     }
     if(sb.st_size == 0)
     {
         MSG("stat('%s') says that st_size == 0\n", filename);
-        return 1;
+        return false;
     }
 
     char* data = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if(data == MAP_FAILED)
     {
         MSG("mmap('%s') failed\n", filename);
-        return 1;
+        return false;
     }
 
     int ibyte_data   = 0;
@@ -1199,7 +1202,7 @@ int main(void)
             if(newline == NULL)
             {
                 MSG("Data parsing failed");
-                return 1;
+                return false;
             }
             ibyte_data = (int)(newline-data) + 1;
             continue;
@@ -1223,7 +1226,7 @@ int main(void)
             !READ_INTEGER_FIELD(&Nrings_read,  "Nrings") )
         {
             MSG("ERROR: not a comment or any of the known fields, but some known fields are still incomplete, so we still need to parse the header");
-            return 1;
+            return false;
         }
 
 #warning "INCOMPLETE PARSING. NEED TO CHECK THAT ibyte_data<sb.st_size always"
@@ -1233,31 +1236,27 @@ int main(void)
     {
         MSG("Currently I'm only accepting version=1 data, but this datafile has version = %d",
             version_read);
-        return 1;
+        return false;
     }
     if(Nrings != Nrings_read)
     {
         MSG("Currently we're assuming a specific value of Nrings = %d, but this datafile has Nrings = %d",
             Nrings, Nrings_read);
-        return 1;
+        return false;
     }
     // Done with the header. The file should be set up such that we're now at an
     // aligned location
     if(ibyte_data % 16)
     {
         MSG("ERROR: after reading the header we're not aligned at a multiple of 16. The data-file writing or parsing are buggy");
-        return 1;
+        return false;
     }
     if((uintptr_t)data % 16)
     {
         MSG("ERROR: the data buffer isn't aligned. mmap() SHOULD return aligned pointers. Something is wrong buggy");
-        return 1;
+        return false;
     }
 
-
-
-    const point3f_t* points[Nrings];
-    int Npoints[Nrings];
 
 
     for(int iring=0; iring<Nrings; iring++)
@@ -1274,14 +1273,14 @@ int main(void)
         if(1 != sscanf(buf, "%d", &Npoints[iring]))
         {
             MSG("Couldn't parse Npoints for iring=%d", iring);
-            return 1;
+            return false;
         }
 
         const int Nbytes_remaining = sb.st_size - ibyte_data;
         if(Npoints[iring] * (int)sizeof(point3f_t) > Nbytes_remaining)
         {
             MSG("Not enough bytes in file for iring=%d", iring);
-            return 1;
+            return false;
         }
 
         points[iring] = (const point3f_t*)&data[ibyte_data];
@@ -1291,9 +1290,24 @@ int main(void)
     if(sb.st_size != ibyte_data)
     {
         MSG("File has trailing bytes");
-        return 1;
+        return false;
     }
 
+    return true;
+}
+
+
+int main(void)
+{
+    // from dump-lidar-scan.py
+    const char* filename = "/tmp/tst.dat";
+    const point3f_t* points[Nrings];
+    int Npoints            [Nrings];
+
+
+    if(!parse_input_file(points,Npoints,
+                         filename))
+        return 1;
 
     point_segmentation(points, Npoints);
 
