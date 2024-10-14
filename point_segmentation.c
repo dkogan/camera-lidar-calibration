@@ -14,7 +14,7 @@
 
 
 static bool dump = true;
-static int debug_iring = 10;
+static int debug_iring = -10;
 static float debug_xmin = -1e6f;
 static float debug_xmax =  1e6f;
 static float debug_ymin = -1e6f;
