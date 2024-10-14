@@ -691,10 +691,10 @@ static void segment_clusters_from_segments(// out
             }
             segment_cluster_t* cluster = &clusters[(*Nclusters)++];
             *cluster = (segment_cluster_t){.n = 2,
-                                   .segments = {[0] = {.isegment = isegment,
-                                                       .iring    = iring},
-                                                [1] = {.isegment = isegment,
-                                                       .iring    = iring1}}};
+                                           .segments = {[0] = {.isegment = isegment,
+                                                               .iring    = iring},
+                                                        [1] = {.isegment = isegment,
+                                                               .iring    = iring1}}};
             while(!stack_empty(&stack))
             {
                 segmentref_t* node = stack_pop(&stack);
