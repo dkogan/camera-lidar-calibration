@@ -168,7 +168,7 @@ typedef struct
         plane_unnormalized_t plane_unnormalized;
     };
 
-    segmentref_t segments[128];
+    segmentref_t segments[256];
     int n;
 } segment_cluster_t;
 
