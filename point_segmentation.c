@@ -171,9 +171,9 @@ int isegment_from_th(const float th_rad)
     return i;
 }
 static
-bool point_is_valid(const point3f_t* p,
-                    const float dth_rad,
-                    const bool debug)
+bool point_is_valid__presolve(const point3f_t* p,
+                              const float dth_rad,
+                              const bool debug)
 {
     if( DEBUG_ERR_ON_TRUE( norm2(*p) > threshold_max_range*threshold_max_range,
                            p,
@@ -326,10 +326,10 @@ static void bitarray64_set_range(uint64_t* bitarray,
 
 
 static
-bool planar(const point3f_t* p,
-            const int ipoint0,
-            const int ipoint1,
-            const uint64_t* bitarray_invalid)
+bool is_point_segment_planar(const point3f_t* p,
+                             const int ipoint0,
+                             const int ipoint1,
+                             const uint64_t* bitarray_invalid)
 {
     const point3f_t* p0 = &p[ipoint0];
     const point3f_t* p1 = &p[ipoint1];
@@ -384,7 +384,7 @@ void finish_segment(// out
        DEBUG_ERR_ON_TRUE(Npoints < threshold_min_Npoints_in_segment,
                          &p[ipoint0],
                          "%d < %d", Npoints, threshold_min_Npoints_in_segment) ||
-       DEBUG_ERR_ON_TRUE(!planar(p,ipoint0,ipoint1,bitarray_invalid),
+       DEBUG_ERR_ON_TRUE(!is_point_segment_planar(p,ipoint0,ipoint1,bitarray_invalid),
                          &p[ipoint0],
                          ""))
     {
@@ -465,8 +465,8 @@ fit_plane_from_ring(// out
         // important
         if(ipoint-ipoint0 <= Npoints_per_segment)
         {
-            if(!point_is_valid(&points[ipoint], th_rad - th_rad_prev,
-                               debug))
+            if(!point_is_valid__presolve(&points[ipoint], th_rad - th_rad_prev,
+                                         debug))
             {
                 Npoints_invalid_in_segment++;
                 bitarray64_set(bitarray_invalid, ipoint-ipoint0);
@@ -560,8 +560,8 @@ static bool plane_from_segment_segment(// out
 }
 
 
-static bool plane_compatible(const plane_t*         plane,
-                             const segment_t* segment)
+static bool plane_segment_compatible(const plane_t*   plane,
+                                     const segment_t* segment)
 {
     // both segment->p and segment->v must lie in the plane
 
@@ -590,7 +590,7 @@ static void try_visit(stack_t* stack,
 
     if(segment_is_valid(segment) &&
        !segment->visited &&
-       plane_compatible(plane, segment))
+       plane_segment_compatible(plane, segment))
     {
         segmentref_t* node = stack_push(stack);
 
@@ -616,14 +616,14 @@ static void try_visit(stack_t* stack,
     }
 }
 
-static void plane_clusters_from_segments(// out
-                                         segment_cluster_t* clusters,
-                                         int* Nclusters,
-                                         const int Nclusters_max, // size of clusters[]
+static void segment_clusters_from_segments(// out
+                                           segment_cluster_t* clusters,
+                                           int* Nclusters,
+                                           const int Nclusters_max, // size of clusters[]
 
-                                         // in
-                                         segment_t* segments, // non-const to be able to set "visited"
-                                         const int Nrings, const int Nsegments_per_rotation)
+                                           // in
+                                           segment_t* segments, // non-const to be able to set "visited"
+                                           const int Nrings, const int Nsegments_per_rotation)
 {
     *Nclusters = 0;
 
@@ -736,8 +736,8 @@ static void plane_clusters_from_segments(// out
 }
 
 
-static void segment(const point3f_t** points,
-                    const int* Npoints)
+static void point_segmentation(const point3f_t** points,
+                               const int* Npoints)
 {
     segment_t segments[Nrings*Nsegments_per_rotation] = {};
 
@@ -778,11 +778,11 @@ static void segment(const point3f_t** points,
     // so there will not be a huge number of candidates
     segment_cluster_t clusters[10];
     int Nclusters;
-    plane_clusters_from_segments(clusters,
-                                 &Nclusters,
-                                 (int)(sizeof(clusters)/sizeof(clusters[0])),
-                                 segments,
-                                 Nrings, Nsegments_per_rotation);
+    segment_clusters_from_segments(clusters,
+                                   &Nclusters,
+                                   (int)(sizeof(clusters)/sizeof(clusters[0])),
+                                   segments,
+                                   Nrings, Nsegments_per_rotation);
 
     if(dump)
         for(int icluster=0; icluster<Nclusters; icluster++)
@@ -950,7 +950,7 @@ int main(void)
     }
 
 
-    segment(points, Npoints);
+    point_segmentation(points, Npoints);
 
     return 0;
 }
