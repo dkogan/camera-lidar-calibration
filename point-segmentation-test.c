@@ -6,7 +6,7 @@
 
 
 
-
+#warning hard-coded constant
 static const int   Nrings = 32;
 
 
