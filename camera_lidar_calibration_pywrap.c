@@ -1,23 +1,7 @@
 #define NPY_NO_DEPRECATED_API NPY_API_VERSION
 
 #include <stdbool.h>
-
-
-
-
-
-
-
-
-#include </usr/include/python3.12/Python.h>
-
-
-
-
-
-
-
-#include </usr/include/python3.12/structmember.h>
+#include <Python.h>
 #include <numpy/arrayobject.h>
 #include <signal.h>
 
