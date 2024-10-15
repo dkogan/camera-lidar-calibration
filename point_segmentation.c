@@ -1084,8 +1084,6 @@ int8_t point_segmentation(// out
                           const point3f_t* points,  // length sum(Npoints)
                           const int* Npoints)
 {
-#error "finish this. Nplanes_max refers to plane[] and not to anything else. Finish Python interface to this function: needs to return stuff"
-
 #warning "pass Npoints_all around instead of recomputing it everywhere?"
 
     int ipoint0_in_ring[Nrings];
@@ -1173,7 +1171,8 @@ int8_t point_segmentation(// out
     {
         if(iplane_out == Nplanes_max)
         {
-            MSG("Nplanes_max=%d exceeded. Ignoring not-yet-processed planes");
+            MSG("Nplanes_max=%d exceeded. Ignoring not-yet-processed planes",
+                Nplanes_max);
             return Nplanes_max;
         }
 
