@@ -4,6 +4,7 @@
 #include <Python.h>
 #include <numpy/arrayobject.h>
 #include <signal.h>
+#include <stddef.h>
 
 #include "point_segmentation.h"
 
@@ -48,8 +49,10 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
     PyObject* result = NULL;
 
     // Each is an iterable of length Nrings
-    PyArrayObject* points  = NULL;
-    PyArrayObject* Npoints = NULL;
+    PyArrayObject* points    = NULL;
+    PyArrayObject* Npoints   = NULL;
+    PyArrayObject* plane_idx = NULL;
+    PyArrayObject* plane_pn  = NULL;
 
     int ipoint0[Nrings];
 
@@ -90,25 +93,47 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
     for(int i=1; i<Nrings; i++)
         ipoint0[i] = ipoint0[i-1] + ((int*)PyArray_DATA(Npoints))[i-1];
 
-    const int Npoints_total = ipoint0[Nrings-1] + ((int*)PyArray_DATA(Npoints))[Nrings-1];
+    const int Npoints_all = ipoint0[Nrings-1] + ((int*)PyArray_DATA(Npoints))[Nrings-1];
 
-    if(Npoints_total != PyArray_DIMS(points)[0])
+    if(Npoints_all != PyArray_DIMS(points)[0])
     {
         PyErr_Format(PyExc_RuntimeError, "'Npoints' says there are %d total points, but 'points' says %d. These must match",
-                     Npoints_total,
+                     Npoints_all,
                      (int)(PyArray_DIMS(points)[0]));
         goto done;
     }
 
-    point_segmentation((const point3f_t*)PyArray_DATA(points),
-                       (const int*)PyArray_DATA(Npoints));
+    plane_idx = (PyArrayObject*)PyArray_SimpleNew(1, ((npy_intp[]){Npoints_all}), NPY_INT8);
+    if(plane_idx == NULL)
+        goto done;
 
-    result = Py_None;
-    Py_INCREF(Py_None);
+    const int Nplanes_max = 16;
+    plane_pn = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Nplanes_max,6}), NPY_FLOAT32);
+    if(plane_pn == NULL)
+        goto done;
+    static_assert(offsetof(plane_t,p) == 0 && offsetof(plane_t,n) == sizeof(point3f_t) && sizeof(plane_t) == 2*sizeof(point3f_t),
+                  "plane_t is expected to densely store p and then n");
+
+    int8_t Nplanes =
+        point_segmentation( // out
+                            PyArray_DATA(plane_idx),
+                            (plane_t*)PyArray_DATA(plane_pn),
+                            // in
+                            Nplanes_max,
+                            (const point3f_t*)PyArray_DATA(points),
+                            (const int*)PyArray_DATA(Npoints));
+    if(Nplanes < 0)
+        goto done;
+
+    result = Py_BuildValue("{sOsO}",
+                           "plane_idx", plane_idx,
+                           "plane_pn",  plane_pn);
 
  done:
     Py_XDECREF(points);
     Py_XDECREF(Npoints);
+    Py_XDECREF(plane_idx);
+    Py_XDECREF(plane_pn);
     return result;
 }
 
