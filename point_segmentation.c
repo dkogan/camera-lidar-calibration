@@ -918,11 +918,11 @@ static float fit_plane_into_points( // out
     int Npoints_thisplane = 0;
     for(int i=0; i<Npoints_all; i++)
         if(plane_idx[i] == plane_id)
+        {
             for(int j=0; j<3; j++)
-            {
                 pmean.xyz[j] += points[i].xyz[j];
-                Npoints_thisplane++;
-            }
+            Npoints_thisplane++;
+        }
     for(int j=0; j<3; j++)
         pmean.xyz[j] /= (float)(Npoints_thisplane);
 
@@ -932,16 +932,15 @@ static float fit_plane_into_points( // out
     double M[3+2+1] = {};
     for(int i=0; i<Npoints_all; i++)
         if(plane_idx[i] == plane_id)
-            for(int j=0; j<3; j++)
-            {
-                const point3f_t dp = sub(points[i], pmean);
-                M[0] += (double)(dp.xyz[0]*dp.xyz[0]);
-                M[1] += (double)(dp.xyz[0]*dp.xyz[1]);
-                M[2] += (double)(dp.xyz[0]*dp.xyz[2]);
-                M[3] += (double)(dp.xyz[1]*dp.xyz[1]);
-                M[4] += (double)(dp.xyz[1]*dp.xyz[2]);
-                M[5] += (double)(dp.xyz[2]*dp.xyz[2]);
-            }
+        {
+            const point3f_t dp = sub(points[i], pmean);
+            M[0] += (double)(dp.xyz[0]*dp.xyz[0]);
+            M[1] += (double)(dp.xyz[0]*dp.xyz[1]);
+            M[2] += (double)(dp.xyz[0]*dp.xyz[2]);
+            M[3] += (double)(dp.xyz[1]*dp.xyz[1]);
+            M[4] += (double)(dp.xyz[1]*dp.xyz[2]);
+            M[5] += (double)(dp.xyz[2]*dp.xyz[2]);
+        }
 
     double v[3];
     double l;
@@ -1186,20 +1185,13 @@ int8_t point_segmentation(// out
            fit_cost < 1.0)
         {
             if(dump)
-            {
-                int Npoints_all = 0;
-                for(int i=0; i<Nrings; i++)
-                    Npoints_all += Npoints[i];
-
                 for(int i=0; i<Npoints_all; i++)
-                {
-                    printf("%f %f cluster-points-refined-%d %f\n",
-                           points[i].x,
-                           points[i].y,
-                           icluster,
-                           points[i].z);
-                }
-            }
+                    if(plane_idx[i] == iplane_out)
+                        printf("%f %f cluster-points-refined-%d %f\n",
+                               points[i].x,
+                               points[i].y,
+                               icluster,
+                               points[i].z);
             iplane_out++;
         }
     }
