@@ -991,11 +991,6 @@ static float refine_plane_from_segment_cluster(// out
             if(iring > iring1) iring1 = iring;
         }
 
-        // I consider the neighboring rings in the cluster, so I add padding on
-        // both sides
-        const int Nrings_pad = 5;
-        iring0 -= Nrings_pad;
-        iring1 += Nrings_pad;
         const int Nrings_considered = iring1-iring0+1;
 
         // I keep track of the already-visited points
