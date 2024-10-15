@@ -160,6 +160,69 @@ typedef struct
     int n;
 } segment_cluster_t;
 
+
+static
+void eig_smallest_real_symmetric_3x3( // out
+                                      double* v,
+                                      double* l,
+                                      // in
+                                      const double* M // shape (6,); packed storage; row-first
+                                      )
+{
+    // I have a symmetric 3x3 matrix M. So the eigenvalues are real and >= 0.
+    // The eigenvectors are orthonormal.
+
+    // This implements
+    // https://en.wikipedia.org/wiki/Eigenvalue_algorithm#3.C3.973_matrices
+    const double p1    = M[1]*M[1] + M[2]*M[2] + M[4]*M[4];
+    const double trace = M[0] + M[3] + M[5];
+
+    const double q  = trace / 3.;
+    const double dq[] = {M[0]-q,
+                         M[3]-q,
+                         M[5]-q};
+    const double p2 =
+        dq[0]*dq[0] + dq[1]*dq[1] + dq[2]*dq[2]
+        + 2. * p1;
+    const double p  = sqrt(p2 / 6.);
+    const double r  =
+        (q*(q*(-q + trace) +
+            p1 - M[0]*M[3] - M[0]*M[5] - M[3]*M[5]) +
+         M[0]*M[3]*M[5] - M[0]*M[4]*M[4] - M[1]*M[1]*M[5] + 2*M[1]*M[2]*M[4] - M[2]*M[2]*M[3])
+        / (2.*p*p*p);
+
+    // To handle round-off errors
+    double phi;
+    if (r <= -1)
+        phi = M_PI / 3;
+    else if(r >= 1)
+        phi = 0.;
+    else
+        phi = acos(r) / 3.;
+
+    // smallest
+    *l = q + 2. * p * cos(phi + (2.*M_PI/3.));
+
+
+    // Now to find the corresponding eigenvector. Following:
+    //   https://en.wikipedia.org/wiki/Eigenvalue_algorithm#Eigenvectors_of_normal_3%C3%973_matrices
+    //
+    // I expect a well-behaved point cloud. Only one
+    const double v0[] = {M[0] - *l,
+                         M[1],
+                         M[2]};
+    const double v1[] = {M[1],
+                         M[3] - *l,
+                         M[4]};
+    v[0] = v0[1]*v1[2] - v0[2]*v1[1];
+    v[1] = v0[2]*v1[0] - v0[0]*v1[2];
+    v[2] = v0[0]*v1[1] - v0[1]*v1[0];
+    const double mag = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    for(int i=0; i<3; i++)
+        v[i] /= mag;
+}
+
+
 static
 float th_from_point(const point3f_t* p)
 {
@@ -833,40 +896,6 @@ static bool accumulate_point(// out
 
     return true;
 }
-
-
-
-
-
-
-
-
-
-
-// A drop-in-able public implementation is needed
-void eig_smallest_real_symmetric_3x3( // out
-                                      double* v,
-                                      double* l,
-                                      // in
-                                      const double* M // shape (6,); packed storage; row-first
-                                      );
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 // Returns a fit cost.

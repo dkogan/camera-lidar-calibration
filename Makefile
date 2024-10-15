@@ -11,7 +11,7 @@ LDLIBS += \
 CFLAGS    += --std=gnu99
 CCXXFLAGS += -Wno-missing-field-initializers
 
-LIB_SOURCES += point_segmentation.c eig.c
+LIB_SOURCES += point_segmentation.c
 point-segmentation.o: point_segmentation.usage.h
 %.usage.h: %.usage
 	< $^ sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$$/\\n"/;' > $@
