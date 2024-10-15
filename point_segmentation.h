@@ -19,5 +19,5 @@ bool point_segmentation__parse_input_file( // out
                                            const char* filename
                                            );
 
-void point_segmentation(const point3f_t** points,
+void point_segmentation(const point3f_t* points,
                         const int* Npoints);

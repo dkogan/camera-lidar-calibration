@@ -55,7 +55,7 @@ int main(int argc, char* argv[])
 
 
 
-
+#if 0
     // from dump-lidar-scan.py
     const char* filename = argv[optind+0];
     const point3f_t* points[Nrings];
@@ -67,6 +67,8 @@ int main(int argc, char* argv[])
         return 1;
 
     point_segmentation(points, Npoints);
+#endif
+    printf("THIS TOOL DOESN'T WORK CURRENTLY. MAKE point_segmentation__parse_input_file() work again\n");
 
     return 0;
 }

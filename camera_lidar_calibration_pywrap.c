@@ -68,8 +68,6 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
     PyArrayObject* Npoints = NULL;
 
     int ipoint0[Nrings];
-    const point3f_t* points_per_ring[Nrings];
-
 
     char* keywords[] = { "points",
                          "Npoints",
@@ -105,7 +103,6 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
     }
 
     ipoint0[0] = 0;
-
     for(int i=1; i<Nrings; i++)
         ipoint0[i] = ipoint0[i-1] + ((int*)PyArray_DATA(Npoints))[i-1];
 
@@ -119,10 +116,7 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
         goto done;
     }
 
-    for(int i=0; i<Nrings; i++)
-        points_per_ring[i] = (const point3f_t*)&((float*)PyArray_DATA(points))[ipoint0[i]*3];
-
-    point_segmentation(points_per_ring,
+    point_segmentation((const point3f_t*)PyArray_DATA(points),
                        (const int*)PyArray_DATA(Npoints));
 
     result = Py_None;

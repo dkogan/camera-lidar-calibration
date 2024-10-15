@@ -946,7 +946,8 @@ static float refine_point_cluster_from_segment_cluster(// out
                                                        const segment_cluster_t* segment_cluster,
                                                        const segment_t* segments,
                                                        const int Nrings, const int Nsegments_per_rotation,
-                                                       const point3f_t** points,
+                                                       const point3f_t* points,
+                                                       const int* ipoint0_in_ring,
                                                        const int* Npoints)
 {
     /* I have an approximate plane estimate.
@@ -1009,7 +1010,7 @@ static float refine_point_cluster_from_segment_cluster(// out
                 if(!accumulate_point(point_cluster,
                                      bitarray_visited[iring-iring0],
                                      &th_rad_last,
-                                     points[iring],
+                                     &points[ipoint0_in_ring[iring]],
                                      &segment_cluster->plane,
                                      ipoint))
                     break;
@@ -1023,7 +1024,7 @@ static float refine_point_cluster_from_segment_cluster(// out
                 if(!accumulate_point(point_cluster,
                                      bitarray_visited[iring-iring0],
                                      &th_rad_last,
-                                     points[iring],
+                                     &points[ipoint0_in_ring[iring]],
                                      &segment_cluster->plane,
                                      ipoint))
                     break;
@@ -1045,7 +1046,7 @@ static float refine_point_cluster_from_segment_cluster(// out
     return -1.0f;
 }
 
-void point_segmentation(const point3f_t** points,
+void point_segmentation(const point3f_t* points,
                         const int* Npoints)
 {
     segment_t segments[Nrings*Nsegments_per_rotation] = {};
@@ -1054,20 +1055,27 @@ void point_segmentation(const point3f_t** points,
         printf("# x y what z\n");
 
 
-    // parsing complete. Do stuff
+    int ipoint0_in_ring[Nrings];
+    ipoint0_in_ring[0] = 0;
+    for(int i=1; i<Nrings; i++)
+        ipoint0_in_ring[i] = ipoint0_in_ring[i-1] + Npoints[i-1];
+
+
     for(int iring=0; iring<Nrings; iring++)
     {
         fit_plane_from_ring(// out
                             &segments[Nsegments_per_rotation*iring],
                             // in
-                            points[iring], Npoints[iring],
+                            &points[ipoint0_in_ring[iring]], Npoints[iring],
                             iring == debug_iring);
 
         if(dump)
         {
             for(int i=0; i<Npoints[iring]; i++)
                 printf("%f %f all %f\n",
-                       points[iring][i].x, points[iring][i].y, points[iring][i].z);
+                       points[ipoint0_in_ring[iring] + i].x,
+                       points[ipoint0_in_ring[iring] + i].y,
+                       points[ipoint0_in_ring[iring] + i].z);
 
             for(int i=0; i<Nsegments_per_rotation; i++)
             {
@@ -1110,10 +1118,10 @@ void point_segmentation(const point3f_t** points,
                     ipoint++)
                 {
                     printf("%f %f cluster-points-raw-%d %f\n",
-                           points[iring][ipoint].x,
-                           points[iring][ipoint].y,
+                           points[ipoint0_in_ring[iring] + ipoint].x,
+                           points[ipoint0_in_ring[iring] + ipoint].y,
                            icluster,
-                           points[iring][ipoint].z);
+                           points[ipoint0_in_ring[iring] + ipoint].z);
                 }
             }
         }
@@ -1129,7 +1137,7 @@ void point_segmentation(const point3f_t** points,
                                                       segment_cluster,
                                                       segments,
                                                       Nrings, Nsegments_per_rotation,
-                                                      points, Npoints);
+                                                      points, ipoint0_in_ring, Npoints);
         if(fit_cost >= 0.0f && // acceptable plane
 #warning "made-up threshold"
            fit_cost < 1.0)
@@ -1252,7 +1260,7 @@ bool point_segmentation__parse_input_file( // out
     }
 
 
-
+#if 0
     for(int iring=0; iring<Nrings; iring++)
     {
 #warning "INCOMPLETE PARSING. NEED TO CHECK THAT ibyte_data<sb.st_size always"
@@ -1286,6 +1294,13 @@ bool point_segmentation__parse_input_file( // out
         MSG("File has trailing bytes");
         return false;
     }
+#endif
+
+    printf("THIS FUNCTION DOESN'T WORK CURRENTLY. MAKE the flat point array work\n");
+    return false;
+
+
+
 
     return true;
 }
