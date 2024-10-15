@@ -16,7 +16,7 @@
 #define MSG(fmt, ...) fprintf(stderr, "%s(%d): " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
 
-static bool dump = true;
+static bool dump = false;
 static int debug_iring = -10;
 static float debug_xmin = -1e6f;
 static float debug_xmax =  1e6f;
