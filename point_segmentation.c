@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <limits.h>
+#include <float.h>
 
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -15,13 +16,6 @@
 
 #define MSG(fmt, ...) fprintf(stderr, "%s(%d): " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
-
-static bool dump = false;
-static int debug_iring = -10;
-static float debug_xmin = -1e6f;
-static float debug_xmax =  1e6f;
-static float debug_ymin = -1e6f;
-static float debug_ymax =  -3.f;
 
 #define DEBUG_ERR_ON_TRUE(what, p, fmt, ...)                            \
     ({  if(debug && (what))                                             \
@@ -36,31 +30,12 @@ static float debug_ymax =  -3.f;
 
 
 
+/* round up */
+#define Nsegments_per_rotation                                          \
+    (int)((ctx->Npoints_per_rotation + ctx->Npoints_per_segment-1) / ctx->Npoints_per_segment)
 
 
 
-
-
-static const int   threshold_min_Npoints_in_segment         = 10;
-static const int   threshold_max_Npoints_invalid_segment    = 5;
-static const float threshold_max_range                      = 5.f;
-static const int   Npoints_per_rotation                     = 1809; // found empirically in dump-lidar-scan.py
-static const int   Npoints_per_segment                      = 20;
-static const int   threshold_max_Ngap                       = 2;
-static const float threshold_max_deviation_off_segment_line = 0.05f;
-static const int   Nrings                                   = 32;
-
-static const float threshold_max_cos_angle_error_normal         = 0.087155742747f; // cos(90-5deg)
-static const float threshold_min_cos_angle_error_same_direction = 0.996194698092f; // cos(5deg)
-static const float threshold_max_plane_point_error              = 0.15;
-// round up
-static const int Nsegments_per_rotation = (int)((Npoints_per_rotation + Npoints_per_segment-1) / Npoints_per_segment);
-
-static const int threshold_max_Nsegments_in_cluster = 40;
-static const int threshold_min_Nsegments_in_cluster = 5;
-
-// used in refinement
-static const float threshold_max_gap_th_rad         = 0.5f * M_PI/180.f;
 
 __attribute__((unused))
 static point3f_t point3f_from_double(const double* p)
@@ -232,9 +207,10 @@ float th_from_point(const point3f_t* p)
 
 // ASSUMES th_rad CAME FROM atan2, SO IT'S IN [-pi,pi]
 static
-int isegment_from_th(const float th_rad)
+int isegment_from_th(const float th_rad,
+                     const context_t* ctx)
 {
-    const float segment_width_rad = 2.0f*M_PI * (float)Npoints_per_segment / (float)Npoints_per_rotation;
+    const float segment_width_rad = 2.0f*M_PI * (float)ctx->Npoints_per_segment / (float)ctx->Npoints_per_rotation;
 
     const int i = (int)((th_rad + M_PI) / segment_width_rad);
     // Should be in range EXCEPT if th_rad == +pi. Just in case and for good
@@ -248,19 +224,20 @@ int isegment_from_th(const float th_rad)
 static
 bool point_is_valid__presolve(const point3f_t* p,
                               const float dth_rad,
-                              const bool debug)
+                              const bool debug,
+                              const context_t* ctx)
 {
-    if( DEBUG_ERR_ON_TRUE( norm2(*p) > threshold_max_range*threshold_max_range,
+    if( DEBUG_ERR_ON_TRUE( norm2(*p) > ctx->threshold_max_range*ctx->threshold_max_range,
                            p,
-                           "%f > %f", norm2(*p), threshold_max_range*threshold_max_range ))
+                           "%f > %f", norm2(*p), ctx->threshold_max_range*ctx->threshold_max_range ))
         return false;
 
-    const int Ngap = (int)( 0.5f + fabsf(dth_rad) * (float)Npoints_per_rotation / (2.0f*M_PI) );
+    const int Ngap = (int)( 0.5f + fabsf(dth_rad) * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
 
     // Ngap==1 is the expected, normal value. Anything larger is a gap
-    if( DEBUG_ERR_ON_TRUE((Ngap-1) > threshold_max_Ngap,
+    if( DEBUG_ERR_ON_TRUE((Ngap-1) > ctx->threshold_max_Ngap,
                           p,
-                          "%d > %d", Ngap-1, threshold_max_Ngap))
+                          "%d > %d", Ngap-1, ctx->threshold_max_Ngap))
         return false;
 
     return true;
@@ -404,7 +381,8 @@ static
 bool is_point_segment_planar(const point3f_t* p,
                              const int ipoint0,
                              const int ipoint1,
-                             const uint64_t* bitarray_invalid)
+                             const uint64_t* bitarray_invalid,
+                             const context_t* ctx)
 {
     const point3f_t* p0 = &p[ipoint0];
     const point3f_t* p1 = &p[ipoint1];
@@ -433,7 +411,7 @@ bool is_point_segment_planar(const point3f_t* p,
         //          = norm2(v) - inner(v01,v)^2 / norm2(v01)
         const float norm2_e = norm2(v) - inner(v,v01)*inner(v,v01) * recip_norm2_v01;
 
-        if(norm2_e > threshold_max_deviation_off_segment_line*threshold_max_deviation_off_segment_line)
+        if(norm2_e > ctx->threshold_max_deviation_off_segment_line*ctx->threshold_max_deviation_off_segment_line)
             return false;
     }
     return true;
@@ -449,17 +427,18 @@ void finish_segment(// out
                     const point3f_t* p,
                     const int ipoint0,
                     const int ipoint1,
-                    const bool debug)
+                    const bool debug,
+                    const context_t* ctx)
 {
     const int Npoints = ipoint1 - ipoint0 + 1 - Npoints_invalid_in_segment;
 
-    if(DEBUG_ERR_ON_TRUE(Npoints_invalid_in_segment > threshold_max_Npoints_invalid_segment,
+    if(DEBUG_ERR_ON_TRUE(Npoints_invalid_in_segment > ctx->threshold_max_Npoints_invalid_segment,
                          &p[ipoint0],
-                         "%d > %d", Npoints_invalid_in_segment, threshold_max_Npoints_invalid_segment) ||
-       DEBUG_ERR_ON_TRUE(Npoints < threshold_min_Npoints_in_segment,
+                         "%d > %d", Npoints_invalid_in_segment, ctx->threshold_max_Npoints_invalid_segment) ||
+       DEBUG_ERR_ON_TRUE(Npoints < ctx->threshold_min_Npoints_in_segment,
                          &p[ipoint0],
-                         "%d < %d", Npoints, threshold_min_Npoints_in_segment) ||
-       DEBUG_ERR_ON_TRUE(!is_point_segment_planar(p,ipoint0,ipoint1,bitarray_invalid),
+                         "%d < %d", Npoints, ctx->threshold_min_Npoints_in_segment) ||
+       DEBUG_ERR_ON_TRUE(!is_point_segment_planar(p,ipoint0,ipoint1,bitarray_invalid, ctx),
                          &p[ipoint0],
                          ""))
     {
@@ -481,7 +460,8 @@ fit_plane_from_ring(// out
                     // in
                     const point3f_t* points,
                     const int Npoints,
-                    const bool debug_this_ring)
+                    const bool debug_this_ring,
+                    const context_t* ctx)
 {
     // I want this to be fast, and I'm looking for very clear planes, so I do a
     // crude thing here:
@@ -496,14 +476,14 @@ fit_plane_from_ring(// out
     // slice)
 
     // bit-field to indicate which points are valid/invalid
-    const int Nwords_bitarray_invalid = bitarray64_nwords(Npoints_per_segment);
+    const int Nwords_bitarray_invalid = bitarray64_nwords(ctx->Npoints_per_segment);
     uint64_t bitarray_invalid[Nwords_bitarray_invalid];
 
 
     const float th_rad0 = th_from_point(&points[0]);
 
     int ipoint0   = 0;
-    int isegment0 = isegment_from_th(th_rad0);
+    int isegment0 = isegment_from_th(th_rad0, ctx);
     int Npoints_invalid_in_segment = 0;
     float th_rad_prev = th_rad0;
 
@@ -513,20 +493,21 @@ fit_plane_from_ring(// out
     {
         const bool debug =
             debug_this_ring &&
-            ((debug_xmin < points[ipoint0 ].x && points[ipoint0 ].x < debug_xmax &&
-              debug_ymin < points[ipoint0 ].y && points[ipoint0 ].y < debug_ymax) ||
-             (debug_xmin < points[ipoint-1].x && points[ipoint-1].x < debug_xmax &&
-              debug_ymin < points[ipoint-1].y && points[ipoint-1].y < debug_ymax));
+            ((ctx->debug_xmin < points[ipoint0 ].x && points[ipoint0 ].x < ctx->debug_xmax &&
+              ctx->debug_ymin < points[ipoint0 ].y && points[ipoint0 ].y < ctx->debug_ymax) ||
+             (ctx->debug_xmin < points[ipoint-1].x && points[ipoint-1].x < ctx->debug_xmax &&
+              ctx->debug_ymin < points[ipoint-1].y && points[ipoint-1].y < ctx->debug_ymax));
 
         const float th_rad = th_from_point(&points[ipoint]);
-        const int isegment = isegment_from_th(th_rad);
+        const int isegment = isegment_from_th(th_rad, ctx);
         if(isegment != isegment0)
         {
             finish_segment(&segments[isegment0],
                            Npoints_invalid_in_segment,
                            bitarray_invalid,
                            points, ipoint0, ipoint-1,
-                           debug);
+                           debug,
+                           ctx);
 
             ipoint0   = ipoint;
             isegment0 = isegment;
@@ -538,10 +519,11 @@ fit_plane_from_ring(// out
         // azimuths don't changes as quickly as expected, and we have extra
         // points in each segment. I ignore those; hopefully they're not
         // important
-        if(ipoint-ipoint0 <= Npoints_per_segment)
+        if(ipoint-ipoint0 <= ctx->Npoints_per_segment)
         {
             if(!point_is_valid__presolve(&points[ipoint], th_rad - th_rad_prev,
-                                         debug))
+                                         debug,
+                                         ctx))
             {
                 Npoints_invalid_in_segment++;
                 bitarray64_set(bitarray_invalid, ipoint-ipoint0);
@@ -553,15 +535,16 @@ fit_plane_from_ring(// out
 
     const bool debug =
         debug_this_ring &&
-        ((debug_xmin < points[ipoint0  ].x && points[ipoint0  ].x < debug_xmax &&
-          debug_ymin < points[ipoint0  ].y && points[ipoint0  ].y < debug_ymax) ||
-         (debug_xmin < points[Npoints-1].x && points[Npoints-1].x < debug_xmax &&
-          debug_ymin < points[Npoints-1].y && points[Npoints-1].y < debug_ymax));
+        ((ctx->debug_xmin < points[ipoint0  ].x && points[ipoint0  ].x < ctx->debug_xmax &&
+          ctx->debug_ymin < points[ipoint0  ].y && points[ipoint0  ].y < ctx->debug_ymax) ||
+         (ctx->debug_xmin < points[Npoints-1].x && points[Npoints-1].x < ctx->debug_xmax &&
+          ctx->debug_ymin < points[Npoints-1].y && points[Npoints-1].y < ctx->debug_ymax));
     finish_segment(&segments[isegment0],
                    Npoints_invalid_in_segment,
                    bitarray_invalid,
                    points, ipoint0, Npoints-1,
-                   debug);
+                   debug,
+                   ctx);
 }
 
 static bool stack_empty(stack_t* stack)
@@ -584,7 +567,8 @@ static segmentref_t* stack_pop(stack_t* stack)
 }
 
 static bool is_normal(const point3f_t v,
-                      const point3f_t n)
+                      const point3f_t n,
+                      const context_t* ctx)
 {
 #warning "it is weird to do this with an angle threshold. should be distance threshold"
     // inner(v,n) = cos magv magn ->
@@ -595,11 +579,12 @@ static bool is_normal(const point3f_t v,
 
     return
         cos_mag_mag*cos_mag_mag <
-        threshold_max_cos_angle_error_normal*threshold_max_cos_angle_error_normal*norm2(n)*norm2(v);
+        ctx->threshold_max_cos_angle_error_normal*ctx->threshold_max_cos_angle_error_normal*norm2(n)*norm2(v);
 }
 
 static bool is_same_direction(const point3f_t a,
-                              const point3f_t b)
+                              const point3f_t b,
+                              const context_t* ctx)
 {
 #warning "it is weird to do this with an angle threshold. should be distance threshold"
     // inner(a,b) = cos maga magb ->
@@ -611,14 +596,15 @@ static bool is_same_direction(const point3f_t a,
     return
         cos_mag_mag > 0.0f &&
         cos_mag_mag*cos_mag_mag >
-        threshold_min_cos_angle_error_same_direction*threshold_min_cos_angle_error_same_direction*norm2(a)*norm2(b);
+        ctx->threshold_min_cos_angle_error_same_direction*ctx->threshold_min_cos_angle_error_same_direction*norm2(a)*norm2(b);
 }
 
 static bool plane_from_segment_segment(// out
                                        plane_unnormalized_t* plane_unnormalized,
                                        // in
                                        const segment_t* s0,
-                                       const segment_t* s1)
+                                       const segment_t* s1,
+                                       const context_t* ctx)
 {
     // I want:
     //   inner(p1-p0, n=cross(v0,v1)) = 0
@@ -628,7 +614,7 @@ static bool plane_from_segment_segment(// out
     point3f_t n0 = cross(dp,s0->v);
     point3f_t n1 = cross(dp,s1->v);
 
-    if(!is_same_direction(n0,n1))
+    if(!is_same_direction(n0,n1,ctx))
         return false;
 
     plane_unnormalized->n_unnormalized = mean(n0,n1);
@@ -638,7 +624,8 @@ static bool plane_from_segment_segment(// out
 
 
 static bool plane_segment_compatible(const plane_unnormalized_t* plane_unnormalized,
-                                     const segment_t*            segment)
+                                     const segment_t*            segment,
+                                     const context_t* ctx)
 {
     // both segment->p and segment->v must lie in the plane
 
@@ -646,13 +633,14 @@ static bool plane_segment_compatible(const plane_unnormalized_t* plane_unnormali
     //   inner(segv,   n) = 0
     //   inner(segp-p, n) = 0
     return
-        is_normal(segment->v, plane_unnormalized->n_unnormalized) &&
-        is_normal(sub(segment->p, plane_unnormalized->p), plane_unnormalized->n_unnormalized);
+        is_normal(segment->v, plane_unnormalized->n_unnormalized, ctx) &&
+        is_normal(sub(segment->p, plane_unnormalized->p), plane_unnormalized->n_unnormalized, ctx);
 }
 
 
 static bool plane_point_compatible(const plane_t*   plane,
-                                   const point3f_t* point)
+                                   const point3f_t* point,
+                                   const context_t* ctx)
 {
     // I want (point - p) to be perpendicular to n. I want this in terms of
     // "distance-off-plane" so err = inner( (point - p), n) / mag(n)
@@ -661,7 +649,7 @@ static bool plane_point_compatible(const plane_t*   plane,
     // n is normalized here, so I omit the /magn
     const point3f_t dp = sub(*point, plane->p);
 
-    return threshold_max_plane_point_error > fabsf(inner(dp, plane->n));
+    return ctx->threshold_max_plane_point_error > fabsf(inner(dp, plane->n));
 }
 
 static void try_visit(stack_t* stack,
@@ -672,7 +660,8 @@ static void try_visit(stack_t* stack,
                       // context
                       const plane_unnormalized_t* plane_unnormalized,
                       segment_t* segments, // non-const to be able to set "visited"
-                      const int Nrings, const int Nsegments_per_rotation)
+                      const int Nrings,
+                      const context_t* ctx)
 {
     if(iring    < 0 || iring    >= Nrings                ) return;
     if(isegment < 0 || isegment >= Nsegments_per_rotation) return;
@@ -681,7 +670,7 @@ static void try_visit(stack_t* stack,
 
     if(segment_is_valid(segment) &&
        !segment->visited &&
-       plane_segment_compatible(plane_unnormalized, segment))
+       plane_segment_compatible(plane_unnormalized, segment, ctx))
     {
         segmentref_t* node = stack_push(stack);
 
@@ -714,7 +703,8 @@ static void segment_clusters_from_segments(// out
 
                                            // in
                                            segment_t* segments, // non-const to be able to set "visited"
-                                           const int Nrings, const int Nsegments_per_rotation)
+                                           const int Nrings,
+                                           const context_t* ctx)
 {
     *Nclusters = 0;
 
@@ -756,7 +746,8 @@ static void segment_clusters_from_segments(// out
                 continue;
 
             if(!plane_from_segment_segment(&cluster->plane_unnormalized,
-                                           segment,segment1))
+                                           segment,segment1,
+                                           ctx))
                 continue;
 
             stack_t stack = {};
@@ -778,19 +769,23 @@ static void segment_clusters_from_segments(// out
                 try_visit(&stack,
                           cluster,
                           node->iring-1, node->isegment, &cluster->plane_unnormalized,
-                          segments, Nrings, Nsegments_per_rotation);
+                          segments, Nrings,
+                          ctx);
                 try_visit(&stack,
                           cluster,
                           node->iring+1, node->isegment, &cluster->plane_unnormalized,
-                          segments, Nrings, Nsegments_per_rotation);
+                          segments, Nrings,
+                          ctx);
                 try_visit(&stack,
                           cluster,
                           node->iring, node->isegment-1, &cluster->plane_unnormalized,
-                          segments, Nrings, Nsegments_per_rotation);
+                          segments, Nrings,
+                          ctx);
                 try_visit(&stack,
                           cluster,
                           node->iring, node->isegment+1, &cluster->plane_unnormalized,
-                          segments, Nrings, Nsegments_per_rotation);
+                          segments, Nrings,
+                          ctx);
             }
 
             if(cluster->n == 2)
@@ -801,8 +796,8 @@ static void segment_clusters_from_segments(// out
                 segment1->visited = false;
             }
 
-            if(cluster->n < threshold_min_Nsegments_in_cluster ||
-               cluster->n > threshold_max_Nsegments_in_cluster)
+            if(cluster->n < ctx->threshold_min_Nsegments_in_cluster ||
+               cluster->n > ctx->threshold_max_Nsegments_in_cluster)
             {
                 continue;
             }
@@ -816,7 +811,7 @@ static void segment_clusters_from_segments(// out
 
             (*Nclusters)++;
 
-            if(dump)
+            if(ctx->dump)
             {
                 for(int i=0; i<cluster->n; i++)
                 {
@@ -845,8 +840,8 @@ static bool accumulate_point(// out
                              // in
                              const point3f_t* points,
                              const int ipoint0_in_ring, // start of this ring in the full points[] array
-                             const int ipoint           // IN-RING index
-                             )
+                             const int ipoint,          // IN-RING index
+                             const context_t* ctx)
 {
     if(bitarray64_check(bitarray_visited, ipoint))
         // We already processed this point, presumably from the other side.
@@ -855,8 +850,8 @@ static bool accumulate_point(// out
         return false;
 
     const float th_rad = th_from_point(&points[ipoint0_in_ring + ipoint]);
-    if(*th_rad_last < 1e6f && // if we have a valid th_rad_last
-       fabsf(th_rad - *th_rad_last) > threshold_max_gap_th_rad)
+    if(*th_rad_last < FLT_MAX && // if we have a valid th_rad_last
+       fabsf(th_rad - *th_rad_last) > ctx->threshold_max_gap_th_rad)
         return false;
 
     // no threshold_max_range check here. This was already checked when
@@ -864,7 +859,8 @@ static bool accumulate_point(// out
     // good
 
     if( plane_point_compatible(&points_and_plane->plane,
-                               &points[ipoint0_in_ring + ipoint]) )
+                               &points[ipoint0_in_ring + ipoint],
+                               ctx) )
     {
         // I will be fitting a plane to a set of points. The most accurate way
         // to do this is to minimize the observation errors (ranges; what the
@@ -980,10 +976,10 @@ static float refine_plane_from_segment_cluster(// out
                                                // in
                                                const segment_cluster_t* segment_cluster,
                                                const segment_t* segments,
-                                               const int Nsegments_per_rotation,
                                                const point3f_t* points,
                                                const int* ipoint0_in_ring,
-                                               const int* Npoints)
+                                               const int* Npoints,
+                                               const context_t* ctx)
 {
     /* I have an approximate plane estimate.
 
@@ -1007,7 +1003,7 @@ static float refine_plane_from_segment_cluster(// out
     const int Nrings_considered = iring1-iring0+1;
 
     // I keep track of the already-visited points
-    const int Nwords_bitarray_visited = bitarray64_nwords(Npoints_per_rotation); // largest-possible size
+    const int Nwords_bitarray_visited = bitarray64_nwords(ctx->Npoints_per_rotation); // largest-possible size
     uint64_t bitarray_visited[Nrings_considered][Nwords_bitarray_visited];
 
     // Start with the best-available plane estimate
@@ -1036,7 +1032,7 @@ static float refine_plane_from_segment_cluster(// out
 
             float th_rad_last;
 
-            th_rad_last = 1e6f; // indicate an invalid value initially
+            th_rad_last = FLT_MAX; // indicate an invalid value initially
             for(int ipoint = ipoint0;
                 ipoint < Npoints[iring];
                 ipoint++)
@@ -1046,11 +1042,12 @@ static float refine_plane_from_segment_cluster(// out
                                      &th_rad_last,
                                      points,
                                      ipoint0_in_ring[iring],
-                                     ipoint))
+                                     ipoint,
+                                     ctx))
                     break;
             }
 
-            th_rad_last = 1e6f; // indicate an invalid value initially
+            th_rad_last = FLT_MAX; // indicate an invalid value initially
             for(int ipoint = ipoint0-1;
                 ipoint >= 0;
                 ipoint--)
@@ -1060,7 +1057,8 @@ static float refine_plane_from_segment_cluster(// out
                                      &th_rad_last,
                                      points,
                                      ipoint0_in_ring[iring],
-                                     ipoint))
+                                     ipoint,
+                                     ctx))
                     break;
             }
 
@@ -1083,34 +1081,54 @@ static float refine_plane_from_segment_cluster(// out
     return -1.0f;
 }
 
+void default_context(context_t* ctx)
+{
+#define LIST_CONTEXT_SET_DEFAULT(type,name,default,...) \
+    .name = default,
+
+    *ctx = (context_t)
+        { LIST_CONTEXT(LIST_CONTEXT_SET_DEFAULT) };
+
+#undef LIST_CONTEXT_SET_DEFAULT
+}
+
 // Returns how many planes were found or <0 on error
 int8_t point_segmentation(// out
                           points_and_plane_t* points_and_plane,
                           // in
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
                           const point3f_t* points,  // length sum(Npoints)
-                          const int* Npoints)
+                          const int* Npoints,
+                          const context_t* ctx)
 
 {
-    int ipoint0_in_ring[Nrings];
+    if(!(ctx->Nrings > 0 && ctx->Nrings <= 1024))
+    {
+        MSG("Unexpected value of Nrings=%d. Does your LIDAR really have this many lasers?",
+            ctx->Nrings);
+        return -1;
+    }
+
+    int ipoint0_in_ring[ctx->Nrings];
     ipoint0_in_ring[0] = 0;
-    for(int i=1; i<Nrings; i++)
+    for(int i=1; i<ctx->Nrings; i++)
         ipoint0_in_ring[i] = ipoint0_in_ring[i-1] + Npoints[i-1];
 
-    segment_t segments[Nrings*Nsegments_per_rotation] = {};
+    segment_t segments[ctx->Nrings*Nsegments_per_rotation] = {};
 
-    if(dump)
+    if(ctx->dump)
         printf("# x y what z\n");
 
-    for(int iring=0; iring<Nrings; iring++)
+    for(int iring=0; iring<ctx->Nrings; iring++)
     {
         fit_plane_from_ring(// out
                             &segments[Nsegments_per_rotation*iring],
                             // in
                             &points[ipoint0_in_ring[iring]], Npoints[iring],
-                            iring == debug_iring);
+                            iring == ctx->debug_iring,
+                            ctx);
 
-        if(dump)
+        if(ctx->dump)
         {
             for(int i=0; i<Npoints[iring]; i++)
                 printf("%f %f all %f\n",
@@ -1141,9 +1159,10 @@ int8_t point_segmentation(// out
                                    &Nclusters,
                                    (int)(sizeof(segment_clusters)/sizeof(segment_clusters[0])),
                                    segments,
-                                   Nrings, Nsegments_per_rotation);
+                                   ctx->Nrings,
+                                   ctx);
 
-    if(dump)
+    if(ctx->dump)
         for(int icluster=0; icluster<Nclusters; icluster++)
         {
             segment_cluster_t* segment_cluster = &segment_clusters[icluster];
@@ -1184,13 +1203,13 @@ int8_t point_segmentation(// out
             refine_plane_from_segment_cluster(&points_and_plane[iplane_out],
                                               segment_cluster,
                                               segments,
-                                              Nsegments_per_rotation,
-                                              points, ipoint0_in_ring, Npoints);
+                                              points, ipoint0_in_ring, Npoints,
+                                              ctx);
         if(fit_cost >= 0.0f && // acceptable plane
 #warning "made-up threshold"
            fit_cost < 1.0)
         {
-            if(dump)
+            if(ctx->dump)
                 for(int i=0; i<points_and_plane[iplane_out].n; i++)
                     printf("%f %f cluster-points-refined-%d %f\n",
                            points[points_and_plane[iplane_out].ipoint[i]].x,

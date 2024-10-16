@@ -41,11 +41,6 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
                                        PyObject* args,
                                        PyObject* kwargs)
 {
-
-#warning hard-coded constant
-    const int   Nrings = 32;
-
-
     PyObject* result = NULL;
 
     // Each is an iterable of length Nrings
@@ -57,21 +52,34 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
     const int Nplanes_max = 16;
     PyArrayObject* ipoint[Nplanes_max] = {};
 
+#warning "I should define a complex dtype to pass points_and_plane from a preallocated numpy array. Instead I do this in C and then copy the results. For now"
     points_and_plane_t points_and_plane[Nplanes_max];
 
-    int ipoint0[Nrings];
+    context_t ctx;
+    default_context(&ctx);
 
+
+#define LIST_CONTEXT_KEYWORDS(   type,name,default,pyparse) #name,
+#define LIST_CONTEXT_PYPARSE(    type,name,default,pyparse) pyparse
+#define LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse) &ctx.name,
     char* keywords[] = { "points",
                          "Npoints",
+                         LIST_CONTEXT(LIST_CONTEXT_KEYWORDS)
                          NULL };
-
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "$O&O&",
+                                     "O&O&" "|$" LIST_CONTEXT(LIST_CONTEXT_PYPARSE)
+                                     ,
                                      keywords,
                                      PyArray_Converter, &points,
                                      PyArray_Converter, &Npoints,
+                                     LIST_CONTEXT(LIST_CONTEXT_ADDRESS_CTX)
                                      NULL))
         goto done;
+
+#undef LIST_CONTEXT_KEYWORDS
+#undef LIST_CONTEXT_PYPARSE
+#undef LIST_CONTEXT_ADDRESS_CTX
+
 
     if(! (PyArray_TYPE(points) == NPY_FLOAT32 &&
           PyArray_NDIM(points) == 2 &&
@@ -85,21 +93,18 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
 
     if(! (PyArray_TYPE(Npoints) == NPY_INT &&
           PyArray_NDIM(Npoints) == 1 &&
-          PyArray_DIMS(Npoints)[0] == Nrings &&
+          PyArray_DIMS(Npoints)[0] == ctx.Nrings &&
           PyArray_STRIDES(Npoints)[0] == sizeof(int)) )
     {
         PyErr_Format(PyExc_RuntimeError,
                      "'Npoints' must be a densely-stored array of shape (Nrings=%d,) containing ints",
-                     Nrings);
+                     ctx.Nrings);
         goto done;
     }
 
-    ipoint0[0] = 0;
-    for(int i=1; i<Nrings; i++)
-        ipoint0[i] = ipoint0[i-1] + ((int*)PyArray_DATA(Npoints))[i-1];
-
-    const int Npoints_all = ipoint0[Nrings-1] + ((int*)PyArray_DATA(Npoints))[Nrings-1];
-
+    int Npoints_all = 0;
+    for(int i=0; i<ctx.Nrings; i++)
+        Npoints_all += ((int*)PyArray_DATA(Npoints))[i];
     if(Npoints_all != PyArray_DIMS(points)[0])
     {
         PyErr_Format(PyExc_RuntimeError, "'Npoints' says there are %d total points, but 'points' says %d. These must match",
@@ -108,15 +113,14 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
         goto done;
     }
 
-#warning "I should define a complex dtype to pass points_and_plane from a preallocated numpy array. Instead I do this in C and then copy the results. For now"
-
     int8_t Nplanes =
         point_segmentation( // out
                             points_and_plane,
                             // in
                             Nplanes_max,
                             (const point3f_t*)PyArray_DATA(points),
-                            (const int*)PyArray_DATA(Npoints));
+                            (const int*)PyArray_DATA(Npoints),
+                            &ctx);
     if(Nplanes < 0)
         goto done;
 

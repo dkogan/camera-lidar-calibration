@@ -26,8 +26,48 @@ typedef struct
 
     plane_t plane;
 } points_and_plane_t;
-
 _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has expected size");
+
+
+
+#define LIST_CONTEXT(_)                                                 \
+  /* bool, but PyArg_ParseTupleAndKeywords("p") wants an int */         \
+  _(int,   dump,                                         (int)false,        "p") \
+  _(int,   debug_iring,                                  -1,                "i") \
+  _(float, debug_xmin,                                   FLT_MIN,           "f") \
+  _(float, debug_xmax,                                   FLT_MAX,           "f") \
+  _(float, debug_ymin,                                   FLT_MIN,           "f") \
+  _(float, debug_ymax,                                   FLT_MAX,           "f") \
+  _(int,   threshold_min_Npoints_in_segment,             10,                "i") \
+  _(int,   threshold_max_Npoints_invalid_segment,        5,                 "i") \
+  _(float, threshold_max_range,                          5.f,               "f") \
+  /* found empirically in dump-lidar-scan.py */                         \
+  _(int,   Npoints_per_rotation,                         1809,              "i") \
+  _(int,   Npoints_per_segment,                          20,                "i") \
+  _(int,   threshold_max_Ngap,                           2,                 "i") \
+  _(float, threshold_max_deviation_off_segment_line,     0.05f,             "f") \
+  _(int,   Nrings,                                       32,                "i") \
+  /* cos(90-5deg) */                                                    \
+  _(float, threshold_max_cos_angle_error_normal,         0.087155742747f,   "f") \
+  /* cos(5deg) */                                                       \
+  _(float, threshold_min_cos_angle_error_same_direction, 0.996194698092f,   "f") \
+  _(float, threshold_max_plane_point_error,              0.15,              "f") \
+  _(int,   threshold_max_Nsegments_in_cluster,           40,                "i") \
+  _(int,   threshold_min_Nsegments_in_cluster,           5,                 "i") \
+  /* used in refinement */                                              \
+  _(float, threshold_max_gap_th_rad,                     0.5f * M_PI/180.f, "f")
+
+
+
+
+typedef struct
+{
+#define LIST_CONTEXT_DECLARE_C(type,name, ...) \
+    type name;
+
+    LIST_CONTEXT(LIST_CONTEXT_DECLARE_C)
+#undef LIST_CONTEXT_DECLARE_C
+} context_t;
 
 
 // Returns how many planes were found or <0 on error
@@ -36,4 +76,7 @@ int8_t point_segmentation(// out
                           // in
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
                           const point3f_t* points,  // length sum(Npoints)
-                          const int* Npoints);
+                          const int* Npoints,
+                          const context_t* ctx);
+
+void default_context(context_t* ctx);
