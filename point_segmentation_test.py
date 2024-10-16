@@ -30,6 +30,10 @@ def parse_args():
     parser.add_argument('--dump',
                         action='store_true',
                         help = '''dump the c-level diagnostics; do not try to make Python plots''')
+    parser.add_argument('--debug',
+                        type=float,
+                        nargs=5,
+                        help = '''debug_iring debug_xmin debug_ymin debug_xmax debug_ymax''')
     parser.add_argument('lidar-topic',
                         type=str,
                         help = '''The LIDAR topic we're looking at''')
@@ -51,10 +55,18 @@ import numpy as np
 import numpysane as nps
 import camera_lidar_calibration
 
+kwargs = dict(dump = args.dump)
+if args.debug is not None:
+    kwargs['debug_iring'] = int(args.debug[0])
+    kwargs['debug_xmin']  = args.debug[1]
+    kwargs['debug_ymin']  = args.debug[2]
+    kwargs['debug_xmax']  = args.debug[3]
+    kwargs['debug_ymax']  = args.debug[4]
+
 points,r = camera_lidar_calibration.point_segmentation(args.bag,
                                                        getattr(args, 'lidar-topic'),
-                                                       dump    = args.dump)
-if args.dump:
+                                                       **kwargs)
+if args.dump or args.debug is not None:
     sys.exit()
 
 
