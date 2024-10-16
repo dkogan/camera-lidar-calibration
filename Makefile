@@ -18,8 +18,6 @@ point-segmentation.o: point_segmentation.usage.h
 EXTRA_CLEAN += *.usage.h
 
 
-BIN_SOURCES += point-segmentation-test.c
-
 camera_lidar_calibration_pywrap.o: CFLAGS += $(PY_MRBUILD_CFLAGS)
 camera_lidar_calibration_pywrap.o: $(addsuffix .h,$(wildcard *.docstring))
 

@@ -30,13 +30,6 @@ typedef struct
 _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has expected size");
 
 
-bool point_segmentation__parse_input_file( // out
-                                           const point3f_t** points, // Nrings of these
-                                           int* Npoints,             // Nrings of these
-                                           // in
-                                           const char* filename
-                                           );
-
 // Returns how many planes were found or <0 on error
 int8_t point_segmentation(// out
                           points_and_plane_t* points_and_plane,
