@@ -59,23 +59,19 @@ points    = array['xyz']
 intensity = array['intensity']
 ring      = array['ring']
 
-
-if not (np.min(ring) == 0 and np.max(ring) == 31):
-    raise Exception("I assume EXACTLY 32 rings for now")
-Nrings = 32
-
+rings = np.unique(ring)
 
 # I need to sort by ring and then by th
 th = np.arctan2( points[:,1], points[:,0] )
 def points_from_rings():
-    for iring in range(Nrings):
+    for iring in rings:
         idx = ring==iring
         yield points[idx][ np.argsort(th[idx]) ]
 
 points_sorted = nps.glue( *points_from_rings(),
                           axis = -2 )
 
-Npoints = np.array([np.count_nonzero(ring==iring) for iring in range(Nrings)],
+Npoints = np.array([np.count_nonzero(ring==iring) for iring in rings],
                    dtype = np.int32)
 
 r = camera_lidar_calibration.point_segmentation(points  = points_sorted,
