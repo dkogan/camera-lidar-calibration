@@ -31,7 +31,8 @@ import numpysane as nps
 import camera_lidar_calibration
 import testutils
 
-
+ctx = camera_lidar_calibration.default_context()
+max_range = ctx['threshold_max_range']
 
 tests = (
     dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-37-12.bag',
@@ -49,8 +50,14 @@ tests = (
 
 for test in tests:
 
-    points,segmentation = camera_lidar_calibration.point_segmentation(f"{args.root}/{test['bag']}",
-                                                                      test['topic'])
+    bag = f"{args.root}/{test['bag']}"
+    topic = test['topic']
+
+    vizcmd = f"./point_segmentation_test.py --dump {topic} {bag} | vnl-filter ' -{max_range} < x && x < {max_range} && -{max_range} < y && y < {max_range}' | feedgnuplot --style all 'with dots' --3d --domain --dataid --square --points --tuplesizeall 3 --autolegend --xlabel x --ylabel y --zlabel z"
+
+    print(f"Evaluating test. Visualize like this:  {vizcmd}")
+
+    points,segmentation = camera_lidar_calibration.point_segmentation(bag, topic)
 
     plane_pn = segmentation['plane_pn']
     ipoint   = segmentation['ipoint']
