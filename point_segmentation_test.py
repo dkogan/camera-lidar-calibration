@@ -51,32 +51,9 @@ import numpy as np
 import numpysane as nps
 import camera_lidar_calibration
 
-lidar_topic = getattr(args, 'lidar-topic')
-
-array = next(bag_interface.bag_messages_generator(args.bag, (lidar_topic,) ))['array']
-
-points    = array['xyz']
-intensity = array['intensity']
-ring      = array['ring']
-
-rings = np.unique(ring)
-
-# I need to sort by ring and then by th
-th = np.arctan2( points[:,1], points[:,0] )
-def points_from_rings():
-    for iring in rings:
-        idx = ring==iring
-        yield points[idx][ np.argsort(th[idx]) ]
-
-points_sorted = nps.glue( *points_from_rings(),
-                          axis = -2 )
-
-Npoints = np.array([np.count_nonzero(ring==iring) for iring in rings],
-                   dtype = np.int32)
-
-r = camera_lidar_calibration.point_segmentation(points  = points_sorted,
-                                                Npoints = Npoints,
-                                                dump    = args.dump)
+points,r = camera_lidar_calibration.point_segmentation(args.bag,
+                                                       getattr(args, 'lidar-topic'),
+                                                       dump    = args.dump)
 if args.dump:
     sys.exit()
 
@@ -90,7 +67,7 @@ n = r['plane_pn'][i,3:]
 # plane is all x such that inner(x-p,n) = 0
 # -> nt p = nt x
 # -> z = nt p / n2 - n0/n2 x - n1/n2 y
-gp.plot(points_sorted[r['ipoint'][i]],
+gp.plot(points[r['ipoint'][i]],
         square=1,
         _3d=1,
         tuplesize=-3,
