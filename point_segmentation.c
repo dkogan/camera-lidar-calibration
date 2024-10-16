@@ -547,6 +547,23 @@ fit_plane_from_ring(// out
                    ctx);
 }
 
+static void ring_minmax_from_segment_cluster(// out
+                                             int* iring0,
+                                             int* iring1,
+                                             // int
+                                             const segment_cluster_t* segment_cluster)
+{
+    *iring0 = INT_MAX;
+    *iring1 = INT_MIN;
+    for(int isegment=0; isegment<segment_cluster->n; isegment++)
+    {
+        const segmentref_t* segmentref = &segment_cluster->segments[isegment];
+        const int           iring      = segmentref->iring;
+        if(iring < *iring0) *iring0 = iring;
+        if(iring > *iring1) *iring1 = iring;
+    }
+}
+
 static bool stack_empty(stack_t* stack)
 {
     return (stack->n == 0);
@@ -802,6 +819,16 @@ static void segment_clusters_from_segments(// out
                 continue;
             }
 
+            {
+                int iring0,iring1;
+                ring_minmax_from_segment_cluster(&iring0, &iring1, cluster);
+                if(iring1-iring0+1 < ctx->threshold_min_Nrings_in_cluster)
+                    continue;
+            }
+
+
+
+
             // We're accepting this cluster. There won't be a lot of these, and
             // we will be accessing the plane normal a lot, so I normalize the
             // normal vector
@@ -990,15 +1017,9 @@ static float refine_plane_from_segment_cluster(// out
        }
      */
 
-    // I find the min/max ring indices in the cluster
-    int iring0 = INT_MAX, iring1 = INT_MIN;
-    for(int isegment=0; isegment<segment_cluster->n; isegment++)
-    {
-        const segmentref_t* segmentref = &segment_cluster->segments[isegment];
-        const int           iring      = segmentref->iring;
-        if(iring < iring0) iring0 = iring;
-        if(iring > iring1) iring1 = iring;
-    }
+
+    int iring0,iring1;
+    ring_minmax_from_segment_cluster(&iring0, &iring1, segment_cluster);
 
     const int Nrings_considered = iring1-iring0+1;
 

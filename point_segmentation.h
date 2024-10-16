@@ -54,6 +54,7 @@ _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has exp
   _(float, threshold_max_plane_point_error,              0.15,              "f") \
   _(int,   threshold_max_Nsegments_in_cluster,           40,                "i") \
   _(int,   threshold_min_Nsegments_in_cluster,           5,                 "i") \
+  _(int,   threshold_min_Nrings_in_cluster,              3,                 "i") \
   /* used in refinement */                                              \
   _(float, threshold_max_gap_th_rad,                     0.5f * M_PI/180.f, "f")
 
