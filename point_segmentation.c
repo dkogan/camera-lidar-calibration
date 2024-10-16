@@ -639,22 +639,6 @@ static bool plane_from_segment_segment(// out
     return true;
 }
 
-
-static bool plane_segment_compatible(const plane_unnormalized_t* plane_unnormalized,
-                                     const segment_t*            segment,
-                                     const context_t* ctx)
-{
-    // both segment->p and segment->v must lie in the plane
-
-    // I want:
-    //   inner(segv,   n) = 0
-    //   inner(segp-p, n) = 0
-    return
-        is_normal(segment->v, plane_unnormalized->n_unnormalized, ctx) &&
-        is_normal(sub(segment->p, plane_unnormalized->p), plane_unnormalized->n_unnormalized, ctx);
-}
-
-
 static bool plane_point_compatible(const plane_t*   plane,
                                    const point3f_t* point,
                                    const context_t* ctx)
@@ -668,6 +652,35 @@ static bool plane_point_compatible(const plane_t*   plane,
 
     return ctx->threshold_max_plane_point_error > fabsf(inner(dp, plane->n));
 }
+
+static bool plane_point_compatible_unnormalized(const plane_unnormalized_t* plane_unnormalized,
+                                                const point3f_t* point,
+                                                const context_t* ctx)
+{
+    // I want (point - p) to be perpendicular to n. I want this in terms of
+    // "distance-off-plane" so err = inner( (point - p), n) / mag(n)
+    //
+    // Accept if threshold > inner( (point - p), n) / mag(n)
+    // n is normalized here, so I omit the /magn
+    const point3f_t dp = sub(*point, plane_unnormalized->p);
+    const float proj = inner(dp, plane_unnormalized->n_unnormalized);
+    return ctx->threshold_max_plane_point_error*norm2(plane_unnormalized->n_unnormalized) > proj*proj;
+}
+
+static bool plane_segment_compatible(const plane_unnormalized_t* plane_unnormalized,
+                                     const segment_t*            segment,
+                                     const context_t* ctx)
+{
+    // both segment->p and segment->v must lie in the plane
+
+    // I want:
+    //   inner(segv,   n) = 0
+    //   inner(segp-p, n) = 0
+    return
+        is_normal(segment->v, plane_unnormalized->n_unnormalized, ctx) &&
+        plane_point_compatible_unnormalized(plane_unnormalized, &segment->p, ctx);
+}
+
 
 static void try_visit(stack_t* stack,
                       // out
