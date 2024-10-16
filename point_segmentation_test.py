@@ -27,6 +27,9 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
+    parser.add_argument('--dump',
+                        action='store_true',
+                        help = '''dump the c-level diagnostics; do not try to make Python plots''')
     parser.add_argument('lidar-topic',
                         type=str,
                         help = '''The LIDAR topic we're looking at''')
@@ -75,5 +78,31 @@ points_sorted = nps.glue( *points_from_rings(),
 Npoints = np.array([np.count_nonzero(ring==iring) for iring in range(Nrings)],
                    dtype = np.int32)
 
-camera_lidar_calibration.point_segmentation(points  = points_sorted,
-                                            Npoints = Npoints )
+r = camera_lidar_calibration.point_segmentation(points  = points_sorted,
+                                                Npoints = Npoints,
+                                                dump    = args.dump)
+if args.dump:
+    sys.exit()
+
+
+import gnuplotlib as gp
+i = 2
+
+p = r['plane_pn'][i,:3]
+n = r['plane_pn'][i,3:]
+
+# plane is all x such that inner(x-p,n) = 0
+# -> nt p = nt x
+# -> z = nt p / n2 - n0/n2 x - n1/n2 y
+gp.plot(points_sorted[r['ipoint'][i]],
+        square=1,
+        _3d=1,
+        tuplesize=-3,
+        _with='points',
+        equation = f"{nps.inner(n,p) / n[2]} - {n[0]/n[2]}*x - {n[1]/n[2]}*y")
+
+
+import IPython
+IPython.embed()
+sys.exit()
+
