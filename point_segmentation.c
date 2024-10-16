@@ -17,7 +17,7 @@
 #define MSG(fmt, ...) fprintf(stderr, "%s(%d): " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
 
-#define DEBUG_ERR_ON_TRUE(what, p, fmt, ...)                            \
+#define DEBUG_ON_TRUE(what, p, fmt, ...)                                \
     ({  if(debug && (what))                                             \
         {                                                               \
             MSG("REJECTED (%.2f %.2f %.2f) at %s():%d because " #what ": " fmt, \
@@ -227,17 +227,17 @@ bool point_is_valid__presolve(const point3f_t* p,
                               const bool debug,
                               const context_t* ctx)
 {
-    if( DEBUG_ERR_ON_TRUE( norm2(*p) > ctx->threshold_max_range*ctx->threshold_max_range,
-                           p,
-                           "%f > %f", norm2(*p), ctx->threshold_max_range*ctx->threshold_max_range ))
+    if( DEBUG_ON_TRUE( norm2(*p) > ctx->threshold_max_range*ctx->threshold_max_range,
+                       p,
+                       "%f > %f", norm2(*p), ctx->threshold_max_range*ctx->threshold_max_range ))
         return false;
 
     const int Ngap = (int)( 0.5f + fabsf(dth_rad) * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
 
     // Ngap==1 is the expected, normal value. Anything larger is a gap
-    if( DEBUG_ERR_ON_TRUE((Ngap-1) > ctx->threshold_max_Ngap,
-                          p,
-                          "%d > %d", Ngap-1, ctx->threshold_max_Ngap))
+    if( DEBUG_ON_TRUE((Ngap-1) > ctx->threshold_max_Ngap,
+                      p,
+                      "%d > %d", Ngap-1, ctx->threshold_max_Ngap))
         return false;
 
     return true;
@@ -432,15 +432,15 @@ void finish_segment(// out
 {
     const int Npoints = ipoint1 - ipoint0 + 1 - Npoints_invalid_in_segment;
 
-    if(DEBUG_ERR_ON_TRUE(Npoints_invalid_in_segment > ctx->threshold_max_Npoints_invalid_segment,
-                         &p[ipoint0],
-                         "%d > %d", Npoints_invalid_in_segment, ctx->threshold_max_Npoints_invalid_segment) ||
-       DEBUG_ERR_ON_TRUE(Npoints < ctx->threshold_min_Npoints_in_segment,
-                         &p[ipoint0],
-                         "%d < %d", Npoints, ctx->threshold_min_Npoints_in_segment) ||
-       DEBUG_ERR_ON_TRUE(!is_point_segment_planar(p,ipoint0,ipoint1,bitarray_invalid, ctx),
-                         &p[ipoint0],
-                         ""))
+    if(DEBUG_ON_TRUE(Npoints_invalid_in_segment > ctx->threshold_max_Npoints_invalid_segment,
+                     &p[ipoint0],
+                     "%d > %d", Npoints_invalid_in_segment, ctx->threshold_max_Npoints_invalid_segment) ||
+       DEBUG_ON_TRUE(Npoints < ctx->threshold_min_Npoints_in_segment,
+                     &p[ipoint0],
+                     "%d < %d", Npoints, ctx->threshold_min_Npoints_in_segment) ||
+       DEBUG_ON_TRUE(!is_point_segment_planar(p,ipoint0,ipoint1,bitarray_invalid, ctx),
+                     &p[ipoint0],
+                     ""))
     {
         *segment = (segment_t){};
         return;
@@ -765,13 +765,13 @@ static void segment_clusters_from_segments(// out
             const bool debug =
                 ctx->debug_xmin < segment->p.x && segment->p.x < ctx->debug_xmax &&
                 ctx->debug_ymin < segment->p.y && segment->p.y < ctx->debug_ymax;
-            if(DEBUG_ERR_ON_TRUE(!plane_from_segment_segment(&cluster->plane_unnormalized,
-                                                             segment,segment1,
-                                                             ctx),
-                                 &segment->p,
-                                 "segment iring=%d isegment=%d isn't plane-consistent with segment iring=%d isegment=%d",
-                                 iring,isegment,
-                                 iring1,isegment))
+            if(DEBUG_ON_TRUE(!plane_from_segment_segment(&cluster->plane_unnormalized,
+                                                         segment,segment1,
+                                                         ctx),
+                             &segment->p,
+                             "segment iring=%d isegment=%d isn't plane-consistent with segment iring=%d isegment=%d",
+                             iring,isegment,
+                             iring1,isegment))
                 continue;
 
             stack_t stack = {};
@@ -812,9 +812,9 @@ static void segment_clusters_from_segments(// out
                           ctx);
             }
 
-            if(DEBUG_ERR_ON_TRUE(cluster->n == 2,
-                                 &segment->p,
-                                 "cluster starting with iring=%d isegment=%d only contains the seed segments", iring,isegment))
+            if(DEBUG_ON_TRUE(cluster->n == 2,
+                             &segment->p,
+                             "cluster starting with iring=%d isegment=%d only contains the seed segments", iring,isegment))
             {
                 // This hypothetical ring-ring component is too small. The
                 // next-ring segment might still be valid in another component,
@@ -823,20 +823,20 @@ static void segment_clusters_from_segments(// out
                 continue;
             }
 
-            if(DEBUG_ERR_ON_TRUE(cluster->n < ctx->threshold_min_Nsegments_in_cluster,
-                                 &segment->p,
-                                 "cluster starting with iring=%d isegment=%d too small: %d < %d",
-                                 iring,isegment,
-                                 cluster->n, ctx->threshold_min_Nsegments_in_cluster))
+            if(DEBUG_ON_TRUE(cluster->n < ctx->threshold_min_Nsegments_in_cluster,
+                             &segment->p,
+                             "cluster starting with iring=%d isegment=%d too small: %d < %d",
+                             iring,isegment,
+                             cluster->n, ctx->threshold_min_Nsegments_in_cluster))
             {
                 continue;
             }
 
-            if(DEBUG_ERR_ON_TRUE(cluster->n > ctx->threshold_max_Nsegments_in_cluster,
-                                 &segment->p,
-                                 "cluster starting with iring=%d isegment=%d too big: %d > %d",
-                                 iring,isegment,
-                                 cluster->n, ctx->threshold_max_Nsegments_in_cluster))
+            if(DEBUG_ON_TRUE(cluster->n > ctx->threshold_max_Nsegments_in_cluster,
+                             &segment->p,
+                             "cluster starting with iring=%d isegment=%d too big: %d > %d",
+                             iring,isegment,
+                             cluster->n, ctx->threshold_max_Nsegments_in_cluster))
             {
                 continue;
             }
@@ -844,11 +844,11 @@ static void segment_clusters_from_segments(// out
             {
                 int iring0,iring1;
                 ring_minmax_from_segment_cluster(&iring0, &iring1, cluster);
-                if(DEBUG_ERR_ON_TRUE(iring1-iring0+1 < ctx->threshold_min_Nrings_in_cluster,
-                                     &segment->p,
-                                     "cluster starting with iring=%d isegment=%d only contains too-few rings: %d < %d",
-                                     iring,isegment,
-                                     iring1-iring0+1, ctx->threshold_min_Nrings_in_cluster))
+                if(DEBUG_ON_TRUE(iring1-iring0+1 < ctx->threshold_min_Nrings_in_cluster,
+                                 &segment->p,
+                                 "cluster starting with iring=%d isegment=%d only contains too-few rings: %d < %d",
+                                 iring,isegment,
+                                 iring1-iring0+1, ctx->threshold_min_Nrings_in_cluster))
                     continue;
             }
 
