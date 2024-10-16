@@ -1,0 +1,81 @@
+#!/usr/bin/python3
+
+r'''LIDAR point-cloud-segmentation test suite
+
+SYNOPSIS
+
+  $ ./point_segmentation_auto_test.py testdata/     \
+    ....
+    All tests passed
+
+'''
+
+
+import sys
+import os
+import argparse
+
+def parse_args():
+    parser = \
+        argparse.ArgumentParser(description = __doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('root',
+                        help = '''The root path to the test data''')
+    args = parser.parse_args()
+    return args
+args = parse_args()
+
+
+import numpy as np
+import numpysane as nps
+import camera_lidar_calibration
+import testutils
+
+
+
+tests = (
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-37-12.bag',
+         topic   = '/lidar/velodyne_front_tilted_points',
+         plane_p = np.array((3.100,-1.294,-0.593)),
+         plane_n = np.array((-0.9635,-0.2279,0.1399))),
+    )
+
+
+for test in tests:
+
+    points,segmentation = camera_lidar_calibration.point_segmentation(f"{args.root}/{test['bag']}",
+                                                                      test['topic'])
+
+    plane_pn = segmentation['plane_pn']
+    ipoint   = segmentation['ipoint']
+
+    Nplanes_found = len(plane_pn)
+
+    testutils.confirm_equal(Nplanes_found, 1,
+                            msg=f'I expect to find exactly 1 plane')
+    if Nplanes_found != 1: continue
+
+    # Normalize vectors. This shouldn't be needed
+    test['plane_n'] /= nps.mag(test['plane_n'])
+
+    testutils.confirm_equal(nps.mag(plane_pn[0,3:]), 1.,
+                            msg = 'Reported plane normal is a unit vector')
+
+    cos_dth = nps.inner(plane_pn[0,3:],test['plane_n'])
+    testutils.confirm_equal(cos_dth, 1,
+                            eps = np.cos(0.1 * np.pi/180.),
+                            msg=f'Plane orientation')
+
+    dp = plane_pn[0,:3] - test['plane_p']
+    mag_dp_normal  = np.inner(dp, test['plane_n'])
+    dp_inplane = dp - mag_dp_normal*test['plane_n']
+    mag_dp_inplane = nps.mag(dp_inplane)
+
+    testutils.confirm_equal(mag_dp_normal, 0,
+                            eps = 5e-3,
+                            msg=f'Plane normal-to-plane location')
+    testutils.confirm_equal(mag_dp_inplane, 0,
+                            eps = 100e-3,
+                            msg=f'Plane in-the--plane location')
+
+testutils.finish()
