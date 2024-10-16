@@ -32,31 +32,31 @@ _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has exp
 
 #define LIST_CONTEXT(_)                                                 \
   /* bool, but PyArg_ParseTupleAndKeywords("p") wants an int */         \
-  _(int,   dump,                                         (int)false,        "p") \
-  _(int,   debug_iring,                                  -1,                "i") \
-  _(float, debug_xmin,                                   FLT_MIN,           "f") \
-  _(float, debug_xmax,                                   FLT_MAX,           "f") \
-  _(float, debug_ymin,                                   FLT_MIN,           "f") \
-  _(float, debug_ymax,                                   FLT_MAX,           "f") \
-  _(int,   threshold_min_Npoints_in_segment,             10,                "i") \
-  _(int,   threshold_max_Npoints_invalid_segment,        5,                 "i") \
-  _(float, threshold_max_range,                          5.f,               "f") \
+  _(int,   dump,                                         (int)false,        "p","i") \
+  _(int,   debug_iring,                                  -1,                "i","i") \
+  _(float, debug_xmin,                                   FLT_MIN,           "f","f") \
+  _(float, debug_xmax,                                   FLT_MAX,           "f","f") \
+  _(float, debug_ymin,                                   FLT_MIN,           "f","f") \
+  _(float, debug_ymax,                                   FLT_MAX,           "f","f") \
+  _(int,   threshold_min_Npoints_in_segment,             10,                "i","i") \
+  _(int,   threshold_max_Npoints_invalid_segment,        5,                 "i","i") \
+  _(float, threshold_max_range,                          5.f,               "f","f") \
   /* found empirically in dump-lidar-scan.py */                         \
-  _(int,   Npoints_per_rotation,                         1809,              "i") \
-  _(int,   Npoints_per_segment,                          20,                "i") \
-  _(int,   threshold_max_Ngap,                           2,                 "i") \
-  _(float, threshold_max_deviation_off_segment_line,     0.05f,             "f") \
-  _(int,   Nrings,                                       32,                "i") \
+  _(int,   Npoints_per_rotation,                         1809,              "i","i") \
+  _(int,   Npoints_per_segment,                          20,                "i","i") \
+  _(int,   threshold_max_Ngap,                           2,                 "i","i") \
+  _(float, threshold_max_deviation_off_segment_line,     0.05f,             "f","f") \
+  _(int,   Nrings,                                       32,                "i","i") \
   /* cos(90-5deg) */                                                    \
-  _(float, threshold_max_cos_angle_error_normal,         0.087155742747f,   "f") \
+  _(float, threshold_max_cos_angle_error_normal,         0.087155742747f,   "f","f") \
   /* cos(5deg) */                                                       \
-  _(float, threshold_min_cos_angle_error_same_direction, 0.996194698092f,   "f") \
-  _(float, threshold_max_plane_point_error,              0.15,              "f") \
-  _(int,   threshold_max_Nsegments_in_cluster,           40,                "i") \
-  _(int,   threshold_min_Nsegments_in_cluster,           5,                 "i") \
-  _(int,   threshold_min_Nrings_in_cluster,              3,                 "i") \
+  _(float, threshold_min_cos_angle_error_same_direction, 0.996194698092f,   "f","f") \
+  _(float, threshold_max_plane_point_error,              0.15,              "f","f") \
+  _(int,   threshold_max_Nsegments_in_cluster,           40,                "i","i") \
+  _(int,   threshold_min_Nsegments_in_cluster,           5,                 "i","i") \
+  _(int,   threshold_min_Nrings_in_cluster,              3,                 "i","i") \
   /* used in refinement */                                              \
-  _(float, threshold_max_gap_th_rad,                     0.5f * M_PI/180.f, "f")
+  _(float, threshold_max_gap_th_rad,                     0.5f * M_PI/180.f, "f","f")
 
 
 

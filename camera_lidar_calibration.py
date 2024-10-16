@@ -39,3 +39,5 @@ def point_segmentation(bag, lidar_topic,
           _camera_lidar_calibration.point_segmentation(points  = points_sorted,
                                                        Npoints = Npoints,
                                                        **kwargs))
+
+default_context = _camera_lidar_calibration.default_context

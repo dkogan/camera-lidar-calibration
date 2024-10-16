@@ -59,9 +59,9 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
     default_context(&ctx);
 
 
-#define LIST_CONTEXT_KEYWORDS(   type,name,default,pyparse) #name,
-#define LIST_CONTEXT_PYPARSE(    type,name,default,pyparse) pyparse
-#define LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse) &ctx.name,
+#define LIST_CONTEXT_KEYWORDS(   type,name,default,pyparse,...) #name,
+#define LIST_CONTEXT_PYPARSE(    type,name,default,pyparse,...) pyparse
+#define LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse,...) &ctx.name,
     char* keywords[] = { "points",
                          "Npoints",
                          LIST_CONTEXT(LIST_CONTEXT_KEYWORDS)
@@ -165,13 +165,38 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
     return result;
 }
 
+
+static PyObject* py_default_context(PyObject* NPY_UNUSED(self),
+                                    PyObject* NPY_UNUSED(args))
+{
+    PyObject* result = NULL;
+
+    context_t ctx;
+    default_context(&ctx);
+
+
+#define LIST_CONTEXT_PYBUILD_PATTERN( type,name,default,pyparse,pybuild) "s" pybuild
+#define LIST_CONTEXT_PYBUILD_KEYVALUE(type,name,default,pyparse,pybuild) ,#name, ctx.name
+    result = Py_BuildValue("{" LIST_CONTEXT(LIST_CONTEXT_PYBUILD_PATTERN) "}"
+                           LIST_CONTEXT(LIST_CONTEXT_PYBUILD_KEYVALUE));
+#undef LIST_CONTEXT_PYBUILD_PATTERN
+#undef LIST_CONTEXT_PYBUILD_KEYVALUE
+
+    // If Py_BuildValue failed, this will already be NULL
+    return result;
+}
+
 static const char point_segmentation_docstring[] =
 #include "point_segmentation.docstring.h"
+    ;
+static const char default_context_docstring[] =
+#include "default_context.docstring.h"
     ;
 
 static PyMethodDef methods[] =
     {
-     PYMETHODDEF_ENTRY(point_segmentation,      py_point_segmentation,         METH_VARARGS | METH_KEYWORDS),
+     PYMETHODDEF_ENTRY(point_segmentation,      py_point_segmentation,      METH_VARARGS | METH_KEYWORDS),
+     PYMETHODDEF_ENTRY(default_context,         py_default_context,         METH_NOARGS),
      {}
     };
 
