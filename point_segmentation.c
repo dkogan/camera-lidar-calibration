@@ -762,9 +762,16 @@ static void segment_clusters_from_segments(// out
             if(!(segment_is_valid(segment1) && !segment1->visited))
                 continue;
 
-            if(!plane_from_segment_segment(&cluster->plane_unnormalized,
-                                           segment,segment1,
-                                           ctx))
+            const bool debug =
+                ctx->debug_xmin < segment->p.x && segment->p.x < ctx->debug_xmax &&
+                ctx->debug_ymin < segment->p.y && segment->p.y < ctx->debug_ymax;
+            if(DEBUG_ERR_ON_TRUE(!plane_from_segment_segment(&cluster->plane_unnormalized,
+                                                             segment,segment1,
+                                                             ctx),
+                                 &segment->p,
+                                 "segment iring=%d isegment=%d isn't plane-consistent with segment iring=%d isegment=%d",
+                                 iring,isegment,
+                                 iring1,isegment))
                 continue;
 
             stack_t stack = {};
@@ -805,16 +812,31 @@ static void segment_clusters_from_segments(// out
                           ctx);
             }
 
-            if(cluster->n == 2)
+            if(DEBUG_ERR_ON_TRUE(cluster->n == 2,
+                                 &segment->p,
+                                 "cluster starting with iring=%d isegment=%d only contains the seed segments", iring,isegment))
             {
                 // This hypothetical ring-ring component is too small. The
                 // next-ring segment might still be valid in another component,
                 // with a different plane, without segment. So I allow it again.
                 segment1->visited = false;
+                continue;
             }
 
-            if(cluster->n < ctx->threshold_min_Nsegments_in_cluster ||
-               cluster->n > ctx->threshold_max_Nsegments_in_cluster)
+            if(DEBUG_ERR_ON_TRUE(cluster->n < ctx->threshold_min_Nsegments_in_cluster,
+                                 &segment->p,
+                                 "cluster starting with iring=%d isegment=%d too small: %d < %d",
+                                 iring,isegment,
+                                 cluster->n, ctx->threshold_min_Nsegments_in_cluster))
+            {
+                continue;
+            }
+
+            if(DEBUG_ERR_ON_TRUE(cluster->n > ctx->threshold_max_Nsegments_in_cluster,
+                                 &segment->p,
+                                 "cluster starting with iring=%d isegment=%d too big: %d > %d",
+                                 iring,isegment,
+                                 cluster->n, ctx->threshold_max_Nsegments_in_cluster))
             {
                 continue;
             }
@@ -822,7 +844,11 @@ static void segment_clusters_from_segments(// out
             {
                 int iring0,iring1;
                 ring_minmax_from_segment_cluster(&iring0, &iring1, cluster);
-                if(iring1-iring0+1 < ctx->threshold_min_Nrings_in_cluster)
+                if(DEBUG_ERR_ON_TRUE(iring1-iring0+1 < ctx->threshold_min_Nrings_in_cluster,
+                                     &segment->p,
+                                     "cluster starting with iring=%d isegment=%d only contains too-few rings: %d < %d",
+                                     iring,isegment,
+                                     iring1-iring0+1, ctx->threshold_min_Nrings_in_cluster))
                     continue;
             }
 
