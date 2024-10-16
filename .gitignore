@@ -1,0 +1,11 @@
+*~
+*.o
+*.d
+*.so
+*.so.*
+cscope.*
+*.docstring.h
+*.usage.h
+*.i
+*.s
+__pycache__
