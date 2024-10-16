@@ -38,6 +38,12 @@ tests = (
          topic   = '/lidar/velodyne_front_tilted_points',
          plane_p = np.array((3.100,-1.294,-0.593)),
          plane_n = np.array((-0.9635,-0.2279,0.1399))),
+
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-37-12.bag',
+         topic   = '/lidar/velodyne_front_horiz_points',
+         plane_p = None,
+         plane_n = None,
+         )
     )
 
 
@@ -50,6 +56,13 @@ for test in tests:
     ipoint   = segmentation['ipoint']
 
     Nplanes_found = len(plane_pn)
+
+    if test['plane_n'] is None:
+        testutils.confirm_equal(Nplanes_found, 0,
+                                msg=f'I expect to find exactly 0 planes')
+        continue
+
+
 
     testutils.confirm_equal(Nplanes_found, 1,
                             msg=f'I expect to find exactly 1 plane')
