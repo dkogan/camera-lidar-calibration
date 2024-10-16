@@ -34,9 +34,9 @@ _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has exp
   /* bool, but PyArg_ParseTupleAndKeywords("p") wants an int */         \
   _(int,   dump,                                         (int)false,        "p","i") \
   _(int,   debug_iring,                                  -1,                "i","i") \
-  _(float, debug_xmin,                                   FLT_MIN,           "f","f") \
+  _(float, debug_xmin,                                   -FLT_MAX,          "f","f") \
   _(float, debug_xmax,                                   FLT_MAX,           "f","f") \
-  _(float, debug_ymin,                                   FLT_MIN,           "f","f") \
+  _(float, debug_ymin,                                   -FLT_MAX,          "f","f") \
   _(float, debug_ymax,                                   FLT_MAX,           "f","f") \
   _(int,   threshold_min_Npoints_in_segment,             10,                "i","i") \
   _(int,   threshold_max_Npoints_invalid_segment,        5,                 "i","i") \
