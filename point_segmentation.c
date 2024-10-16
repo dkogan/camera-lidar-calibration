@@ -838,16 +838,15 @@ static void segment_clusters_from_segments(// out
 // Returns true if we processed this point (maybe by accumulating it) and we
 // should keep going. Returns false if we should stop the iteration
 static bool accumulate_point(// out
-                             int8_t* plane_idx,
+                             points_and_plane_t* points_and_plane,
                              // in,out
-                             uint64_t* bitarray_visited,
+                             uint64_t* bitarray_visited, // indexed by IN-RING points
                              float* th_rad_last,
                              // in
                              const point3f_t* points,
-                             const int ipoint0_in_ring,
-                             const plane_t* plane,
-                             const int8_t plane_id,
-                             const int ipoint)
+                             const int ipoint0_in_ring, // start of this ring in the full points[] array
+                             const int ipoint           // IN-RING index
+                             )
 {
     if(bitarray64_check(bitarray_visited, ipoint))
         // We already processed this point, presumably from the other side.
@@ -864,7 +863,7 @@ static bool accumulate_point(// out
     // constructing the candidate segments. So if we got this far, I assume it's
     // good
 
-    if( plane_point_compatible(plane,
+    if( plane_point_compatible(&points_and_plane->plane,
                                &points[ipoint0_in_ring + ipoint]) )
     {
         // I will be fitting a plane to a set of points. The most accurate way
@@ -882,7 +881,12 @@ static bool accumulate_point(// out
         // make it work in one pass, but that's very likely to produce high
         // floating point round-off errors. So I actually accumulate the full
         // points for now, and might do something more efficient later
-        plane_idx[ipoint0_in_ring + ipoint] = plane_id;
+        if(points_and_plane->n == (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])))
+        {
+            MSG("points_and_plane->ipoint overflow. Skipping the reset of the points");
+            return false;
+        }
+        points_and_plane->ipoint[points_and_plane->n++] = ipoint0_in_ring + ipoint;
 
         bitarray64_set(bitarray_visited, ipoint);
         *th_rad_last = th_rad;
@@ -903,9 +907,7 @@ static float fit_plane_into_points( // out
                                    plane_t*         plane,
                                    // in
                                    const point3f_t* points,
-                                   const int        Npoints_all,
-                                   const int8_t*    plane_idx, // which plane each point belongs to; <0 for "none"
-                                   const int8_t     plane_id   // the specific plane we're interested in
+                                   const points_and_plane_t* points_and_plane
                                    )
 {
     /*
@@ -940,36 +942,27 @@ static float fit_plane_into_points( // out
 
     */
 
-#warning "fit_plane_into_points has two iterations. Now that I only have an plane_idx array, I have to look through ALL the points during each iteration. This is slow?"
-
-
     point3f_t pmean = {};
-    int Npoints_thisplane = 0;
-    for(int i=0; i<Npoints_all; i++)
-        if(plane_idx[i] == plane_id)
-        {
-            for(int j=0; j<3; j++)
-                pmean.xyz[j] += points[i].xyz[j];
-            Npoints_thisplane++;
-        }
+    for(int i=0; i<points_and_plane->n; i++)
+        for(int j=0; j<3; j++)
+            pmean.xyz[j] += points[points_and_plane->ipoint[i]].xyz[j];
     for(int j=0; j<3; j++)
-        pmean.xyz[j] /= (float)(Npoints_thisplane);
+        pmean.xyz[j] /= (float)(points_and_plane->n);
 
 
     // packed storage; row-first
     // double-precision because this is potentially inaccurate
     double M[3+2+1] = {};
-    for(int i=0; i<Npoints_all; i++)
-        if(plane_idx[i] == plane_id)
-        {
-            const point3f_t dp = sub(points[i], pmean);
-            M[0] += (double)(dp.xyz[0]*dp.xyz[0]);
-            M[1] += (double)(dp.xyz[0]*dp.xyz[1]);
-            M[2] += (double)(dp.xyz[0]*dp.xyz[2]);
-            M[3] += (double)(dp.xyz[1]*dp.xyz[1]);
-            M[4] += (double)(dp.xyz[1]*dp.xyz[2]);
-            M[5] += (double)(dp.xyz[2]*dp.xyz[2]);
-        }
+    for(int i=0; i<points_and_plane->n; i++)
+    {
+        const point3f_t dp = sub(points[points_and_plane->ipoint[i]], pmean);
+        M[0] += (double)(dp.xyz[0]*dp.xyz[0]);
+        M[1] += (double)(dp.xyz[0]*dp.xyz[1]);
+        M[2] += (double)(dp.xyz[0]*dp.xyz[2]);
+        M[3] += (double)(dp.xyz[1]*dp.xyz[1]);
+        M[4] += (double)(dp.xyz[1]*dp.xyz[2]);
+        M[5] += (double)(dp.xyz[2]*dp.xyz[2]);
+    }
 
     double v[3];
     double l;
@@ -982,17 +975,15 @@ static float fit_plane_into_points( // out
 
 
 static float refine_plane_from_segment_cluster(// out
-                                               int8_t* plane_idx, // which plane each point belongs to; <0 for "none"
-                                               plane_t* plane,
+                                               points_and_plane_t* points_and_plane,
 
                                                // in
                                                const segment_cluster_t* segment_cluster,
                                                const segment_t* segments,
-                                               const int Nrings, const int Nsegments_per_rotation,
+                                               const int Nsegments_per_rotation,
                                                const point3f_t* points,
                                                const int* ipoint0_in_ring,
-                                               const int* Npoints,
-                                               const int8_t plane_id)
+                                               const int* Npoints)
 {
     /* I have an approximate plane estimate.
 
@@ -1003,27 +994,29 @@ static float refine_plane_from_segment_cluster(// out
        }
      */
 
-    int Npoints_all = 0;
-    for(int i=0; i<Nrings; i++)
-        Npoints_all += Npoints[i];
+    // I find the min/max ring indices in the cluster
+    int iring0 = INT_MAX, iring1 = INT_MIN;
+    for(int isegment=0; isegment<segment_cluster->n; isegment++)
+    {
+        const segmentref_t* segmentref = &segment_cluster->segments[isegment];
+        const int           iring      = segmentref->iring;
+        if(iring < iring0) iring0 = iring;
+        if(iring > iring1) iring1 = iring;
+    }
+
+    const int Nrings_considered = iring1-iring0+1;
+
+    // I keep track of the already-visited points
+    const int Nwords_bitarray_visited = bitarray64_nwords(Npoints_per_rotation); // largest-possible size
+    uint64_t bitarray_visited[Nrings_considered][Nwords_bitarray_visited];
+
+    // Start with the best-available plane estimate
+    points_and_plane->plane = segment_cluster->plane;
 
     while(true)
     {
-        // I find the min/max ring indices in the cluster
-        int iring0 = INT_MAX, iring1 = INT_MIN;
-        for(int isegment=0; isegment<segment_cluster->n; isegment++)
-        {
-            const segmentref_t* segmentref = &segment_cluster->segments[isegment];
-            const int           iring      = segmentref->iring;
-            if(iring < iring0) iring0 = iring;
-            if(iring > iring1) iring1 = iring;
-        }
+        points_and_plane->n = 0;
 
-        const int Nrings_considered = iring1-iring0+1;
-
-        // I keep track of the already-visited points
-        const int Nwords_bitarray_visited = bitarray64_nwords(Npoints_per_rotation); // largest-possible size
-        uint64_t bitarray_visited[Nrings_considered][Nwords_bitarray_visited];
         for(int i=0; i<Nrings_considered; i++)
             memset(bitarray_visited[i], 0, Nwords_bitarray_visited*sizeof(uint64_t));
 
@@ -1048,13 +1041,11 @@ static float refine_plane_from_segment_cluster(// out
                 ipoint < Npoints[iring];
                 ipoint++)
             {
-                if(!accumulate_point(plane_idx,
+                if(!accumulate_point(points_and_plane,
                                      bitarray_visited[iring-iring0],
                                      &th_rad_last,
                                      points,
                                      ipoint0_in_ring[iring],
-                                     &segment_cluster->plane,
-                                     plane_id,
                                      ipoint))
                     break;
             }
@@ -1064,13 +1055,11 @@ static float refine_plane_from_segment_cluster(// out
                 ipoint >= 0;
                 ipoint--)
             {
-                if(!accumulate_point(plane_idx,
+                if(!accumulate_point(points_and_plane,
                                      bitarray_visited[iring-iring0],
                                      &th_rad_last,
                                      points,
                                      ipoint0_in_ring[iring],
-                                     &segment_cluster->plane,
-                                     plane_id,
                                      ipoint))
                     break;
             }
@@ -1083,11 +1072,9 @@ static float refine_plane_from_segment_cluster(// out
 
 
         // Got a set of points. Fit a plane
-        float fit_cost = fit_plane_into_points(plane,
+        float fit_cost = fit_plane_into_points(&points_and_plane->plane,
                                                points,
-                                               Npoints_all,
-                                               plane_idx,
-                                               plane_id);
+                                               points_and_plane);
 
 #warning FOR NOW I JUST RUN A SINGLE ITERATION
         return fit_cost;
@@ -1096,27 +1083,19 @@ static float refine_plane_from_segment_cluster(// out
     return -1.0f;
 }
 
+// Returns how many planes were found or <0 on error
 int8_t point_segmentation(// out
-                          int8_t* plane_idx, // which plane each point belongs
-                                             // to; <0 for "none". 1-1
-                                             // correspondence to elements of
-                                             // points[]
-                          plane_t* plane,
+                          points_and_plane_t* points_and_plane,
                           // in
-                          const int8_t Nplanes_max, // buffer length of plane[]
+                          const int8_t Nplanes_max, // buffer length of points_and_plane[]
                           const point3f_t* points,  // length sum(Npoints)
                           const int* Npoints)
-{
-#warning "pass Npoints_all around instead of recomputing it everywhere?"
 
+{
     int ipoint0_in_ring[Nrings];
     ipoint0_in_ring[0] = 0;
     for(int i=1; i<Nrings; i++)
         ipoint0_in_ring[i] = ipoint0_in_ring[i-1] + Npoints[i-1];
-    int Npoints_all = ipoint0_in_ring[Nrings-1] + Npoints[Nrings-1];
-
-
-    memset(plane_idx, (int8_t)(-1), Npoints_all);
 
     segment_t segments[Nrings*Nsegments_per_rotation] = {};
 
@@ -1202,25 +1181,22 @@ int8_t point_segmentation(// out
         segment_cluster_t* segment_cluster = &segment_clusters[icluster];
 
         float fit_cost =
-            refine_plane_from_segment_cluster(plane_idx,
-                                              &plane[iplane_out],
+            refine_plane_from_segment_cluster(&points_and_plane[iplane_out],
                                               segment_cluster,
                                               segments,
-                                              Nrings, Nsegments_per_rotation,
-                                              points, ipoint0_in_ring, Npoints,
-                                              iplane_out);
+                                              Nsegments_per_rotation,
+                                              points, ipoint0_in_ring, Npoints);
         if(fit_cost >= 0.0f && // acceptable plane
 #warning "made-up threshold"
            fit_cost < 1.0)
         {
             if(dump)
-                for(int i=0; i<Npoints_all; i++)
-                    if(plane_idx[i] == iplane_out)
-                        printf("%f %f cluster-points-refined-%d %f\n",
-                               points[i].x,
-                               points[i].y,
-                               icluster,
-                               points[i].z);
+                for(int i=0; i<points_and_plane[iplane_out].n; i++)
+                    printf("%f %f cluster-points-refined-%d %f\n",
+                           points[points_and_plane[iplane_out].ipoint[i]].x,
+                           points[points_and_plane[iplane_out].ipoint[i]].y,
+                           icluster,
+                           points[points_and_plane[iplane_out].ipoint[i]].z);
             iplane_out++;
         }
     }

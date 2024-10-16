@@ -51,8 +51,13 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
     // Each is an iterable of length Nrings
     PyArrayObject* points    = NULL;
     PyArrayObject* Npoints   = NULL;
-    PyArrayObject* plane_idx = NULL;
     PyArrayObject* plane_pn  = NULL;
+    PyObject* py_ipoint      = NULL;
+
+    const int Nplanes_max = 16;
+    PyArrayObject* ipoint[Nplanes_max] = {};
+
+    points_and_plane_t points_and_plane[Nplanes_max];
 
     int ipoint0[Nrings];
 
@@ -103,21 +108,11 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
         goto done;
     }
 
-    plane_idx = (PyArrayObject*)PyArray_SimpleNew(1, ((npy_intp[]){Npoints_all}), NPY_INT8);
-    if(plane_idx == NULL)
-        goto done;
-
-    const int Nplanes_max = 16;
-    plane_pn = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Nplanes_max,6}), NPY_FLOAT32);
-    if(plane_pn == NULL)
-        goto done;
-    static_assert(offsetof(plane_t,p) == 0 && offsetof(plane_t,n) == sizeof(point3f_t) && sizeof(plane_t) == 2*sizeof(point3f_t),
-                  "plane_t is expected to densely store p and then n");
+#warning "I should define a complex dtype to pass points_and_plane from a preallocated numpy array. Instead I do this in C and then copy the results. For now"
 
     int8_t Nplanes =
         point_segmentation( // out
-                            PyArray_DATA(plane_idx),
-                            (plane_t*)PyArray_DATA(plane_pn),
+                            points_and_plane,
                             // in
                             Nplanes_max,
                             (const point3f_t*)PyArray_DATA(points),
@@ -125,15 +120,44 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
     if(Nplanes < 0)
         goto done;
 
+    // Success. Allocate the output and copy
+    for(int i=0; i<Nplanes; i++)
+    {
+        ipoint[i] = (PyArrayObject*)PyArray_SimpleNew(1, ((npy_intp[]){points_and_plane[i].n}), NPY_UINT32);
+        if(ipoint[i] == NULL)
+            goto done;
+
+        memcpy(PyArray_DATA(ipoint[i]), points_and_plane[i].ipoint, sizeof(points_and_plane[i].ipoint[0])*points_and_plane[i].n);
+    }
+
+    plane_pn = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Nplanes,6}), NPY_FLOAT32);
+    if(plane_pn == NULL)
+        goto done;
+    static_assert(offsetof(plane_t,p) == 0 && offsetof(plane_t,n) == sizeof(point3f_t) && sizeof(plane_t) == 2*sizeof(point3f_t),
+                  "plane_t is expected to densely store p and then n");
+    for(int i=0; i<Nplanes; i++)
+        memcpy( &((float*)PyArray_DATA(plane_pn))[6*i], &points_and_plane[i].plane, sizeof(points_and_plane[i].plane));
+
+    py_ipoint = PyTuple_New(Nplanes);
+    if(py_ipoint == NULL) goto done;
+    for(int i=0; i<Nplanes; i++)
+    {
+        PyTuple_SET_ITEM(py_ipoint, i, ipoint[i]);
+        Py_INCREF(ipoint[i]);
+    }
+
     result = Py_BuildValue("{sOsO}",
-                           "plane_idx", plane_idx,
+                           "ipoint",    py_ipoint,
                            "plane_pn",  plane_pn);
 
  done:
     Py_XDECREF(points);
     Py_XDECREF(Npoints);
-    Py_XDECREF(plane_idx);
+    for(int i=0; i<Nplanes_max; i++)
+        Py_XDECREF(ipoint[i]);
+    Py_XDECREF(py_ipoint);
     Py_XDECREF(plane_pn);
+
     return result;
 }
 
