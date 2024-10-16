@@ -516,7 +516,7 @@ fit_plane_from_ring(// out
         }
 
         // This should ALWAYS be true. But some datasets are weird, and the
-        // azimuths don't changes as quickly as expected, and we have extra
+        // azimuths don't change as quickly as expected, and we have extra
         // points in each segment. I ignore those; hopefully they're not
         // important
         if(ipoint-ipoint0 <= ctx->Npoints_per_segment)
