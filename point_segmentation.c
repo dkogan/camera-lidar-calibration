@@ -420,8 +420,9 @@ bool is_point_segment_planar(const point3f_t* p,
 
 static
 void finish_segment(// out
-                    segment_t* segment,
+                    segment_t* segments,
                     // in
+                    const int isegment, const int iring,
                     const int Npoints_invalid_in_segment,
                     const uint64_t* bitarray_invalid,
                     const point3f_t* p,
@@ -430,12 +431,14 @@ void finish_segment(// out
                     const bool debug_this_ring,
                     const context_t* ctx)
 {
-    const bool debug =
-        debug_this_ring &&
-        ((ctx->debug_xmin < points[ipoint0].x && points[ipoint0].x < ctx->debug_xmax &&
-          ctx->debug_ymin < points[ipoint0].y && points[ipoint0].y < ctx->debug_ymax) ||
-         (ctx->debug_xmin < points[ipoint1].x && points[ipoint1].x < ctx->debug_xmax &&
-          ctx->debug_ymin < points[ipoint1].y && points[ipoint1].y < ctx->debug_ymax));
+    segment_t* segment = &segments[isegment];
+
+    const bool debug_region =
+        (ctx->debug_xmin < p[ipoint0].x && p[ipoint0].x < ctx->debug_xmax &&
+         ctx->debug_ymin < p[ipoint0].y && p[ipoint0].y < ctx->debug_ymax) ||
+        (ctx->debug_xmin < p[ipoint1].x && p[ipoint1].x < ctx->debug_xmax &&
+         ctx->debug_ymin < p[ipoint1].y && p[ipoint1].y < ctx->debug_ymax);
+    const bool debug = debug_this_ring && debug_region;
 
 
     const int Npoints = ipoint1 - ipoint0 + 1 - Npoints_invalid_in_segment;
@@ -458,17 +461,23 @@ void finish_segment(// out
     segment->v = sub( p[ipoint1], p[ipoint0]);
     segment->ipoint0 = ipoint0;
     segment->ipoint1 = ipoint1;
+
+    if(debug_region)
+        MSG("isegment=%d iring=%d has p = (%.2f %.2f %.2f) at %s():%d",
+            isegment, iring,
+            segment->p.x,segment->p.y,segment->p.z,
+            __func__, __LINE__);
 }
 
 
 static void
 fit_plane_from_ring(// out
-                    segment_t* segments,
+                    segment_t* segments_thisring,
 
                     // in
-                    const point3f_t* points,
-                    const int Npoints,
-                    const bool debug_this_ring,
+                    const int iring,
+                    const point3f_t* points_thisring,
+                    const int Npoints_thisring,
                     const context_t* ctx)
 {
     // I want this to be fast, and I'm looking for very clear planes, so I do a
@@ -488,7 +497,7 @@ fit_plane_from_ring(// out
     uint64_t bitarray_invalid[Nwords_bitarray_invalid];
 
 
-    const float th_rad0 = th_from_point(&points[0]);
+    const float th_rad0 = th_from_point(&points_thisring[0]);
 
     int ipoint0   = 0;
     int isegment0 = isegment_from_th(th_rad0, ctx);
@@ -497,17 +506,18 @@ fit_plane_from_ring(// out
 
     memset(bitarray_invalid, 0, Nwords_bitarray_invalid*sizeof(uint64_t));
 
-    for(int ipoint=1; ipoint<Npoints; ipoint++)
+    for(int ipoint=1; ipoint<Npoints_thisring; ipoint++)
     {
-        const float th_rad = th_from_point(&points[ipoint]);
+        const float th_rad = th_from_point(&points_thisring[ipoint]);
         const int isegment = isegment_from_th(th_rad, ctx);
         if(isegment != isegment0)
         {
-            finish_segment(&segments[isegment0],
+            finish_segment(segments_thisring,
+                           isegment0, iring,
                            Npoints_invalid_in_segment,
                            bitarray_invalid,
-                           points, ipoint0, ipoint-1,
-                           debug_this_ring,
+                           points_thisring, ipoint0, ipoint-1,
+                           iring == ctx->debug_iring,
                            ctx);
 
             ipoint0   = ipoint;
@@ -536,11 +546,12 @@ fit_plane_from_ring(// out
         th_rad_prev = th_rad;
     }
 
-    finish_segment(&segments[isegment0],
+    finish_segment(segments_thisring,
+                   isegment0, iring,
                    Npoints_invalid_in_segment,
                    bitarray_invalid,
-                   points, ipoint0, Npoints-1,
-                   debug_this_ring,
+                   points_thisring, ipoint0, Npoints_thisring-1,
+                   iring == ctx->debug_iring,
                    ctx);
 }
 
@@ -1181,8 +1192,8 @@ int8_t point_segmentation(// out
         fit_plane_from_ring(// out
                             &segments[Nsegments_per_rotation*iring],
                             // in
+                            iring,
                             &points[ipoint0_in_ring[iring]], Npoints[iring],
-                            iring == ctx->debug_iring,
                             ctx);
 
         if(ctx->dump)
