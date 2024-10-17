@@ -467,14 +467,14 @@ void finish_segment(// out
 
 
 static void
-fit_plane_from_ring(// out
-                    segment_t* segments_thisring,
+stage1_segment_from_ring(// out
+                         segment_t* segments_thisring,
 
-                    // in
-                    const int iring,
-                    const point3f_t* points_thisring,
-                    const int Npoints_thisring,
-                    const context_t* ctx)
+                         // in
+                         const int iring,
+                         const point3f_t* points_thisring,
+                         const int Npoints_thisring,
+                         const context_t* ctx)
 {
     // I want this to be fast, and I'm looking for very clear planes, so I do a
     // crude thing here:
@@ -730,15 +730,15 @@ static void try_visit(stack_t* stack,
     }
 }
 
-static void segment_clusters_from_segments(// out
-                                           segment_cluster_t* clusters,
-                                           int* Nclusters,
-                                           const int Nclusters_max, // size of clusters[]
+static void stage2_cluster_segments(// out
+                                    segment_cluster_t* clusters,
+                                    int* Nclusters,
+                                    const int Nclusters_max, // size of clusters[]
 
-                                           // in
-                                           segment_t* segments, // non-const to be able to set "visited"
-                                           const int Nrings,
-                                           const context_t* ctx)
+                                    // in
+                                    segment_t* segments, // non-const to be able to set "visited"
+                                    const int Nrings,
+                                    const context_t* ctx)
 {
     *Nclusters = 0;
 
@@ -902,21 +902,6 @@ static void segment_clusters_from_segments(// out
                 cluster->plane.n.xyz[i] = cluster->plane_unnormalized.n_unnormalized.xyz[i] / magn;
 
             (*Nclusters)++;
-
-            if(ctx->dump)
-            {
-                for(int i=0; i<cluster->n; i++)
-                {
-                    const segmentref_t* node = &cluster->segments[i];
-                    const segment_t* segment = &segments[node->iring*Nsegments_per_rotation + node->isegment];
-
-                    printf("%f %f cluster-kernels-%02d %f\n",
-                           segment->p.x,
-                           segment->p.y,
-                           *Nclusters - 1,
-                           segment->p.z);
-                }
-            }
         }
     }
 }
@@ -1082,17 +1067,17 @@ static void fit_plane_into_points( // out
 }
 
 
-static void refine_plane_from_segment_cluster(// out
-                                              points_and_plane_t* points_and_plane,
-                                              float*              max_norm2_dp,
-                                              float*              eigenvalues_ascending, // 3 of these
-                                              // in
-                                              const segment_cluster_t* segment_cluster,
-                                              const segment_t* segments,
-                                              const point3f_t* points,
-                                              const int* ipoint0_in_ring,
-                                              const int* Npoints,
-                                              const context_t* ctx)
+static void stage3_refine_clusters(// out
+                                   points_and_plane_t* points_and_plane,
+                                   float*              max_norm2_dp,
+                                   float*              eigenvalues_ascending, // 3 of these
+                                   // in
+                                   const segment_cluster_t* segment_cluster,
+                                   const segment_t* segments,
+                                   const point3f_t* points,
+                                   const int* ipoint0_in_ring,
+                                   const int* Npoints,
+                                   const context_t* ctx)
 {
     /* I have an approximate plane estimate.
 
@@ -1230,12 +1215,12 @@ int8_t point_segmentation(// out
 
     for(int iring=0; iring<ctx->Nrings; iring++)
     {
-        fit_plane_from_ring(// out
-                            &segments[Nsegments_per_rotation*iring],
-                            // in
-                            iring,
-                            &points[ipoint0_in_ring[iring]], Npoints[iring],
-                            ctx);
+        stage1_segment_from_ring(// out
+                                 &segments[Nsegments_per_rotation*iring],
+                                 // in
+                                 iring,
+                                 &points[ipoint0_in_ring[iring]], Npoints[iring],
+                                 ctx);
 
         if(ctx->dump)
         {
@@ -1250,7 +1235,7 @@ int8_t point_segmentation(// out
                 if(!(segments[iring*Nsegments_per_rotation + i].v.x == 0 &&
                      segments[iring*Nsegments_per_rotation + i].v.y == 0 &&
                      segments[iring*Nsegments_per_rotation + i].v.z == 0))
-                    printf("%f %f segment-ring-%02d %f\n",
+                    printf("%f %f stage1-segment-from-ring-%02d %f\n",
                            segments[iring*Nsegments_per_rotation + i].p.x,
                            segments[iring*Nsegments_per_rotation + i].p.y,
                            iring,
@@ -1264,12 +1249,12 @@ int8_t point_segmentation(// out
     const int Nmax_planes = 10;
     segment_cluster_t segment_clusters[Nmax_planes];
     int Nclusters;
-    segment_clusters_from_segments(segment_clusters,
-                                   &Nclusters,
-                                   (int)(sizeof(segment_clusters)/sizeof(segment_clusters[0])),
-                                   segments,
-                                   ctx->Nrings,
-                                   ctx);
+    stage2_cluster_segments(segment_clusters,
+                            &Nclusters,
+                            (int)(sizeof(segment_clusters)/sizeof(segment_clusters[0])),
+                            segments,
+                            ctx->Nrings,
+                            ctx);
 
     if(ctx->dump)
         for(int icluster=0; icluster<Nclusters; icluster++)
@@ -1279,14 +1264,20 @@ int8_t point_segmentation(// out
             {
                 const int iring    = segment_cluster->segments[i].iring;
                 const int isegment = segment_cluster->segments[i].isegment;
-
                 segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
+
+                printf("%f %f stage2-cluster-kernels-%d %f\n",
+                       segment->p.x,
+                       segment->p.y,
+                       icluster,
+                       segment->p.z);
+
 
                 for(int ipoint=segment->ipoint0;
                     ipoint <= segment->ipoint1;
                     ipoint++)
                 {
-                    printf("%f %f cluster-points-raw-%d %f\n",
+                    printf("%f %f stage2-cluster-points-%d %f\n",
                            points[ipoint0_in_ring[iring] + ipoint].x,
                            points[ipoint0_in_ring[iring] + ipoint].y,
                            icluster,
@@ -1310,13 +1301,13 @@ int8_t point_segmentation(// out
 
         float max_norm2_dp;
         float eigenvalues_ascending[3];
-        refine_plane_from_segment_cluster(&points_and_plane[iplane_out],
-                                          &max_norm2_dp,
-                                          eigenvalues_ascending,
-                                          segment_cluster,
-                                          segments,
-                                          points, ipoint0_in_ring, Npoints,
-                                          ctx);
+        stage3_refine_clusters(&points_and_plane[iplane_out],
+                               &max_norm2_dp,
+                               eigenvalues_ascending,
+                               segment_cluster,
+                               segments,
+                               points, ipoint0_in_ring, Npoints,
+                               ctx);
 
         const int Npoints_in_plane = points_and_plane[iplane_out].n;
 
@@ -1353,7 +1344,7 @@ int8_t point_segmentation(// out
         // We're past all the filters. I accept this plane
         if(ctx->dump)
             for(int i=0; i<points_and_plane[iplane_out].n; i++)
-                printf("%f %f cluster-points-refined-%d %f\n",
+                printf("%f %f stage3-refined-points-%d %f\n",
                        points[points_and_plane[iplane_out].ipoint[i]].x,
                        points[points_and_plane[iplane_out].ipoint[i]].y,
                        icluster,
