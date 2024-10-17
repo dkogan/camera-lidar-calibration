@@ -1333,6 +1333,16 @@ int8_t point_segmentation(// out
                          sqrt(eigenvalues_ascending[0]/(float)Npoints_in_plane), ctx->threshold_max_rms_fit_error))
             continue;
 
+        // Some point clouds are degenerate, and we throw them away. The first
+        // eigenvalue is 0-ish: we're looking at a plane, and the data must be
+        // squished in that way. But the next eigenvalue should be a decent
+        // size. Otherwise the data is linear-y instead of plane-y
+        if(DEBUG_ON_TRUE(eigenvalues_ascending[1] < ctx->threshold_min_rms_point_cloud_2nd_dimension*ctx->threshold_min_rms_point_cloud_2nd_dimension*(float)Npoints_in_plane,
+                         &points_and_plane[iplane_out].plane.p,
+                         "Refined plane is degenerate (2nd eigenvalue of point cloud dispersion is too small): %f < %f",
+                         sqrt(eigenvalues_ascending[1]/(float)Npoints_in_plane), ctx->threshold_min_rms_point_cloud_2nd_dimension))
+            continue;
+
         if(DEBUG_ON_TRUE(max_norm2_dp*2.*2. > ctx->threshold_max_plane_size*ctx->threshold_max_plane_size,
                          &points_and_plane[iplane_out].plane.p,
                          "Refined plane is too big: max_mag_dp*2 > threshold: %f > %f",
