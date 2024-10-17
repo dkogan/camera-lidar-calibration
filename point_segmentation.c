@@ -989,9 +989,10 @@ static bool accumulate_point(// out
 }
 
 
-// Returns a fit cost.
+// Returns a fit cost: the RMS off-plane error
 static float fit_plane_into_points( // out
                                    plane_t*         plane,
+                                   float*           max_norm2_dp,
                                    // in
                                    const point3f_t* points,
                                    const points_and_plane_t* points_and_plane
@@ -1037,12 +1038,19 @@ static float fit_plane_into_points( // out
         pmean.xyz[j] /= (float)(points_and_plane->n);
 
 
+    *max_norm2_dp = 0.0f;
+
     // packed storage; row-first
     // double-precision because this is potentially inaccurate
     double M[3+2+1] = {};
     for(int i=0; i<points_and_plane->n; i++)
     {
         const point3f_t dp = sub(points[points_and_plane->ipoint[i]], pmean);
+
+        const float norm2_dp = norm2(dp);
+        if(*max_norm2_dp < norm2_dp)
+            *max_norm2_dp = norm2_dp;
+
         M[0] += (double)(dp.xyz[0]*dp.xyz[0]);
         M[1] += (double)(dp.xyz[0]*dp.xyz[1]);
         M[2] += (double)(dp.xyz[0]*dp.xyz[2]);
@@ -1057,13 +1065,14 @@ static float fit_plane_into_points( // out
     plane->p = pmean;
     plane->n = point3f_from_double(v);
 
-    return (float)l;
+    // RMS off-plane error
+    return sqrtf((float)l / (float)(points_and_plane->n));
 }
 
 
 static float refine_plane_from_segment_cluster(// out
                                                points_and_plane_t* points_and_plane,
-
+                                               float*              max_norm2_dp,
                                                // in
                                                const segment_cluster_t* segment_cluster,
                                                const segment_t* segments,
@@ -1155,12 +1164,13 @@ static float refine_plane_from_segment_cluster(// out
 
 
         // Got a set of points. Fit a plane
-        float fit_cost = fit_plane_into_points(&points_and_plane->plane,
-                                               points,
-                                               points_and_plane);
+        float rms_fit_error = fit_plane_into_points(&points_and_plane->plane,
+                                                    max_norm2_dp,
+                                                    points,
+                                                    points_and_plane);
 
 #warning FOR NOW I JUST RUN A SINGLE ITERATION
-        return fit_cost;
+        return rms_fit_error;
     }
 
     return -1.0f;
@@ -1284,25 +1294,47 @@ int8_t point_segmentation(// out
 
         segment_cluster_t* segment_cluster = &segment_clusters[icluster];
 
-        float fit_cost =
+        float max_norm2_dp;
+        float rms_fit_error =
             refine_plane_from_segment_cluster(&points_and_plane[iplane_out],
+                                              &max_norm2_dp,
                                               segment_cluster,
                                               segments,
                                               points, ipoint0_in_ring, Npoints,
                                               ctx);
-        if(fit_cost >= 0.0f && // acceptable plane
-#warning "made-up threshold"
-           fit_cost < 1.0)
-        {
-            if(ctx->dump)
-                for(int i=0; i<points_and_plane[iplane_out].n; i++)
-                    printf("%f %f cluster-points-refined-%d %f\n",
-                           points[points_and_plane[iplane_out].ipoint[i]].x,
-                           points[points_and_plane[iplane_out].ipoint[i]].y,
-                           icluster,
-                           points[points_and_plane[iplane_out].ipoint[i]].z);
-            iplane_out++;
-        }
+
+        const bool debug =
+            ctx->debug_xmin < points_and_plane[iplane_out].plane.p.x && points_and_plane[iplane_out].plane.p.x < ctx->debug_xmax &&
+            ctx->debug_ymin < points_and_plane[iplane_out].plane.p.y && points_and_plane[iplane_out].plane.p.y < ctx->debug_ymax;
+
+
+        if(DEBUG_ON_TRUE(rms_fit_error < 0.0f,
+                         &points_and_plane[iplane_out].plane.p,
+                         "Refined plane is rejected by refine_plane_from_segment_cluster()"))
+            continue;
+
+        if(DEBUG_ON_TRUE(rms_fit_error > ctx->threshold_max_rms_fit_error,
+                         &points_and_plane[iplane_out].plane.p,
+                         "Refined plane doesn't fit the constituent points well-enough: %f > %f",
+                         rms_fit_error, ctx->threshold_max_rms_fit_error))
+            continue;
+
+        if(DEBUG_ON_TRUE(max_norm2_dp*2.*2. > ctx->threshold_max_plane_size*ctx->threshold_max_plane_size,
+                         &points_and_plane[iplane_out].plane.p,
+                         "Refined plane is too big: max_mag_dp*2 > threshold: %f > %f",
+                         sqrtf(max_norm2_dp)*2., ctx->threshold_max_plane_size))
+            continue;
+
+
+        // We're past all the filters. I accept this plane
+        if(ctx->dump)
+            for(int i=0; i<points_and_plane[iplane_out].n; i++)
+                printf("%f %f cluster-points-refined-%d %f\n",
+                       points[points_and_plane[iplane_out].ipoint[i]].x,
+                       points[points_and_plane[iplane_out].ipoint[i]].y,
+                       icluster,
+                       points[points_and_plane[iplane_out].ipoint[i]].z);
+        iplane_out++;
     }
 
     return iplane_out;
