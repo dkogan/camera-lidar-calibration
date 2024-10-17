@@ -671,6 +671,7 @@ static bool plane_point_compatible_unnormalized(const plane_unnormalized_t* plan
 
 static bool plane_segment_compatible(const plane_unnormalized_t* plane_unnormalized,
                                      const segment_t*            segment,
+                                     const int iring, const int isegment,
                                      const context_t* ctx)
 {
     // both segment->p and segment->v must lie in the plane
@@ -678,9 +679,18 @@ static bool plane_segment_compatible(const plane_unnormalized_t* plane_unnormali
     // I want:
     //   inner(segv,   n) = 0
     //   inner(segp-p, n) = 0
+    const bool debug =
+        ctx->debug_xmin < segment->p.x && segment->p.x < ctx->debug_xmax &&
+        ctx->debug_ymin < segment->p.y && segment->p.y < ctx->debug_ymax;
     return
-        is_normal(segment->v, plane_unnormalized->n_unnormalized, ctx) &&
-        plane_point_compatible_unnormalized(plane_unnormalized, &segment->p, ctx);
+        !( DEBUG_ON_TRUE(!is_normal(segment->v, plane_unnormalized->n_unnormalized, ctx),
+                         &segment->p,
+                         "segment iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
+                         iring,isegment) ||
+           DEBUG_ON_TRUE(!plane_point_compatible_unnormalized(plane_unnormalized, &segment->p, ctx),
+                         &segment->p,
+                         "segment iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
+                         iring,isegment));
 }
 
 
@@ -702,7 +712,9 @@ static void try_visit(stack_t* stack,
 
     if(segment_is_valid(segment) &&
        !segment->visited &&
-       plane_segment_compatible(plane_unnormalized, segment, ctx))
+       plane_segment_compatible(plane_unnormalized, segment,
+                                iring, isegment,
+                                ctx))
     {
         segmentref_t* node = stack_push(stack);
 
