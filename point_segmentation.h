@@ -42,7 +42,7 @@ _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has exp
   _(int,   threshold_max_Npoints_invalid_segment,        5,                 "i","i") \
   _(float, threshold_max_range,                          5.f,               "f","f") \
   _(float, threshold_max_plane_size,                     1.5f,              "f","f") \
-  _(float, threshold_max_rms_fit_error,                  0.01f,             "f","f") \
+  _(float, threshold_max_rms_fit_error,                  0.015f,            "f","f") \
   _(float, threshold_min_rms_point_cloud_2nd_dimension,  0.1f,              "f","f") \
   /* found empirically in dump-lidar-scan.py */                         \
   _(int,   Npoints_per_rotation,                         1809,              "i","i") \
