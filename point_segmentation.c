@@ -137,12 +137,12 @@ typedef struct
 
 
 static
-void eig_smallest_real_symmetric_3x3( // out
-                                      double* v,
-                                      double* l,
-                                      // in
-                                      const double* M // shape (6,); packed storage; row-first
-                                      )
+void eig_real_symmetric_3x3( // out
+                             double* vsmallest, // the smallest-eigenvalue eigenvector
+                             double* l,         // ALL the eigenvalues, in ascending order
+                             // in
+                             const double* M // shape (6,); packed storage; row-first
+                             )
 {
     // I have a symmetric 3x3 matrix M. So the eigenvalues are real and >= 0.
     // The eigenvectors are orthonormal.
@@ -175,26 +175,27 @@ void eig_smallest_real_symmetric_3x3( // out
     else
         phi = acos(r) / 3.;
 
-    // smallest
-    *l = q + 2. * p * cos(phi + (2.*M_PI/3.));
+    l[0] = q + 2. * p * cos(phi + (2.*M_PI/3.)); // smallest; "eig3" in wikipedia
+    l[2] = q + 2. * p * cos(phi);                // largest;  "eig1" in wikipedia
+    l[1] = 3.*q - l[2] - l[0];
 
 
     // Now to find the corresponding eigenvector. Following:
     //   https://en.wikipedia.org/wiki/Eigenvalue_algorithm#Eigenvectors_of_normal_3%C3%973_matrices
     //
     // I expect a well-behaved point cloud. Only one
-    const double v0[] = {M[0] - *l,
+    const double v0[] = {M[0] - l[0],
                          M[1],
                          M[2]};
     const double v1[] = {M[1],
-                         M[3] - *l,
+                         M[3] - l[0],
                          M[4]};
-    v[0] = v0[1]*v1[2] - v0[2]*v1[1];
-    v[1] = v0[2]*v1[0] - v0[0]*v1[2];
-    v[2] = v0[0]*v1[1] - v0[1]*v1[0];
-    const double mag = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    vsmallest[0] = v0[1]*v1[2] - v0[2]*v1[1];
+    vsmallest[1] = v0[2]*v1[0] - v0[0]*v1[2];
+    vsmallest[2] = v0[0]*v1[1] - v0[1]*v1[0];
+    const double mag = sqrt(vsmallest[0]*vsmallest[0] + vsmallest[1]*vsmallest[1] + vsmallest[2]*vsmallest[2]);
     for(int i=0; i<3; i++)
-        v[i] /= mag;
+        vsmallest[i] /= mag;
 }
 
 
@@ -1000,10 +1001,10 @@ static bool accumulate_point(// out
 }
 
 
-// Returns a fit cost: the RMS off-plane error
-static float fit_plane_into_points( // out
+static void fit_plane_into_points( // out
                                    plane_t*         plane,
                                    float*           max_norm2_dp,
+                                   float*           eigenvalues_ascending, // 3 of these
                                    // in
                                    const point3f_t* points,
                                    const points_and_plane_t* points_and_plane
@@ -1070,27 +1071,28 @@ static float fit_plane_into_points( // out
         M[5] += (double)(dp.xyz[2]*dp.xyz[2]);
     }
 
-    double v[3];
-    double l;
-    eig_smallest_real_symmetric_3x3(v,&l,M);
+    double l[3];         // all the eigenvalues, in ascending order
+    double vsmallest[3]; // eigenvector for l[0]
+    eig_real_symmetric_3x3(vsmallest,l,M);
     plane->p = pmean;
-    plane->n = point3f_from_double(v);
+    plane->n = point3f_from_double(vsmallest);
 
-    // RMS off-plane error
-    return sqrtf((float)l / (float)(points_and_plane->n));
+    for(int i=0; i<3; i++)
+        eigenvalues_ascending[i] = (float)l[i];
 }
 
 
-static float refine_plane_from_segment_cluster(// out
-                                               points_and_plane_t* points_and_plane,
-                                               float*              max_norm2_dp,
-                                               // in
-                                               const segment_cluster_t* segment_cluster,
-                                               const segment_t* segments,
-                                               const point3f_t* points,
-                                               const int* ipoint0_in_ring,
-                                               const int* Npoints,
-                                               const context_t* ctx)
+static void refine_plane_from_segment_cluster(// out
+                                              points_and_plane_t* points_and_plane,
+                                              float*              max_norm2_dp,
+                                              float*              eigenvalues_ascending, // 3 of these
+                                              // in
+                                              const segment_cluster_t* segment_cluster,
+                                              const segment_t* segments,
+                                              const point3f_t* points,
+                                              const int* ipoint0_in_ring,
+                                              const int* Npoints,
+                                              const context_t* ctx)
 {
     /* I have an approximate plane estimate.
 
@@ -1177,16 +1179,15 @@ static float refine_plane_from_segment_cluster(// out
 
 
         // Got a set of points. Fit a plane
-        float rms_fit_error = fit_plane_into_points(&points_and_plane->plane,
-                                                    max_norm2_dp,
-                                                    points,
-                                                    points_and_plane);
+        fit_plane_into_points(&points_and_plane->plane,
+                              max_norm2_dp,
+                              eigenvalues_ascending,
+                              points,
+                              points_and_plane);
 
 #warning FOR NOW I JUST RUN A SINGLE ITERATION
-        return rms_fit_error;
+        return;
     }
-
-    return -1.0f;
 }
 
 void default_context(context_t* ctx)
@@ -1308,28 +1309,28 @@ int8_t point_segmentation(// out
         segment_cluster_t* segment_cluster = &segment_clusters[icluster];
 
         float max_norm2_dp;
-        float rms_fit_error =
-            refine_plane_from_segment_cluster(&points_and_plane[iplane_out],
-                                              &max_norm2_dp,
-                                              segment_cluster,
-                                              segments,
-                                              points, ipoint0_in_ring, Npoints,
-                                              ctx);
+        float eigenvalues_ascending[3];
+        refine_plane_from_segment_cluster(&points_and_plane[iplane_out],
+                                          &max_norm2_dp,
+                                          eigenvalues_ascending,
+                                          segment_cluster,
+                                          segments,
+                                          points, ipoint0_in_ring, Npoints,
+                                          ctx);
+
+        const int Npoints_in_plane = points_and_plane[iplane_out].n;
 
         const bool debug =
             ctx->debug_xmin < points_and_plane[iplane_out].plane.p.x && points_and_plane[iplane_out].plane.p.x < ctx->debug_xmax &&
             ctx->debug_ymin < points_and_plane[iplane_out].plane.p.y && points_and_plane[iplane_out].plane.p.y < ctx->debug_ymax;
 
-
-        if(DEBUG_ON_TRUE(rms_fit_error < 0.0f,
-                         &points_and_plane[iplane_out].plane.p,
-                         "Refined plane is rejected by refine_plane_from_segment_cluster()"))
-            continue;
-
-        if(DEBUG_ON_TRUE(rms_fit_error > ctx->threshold_max_rms_fit_error,
+        // Each eigenvalue is a 1-sigma ellipse of our point cloud. It
+        // represents the sum-of-squares of deviations from the mean. The RMS is
+        // the useful value: RMS = sqrt(sum_of_squares/N)
+        if(DEBUG_ON_TRUE(eigenvalues_ascending[0] > ctx->threshold_max_rms_fit_error*ctx->threshold_max_rms_fit_error*(float)Npoints_in_plane,
                          &points_and_plane[iplane_out].plane.p,
                          "Refined plane doesn't fit the constituent points well-enough: %f > %f",
-                         rms_fit_error, ctx->threshold_max_rms_fit_error))
+                         sqrt(eigenvalues_ascending[0]/(float)Npoints_in_plane), ctx->threshold_max_rms_fit_error))
             continue;
 
         if(DEBUG_ON_TRUE(max_norm2_dp*2.*2. > ctx->threshold_max_plane_size*ctx->threshold_max_plane_size,
