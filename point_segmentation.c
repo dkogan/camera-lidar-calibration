@@ -932,6 +932,7 @@ static bool accumulate_point(// out
                              const point3f_t* points,
                              const int ipoint0_in_ring, // start of this ring in the full points[] array
                              const int ipoint,          // IN-RING index
+                             const int ipoint_segment_limit,
                              const context_t* ctx)
 {
     if(bitarray64_check(bitarray_visited, ipoint))
@@ -941,9 +942,19 @@ static bool accumulate_point(// out
         return false;
 
     const float th_rad = th_from_point(&points[ipoint0_in_ring + ipoint]);
-    if(*th_rad_last < FLT_MAX && // if we have a valid th_rad_last
-       fabsf(th_rad - *th_rad_last) > ctx->threshold_max_gap_th_rad)
-        return false;
+    if(*th_rad_last < FLT_MAX)
+    {
+        // we have a valid th_rad_last
+        if(fabsf(th_rad - *th_rad_last) > ctx->threshold_max_gap_th_rad)
+            return false;
+    }
+    else
+    {
+        // we do not have a valid th_rad_last. Stop when we reach the segment
+        // limit
+        if(ipoint == ipoint_segment_limit)
+            return false;
+    }
 
     // no threshold_max_range check here. This was already checked when
     // constructing the candidate segments. So if we got this far, I assume it's
@@ -1137,6 +1148,7 @@ static float refine_plane_from_segment_cluster(// out
                                      points,
                                      ipoint0_in_ring[iring],
                                      ipoint,
+                                     segment->ipoint1,
                                      ctx))
                     break;
             }
@@ -1152,6 +1164,7 @@ static float refine_plane_from_segment_cluster(// out
                                      points,
                                      ipoint0_in_ring[iring],
                                      ipoint,
+                                     segment->ipoint0,
                                      ctx))
                     break;
             }
