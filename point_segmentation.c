@@ -591,7 +591,6 @@ static bool is_normal(const point3f_t v,
                       const point3f_t n,
                       const context_t* ctx)
 {
-#warning "it is weird to do this with an angle threshold. should be distance threshold"
     // inner(v,n) = cos magv magn ->
     // cos = inner / (magv magn) ->
     // cos^2 = inner^2 / (norm2v norm2n) ->
@@ -607,7 +606,6 @@ static bool is_same_direction(const point3f_t a,
                               const point3f_t b,
                               const context_t* ctx)
 {
-#warning "it is weird to do this with an angle threshold. should be distance threshold"
     // inner(a,b) = cos maga magb ->
     // cos = inner / (maga magb) ->
     // cos^2 = inner^2 / (norm2a norm2b) ->
