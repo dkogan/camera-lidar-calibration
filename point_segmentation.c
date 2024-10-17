@@ -227,11 +227,6 @@ bool point_is_valid__presolve(const point3f_t* p,
                               const bool debug,
                               const context_t* ctx)
 {
-    if( DEBUG_ON_TRUE( norm2(*p) > ctx->threshold_max_range*ctx->threshold_max_range,
-                       p,
-                       "%f > %f", norm2(*p), ctx->threshold_max_range*ctx->threshold_max_range ))
-        return false;
-
     const int Ngap = (int)( 0.5f + fabsf(dth_rad) * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
 
     // Ngap==1 is the expected, normal value. Anything larger is a gap
@@ -872,6 +867,28 @@ static void segment_clusters_from_segments(// out
                                  iring1-iring0+1, ctx->threshold_min_Nrings_in_cluster))
                     continue;
             }
+
+            // I throw out any cluster that's entirely too far. I only do this
+            // now because it's possible to see far-too-large planes that are
+            // partially too far (walls, ground), and I want to detect this
+            // far-too-large-ness, and throw them out
+            bool keep = false;
+            for(int i=0; i<cluster->n; i++)
+            {
+                const segmentref_t* node = &cluster->segments[i];
+                const segment_t* segment = &segments[node->iring*Nsegments_per_rotation + node->isegment];
+
+                if( norm2(segment->p) < ctx->threshold_max_range*ctx->threshold_max_range )
+                {
+                    keep = true;
+                    break;
+                }
+            }
+            if(DEBUG_ON_TRUE(!keep,
+                             &segment->p,
+                             "cluster starting with iring=%d isegment=%d is completely past the threshold_max_range=%f",
+                             iring,isegment, ctx->threshold_max_range))
+                continue;
 
 
 
