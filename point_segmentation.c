@@ -148,7 +148,7 @@ void eig_smallest_real_symmetric_3x3( // out
     // The eigenvectors are orthonormal.
 
     // This implements
-    // https://en.wikipedia.org/wiki/Eigenvalue_algorithm#3.C3.973_matrices
+    // https://en.wikipedia.org/wiki/Eigenvalue_algorithm#Symmetric_3%C3%973_matrices
     const double p1    = M[1]*M[1] + M[2]*M[2] + M[4]*M[4];
     const double trace = M[0] + M[3] + M[5];
 
