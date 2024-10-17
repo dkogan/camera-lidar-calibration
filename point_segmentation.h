@@ -54,7 +54,7 @@ _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has exp
   /* cos(5deg) */                                                       \
   _(float, threshold_min_cos_angle_error_same_direction, 0.996194698092f,   "f","f") \
   _(float, threshold_max_plane_point_error,              0.15,              "f","f") \
-  _(int,   threshold_max_Nsegments_in_cluster,           40,                "i","i") \
+  _(int,   threshold_max_Nsegments_in_cluster,           100,               "i","i") \
   _(int,   threshold_min_Nsegments_in_cluster,           5,                 "i","i") \
   _(int,   threshold_min_Nrings_in_cluster,              3,                 "i","i") \
   /* used in refinement */                                              \
