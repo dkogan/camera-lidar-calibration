@@ -67,6 +67,18 @@ points,r = camera_lidar_calibration.point_segmentation(args.bag,
                                                        getattr(args, 'lidar-topic'),
                                                        **kwargs)
 if args.dump or args.debug is not None:
+    # Write the planes out to stdout, in a way that can be cut/pasted into
+    # point_segmentation_auto_test.py
+    plane_pn = r['plane_pn']
+    plane_p = plane_pn[...,:3]
+    plane_n = plane_pn[...,3:]
+    for i in range(len(plane_pn)):
+        print(f"### plane {i}",
+              file = sys.stderr)
+        print(f"         plane_p = np.array(({plane_p[i,0]:.3f},{plane_p[i,1]:.3f},{plane_p[i,2]:.3f})),",
+              file = sys.stderr)
+        print(f"         plane_n = np.array(({plane_n[i,0]:.4f},{plane_n[i,1]:.4f},{plane_n[i,2]:.4f})),",
+              file = sys.stderr)
     sys.exit()
 
 
