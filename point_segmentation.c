@@ -1121,9 +1121,9 @@ static float refine_plane_from_segment_cluster(// out
         for(int i=0; i<Nrings_considered; i++)
             memset(bitarray_visited[i], 0, Nwords_bitarray_visited*sizeof(uint64_t));
 
-        for(int isegment=0; isegment<segment_cluster->n; isegment++)
+        for(int isegment_in_cluster=0; isegment_in_cluster<segment_cluster->n; isegment_in_cluster++)
         {
-            const segmentref_t* segmentref = &segment_cluster->segments[isegment];
+            const segmentref_t* segmentref = &segment_cluster->segments[isegment_in_cluster];
 
             const int iring    = segmentref->iring;
             const int isegment = segmentref->isegment;
