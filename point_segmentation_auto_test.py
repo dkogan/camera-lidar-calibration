@@ -35,22 +35,52 @@ ctx = camera_lidar_calibration.default_context()
 max_range = ctx['threshold_max_range']
 
 tests = (
+
+    # This contains a board, but there's a ground scan beneath that lines up
+    # well with it. This makes it look too bad, and I'm fine with nothing being
+    # found here
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-36-36.bag',
+         topic   = '/lidar/velodyne_front_tilted_points',
+         plane_p = None,
+         plane_n = None),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-36-36.bag',
+         topic   = '/lidar/velodyne_front_horiz_points',
+         plane_p = np.array((3.368,-0.050,0.645)),
+         plane_n = np.array((0.7032,-0.6637,0.2550)),
+         ),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-36-36.bag',
+         topic   = '/lidar/velodyne_back_points',
+         plane_p = None,
+         plane_n = None),
+
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-36-47.bag',
+         topic   = '/lidar/velodyne_front_tilted_points',
+         plane_p = np.array((2.875,-0.078,0.033)),
+         plane_n = np.array((0.6558,-0.0045,0.7550)),
+         ),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-36-47.bag',
+         topic   = '/lidar/velodyne_front_horiz_points',
+         plane_p = np.array((2.797,0.154,-0.028)),
+         plane_n = np.array((-0.7487,-0.0133,0.6628)),
+         ),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-36-47.bag',
+         topic   = '/lidar/velodyne_back_points',
+         plane_p = None,
+         plane_n = None),
+
     dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-37-12.bag',
          topic   = '/lidar/velodyne_front_tilted_points',
          plane_p = np.array((3.100,-1.294,-0.593)),
-         plane_n = np.array((-0.9635,-0.2279,0.1399))),
-
+         plane_n = np.array((-0.9635,-0.2279,0.1399)),
+         ),
     dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-37-12.bag',
          topic   = '/lidar/velodyne_front_horiz_points',
          plane_p = None,
-         plane_n = None,
-         ),
-
+         plane_n = None),
     dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-37-12.bag',
          topic   = '/lidar/velodyne_back_points',
          plane_p = None,
-         plane_n = None,
-         ),
+         plane_n = None),
 
     )
 
