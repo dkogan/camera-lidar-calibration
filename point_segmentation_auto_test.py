@@ -44,7 +44,14 @@ tests = (
          topic   = '/lidar/velodyne_front_horiz_points',
          plane_p = None,
          plane_n = None,
-         )
+         ),
+
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-37-12.bag',
+         topic   = '/lidar/velodyne_back_points',
+         plane_p = None,
+         plane_n = None,
+         ),
+
     )
 
 

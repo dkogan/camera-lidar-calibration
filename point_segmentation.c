@@ -119,7 +119,7 @@ typedef struct
 
 typedef struct
 {
-    segmentref_t nodes[128];
+    segmentref_t nodes[255];
     int n;
 } stack_t;
 
@@ -131,7 +131,7 @@ typedef struct
         plane_unnormalized_t plane_unnormalized;
     };
 
-    segmentref_t segments[256];
+    segmentref_t segments[512-7];
     int n;
 } segment_cluster_t;
 
