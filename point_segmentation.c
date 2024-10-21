@@ -780,10 +780,13 @@ static bool plane_point_compatible_unnormalized(const plane_unnormalized_t* plan
     return ctx->threshold_max_plane_point_error*norm2(plane_unnormalized->n_unnormalized) > proj*proj;
 }
 
-static bool plane_segment_compatible(const plane_unnormalized_t* plane_unnormalized,
-                                     const segment_t*            segment,
-                                     const int iring, const int isegment,
-                                     const context_t* ctx)
+static bool plane_segment_compatible(segment_cluster_t* cluster,
+                                     const segment_t*   segment,
+                                     const int          iring, const int isegment,
+                                     const segment_t*   segments,
+                                     const point3f_t*   points,
+                                     const int*         ipoint0_in_ring,
+                                     const context_t*   ctx)
 {
     // both segment->p and segment->v must lie in the plane
 
@@ -793,38 +796,43 @@ static bool plane_segment_compatible(const plane_unnormalized_t* plane_unnormali
     const bool debug =
         ctx->debug_xmin < segment->p.x && segment->p.x < ctx->debug_xmax &&
         ctx->debug_ymin < segment->p.y && segment->p.y < ctx->debug_ymax;
-    return
-        !( DEBUG_ON_TRUE(!is_normal(segment->v, plane_unnormalized->n_unnormalized, ctx),
+    if(!( DEBUG_ON_TRUE(!is_normal(segment->v, cluster->plane_unnormalized.n_unnormalized, ctx),
                          &segment->p,
                          "segment iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
                          iring,isegment) ||
-           DEBUG_ON_TRUE(!plane_point_compatible_unnormalized(plane_unnormalized, &segment->p, ctx),
+          DEBUG_ON_TRUE( !plane_point_compatible_unnormalized(&cluster->plane_unnormalized, &segment->p, ctx),
                          &segment->p,
                          "segment iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
-                         iring,isegment));
+                         iring,isegment)))
+        return true;
+
+    return false;
 }
 
 
 static void try_visit(stack_t* stack,
-                      // out
+                      // in,out
                       segment_cluster_t* cluster,
                       // what we're trying
                       const int iring, const int isegment,
                       // context
-                      const plane_unnormalized_t* plane_unnormalized,
                       segment_t* segments, // non-const to be able to set "visited"
-                      const int Nrings,
+                      const point3f_t*   points,
+                      const int*         ipoint0_in_ring,
                       const context_t* ctx)
 {
-    if(iring    < 0 || iring    >= Nrings                ) return;
+    if(iring    < 0 || iring    >= ctx->Nrings           ) return;
     if(isegment < 0 || isegment >= Nsegments_per_rotation) return;
 
     segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
 
     if(segment_is_valid(segment) &&
        !segment->visited &&
-       plane_segment_compatible(plane_unnormalized, segment,
+       plane_segment_compatible(cluster,
+                                segment,
                                 iring, isegment,
+                                segments,
+                                points, ipoint0_in_ring,
                                 ctx))
     {
         segmentref_t* node = stack_push(stack);
@@ -857,13 +865,14 @@ static void stage2_cluster_segments(// out
                                     const int Nclusters_max, // size of clusters[]
 
                                     // in
-                                    segment_t* segments, // non-const to be able to set "visited"
-                                    const int Nrings,
+                                    segment_t*       segments, // non-const to be able to set "visited"
+                                    const point3f_t* points,
+                                    const int*       ipoint0_in_ring,
                                     const context_t* ctx)
 {
     *Nclusters = 0;
 
-    for(int iring = 0; iring < Nrings-1; iring++)
+    for(int iring = 0; iring < ctx->Nrings-1; iring++)
     {
         for(int isegment = 0; isegment < Nsegments_per_rotation; isegment++)
         {
@@ -930,23 +939,27 @@ static void stage2_cluster_segments(// out
                 segmentref_t* node = stack_pop(&stack);
                 try_visit(&stack,
                           cluster,
-                          node->iring-1, node->isegment, &cluster->plane_unnormalized,
-                          segments, Nrings,
+                          node->iring-1, node->isegment,
+                          segments,
+                          points, ipoint0_in_ring,
                           ctx);
                 try_visit(&stack,
                           cluster,
-                          node->iring+1, node->isegment, &cluster->plane_unnormalized,
-                          segments, Nrings,
+                          node->iring+1, node->isegment,
+                          segments,
+                          points, ipoint0_in_ring,
                           ctx);
                 try_visit(&stack,
                           cluster,
-                          node->iring, node->isegment-1, &cluster->plane_unnormalized,
-                          segments, Nrings,
+                          node->iring, node->isegment-1,
+                          segments,
+                          points, ipoint0_in_ring,
                           ctx);
                 try_visit(&stack,
                           cluster,
-                          node->iring, node->isegment+1, &cluster->plane_unnormalized,
-                          segments, Nrings,
+                          node->iring, node->isegment+1,
+                          segments,
+                          points, ipoint0_in_ring,
                           ctx);
             }
 
@@ -1293,7 +1306,7 @@ int8_t point_segmentation(// out
                             &Nclusters,
                             (int)(sizeof(segment_clusters)/sizeof(segment_clusters[0])),
                             segments,
-                            ctx->Nrings,
+                            points, ipoint0_in_ring,
                             ctx);
 
     if(ctx->dump)
