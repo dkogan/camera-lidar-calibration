@@ -1365,7 +1365,7 @@ int8_t point_segmentation(// out
 
     // plane_clusters_from_segments() will return only clusters of an acceptable size,
     // so there will not be a huge number of candidates
-    const int Nmax_planes = 10;
+    const int Nmax_planes = 20;
     segment_cluster_t segment_clusters[Nmax_planes];
     int Nclusters;
     stage2_cluster_segments(segment_clusters,
