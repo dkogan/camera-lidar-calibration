@@ -722,9 +722,9 @@ static bool plane_from_segment_segment(// out
     return true;
 }
 
-static bool plane_point_compatible(const plane_t*   plane,
-                                   const point3f_t* point,
-                                   const context_t* ctx)
+static bool plane_point_compatible__normalized(const plane_t*   plane,
+                                               const point3f_t* point,
+                                               const context_t* ctx)
 {
     // I want (point - p) to be perpendicular to n. I want this in terms of
     // "distance-off-plane" so err = inner( (point - p), n) / mag(n)
@@ -1037,9 +1037,9 @@ static bool accumulate_point(// out
     // constructing the candidate segments. So if we got this far, I assume it's
     // good
 
-    if( plane_point_compatible(&points_and_plane->plane,
-                               &points[ipoint0_in_ring + ipoint],
-                               ctx) )
+    if( plane_point_compatible__normalized(&points_and_plane->plane,
+                                           &points[ipoint0_in_ring + ipoint],
+                                           ctx) )
     {
         // I will be fitting a plane to a set of points. The most accurate way
         // to do this is to minimize the observation errors (ranges; what the
