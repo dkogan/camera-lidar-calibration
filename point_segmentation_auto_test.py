@@ -137,6 +137,35 @@ tests = (
          plane_p = np.array((0.566,-4.260,0.328)),
          plane_n = np.array((-0.7427,0.6681,0.0437)),
          ),
+    # 2023-10-19/one_cal_data_2023-10-19-20-38-10.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-38-14.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-38-18.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-38-23.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-39-03.bag
+
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-39-15.bag',
+         topic   = '/lidar/velodyne_front_tilted_points',
+         plane_p = None,
+         plane_n = None,
+         ),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-39-15.bag',
+         topic   = '/lidar/velodyne_front_horiz_points',
+         plane_p = None,
+         plane_n = None,
+         ),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-39-15.bag',
+         topic   = '/lidar/velodyne_back_points',
+         plane_p = np.array((2.789,-0.641,0.068)),
+         plane_n = np.array((-0.9770,0.2065,0.0534)),
+         ),
+    # 2023-10-19/one_cal_data_2023-10-19-20-39-32.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-39-39.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-39-50.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-39-57.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-40-02.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-40-09.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-40-13.bag
+
     )
 
 
