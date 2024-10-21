@@ -1084,10 +1084,19 @@ static void stage2_cluster_segments(// out
 
 
 
+            // We're accepting this cluster. TO prepare for the next stage I
+            // refine the plane estimate and I normalize the normal vector
+            if(!fit_plane_into_cluster(// out
+                                       &cluster->plane_unnormalized,
+                                       // in
+                                       cluster,
+                                       NULL, -1,
+                                       segments,
+                                       points,
+                                       ipoint0_in_ring,
+                                       ctx))
+                continue;
 
-            // We're accepting this cluster. There won't be a lot of these, and
-            // we will be accessing the plane normal a lot, so I normalize the
-            // normal vector
             const float magn = mag(cluster->plane_unnormalized.n_unnormalized);
             for(int i=0; i<3;i++)
                 cluster->plane.n.xyz[i] = cluster->plane_unnormalized.n_unnormalized.xyz[i] / magn;
