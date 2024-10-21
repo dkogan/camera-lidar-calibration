@@ -1191,6 +1191,7 @@ static void stage3_refine_clusters(// out
                                    float*              max_norm2_dp,
                                    float*              eigenvalues_ascending, // 3 of these
                                    // in
+                                   const int icluster,
                                    const segment_cluster_t* segment_cluster,
                                    const segment_t* segments,
                                    const point3f_t* points,
@@ -1220,9 +1221,13 @@ static void stage3_refine_clusters(// out
     // Start with the best-available plane estimate
     points_and_plane->plane = segment_cluster->plane;
 
+    const bool debug =
+        ctx->debug_xmin < segment_cluster->plane.p.x && segment_cluster->plane.p.x < ctx->debug_xmax &&
+        ctx->debug_ymin < segment_cluster->plane.p.y && segment_cluster->plane.p.y < ctx->debug_ymax;
     while(true)
     {
         points_and_plane->n = 0;
+        int points_and_plane_n_prev = 0;
 
         for(int i=0; i<Nrings_considered; i++)
             memset(bitarray_visited[i], 0, Nwords_bitarray_visited*sizeof(uint64_t));
@@ -1279,6 +1284,14 @@ static void stage3_refine_clusters(// out
             // I don't bother to look in rings that don't appear in the
             // segment_cluster. This will by contain not very much data (because
             // the pre-solve didn't find it), and won't be of much value
+            if(debug)
+            {
+                MSG("isegment=%d iring=%d at icluster=%d: refinement gathered %d points",
+                    isegment, iring,
+                    icluster,
+                    points_and_plane->n - points_and_plane_n_prev);
+                points_and_plane_n_prev = points_and_plane->n;
+            }
         }
 
 
@@ -1423,6 +1436,7 @@ int8_t point_segmentation(// out
         stage3_refine_clusters(&points_and_plane[iplane_out],
                                &max_norm2_dp,
                                eigenvalues_ascending,
+                               icluster,
                                segment_cluster,
                                segments,
                                points, ipoint0_in_ring, Npoints,
