@@ -198,6 +198,87 @@ void eig_real_symmetric_3x3( // out
         vsmallest[i] /= mag;
 }
 
+static void fit_plane_into_points( // out
+                                   plane_t*         plane,
+                                   float*           max_norm2_dp,
+                                   float*           eigenvalues_ascending, // 3 of these
+                                   // in
+                                   const point3f_t* points,
+                                   const points_and_plane_t* points_and_plane
+                                   )
+{
+    /*
+      I fit a plane to a set of points. The most accurate way to do this is to
+      minimize the observation errors (ranges; what the fit ingesting this data
+      will be doing). But that's a nonlinear solve, and I avoid that here. I
+      simply minimize the norm2 off-plane error instead:
+
+      - compute pmean
+      - compute M = sum(outer(p[i]-pmean,p[i]-pmean))
+      - n = eigenvector of M corresponding to the smallest eigenvalue
+
+      Derivation: plane is (p,n); points are in a (3,N) matrix P.
+      ei = nt (Pi - p)
+      E = sum(inner(ei,ei))
+      dE/dp ~ sum(eit nt)
+            = sum( (Pit-pt) n nt )
+      dE/dp = 0 -> sum(Pit) n nt = sum(pt) n nt
+      -> p = mean(P)
+
+      Let Q = P-mean(P)
+      ei = nt Qi
+      E = sum(inner(ei,ei)) = nt Q Qt n
+
+      Lagrange multipliers to constrain norm2(n) = 1:
+      L = nt Q Qt n - l nt n
+      dL/dn = 2 nt Q Qt - 2 l nt
+      dL/dn = 0 -> Q Qt n = l n
+
+      This is an eigenvalue problem: l,n are eigen(values,vectors) of Q Qt
+      E = nt Q Qt n = l nt n = l
+
+    */
+
+    point3f_t pmean = {};
+    for(int i=0; i<points_and_plane->n; i++)
+        for(int j=0; j<3; j++)
+            pmean.xyz[j] += points[points_and_plane->ipoint[i]].xyz[j];
+    for(int j=0; j<3; j++)
+        pmean.xyz[j] /= (float)(points_and_plane->n);
+
+
+    *max_norm2_dp = 0.0f;
+
+    // packed storage; row-first
+    // double-precision because this is potentially inaccurate
+    double M[3+2+1] = {};
+    for(int i=0; i<points_and_plane->n; i++)
+    {
+        const point3f_t dp = sub(points[points_and_plane->ipoint[i]], pmean);
+
+        const float norm2_dp = norm2(dp);
+        if(*max_norm2_dp < norm2_dp)
+            *max_norm2_dp = norm2_dp;
+
+        M[0] += (double)(dp.xyz[0]*dp.xyz[0]);
+        M[1] += (double)(dp.xyz[0]*dp.xyz[1]);
+        M[2] += (double)(dp.xyz[0]*dp.xyz[2]);
+        M[3] += (double)(dp.xyz[1]*dp.xyz[1]);
+        M[4] += (double)(dp.xyz[1]*dp.xyz[2]);
+        M[5] += (double)(dp.xyz[2]*dp.xyz[2]);
+    }
+
+    double l[3];         // all the eigenvalues, in ascending order
+    double vsmallest[3]; // eigenvector for l[0]
+    eig_real_symmetric_3x3(vsmallest,l,M);
+    plane->p = pmean;
+    plane->n = point3f_from_double(vsmallest);
+
+    for(int i=0; i<3; i++)
+        eigenvalues_ascending[i] = (float)l[i];
+}
+
+
 
 static
 float th_from_point(const point3f_t* p)
@@ -993,87 +1074,6 @@ static bool accumulate_point(// out
     }
 
     return true;
-}
-
-
-static void fit_plane_into_points( // out
-                                   plane_t*         plane,
-                                   float*           max_norm2_dp,
-                                   float*           eigenvalues_ascending, // 3 of these
-                                   // in
-                                   const point3f_t* points,
-                                   const points_and_plane_t* points_and_plane
-                                   )
-{
-    /*
-      I fit a plane to a set of points. The most accurate way to do this is to
-      minimize the observation errors (ranges; what the fit ingesting this data
-      will be doing). But that's a nonlinear solve, and I avoid that here. I
-      simply minimize the norm2 off-plane error instead:
-
-      - compute pmean
-      - compute M = sum(outer(p[i]-pmean,p[i]-pmean))
-      - n = eigenvector of M corresponding to the smallest eigenvalue
-
-      Derivation: plane is (p,n); points are in a (3,N) matrix P.
-      ei = nt (Pi - p)
-      E = sum(inner(ei,ei))
-      dE/dp ~ sum(eit nt)
-            = sum( (Pit-pt) n nt )
-      dE/dp = 0 -> sum(Pit) n nt = sum(pt) n nt
-      -> p = mean(P)
-
-      Let Q = P-mean(P)
-      ei = nt Qi
-      E = sum(inner(ei,ei)) = nt Q Qt n
-
-      Lagrange multipliers to constrain norm2(n) = 1:
-      L = nt Q Qt n - l nt n
-      dL/dn = 2 nt Q Qt - 2 l nt
-      dL/dn = 0 -> Q Qt n = l n
-
-      This is an eigenvalue problem: l,n are eigen(values,vectors) of Q Qt
-      E = nt Q Qt n = l nt n = l
-
-    */
-
-    point3f_t pmean = {};
-    for(int i=0; i<points_and_plane->n; i++)
-        for(int j=0; j<3; j++)
-            pmean.xyz[j] += points[points_and_plane->ipoint[i]].xyz[j];
-    for(int j=0; j<3; j++)
-        pmean.xyz[j] /= (float)(points_and_plane->n);
-
-
-    *max_norm2_dp = 0.0f;
-
-    // packed storage; row-first
-    // double-precision because this is potentially inaccurate
-    double M[3+2+1] = {};
-    for(int i=0; i<points_and_plane->n; i++)
-    {
-        const point3f_t dp = sub(points[points_and_plane->ipoint[i]], pmean);
-
-        const float norm2_dp = norm2(dp);
-        if(*max_norm2_dp < norm2_dp)
-            *max_norm2_dp = norm2_dp;
-
-        M[0] += (double)(dp.xyz[0]*dp.xyz[0]);
-        M[1] += (double)(dp.xyz[0]*dp.xyz[1]);
-        M[2] += (double)(dp.xyz[0]*dp.xyz[2]);
-        M[3] += (double)(dp.xyz[1]*dp.xyz[1]);
-        M[4] += (double)(dp.xyz[1]*dp.xyz[2]);
-        M[5] += (double)(dp.xyz[2]*dp.xyz[2]);
-    }
-
-    double l[3];         // all the eigenvalues, in ascending order
-    double vsmallest[3]; // eigenvector for l[0]
-    eig_real_symmetric_3x3(vsmallest,l,M);
-    plane->p = pmean;
-    plane->n = point3f_from_double(vsmallest);
-
-    for(int i=0; i<3; i++)
-        eigenvalues_ascending[i] = (float)l[i];
 }
 
 
