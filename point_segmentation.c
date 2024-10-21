@@ -780,6 +780,63 @@ static bool plane_point_compatible_unnormalized(const plane_unnormalized_t* plan
     return ctx->threshold_max_plane_point_error*norm2(plane_unnormalized->n_unnormalized) > proj*proj;
 }
 
+static bool fit_plane_into_cluster(// out
+                                   plane_unnormalized_t* plane_unnormalized,
+                                   // in
+                                   const segment_cluster_t* cluster,
+
+                                   // extra segment to consider in addition to the segments in the cluster
+                                   const segment_t*   segment0,
+                                   const int          iring0,
+
+                                   const segment_t*   segments,
+                                   const point3f_t*   points,
+                                   const int*         ipoint0_in_ring,
+                                   const context_t*   ctx)
+{
+    // using the "points" only, not the "plane". Storing the left/right ends of
+    // the existing segments (cluster->n of them) and the one candidate new
+    // segment
+    const int Nsegments = cluster->n + (segment0 != NULL ? 1 : 0);
+    points_and_plane_t points_and_plane = {.n = 2*Nsegments};
+
+    if( 2*Nsegments > (int)(sizeof(points_and_plane.ipoint)/sizeof(points_and_plane.ipoint[0])))
+    {
+        MSG("sizeof(points_and_plane_t.ipoint) exceeded. plane_segment_compatible() is giving up and returning false. Bump up the size");
+        return false;
+    }
+
+    int ipoint0 = 0;
+    if(segment0 != NULL)
+    {
+        points_and_plane.ipoint[0] = ipoint0_in_ring[iring0] + segment0->ipoint0;
+        points_and_plane.ipoint[1] = ipoint0_in_ring[iring0] + segment0->ipoint1;
+        ipoint0 = 2;
+    }
+
+    for(int i=0; i<cluster->n; i++)
+    {
+        const int iring    = cluster->segments[i].iring;
+        const int isegment = cluster->segments[i].isegment;
+        const segment_t* segment =
+            &segments[iring*Nsegments_per_rotation + isegment];
+
+        points_and_plane.ipoint[ipoint0 + 2*i + 0] = ipoint0_in_ring[iring] + segment->ipoint0;
+        points_and_plane.ipoint[ipoint0 + 2*i + 1] = ipoint0_in_ring[iring] + segment->ipoint1;
+    }
+
+
+    float max_norm2_dp;
+    float eigenvalues_ascending[3];
+    fit_plane_into_points__unnormalized( // out
+                                         plane_unnormalized,
+                                         &max_norm2_dp,
+                                         eigenvalues_ascending, // 3 of these
+                                         // in
+                                         points, &points_and_plane);
+    return true;
+}
+
 static bool plane_segment_compatible(segment_cluster_t* cluster,
                                      const segment_t*   segment,
                                      const int          iring, const int isegment,
