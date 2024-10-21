@@ -141,8 +141,8 @@ void eig_real_symmetric_3x3( // out
                              double* vsmallest, // the smallest-eigenvalue eigenvector
                              double* l,         // ALL the eigenvalues, in ascending order
                              // in
-                             const double* M // shape (6,); packed storage; row-first
-                             )
+                             const double* M, // shape (6,); packed storage; row-first
+                             const bool normalize_v )
 {
     // I have a symmetric 3x3 matrix M. So the eigenvalues are real and >= 0.
     // The eigenvectors are orthonormal.
@@ -193,19 +193,23 @@ void eig_real_symmetric_3x3( // out
     vsmallest[0] = v0[1]*v1[2] - v0[2]*v1[1];
     vsmallest[1] = v0[2]*v1[0] - v0[0]*v1[2];
     vsmallest[2] = v0[0]*v1[1] - v0[1]*v1[0];
-    const double mag = sqrt(vsmallest[0]*vsmallest[0] + vsmallest[1]*vsmallest[1] + vsmallest[2]*vsmallest[2]);
-    for(int i=0; i<3; i++)
-        vsmallest[i] /= mag;
+
+    if(normalize_v)
+    {
+        const double mag = sqrt(vsmallest[0]*vsmallest[0] + vsmallest[1]*vsmallest[1] + vsmallest[2]*vsmallest[2]);
+        for(int i=0; i<3; i++)
+            vsmallest[i] /= mag;
+    }
 }
 
-static void fit_plane_into_points( // out
-                                   plane_t*         plane,
-                                   float*           max_norm2_dp,
-                                   float*           eigenvalues_ascending, // 3 of these
-                                   // in
-                                   const point3f_t* points,
-                                   const points_and_plane_t* points_and_plane
-                                   )
+static void _fit_plane_into_points( // out
+                                    plane_t*         plane, // may be normalized or unnormalized
+                                    float*           max_norm2_dp,
+                                    float*           eigenvalues_ascending, // 3 of these
+                                    // in
+                                    const point3f_t* points,
+                                    const points_and_plane_t* points_and_plane,
+                                    const bool normalize_v )
 {
     /*
       I fit a plane to a set of points. The most accurate way to do this is to
@@ -270,13 +274,39 @@ static void fit_plane_into_points( // out
 
     double l[3];         // all the eigenvalues, in ascending order
     double vsmallest[3]; // eigenvector for l[0]
-    eig_real_symmetric_3x3(vsmallest,l,M);
+    eig_real_symmetric_3x3(vsmallest,l,M,
+                           normalize_v);
     plane->p = pmean;
     plane->n = point3f_from_double(vsmallest);
 
     for(int i=0; i<3; i++)
         eigenvalues_ascending[i] = (float)l[i];
 }
+
+static void fit_plane_into_points__normalized( // out
+                                               plane_t*         plane,
+                                               float*           max_norm2_dp,
+                                               float*           eigenvalues_ascending, // 3 of these
+                                               // in
+                                               const point3f_t* points,
+                                               const points_and_plane_t* points_and_plane)
+{
+    _fit_plane_into_points(plane,
+                           max_norm2_dp,eigenvalues_ascending,points,points_and_plane, true);
+}
+
+static void fit_plane_into_points__unnormalized( // out
+                                                 plane_unnormalized_t*     plane_unnormalized,
+                                                 float*                    max_norm2_dp,
+                                                 float*                    eigenvalues_ascending, // 3 of these
+                                                 // in
+                                                 const point3f_t*          points,
+                                                 const points_and_plane_t* points_and_plane)
+{
+    _fit_plane_into_points((plane_t*)plane_unnormalized,
+                           max_norm2_dp,eigenvalues_ascending,points,points_and_plane, false);
+}
+
 
 
 
@@ -1174,11 +1204,11 @@ static void stage3_refine_clusters(// out
 
 
         // Got a set of points. Fit a plane
-        fit_plane_into_points(&points_and_plane->plane,
-                              max_norm2_dp,
-                              eigenvalues_ascending,
-                              points,
-                              points_and_plane);
+        fit_plane_into_points__normalized(&points_and_plane->plane,
+                                          max_norm2_dp,
+                                          eigenvalues_ascending,
+                                          points,
+                                          points_and_plane);
 
 #warning FOR NOW I JUST RUN A SINGLE ITERATION
         return;
