@@ -415,17 +415,17 @@ bool is_point_segment_planar(const point3f_t* p,
 
 
 static
-void finish_segment(// out
-                    segment_t* segments,
-                    // in
-                    const int isegment, const int iring,
-                    const int Npoints_invalid_in_segment,
-                    const uint64_t* bitarray_invalid,
-                    const point3f_t* p,
-                    const int ipoint0,
-                    const int ipoint1,
-                    const bool debug_this_ring,
-                    const context_t* ctx)
+void stage1_finish_segment(// out
+                           segment_t* segments,
+                           // in
+                           const int isegment, const int iring,
+                           const int Npoints_invalid_in_segment,
+                           const uint64_t* bitarray_invalid,
+                           const point3f_t* p,
+                           const int ipoint0,
+                           const int ipoint1,
+                           const bool debug_this_ring,
+                           const context_t* ctx)
 {
     segment_t* segment = &segments[isegment];
 
@@ -508,13 +508,13 @@ stage1_segment_from_ring(// out
         const int isegment = isegment_from_th(th_rad, ctx);
         if(isegment != isegment0)
         {
-            finish_segment(segments_thisring,
-                           isegment0, iring,
-                           Npoints_invalid_in_segment,
-                           bitarray_invalid,
-                           points_thisring, ipoint0, ipoint-1,
-                           iring == ctx->debug_iring,
-                           ctx);
+            stage1_finish_segment(segments_thisring,
+                                  isegment0, iring,
+                                  Npoints_invalid_in_segment,
+                                  bitarray_invalid,
+                                  points_thisring, ipoint0, ipoint-1,
+                                  iring == ctx->debug_iring,
+                                  ctx);
 
             ipoint0   = ipoint;
             isegment0 = isegment;
@@ -542,13 +542,13 @@ stage1_segment_from_ring(// out
         th_rad_prev = th_rad;
     }
 
-    finish_segment(segments_thisring,
-                   isegment0, iring,
-                   Npoints_invalid_in_segment,
-                   bitarray_invalid,
-                   points_thisring, ipoint0, Npoints_thisring-1,
-                   iring == ctx->debug_iring,
-                   ctx);
+    stage1_finish_segment(segments_thisring,
+                          isegment0, iring,
+                          Npoints_invalid_in_segment,
+                          bitarray_invalid,
+                          points_thisring, ipoint0, Npoints_thisring-1,
+                          iring == ctx->debug_iring,
+                          ctx);
 }
 
 static void ring_minmax_from_segment_cluster(// out
