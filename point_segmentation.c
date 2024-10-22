@@ -14,15 +14,15 @@
 #include "point_segmentation.h"
 
 
-#define MSG(fmt, ...) fprintf(stderr, "%s(%d): " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#define MSG(fmt, ...) fprintf(stderr, "%s(%d) %s(): " fmt "\n", __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
 
 #define DEBUG_ON_TRUE(what, p, fmt, ...)                                \
     ({  if(debug && (what))                                             \
         {                                                               \
-            MSG("REJECTED (%.2f %.2f %.2f) at %s():%d because " #what ": " fmt, \
+            MSG("REJECTED (%.2f %.2f %.2f) because " #what ": " fmt,    \
                 (p)->x,(p)->y,(p)->z,                                   \
-                __func__, __LINE__, ##__VA_ARGS__);                     \
+                ##__VA_ARGS__);                                         \
         }                                                               \
         what;                                                           \
     })
@@ -570,10 +570,9 @@ void stage1_finish_segment(// out
     segment->ipoint1 = ipoint1;
 
     if(debug_region)
-        MSG("isegment=%d iring=%d has p = (%.2f %.2f %.2f) at %s():%d",
+        MSG("isegment=%d iring=%d has p = (%.2f %.2f %.2f)",
             isegment, iring,
-            segment->p.x,segment->p.y,segment->p.z,
-            __func__, __LINE__);
+            segment->p.x,segment->p.y,segment->p.z);
 }
 
 
@@ -840,6 +839,7 @@ static bool fit_plane_into_cluster(// out
 static bool plane_segment_compatible(segment_cluster_t* cluster,
                                      const segment_t*   segment,
                                      const int          iring, const int isegment,
+                                     const int          icluster,
                                      const segment_t*   segments,
                                      const point3f_t*   points,
                                      const int*         ipoint0_in_ring,
@@ -853,14 +853,14 @@ static bool plane_segment_compatible(segment_cluster_t* cluster,
     const bool debug =
         ctx->debug_xmin < segment->p.x && segment->p.x < ctx->debug_xmax &&
         ctx->debug_ymin < segment->p.y && segment->p.y < ctx->debug_ymax;
-    if(!( DEBUG_ON_TRUE(!is_normal(segment->v, cluster->plane_unnormalized.n_unnormalized, ctx),
+    if(!( DEBUG_ON_TRUE( !is_normal(segment->v, cluster->plane_unnormalized.n_unnormalized, ctx),
                          &segment->p,
-                         "segment iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
-                         iring,isegment) ||
+                         "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
+                         icluster,iring,isegment) ||
           DEBUG_ON_TRUE( !plane_point_compatible_unnormalized(&cluster->plane_unnormalized, &segment->p, ctx),
                          &segment->p,
-                         "segment iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
-                         iring,isegment)))
+                         "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
+                         icluster,iring,isegment)))
         return true;
 
     return false;
@@ -873,6 +873,7 @@ static void try_visit(stack_t* stack,
                       // what we're trying
                       const int iring, const int isegment,
                       // context
+                      const int icluster,
                       segment_t* segments, // non-const to be able to set "visited"
                       const point3f_t*   points,
                       const int*         ipoint0_in_ring,
@@ -888,6 +889,7 @@ static void try_visit(stack_t* stack,
        plane_segment_compatible(cluster,
                                 segment,
                                 iring, isegment,
+                                icluster,
                                 segments,
                                 points, ipoint0_in_ring,
                                 ctx))
@@ -938,7 +940,10 @@ static void stage2_cluster_segments(// out
                 MSG("Too many flat objects in scene, exceeded Nclusters_max. Not reporting any more candidate planes. Bump Nclusters_max");
                 return;
             }
-            segment_cluster_t* cluster = &clusters[*Nclusters];
+
+            const int icluster = *Nclusters;
+
+            segment_cluster_t* cluster = &clusters[icluster];
 
             segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
             if(!(segment_is_valid(segment) && !segment->visited))
@@ -973,8 +978,8 @@ static void stage2_cluster_segments(// out
                                                          segment,segment1,
                                                          ctx),
                              &segment->p,
-                             "segment iring=%d isegment=%d isn't plane-consistent with segment iring=%d isegment=%d",
-                             iring,isegment,
+                             "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent with segment iring=%d isegment=%d",
+                             icluster,iring,isegment,
                              iring1,isegment))
                 continue;
 
@@ -997,24 +1002,28 @@ static void stage2_cluster_segments(// out
                 try_visit(&stack,
                           cluster,
                           node->iring-1, node->isegment,
+                          icluster,
                           segments,
                           points, ipoint0_in_ring,
                           ctx);
                 try_visit(&stack,
                           cluster,
                           node->iring+1, node->isegment,
+                          icluster,
                           segments,
                           points, ipoint0_in_ring,
                           ctx);
                 try_visit(&stack,
                           cluster,
                           node->iring, node->isegment-1,
+                          icluster,
                           segments,
                           points, ipoint0_in_ring,
                           ctx);
                 try_visit(&stack,
                           cluster,
                           node->iring, node->isegment+1,
+                          icluster,
                           segments,
                           points, ipoint0_in_ring,
                           ctx);
@@ -1022,7 +1031,8 @@ static void stage2_cluster_segments(// out
 
             if(DEBUG_ON_TRUE(cluster->n == 2,
                              &segment->p,
-                             "cluster starting with iring=%d isegment=%d only contains the seed segments", iring,isegment))
+                             "icluster=%d starting with iring=%d isegment=%d only contains the seed segments",
+                             icluster, iring,isegment))
             {
                 // This hypothetical ring-ring component is too small. The
                 // next-ring segment might still be valid in another component,
@@ -1033,8 +1043,8 @@ static void stage2_cluster_segments(// out
 
             if(DEBUG_ON_TRUE(cluster->n < ctx->threshold_min_Nsegments_in_cluster,
                              &segment->p,
-                             "cluster starting with iring=%d isegment=%d too small: %d < %d",
-                             iring,isegment,
+                             "icluster=%d starting with iring=%d isegment=%d too small: %d < %d",
+                             icluster,iring,isegment,
                              cluster->n, ctx->threshold_min_Nsegments_in_cluster))
             {
                 continue;
@@ -1042,8 +1052,8 @@ static void stage2_cluster_segments(// out
 
             if(DEBUG_ON_TRUE(cluster->n > ctx->threshold_max_Nsegments_in_cluster,
                              &segment->p,
-                             "cluster starting with iring=%d isegment=%d too big: %d > %d",
-                             iring,isegment,
+                             "icluster=%d starting with iring=%d isegment=%d too big: %d > %d",
+                             icluster,iring,isegment,
                              cluster->n, ctx->threshold_max_Nsegments_in_cluster))
             {
                 continue;
@@ -1054,8 +1064,8 @@ static void stage2_cluster_segments(// out
                 ring_minmax_from_segment_cluster(&iring0, &iring1, cluster);
                 if(DEBUG_ON_TRUE(iring1-iring0+1 < ctx->threshold_min_Nrings_in_cluster,
                                  &segment->p,
-                                 "cluster starting with iring=%d isegment=%d only contains too-few rings: %d < %d",
-                                 iring,isegment,
+                                 "icluster=%d starting with iring=%d isegment=%d only contains too-few rings: %d < %d",
+                                 icluster,iring,isegment,
                                  iring1-iring0+1, ctx->threshold_min_Nrings_in_cluster))
                     continue;
             }
@@ -1078,8 +1088,8 @@ static void stage2_cluster_segments(// out
             }
             if(DEBUG_ON_TRUE(!keep,
                              &segment->p,
-                             "cluster starting with iring=%d isegment=%d is completely past the threshold_max_range=%f",
-                             iring,isegment, ctx->threshold_max_range))
+                             "icluster=%d starting with iring=%d isegment=%d is completely past the threshold_max_range=%f",
+                             icluster,iring,isegment, ctx->threshold_max_range))
                 continue;
 
 
