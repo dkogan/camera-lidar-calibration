@@ -1375,14 +1375,18 @@ int8_t point_segmentation(// out
 
             for(int i=0; i<Nsegments_per_rotation; i++)
             {
+                // Breaks the "vnl" part of this, since there are too many
+                // columns here
                 if(!(segments[iring*Nsegments_per_rotation + i].v.x == 0 &&
                      segments[iring*Nsegments_per_rotation + i].v.y == 0 &&
                      segments[iring*Nsegments_per_rotation + i].v.z == 0))
-                    printf("%f %f stage1-segment-from-ring-%02d %f\n",
+                    printf("%f %f stage1-segment %f %f %f %f\n",
                            segments[iring*Nsegments_per_rotation + i].p.x,
                            segments[iring*Nsegments_per_rotation + i].p.y,
-                           iring,
-                           segments[iring*Nsegments_per_rotation + i].p.z);
+                           segments[iring*Nsegments_per_rotation + i].p.z,
+                           segments[iring*Nsegments_per_rotation + i].v.x * 0.3,
+                           segments[iring*Nsegments_per_rotation + i].v.y * 0.3,
+                           segments[iring*Nsegments_per_rotation + i].v.z * 0.3 );
             }
         }
     }
