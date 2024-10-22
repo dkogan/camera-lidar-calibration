@@ -134,6 +134,7 @@ typedef struct
     segmentref_t segments[512-7];
     int n;
 } segment_cluster_t;
+_Static_assert(sizeof(segment_cluster_t) == 512*4, "segment_cluster_t has expected size");
 
 
 static
