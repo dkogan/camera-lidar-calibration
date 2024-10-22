@@ -131,10 +131,10 @@ typedef struct
         plane_unnormalized_t plane_unnormalized;
     };
 
-    segmentref_t segments[512-7];
+    segmentref_t segments[1024-7];
     int n;
 } segment_cluster_t;
-_Static_assert(sizeof(segment_cluster_t) == 512*4, "segment_cluster_t has expected size");
+_Static_assert(sizeof(segment_cluster_t) == 1024*4, "segment_cluster_t has expected size");
 
 
 static
