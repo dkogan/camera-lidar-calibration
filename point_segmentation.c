@@ -209,7 +209,7 @@ static void _fit_plane_into_points( // out
                                     float*           eigenvalues_ascending, // 3 of these
                                     // in
                                     const point3f_t* points,
-                                    const points_and_plane_t* points_and_plane,
+                                    const ipoint_set_t* ipoint_set,
                                     const bool normalize_v )
 {
     /*
@@ -245,11 +245,11 @@ static void _fit_plane_into_points( // out
     */
 
     point3f_t pmean = {};
-    for(int i=0; i<points_and_plane->n; i++)
+    for(int i=0; i<ipoint_set->n; i++)
         for(int j=0; j<3; j++)
-            pmean.xyz[j] += points[points_and_plane->ipoint[i]].xyz[j];
+            pmean.xyz[j] += points[ipoint_set->ipoint[i]].xyz[j];
     for(int j=0; j<3; j++)
-        pmean.xyz[j] /= (float)(points_and_plane->n);
+        pmean.xyz[j] /= (float)(ipoint_set->n);
 
 
     *max_norm2_dp = 0.0f;
@@ -257,9 +257,9 @@ static void _fit_plane_into_points( // out
     // packed storage; row-first
     // double-precision because this is potentially inaccurate
     double M[3+2+1] = {};
-    for(int i=0; i<points_and_plane->n; i++)
+    for(int i=0; i<ipoint_set->n; i++)
     {
-        const point3f_t dp = sub(points[points_and_plane->ipoint[i]], pmean);
+        const point3f_t dp = sub(points[ipoint_set->ipoint[i]], pmean);
 
         const float norm2_dp = norm2(dp);
         if(*max_norm2_dp < norm2_dp)
@@ -285,27 +285,27 @@ static void _fit_plane_into_points( // out
 }
 
 static void fit_plane_into_points__normalized( // out
-                                               plane_t*         plane,
-                                               float*           max_norm2_dp,
-                                               float*           eigenvalues_ascending, // 3 of these
+                                               plane_t*            plane,
+                                               float*              max_norm2_dp,
+                                               float*              eigenvalues_ascending, // 3 of these
                                                // in
-                                               const point3f_t* points,
-                                               const points_and_plane_t* points_and_plane)
+                                               const point3f_t*    points,
+                                               const ipoint_set_t* ipoint_set)
 {
     _fit_plane_into_points(plane,
-                           max_norm2_dp,eigenvalues_ascending,points,points_and_plane, true);
+                           max_norm2_dp,eigenvalues_ascending,points,ipoint_set, true);
 }
 
 static void fit_plane_into_points__unnormalized( // out
-                                                 plane_unnormalized_t*     plane_unnormalized,
-                                                 float*                    max_norm2_dp,
-                                                 float*                    eigenvalues_ascending, // 3 of these
+                                                 plane_unnormalized_t* plane_unnormalized,
+                                                 float*                max_norm2_dp,
+                                                 float*                eigenvalues_ascending, // 3 of these
                                                  // in
-                                                 const point3f_t*          points,
-                                                 const points_and_plane_t* points_and_plane)
+                                                 const point3f_t*      points,
+                                                 const ipoint_set_t*   ipoint_set)
 {
     _fit_plane_into_points((plane_t*)plane_unnormalized,
-                           max_norm2_dp,eigenvalues_ascending,points,points_and_plane, false);
+                           max_norm2_dp,eigenvalues_ascending,points,ipoint_set, false);
 }
 
 
@@ -794,23 +794,22 @@ static bool fit_plane_into_cluster(// out
                                    const int*         ipoint0_in_ring,
                                    const context_t*   ctx)
 {
-    // using the "points" only, not the "plane". Storing the left/right ends of
-    // the existing segments (cluster->n of them) and the one candidate new
-    // segment
+    // Storing the left/right ends of the existing segments (cluster->n of them)
+    // and the one candidate new segment
     const int Nsegments = cluster->n + (segment0 != NULL ? 1 : 0);
-    points_and_plane_t points_and_plane = {.n = 2*Nsegments};
+    ipoint_set_t ipoint_set = {.n = 2*Nsegments};
 
-    if( 2*Nsegments > (int)(sizeof(points_and_plane.ipoint)/sizeof(points_and_plane.ipoint[0])))
+    if( 2*Nsegments > (int)(sizeof(ipoint_set.ipoint)/sizeof(ipoint_set.ipoint[0])))
     {
-        MSG("sizeof(points_and_plane_t.ipoint) exceeded. plane_segment_compatible() is giving up and returning false. Bump up the size");
+        MSG("sizeof(ipoint_set_t.ipoint) exceeded. plane_segment_compatible() is giving up and returning false. Bump up the size");
         return false;
     }
 
     int ipoint0 = 0;
     if(segment0 != NULL)
     {
-        points_and_plane.ipoint[0] = ipoint0_in_ring[iring0] + segment0->ipoint0;
-        points_and_plane.ipoint[1] = ipoint0_in_ring[iring0] + segment0->ipoint1;
+        ipoint_set.ipoint[0] = ipoint0_in_ring[iring0] + segment0->ipoint0;
+        ipoint_set.ipoint[1] = ipoint0_in_ring[iring0] + segment0->ipoint1;
         ipoint0 = 2;
     }
 
@@ -821,8 +820,8 @@ static bool fit_plane_into_cluster(// out
         const segment_t* segment =
             &segments[iring*Nsegments_per_rotation + isegment];
 
-        points_and_plane.ipoint[ipoint0 + 2*i + 0] = ipoint0_in_ring[iring] + segment->ipoint0;
-        points_and_plane.ipoint[ipoint0 + 2*i + 1] = ipoint0_in_ring[iring] + segment->ipoint1;
+        ipoint_set.ipoint[ipoint0 + 2*i + 0] = ipoint0_in_ring[iring] + segment->ipoint0;
+        ipoint_set.ipoint[ipoint0 + 2*i + 1] = ipoint0_in_ring[iring] + segment->ipoint1;
     }
 
 
@@ -833,7 +832,7 @@ static bool fit_plane_into_cluster(// out
                                          &max_norm2_dp,
                                          eigenvalues_ascending, // 3 of these
                                          // in
-                                         points, &points_and_plane);
+                                         points, &ipoint_set);
     return true;
 }
 
@@ -1121,11 +1120,12 @@ static void stage2_cluster_segments(// out
 // Returns true if we processed this point (maybe by accumulating it) and we
 // should keep going. Returns false if we should stop the iteration
 static bool accumulate_point(// out
-                             points_and_plane_t* points_and_plane,
+                             ipoint_set_t* ipoint_set,
                              // in,out
                              uint64_t* bitarray_visited, // indexed by IN-RING points
                              float* th_rad_last,
                              // in
+                             const plane_t* plane,
                              const point3f_t* points,
                              const int ipoint0_in_ring, // start of this ring in the full points[] array
                              const int ipoint,          // IN-RING index
@@ -1157,7 +1157,7 @@ static bool accumulate_point(// out
     // constructing the candidate segments. So if we got this far, I assume it's
     // good
 
-    if( plane_point_compatible__normalized(&points_and_plane->plane,
+    if( plane_point_compatible__normalized(plane,
                                            &points[ipoint0_in_ring + ipoint],
                                            ctx) )
     {
@@ -1176,12 +1176,12 @@ static bool accumulate_point(// out
         // make it work in one pass, but that's very likely to produce high
         // floating point round-off errors. So I actually accumulate the full
         // points for now, and might do something more efficient later
-        if(points_and_plane->n == (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])))
+        if(ipoint_set->n == (int)(sizeof(ipoint_set->ipoint)/sizeof(ipoint_set->ipoint[0])))
         {
-            MSG("points_and_plane->ipoint overflow. Skipping the reset of the points");
+            MSG("ipoint_set->ipoint overflow. Skipping the reset of the points");
             return false;
         }
-        points_and_plane->ipoint[points_and_plane->n++] = ipoint0_in_ring + ipoint;
+        ipoint_set->ipoint[ipoint_set->n++] = ipoint0_in_ring + ipoint;
 
         bitarray64_set(bitarray_visited, ipoint);
         *th_rad_last = th_rad;
@@ -1232,13 +1232,15 @@ static void stage3_refine_clusters(// out
     // Start with the best-available plane estimate
     points_and_plane->plane = segment_cluster->plane;
 
+    ipoint_set_t* ipoint_set = &points_and_plane->ipoint_set;
+
     const bool debug =
         ctx->debug_xmin < segment_cluster->plane.p.x && segment_cluster->plane.p.x < ctx->debug_xmax &&
         ctx->debug_ymin < segment_cluster->plane.p.y && segment_cluster->plane.p.y < ctx->debug_ymax;
     while(true)
     {
-        points_and_plane->n = 0;
-        int points_and_plane_n_prev = 0;
+        ipoint_set->n = 0;
+        int ipoint_set_n_prev = 0;
 
         for(int i=0; i<Nrings_considered; i++)
             memset(bitarray_visited[i], 0, Nwords_bitarray_visited*sizeof(uint64_t));
@@ -1264,9 +1266,10 @@ static void stage3_refine_clusters(// out
                 ipoint < Npoints[iring];
                 ipoint++)
             {
-                if(!accumulate_point(points_and_plane,
+                if(!accumulate_point(ipoint_set,
                                      bitarray_visited[iring-iring0],
                                      &th_rad_last,
+                                     &points_and_plane->plane,
                                      points,
                                      ipoint0_in_ring[iring],
                                      ipoint,
@@ -1280,9 +1283,10 @@ static void stage3_refine_clusters(// out
                 ipoint >= 0;
                 ipoint--)
             {
-                if(!accumulate_point(points_and_plane,
+                if(!accumulate_point(ipoint_set,
                                      bitarray_visited[iring-iring0],
                                      &th_rad_last,
+                                     &points_and_plane->plane,
                                      points,
                                      ipoint0_in_ring[iring],
                                      ipoint,
@@ -1300,8 +1304,8 @@ static void stage3_refine_clusters(// out
                 MSG("isegment=%d iring=%d at icluster=%d: refinement gathered %d points",
                     isegment, iring,
                     icluster,
-                    points_and_plane->n - points_and_plane_n_prev);
-                points_and_plane_n_prev = points_and_plane->n;
+                    ipoint_set->n - ipoint_set_n_prev);
+                ipoint_set_n_prev = ipoint_set->n;
             }
         }
 
@@ -1311,7 +1315,7 @@ static void stage3_refine_clusters(// out
                                           max_norm2_dp,
                                           eigenvalues_ascending,
                                           points,
-                                          points_and_plane);
+                                          ipoint_set);
 
 #warning FOR NOW I JUST RUN A SINGLE ITERATION
         return;
@@ -1457,7 +1461,7 @@ int8_t point_segmentation(// out
                                points, ipoint0_in_ring, Npoints,
                                ctx);
 
-        const int Npoints_in_plane = points_and_plane[iplane_out].n;
+        const int Npoints_in_plane = points_and_plane[iplane_out].ipoint_set.n;
 
         const bool debug =
             ctx->debug_xmin < points_and_plane[iplane_out].plane.p.x && points_and_plane[iplane_out].plane.p.x < ctx->debug_xmax &&
@@ -1491,12 +1495,12 @@ int8_t point_segmentation(// out
 
         // We're past all the filters. I accept this plane
         if(ctx->dump)
-            for(int i=0; i<points_and_plane[iplane_out].n; i++)
+            for(int i=0; i<points_and_plane[iplane_out].ipoint_set.n; i++)
                 printf("%f %f stage3-refined-points-%d %f\n",
-                       points[points_and_plane[iplane_out].ipoint[i]].x,
-                       points[points_and_plane[iplane_out].ipoint[i]].y,
+                       points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].x,
+                       points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].y,
                        icluster,
-                       points[points_and_plane[iplane_out].ipoint[i]].z);
+                       points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].z);
         iplane_out++;
     }
 

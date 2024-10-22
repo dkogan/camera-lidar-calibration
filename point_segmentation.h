@@ -20,11 +20,15 @@ typedef struct
 
 typedef struct
 {
-    uint32_t ipoint[8192 - 7]; // -7 to make each of these fit evenly into a
-                               // round-sized chunk of memory
+    uint32_t ipoint[8192 - 7]; // -7 to make each points_and_plane_t fit evenly
+                               // into a round-sized chunk of memory
     int n;
+} ipoint_set_t;
 
-    plane_t plane;
+typedef struct
+{
+    ipoint_set_t ipoint_set;
+    plane_t      plane;
 } points_and_plane_t;
 _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has expected size");
 
