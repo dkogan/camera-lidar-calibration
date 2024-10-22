@@ -637,7 +637,7 @@ stage1_segment_from_ring(// out
         // azimuths don't change as quickly as expected, and we have extra
         // points in each segment. I ignore those; hopefully they're not
         // important
-        if(ipoint-ipoint0 <= ctx->Npoints_per_segment)
+        if(ipoint-ipoint0 < ctx->Npoints_per_segment)
         {
             if(!point_is_valid__presolve(&points_thisring[ipoint], th_rad - th_rad_prev,
                                          (iring == ctx->debug_iring) &&
