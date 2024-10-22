@@ -41,7 +41,7 @@ _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has exp
   _(int,   threshold_min_Npoints_in_segment,             10,                "i","i") \
   _(int,   threshold_max_Npoints_invalid_segment,        5,                 "i","i") \
   _(float, threshold_max_range,                          9.f,               "f","f") \
-  _(float, threshold_max_plane_size,                     1.5f,              "f","f") \
+  _(float, threshold_max_plane_size,                     1.7f,              "f","f") \
   _(float, threshold_max_rms_fit_error,                  0.015f,            "f","f") \
   _(float, threshold_min_rms_point_cloud_2nd_dimension,  0.1f,              "f","f") \
   /* found empirically in dump-lidar-scan.py */                         \
@@ -55,7 +55,7 @@ _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has exp
   /* cos(5deg) */                                                       \
   _(float, threshold_min_cos_angle_error_same_direction, 0.996194698092f,   "f","f") \
   _(float, threshold_max_plane_point_error,              0.15,              "f","f") \
-  _(int,   threshold_max_Nsegments_in_cluster,           100,               "i","i") \
+  _(int,   threshold_max_Nsegments_in_cluster,           150,               "i","i") \
   _(int,   threshold_min_Nsegments_in_cluster,           5,                 "i","i") \
   _(int,   threshold_min_Nrings_in_cluster,              3,                 "i","i") \
   /* used in refinement */                                              \
