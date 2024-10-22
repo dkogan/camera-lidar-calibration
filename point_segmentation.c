@@ -594,10 +594,10 @@ stage1_segment_from_ring(// out
     //
     // 2. I have ordered data, and I know that each planar segment will be a
     //    very squashed conic section segment. In many cases, it'll be so
-    //    squashed to appear linear (i.e.) its plane would be ill-defined
+    //    squashed to appear linear (i.e. its plane would be ill-defined)
     //
     // So I check for linearity first. And then for a curve (conic section
-    // slice)
+    // slice). NO; TODAY I LOOK FOR LINEAR SEGMENTS ONLY
 
     // bit-field to indicate which points are valid/invalid
     const int Nwords_bitarray_invalid = bitarray64_nwords(ctx->Npoints_per_segment);
