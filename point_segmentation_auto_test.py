@@ -166,6 +166,85 @@ tests = (
     # 2023-10-19/one_cal_data_2023-10-19-20-40-09.bag
     # 2023-10-19/one_cal_data_2023-10-19-20-40-13.bag
 
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-40-17.bag',
+         topic   = '/lidar/velodyne_front_tilted_points',
+         plane_p = None,
+         plane_n = None,
+         ),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-40-17.bag',
+         topic   = '/lidar/velodyne_front_horiz_points',
+         plane_p = None,
+         plane_n = None,
+         ),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-40-17.bag',
+         topic   = '/lidar/velodyne_back_points',
+         plane_p = np.array((2.229,1.001,-0.094)),
+         plane_n = np.array((0.3710,0.6990,0.6114)),
+         ),
+    # 2023-10-19/one_cal_data_2023-10-19-20-40-22.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-40-28.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-40-56.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-41-00.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-41-03.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-41-07.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-41-11.bag
+
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-41-18.bag',
+         topic   = '/lidar/velodyne_front_tilted_points',
+         plane_p = None,
+         plane_n = None,
+         ),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-41-18.bag',
+         topic   = '/lidar/velodyne_front_horiz_points',
+         plane_p = None,
+         plane_n = None,
+         ),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-41-18.bag',
+         topic   = '/lidar/velodyne_back_points',
+         plane_p = None,
+         plane_n = None),
+    # 2023-10-19/one_cal_data_2023-10-19-20-41-23.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-41-27.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-41-36.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-41-40.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-41-45.bag
+
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-41-50.bag',
+         topic   = '/lidar/velodyne_front_tilted_points',
+         plane_p = None,
+         plane_n = None,
+         ),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-41-50.bag',
+         topic   = '/lidar/velodyne_front_horiz_points',
+         plane_p = None,
+         plane_n = None,
+         ),
+    # This one does have a plane, but it's only 3 rings, and easy to miss
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-41-50.bag',
+         topic   = '/lidar/velodyne_back_points',
+         plane_p = None,
+         plane_n = None),
+    # 2023-10-19/one_cal_data_2023-10-19-20-41-54.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-41-59.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-42-03.bag
+    # 2023-10-19/one_cal_data_2023-10-19-20-42-07.bag
+
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-42-11.bag',
+         topic   = '/lidar/velodyne_front_tilted_points',
+         plane_p = None,
+         plane_n = None,
+         ),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-42-11.bag',
+         topic   = '/lidar/velodyne_front_horiz_points',
+         plane_p = np.array((-2.483,-4.519,0.108)),
+         plane_n = np.array((0.0300,-0.8140,0.5802)),
+         ),
+    dict(bag     = '2023-10-19/one_cal_data_2023-10-19-20-42-11.bag',
+         topic   = '/lidar/velodyne_back_points',
+         plane_p = np.array((0.256,4.393,-0.064)),
+         plane_n = np.array((0.1178,0.8078,0.5775)),
+         ),
+
     )
 
 
