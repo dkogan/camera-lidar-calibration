@@ -1018,11 +1018,11 @@ static bool plane_segment_compatible(// The initial plane estimate in
         ctx->debug_ymin < segment->p.y && segment->p.y < ctx->debug_ymax;
     if(!( DEBUG_ON_TRUE( !is_normal(segment->v, cluster->plane_unnormalized.n_unnormalized, ctx),
                          &segment->p,
-                         "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
+                         "icluster=%d: iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
                          icluster,iring,isegment) ||
           DEBUG_ON_TRUE( !plane_point_compatible_unnormalized(&cluster->plane_unnormalized, &segment->p, ctx),
                          &segment->p,
-                         "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
+                         "icluster=%d: iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
                          icluster,iring,isegment)))
         return true;
 
@@ -1048,11 +1048,11 @@ static bool plane_segment_compatible(// The initial plane estimate in
     // fail the test
     if(DEBUG_ON_TRUE(!is_normal(segment->v, plane_unnormalized.n_unnormalized, ctx),
                      &segment->p,
-                     "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
+                     "icluster=%d: iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
                      icluster,iring,isegment) ||
        DEBUG_ON_TRUE( !plane_point_compatible_unnormalized(&plane_unnormalized, &segment->p, ctx),
                       &segment->p,
-                      "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
+                      "icluster=%d: iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
                       icluster,iring,isegment))
         return false;
 
@@ -1065,11 +1065,11 @@ static bool plane_segment_compatible(// The initial plane estimate in
 
         if(DEBUG_ON_TRUE(!is_normal(segment_here->v, plane_unnormalized.n_unnormalized, ctx),
                          &segment_here->p,
-                         "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
+                         "icluster=%d: iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
                          icluster,iring_here,isegment_here) ||
            DEBUG_ON_TRUE(!plane_point_compatible_unnormalized(&plane_unnormalized, &segment_here->p, ctx),
                          &segment_here->p,
-                         "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
+                         "icluster=%d: iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
                          icluster,iring_here,isegment_here))
             return false;
     }
@@ -1194,7 +1194,7 @@ static void stage2_cluster_segments(// out
                                                          segment,segment1,
                                                          ctx),
                              &segment->p,
-                             "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent with segment iring=%d isegment=%d",
+                             "icluster=%d: iring=%d isegment=%d isn't plane-consistent with iring=%d isegment=%d",
                              icluster,iring,isegment,
                              iring1,isegment))
                 continue;
