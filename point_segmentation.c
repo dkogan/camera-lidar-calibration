@@ -725,11 +725,6 @@ void stage1_finish_segment(// out
     segment->ipoint0 = ipoint0;
     segment->ipoint1 = ipoint1;
 
-    if(debug_region)
-        MSG("iring=%d isegment=%d has p = (%.2f %.2f %.2f)",
-            iring, isegment,
-            segment->p.x,segment->p.y,segment->p.z);
-
     if(ctx->dump)
         printf("%f %f label %f %d-%d\n",
                segment->p.x,segment->p.y,segment->p.z,
