@@ -1573,9 +1573,6 @@ int8_t point_segmentation(// out
 
     segment_t segments[ctx->Nrings*Nsegments_per_rotation] = {};
 
-    if(ctx->dump)
-        printf("# x y what z\n");
-
     for(int iring=0; iring<ctx->Nrings; iring++)
     {
         stage1_segment_from_ring(// out
