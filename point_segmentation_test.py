@@ -87,7 +87,7 @@ import gnuplotlib as gp
 
 Nplanes = len(segmentation['plane_p'])
 if Nplanes == 0:
-    print("No planes foudn")
+    print("No planes found")
     sys.exit()
 
 
