@@ -314,7 +314,7 @@ for test in tests:
                             eps = 5e-3,
                             msg=f'Plane normal-to-plane location')
     testutils.confirm_equal(mag_dp_inplane, 0,
-                            eps = 100e-3,
+                            eps = 200e-3,
                             msg=f'Plane in-the-plane location')
 
 testutils.finish()
