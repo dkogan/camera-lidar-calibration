@@ -253,7 +253,8 @@ for test in tests:
     bag = f"{args.root}/{test['bag']}"
     topic = test['topic']
 
-    vizcmd = fr'''  x0y0x1y1=(-{max_range} -{max_range} {max_range} {max_range});
+    vizcmd = fr'''
+  x0y0x1y1=(-{max_range} -{max_range} {max_range} {max_range});
   ./point_segmentation_test.py --dump \
     {topic} \
     {bag} \
