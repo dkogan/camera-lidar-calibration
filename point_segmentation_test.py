@@ -84,7 +84,14 @@ if args.dump or args.debug is not None:
 
 
 import gnuplotlib as gp
-i = 2
+
+Nplanes = len(segmentation['plane_p'])
+if Nplanes == 0:
+    print("No planes foudn")
+    sys.exit()
+
+
+i = 0
 
 plane_p = segmentation['plane_p'][i]
 plane_n = segmentation['plane_n'][i]
@@ -97,6 +104,7 @@ gp.plot(segmentation['points'][i],
         _3d=1,
         tuplesize=-3,
         _with='points',
+        title = "First reported plane",
         equation = f"{nps.inner(plane_n,plane_p) / plane_n[2]} - {plane_n[0]/plane_n[2]}*x - {plane_n[1]/plane_n[2]}*y")
 
 
