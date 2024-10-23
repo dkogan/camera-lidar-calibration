@@ -729,6 +729,11 @@ void stage1_finish_segment(// out
         MSG("isegment=%d iring=%d has p = (%.2f %.2f %.2f)",
             isegment, iring,
             segment->p.x,segment->p.y,segment->p.z);
+
+    if(ctx->dump)
+        printf("%f %f label %f %d-%d\n",
+               segment->p.x,segment->p.y,segment->p.z,
+               iring, isegment);
 }
 
 

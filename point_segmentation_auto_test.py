@@ -263,6 +263,8 @@ for test in tests:
       --style all "with points pt 7 ps 0.5" \
       --style stage1-segment "with vectors" \
       --tuplesize stage1-segment 6 \
+      --style label "with labels" \
+      --tuplesize label 4 \
       --3d \
       --domain \
       --dataid \
