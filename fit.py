@@ -1318,7 +1318,7 @@ def get_joint_observation(bag,
             print("WARNING: More than one chessboard found in view",
                   file = sys.stderr)
             return None
-        return points[0]
+        return points[0].astype(float)
 
     Nlidars = len(args.lidar_topic)
     p_lidar = \
