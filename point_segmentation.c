@@ -991,7 +991,10 @@ static bool fit_plane_into_cluster(// out
     return true;
 }
 
-static bool plane_segment_compatible(segment_cluster_t* cluster,
+static bool plane_segment_compatible(// The initial plane estimate in
+                                     // cluster->plane_unnormalized may be updated by
+                                     // this call, if we return true
+                                     segment_cluster_t* cluster,
                                      const segment_t*   segment,
                                      const int          iring, const int isegment,
                                      const int          icluster,
@@ -1018,7 +1021,57 @@ static bool plane_segment_compatible(segment_cluster_t* cluster,
                          icluster,iring,isegment)))
         return true;
 
-    return false;
+
+    // Segment doesn't fit. I try to update the estimate using this new segment,
+    // and check again. I don't do this in all paths, because it's potentially
+    // slow, and I'd like to avoid doing this as much as possible.
+    plane_unnormalized_t plane_unnormalized;
+    if(!fit_plane_into_cluster(// out
+                               &plane_unnormalized,
+                               // in
+                               cluster,
+                               segment, iring,
+                               segments,
+                               points,
+                               ipoint0_in_ring,
+                               ctx))
+        return false;
+
+
+    // same check as above, but for all the extant segments and a with a new,
+    // fitted plane. If the new plane doesn't fit any of the current segments, I
+    // fail the test
+    if(DEBUG_ON_TRUE(!is_normal(segment->v, plane_unnormalized.n_unnormalized, ctx),
+                     &segment->p,
+                     "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
+                     icluster,iring,isegment) ||
+       DEBUG_ON_TRUE( !plane_point_compatible_unnormalized(&plane_unnormalized, &segment->p, ctx),
+                      &segment->p,
+                      "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
+                      icluster,iring,isegment))
+        return false;
+
+    for(int i=0; i<cluster->n; i++)
+    {
+        const int iring_here    = cluster->segments[i].iring;
+        const int isegment_here = cluster->segments[i].isegment;
+        const segment_t* segment_here =
+            &segments[iring_here*Nsegments_per_rotation + isegment_here];
+
+        if(DEBUG_ON_TRUE(!is_normal(segment_here->v, plane_unnormalized.n_unnormalized, ctx),
+                         &segment_here->p,
+                         "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
+                         icluster,iring_here,isegment_here) ||
+           DEBUG_ON_TRUE(!plane_point_compatible_unnormalized(&plane_unnormalized, &segment_here->p, ctx),
+                         &segment_here->p,
+                         "icluster=%d: segment iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
+                         icluster,iring_here,isegment_here))
+            return false;
+    }
+
+    // new plane fits well-enough
+    cluster->plane_unnormalized = plane_unnormalized;
+    return true;
 }
 
 
@@ -1041,7 +1094,10 @@ static void try_visit(stack_t* stack,
 
     if(segment_is_valid(segment) &&
        !segment->visited &&
-       plane_segment_compatible(cluster,
+       plane_segment_compatible(// The initial plane estimate in
+                                // cluster->plane_unnormalized may be updated by
+                                // this call, if we return true
+                                cluster,
                                 segment,
                                 iring, isegment,
                                 icluster,
