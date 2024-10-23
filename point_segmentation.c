@@ -1001,17 +1001,17 @@ static bool fit_plane_into_cluster(// out
     return true;
 }
 
-static bool plane_segment_compatible(// The initial plane estimate in
-                                     // cluster->plane_unnormalized may be updated by
-                                     // this call, if we return true
-                                     segment_cluster_t* cluster,
-                                     const segment_t*   segment,
-                                     const int          iring, const int isegment,
-                                     const int          icluster,
-                                     const segment_t*   segments,
-                                     const point3f_t*   points,
-                                     const int*         ipoint0_in_ring,
-                                     const context_t*   ctx)
+static bool stage2_plane_segment_compatible(// The initial plane estimate in
+                                            // cluster->plane_unnormalized may be updated by
+                                            // this call, if we return true
+                                            segment_cluster_t* cluster,
+                                            const segment_t*   segment,
+                                            const int          iring, const int isegment,
+                                            const int          icluster,
+                                            const segment_t*   segments,
+                                            const point3f_t*   points,
+                                            const int*         ipoint0_in_ring,
+                                            const context_t*   ctx)
 {
     // both segment->p and segment->v must lie in the plane
 
@@ -1104,16 +1104,16 @@ static void try_visit(stack_t* stack,
 
     if(segment_is_valid(segment) &&
        !segment->visited &&
-       plane_segment_compatible(// The initial plane estimate in
-                                // cluster->plane_unnormalized may be updated by
-                                // this call, if we return true
-                                cluster,
-                                segment,
-                                iring, isegment,
-                                icluster,
-                                segments,
-                                points, ipoint0_in_ring,
-                                ctx))
+       stage2_plane_segment_compatible(// The initial plane estimate in
+                                       // cluster->plane_unnormalized may be updated by
+                                       // this call, if we return true
+                                       cluster,
+                                       segment,
+                                       iring, isegment,
+                                       icluster,
+                                       segments,
+                                       points, ipoint0_in_ring,
+                                       ctx))
     {
         segmentref_t* node = stack_push(stack);
 
