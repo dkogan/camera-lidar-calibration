@@ -53,6 +53,7 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
     PyArrayObject* ipoint[Nplanes_max] = {};
 
 #warning "I should define a complex dtype to pass points_and_plane from a preallocated numpy array. Instead I do this in C and then copy the results. For now"
+#warning "possibly this is too large"
     points_and_plane_t points_and_plane[Nplanes_max];
 
     context_t ctx;
@@ -150,9 +151,9 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
         Py_INCREF(ipoint[i]);
     }
 
-    result = Py_BuildValue("{sOsO}",
-                           "ipoint",    py_ipoint,
-                           "plane_pn",  plane_pn);
+    result = Py_BuildValue("OO",
+                           py_ipoint,
+                           plane_pn);
 
  done:
     Py_XDECREF(points);

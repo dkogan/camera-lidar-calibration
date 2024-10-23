@@ -13,7 +13,6 @@ import gnuplotlib as gp
 
 import mrcal
 
-import pcl
 import io
 import cv2
 import inspect
@@ -90,6 +89,7 @@ def find_plane(points,
                normal_distance_weight,
                max_iterations = 100):
 
+    import pcl
 
     # The logic around ksearch and search_radius is apparently not in libpcl at
     # all, but in the Python wrapper:
@@ -584,6 +584,9 @@ def cluster_and_find_planes(points, idx,
                             board_size_for_max,
                             ring,
                             th):
+
+    import pcl
+
 
     p_accepted          = None
     p_accepted_multiple = False

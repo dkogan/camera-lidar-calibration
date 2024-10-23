@@ -276,12 +276,10 @@ for test in tests:
 
     print(f"Evaluating test. Visualize like this:  {vizcmd}")
 
-    points,segmentation = camera_lidar_calibration.point_segmentation(bag, topic)
+    segmentation = \
+        camera_lidar_calibration.point_segmentation(bag, topic)
 
-    plane_pn = segmentation['plane_pn']
-    ipoint   = segmentation['ipoint']
-
-    Nplanes_found = len(plane_pn)
+    Nplanes_found = len(segmentation['plane_p'])
 
     if test['plane_n'] is None:
         testutils.confirm_equal(Nplanes_found, 0,
@@ -294,18 +292,22 @@ for test in tests:
                             msg=f'I expect to find exactly 1 plane')
     if Nplanes_found != 1: continue
 
+    # I have just one plane
+    plane_p = segmentation['plane_p'][0,:]
+    plane_n = segmentation['plane_n'][0,:]
+
     # Normalize vectors. This shouldn't be needed
     test['plane_n'] /= nps.mag(test['plane_n'])
 
-    testutils.confirm_equal(nps.mag(plane_pn[0,3:]), 1.,
+    testutils.confirm_equal(nps.mag(plane_n), 1.,
                             msg = 'Reported plane normal is a unit vector')
 
-    cos_dth = nps.inner(plane_pn[0,3:],test['plane_n'])
+    cos_dth = nps.inner(plane_n,test['plane_n'])
     testutils.confirm_equal(np.abs(cos_dth), 1,
                             eps = np.cos(0.1 * np.pi/180.),
                             msg=f'Plane orientation')
 
-    dp = plane_pn[0,:3] - test['plane_p']
+    dp = plane_p - test['plane_p']
     mag_dp_normal  = np.inner(dp, test['plane_n'])
     dp_inplane = dp - mag_dp_normal*test['plane_n']
     mag_dp_inplane = nps.mag(dp_inplane)

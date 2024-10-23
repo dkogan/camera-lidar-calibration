@@ -183,6 +183,7 @@ import mrcal
 import mrcal.calibration
 
 import calibration_data_import
+import camera_lidar_calibration
 
 
 # from mrcal/scales.h:
@@ -1305,19 +1306,23 @@ def get_joint_observation(bag,
                              cache   = cache ) \
           for icamera in range(Ncameras) ]
 
+
+    def get_one_board(ilidar):
+        segmentation = \
+            camera_lidar_calibration.point_segmentation(bag,
+                                                        args.lidar_topic[ilidar])
+        points = segmentation['points']
+        if len(points) == 0:
+            return None
+        if len(points) > 1:
+            print("WARNING: More than one chessboard found in view",
+                  file = sys.stderr)
+            return None
+        return points[0]
+
     Nlidars = len(args.lidar_topic)
     p_lidar = \
-        [ calibration_data_import.get_lidar_observation( \
-                                bag,
-                                args.lidar_topic[ilidar],
-                                p_board_local = p_board_local,
-                                what = f"{bagname}-{calibration_data_import.canonical_lidar_topic_name(args.lidar_topic[ilidar])}",
-                                cache = cache,
-                                viz                          = args.viz,
-                                viz_show_only_accepted       = args.viz_show_only_accepted,
-                                viz_show_point_cloud_context = args.viz_show_point_cloud_context,
-                                board_size_for_min           = board_size_for_min,
-                                board_size_for_max           = board_size_for_max) \
+        [ get_one_board(ilidar) \
           for ilidar in range(Nlidars)]
 
     if all(x is None for x in q_observed) and \

@@ -34,10 +34,16 @@ def point_segmentation(bag, lidar_topic,
     Npoints = np.array([np.count_nonzero(ring==iring) for iring in rings],
                        dtype = np.int32)
 
+    ipoint, plane_pn = \
+        _camera_lidar_calibration.point_segmentation(points  = points_sorted,
+                                                     Npoints = Npoints,
+                                                     Nrings  = len(Npoints),
+                                                     **kwargs)
+    Nplanes = len(ipoint)
+
     return \
-        ( points_sorted,
-          _camera_lidar_calibration.point_segmentation(points  = points_sorted,
-                                                       Npoints = Npoints,
-                                                       **kwargs))
+        dict( points  = [points_sorted[ipoint[i]] for i in range(Nplanes)],
+              plane_p = plane_pn[:,:3],
+              plane_n = plane_pn[:,3:] )
 
 default_context = _camera_lidar_calibration.default_context

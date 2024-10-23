@@ -63,16 +63,17 @@ if args.debug is not None:
     kwargs['debug_xmax']  = args.debug[3]
     kwargs['debug_ymax']  = args.debug[4]
 
-points,r = camera_lidar_calibration.point_segmentation(args.bag,
-                                                       getattr(args, 'lidar-topic'),
-                                                       **kwargs)
+
+segmentation = \
+    camera_lidar_calibration.point_segmentation(args.bag,
+                                                getattr(args, 'lidar-topic'),
+                                                **kwargs)
 if args.dump or args.debug is not None:
     # Write the planes out to stdout, in a way that can be cut/pasted into
     # point_segmentation_auto_test.py
-    plane_pn = r['plane_pn']
-    plane_p = plane_pn[...,:3]
-    plane_n = plane_pn[...,3:]
-    for i in range(len(plane_pn)):
+    plane_p = segmentation['plane_p']
+    plane_n = segmentation['plane_n']
+    for i in range(len(plane_p)):
         print(f"### plane {i}",
               file = sys.stderr)
         print(f"         plane_p = np.array(({plane_p[i,0]:.3f},{plane_p[i,1]:.3f},{plane_p[i,2]:.3f})),",
@@ -85,18 +86,18 @@ if args.dump or args.debug is not None:
 import gnuplotlib as gp
 i = 2
 
-p = r['plane_pn'][i,:3]
-n = r['plane_pn'][i,3:]
+plane_p = segmentation['plane_p'][i]
+plane_n = segmentation['plane_n'][i]
 
 # plane is all x such that inner(x-p,n) = 0
 # -> nt p = nt x
 # -> z = nt p / n2 - n0/n2 x - n1/n2 y
-gp.plot(points[r['ipoint'][i]],
+gp.plot(segmentation['points'][i],
         square=1,
         _3d=1,
         tuplesize=-3,
         _with='points',
-        equation = f"{nps.inner(n,p) / n[2]} - {n[0]/n[2]}*x - {n[1]/n[2]}*y")
+        equation = f"{nps.inner(plane_n,plane_p) / plane_n[2]} - {plane_n[0]/plane_n[2]}*x - {plane_n[1]/plane_n[2]}*y")
 
 
 import IPython
