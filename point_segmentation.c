@@ -114,7 +114,7 @@ typedef struct
 
 typedef struct
 {
-    uint16_t isegment, iring;
+    uint16_t iring, isegment;
 } segmentref_t;
 
 typedef struct
@@ -726,8 +726,8 @@ void stage1_finish_segment(// out
     segment->ipoint1 = ipoint1;
 
     if(debug_region)
-        MSG("isegment=%d iring=%d has p = (%.2f %.2f %.2f)",
-            isegment, iring,
+        MSG("iring=%d isegment=%d has p = (%.2f %.2f %.2f)",
+            iring, isegment,
             segment->p.x,segment->p.y,segment->p.z);
 
     if(ctx->dump)
@@ -1517,8 +1517,8 @@ static void stage3_refine_clusters(// out
             // the pre-solve didn't find it), and won't be of much value
             if(debug)
             {
-                MSG("isegment=%d iring=%d at icluster=%d: refinement gathered %d points",
-                    isegment, iring,
+                MSG("iring=%d isegment=%d at icluster=%d: refinement gathered %d points",
+                    iring, isegment,
                     icluster,
                     ipoint_set->n - ipoint_set_n_prev);
                 ipoint_set_n_prev = ipoint_set->n;
