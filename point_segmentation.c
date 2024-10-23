@@ -17,11 +17,21 @@
 #define MSG(fmt, ...) fprintf(stderr, "%s(%d) %s(): " fmt "\n", __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
 
-#define DEBUG_ON_TRUE(what, p, fmt, ...)                                \
+#define DEBUG_ON_TRUE_POINT(what, p, fmt, ...)                          \
     ({  if(debug && (what))                                             \
         {                                                               \
             MSG("REJECTED (%.2f %.2f %.2f) because " #what ": " fmt,    \
                 (p)->x,(p)->y,(p)->z,                                   \
+                ##__VA_ARGS__);                                         \
+        }                                                               \
+        what;                                                           \
+    })
+
+#define DEBUG_ON_TRUE_SEGMENT(what, iring, isegment, fmt, ...)          \
+    ({  if(debug && (what))                                             \
+        {                                                               \
+            MSG("REJECTED %d-%d because " #what ": " fmt,               \
+                iring,isegment,                                         \
                 ##__VA_ARGS__);                                         \
         }                                                               \
         what;                                                           \
@@ -483,7 +493,7 @@ bool point_is_valid__presolve(const point3f_t* p,
     const int Ngap = (int)( 0.5f + fabsf(dth_rad) * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
 
     // Ngap==1 is the expected, normal value. Anything larger is a gap
-    if( DEBUG_ON_TRUE((Ngap-1) > ctx->threshold_max_Ngap,
+    if( DEBUG_ON_TRUE_POINT((Ngap-1) > ctx->threshold_max_Ngap,
                       p,
                       "%d > %d", Ngap-1, ctx->threshold_max_Ngap))
         return false;
@@ -691,15 +701,15 @@ void stage1_finish_segment(// out
 
     const int Npoints = ipoint1 - ipoint0 + 1 - Npoints_invalid_in_segment;
 
-    if(DEBUG_ON_TRUE(Npoints_invalid_in_segment > ctx->threshold_max_Npoints_invalid_segment,
-                     &p[ipoint0],
-                     "%d > %d", Npoints_invalid_in_segment, ctx->threshold_max_Npoints_invalid_segment) ||
-       DEBUG_ON_TRUE(Npoints < ctx->threshold_min_Npoints_in_segment,
-                     &p[ipoint0],
-                     "%d < %d", Npoints, ctx->threshold_min_Npoints_in_segment) ||
-       DEBUG_ON_TRUE(!is_point_segment_planar(p,ipoint0,ipoint1,bitarray_invalid, ctx),
-                     &p[ipoint0],
-                     ""))
+    if(DEBUG_ON_TRUE_SEGMENT(Npoints_invalid_in_segment > ctx->threshold_max_Npoints_invalid_segment,
+                             iring,isegment,
+                             "%d > %d", Npoints_invalid_in_segment, ctx->threshold_max_Npoints_invalid_segment) ||
+       DEBUG_ON_TRUE_SEGMENT(Npoints < ctx->threshold_min_Npoints_in_segment,
+                             iring,isegment,
+                             "%d < %d", Npoints, ctx->threshold_min_Npoints_in_segment) ||
+       DEBUG_ON_TRUE_SEGMENT(!is_point_segment_planar(p,ipoint0,ipoint1,bitarray_invalid, ctx),
+                             iring,isegment,
+                             ""))
     {
         *segment = (segment_t){};
         return;
@@ -1011,14 +1021,14 @@ static bool plane_segment_compatible(// The initial plane estimate in
     const bool debug =
         ctx->debug_xmin < segment->p.x && segment->p.x < ctx->debug_xmax &&
         ctx->debug_ymin < segment->p.y && segment->p.y < ctx->debug_ymax;
-    if(!( DEBUG_ON_TRUE( !is_normal(segment->v, cluster->plane_unnormalized.n_unnormalized, ctx),
-                         &segment->p,
-                         "icluster=%d: iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
-                         icluster,iring,isegment) ||
-          DEBUG_ON_TRUE( !plane_point_compatible_unnormalized(&cluster->plane_unnormalized, &segment->p, ctx),
-                         &segment->p,
-                         "icluster=%d: iring=%d isegment=%d isn't plane-consistent during accumulation: the segment direction isn't in-plane",
-                         icluster,iring,isegment)))
+    if(!( DEBUG_ON_TRUE_SEGMENT( !is_normal(segment->v, cluster->plane_unnormalized.n_unnormalized, ctx),
+                                 iring,isegment,
+                                 "icluster=%d: segment isn't plane-consistent during accumulation: the direction isn't in-plane",
+                                 icluster) ||
+          DEBUG_ON_TRUE_SEGMENT( !plane_point_compatible_unnormalized(&cluster->plane_unnormalized, &segment->p, ctx),
+                                 iring,isegment,
+                                 "icluster=%d: segment isn't plane-consistent during accumulation: the point isn't in-plane",
+                                 icluster)))
         return true;
 
 
@@ -1041,14 +1051,14 @@ static bool plane_segment_compatible(// The initial plane estimate in
     // same check as above, but for all the extant segments and a with a new,
     // fitted plane. If the new plane doesn't fit any of the current segments, I
     // fail the test
-    if(DEBUG_ON_TRUE(!is_normal(segment->v, plane_unnormalized.n_unnormalized, ctx),
-                     &segment->p,
-                     "icluster=%d: iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
-                     icluster,iring,isegment) ||
-       DEBUG_ON_TRUE( !plane_point_compatible_unnormalized(&plane_unnormalized, &segment->p, ctx),
-                      &segment->p,
-                      "icluster=%d: iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
-                      icluster,iring,isegment))
+    if(DEBUG_ON_TRUE_SEGMENT(!is_normal(segment->v, plane_unnormalized.n_unnormalized, ctx),
+                             iring,isegment,
+                             "icluster=%d: segment isn't plane-consistent during the re-fit check: the direction isn't in-plane",
+                             icluster) ||
+       DEBUG_ON_TRUE_SEGMENT( !plane_point_compatible_unnormalized(&plane_unnormalized, &segment->p, ctx),
+                              iring,isegment,
+                              "icluster=%d: segment isn't plane-consistent during the re-fit check: the point isn't in-plane",
+                              icluster))
         return false;
 
     for(int i=0; i<cluster->n; i++)
@@ -1058,14 +1068,14 @@ static bool plane_segment_compatible(// The initial plane estimate in
         const segment_t* segment_here =
             &segments[iring_here*Nsegments_per_rotation + isegment_here];
 
-        if(DEBUG_ON_TRUE(!is_normal(segment_here->v, plane_unnormalized.n_unnormalized, ctx),
-                         &segment_here->p,
-                         "icluster=%d: iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
-                         icluster,iring_here,isegment_here) ||
-           DEBUG_ON_TRUE(!plane_point_compatible_unnormalized(&plane_unnormalized, &segment_here->p, ctx),
-                         &segment_here->p,
-                         "icluster=%d: iring=%d isegment=%d isn't plane-consistent during the re-fit check: the segment direction isn't in-plane",
-                         icluster,iring_here,isegment_here))
+        if(DEBUG_ON_TRUE_SEGMENT(!is_normal(segment_here->v, plane_unnormalized.n_unnormalized, ctx),
+                                 iring_here,isegment_here,
+                                 "icluster=%d: segment isn't plane-consistent during the re-fit check: the direction isn't in-plane",
+                                 icluster) ||
+           DEBUG_ON_TRUE_SEGMENT(!plane_point_compatible_unnormalized(&plane_unnormalized, &segment_here->p, ctx),
+                                 iring_here,isegment_here,
+                                 "icluster=%d: segment isn't plane-consistent during the re-fit check: the isn't in-plane",
+                                 icluster))
             return false;
     }
 
@@ -1185,13 +1195,13 @@ static void stage2_cluster_segments(// out
             const bool debug =
                 ctx->debug_xmin < segment->p.x && segment->p.x < ctx->debug_xmax &&
                 ctx->debug_ymin < segment->p.y && segment->p.y < ctx->debug_ymax;
-            if(DEBUG_ON_TRUE(!plane_from_segment_segment(&cluster->plane_unnormalized,
-                                                         segment,segment1,
-                                                         ctx),
-                             &segment->p,
-                             "icluster=%d: iring=%d isegment=%d isn't plane-consistent with iring=%d isegment=%d",
-                             icluster,iring,isegment,
-                             iring1,isegment))
+            if(DEBUG_ON_TRUE_SEGMENT(!plane_from_segment_segment(&cluster->plane_unnormalized,
+                                                                 segment,segment1,
+                                                                 ctx),
+                                     iring,isegment,
+                                     "icluster=%d: segment isn't plane-consistent with %d-%d",
+                                     icluster,
+                                     iring1,isegment))
                 continue;
 
             stack_t stack = {};
@@ -1240,10 +1250,10 @@ static void stage2_cluster_segments(// out
                           ctx);
             }
 
-            if(DEBUG_ON_TRUE(cluster->n == 2,
-                             &segment->p,
-                             "icluster=%d starting with iring=%d isegment=%d only contains the seed segments",
-                             icluster, iring,isegment))
+            if(DEBUG_ON_TRUE_SEGMENT(cluster->n == 2,
+                                     iring,isegment,
+                                     "icluster=%d only contains the seed segments",
+                                     icluster))
             {
                 // This hypothetical ring-ring component is too small. The
                 // next-ring segment might still be valid in another component,
@@ -1252,20 +1262,20 @@ static void stage2_cluster_segments(// out
                 continue;
             }
 
-            if(DEBUG_ON_TRUE(cluster->n < ctx->threshold_min_Nsegments_in_cluster,
-                             &segment->p,
-                             "icluster=%d starting with iring=%d isegment=%d too small: %d < %d",
-                             icluster,iring,isegment,
-                             cluster->n, ctx->threshold_min_Nsegments_in_cluster))
+            if(DEBUG_ON_TRUE_SEGMENT(cluster->n < ctx->threshold_min_Nsegments_in_cluster,
+                                     iring,isegment,
+                                     "icluster=%d too small: %d < %d",
+                                     icluster,
+                                     cluster->n, ctx->threshold_min_Nsegments_in_cluster))
             {
                 continue;
             }
 
-            if(DEBUG_ON_TRUE(cluster->n > ctx->threshold_max_Nsegments_in_cluster,
-                             &segment->p,
-                             "icluster=%d starting with iring=%d isegment=%d too big: %d > %d",
-                             icluster,iring,isegment,
-                             cluster->n, ctx->threshold_max_Nsegments_in_cluster))
+            if(DEBUG_ON_TRUE_SEGMENT(cluster->n > ctx->threshold_max_Nsegments_in_cluster,
+                                     iring,isegment,
+                                     "icluster=%d too big: %d > %d",
+                                     icluster,
+                                     cluster->n, ctx->threshold_max_Nsegments_in_cluster))
             {
                 continue;
             }
@@ -1273,11 +1283,11 @@ static void stage2_cluster_segments(// out
             {
                 int iring0,iring1;
                 ring_minmax_from_segment_cluster(&iring0, &iring1, cluster);
-                if(DEBUG_ON_TRUE(iring1-iring0+1 < ctx->threshold_min_Nrings_in_cluster,
-                                 &segment->p,
-                                 "icluster=%d starting with iring=%d isegment=%d only contains too-few rings: %d < %d",
-                                 icluster,iring,isegment,
-                                 iring1-iring0+1, ctx->threshold_min_Nrings_in_cluster))
+                if(DEBUG_ON_TRUE_SEGMENT(iring1-iring0+1 < ctx->threshold_min_Nrings_in_cluster,
+                                         iring,isegment,
+                                         "icluster=%d contains too-few rings: %d < %d",
+                                         icluster,
+                                         iring1-iring0+1, ctx->threshold_min_Nrings_in_cluster))
                     continue;
             }
 
@@ -1297,10 +1307,10 @@ static void stage2_cluster_segments(// out
                     break;
                 }
             }
-            if(DEBUG_ON_TRUE(!keep,
-                             &segment->p,
-                             "icluster=%d starting with iring=%d isegment=%d is completely past the threshold_max_range=%f",
-                             icluster,iring,isegment, ctx->threshold_max_range))
+            if(DEBUG_ON_TRUE_SEGMENT(!keep,
+                                     iring,isegment,
+                                     "icluster=%d is completely past the threshold_max_range=%f",
+                                     icluster, ctx->threshold_max_range))
                 continue;
 
 
@@ -1512,7 +1522,7 @@ static void stage3_refine_clusters(// out
             // the pre-solve didn't find it), and won't be of much value
             if(debug)
             {
-                MSG("iring=%d isegment=%d at icluster=%d: refinement gathered %d points",
+                MSG("%d-%d at icluster=%d: refinement gathered %d points",
                     iring, isegment,
                     icluster,
                     ipoint_set->n - ipoint_set_n_prev);
@@ -1681,7 +1691,7 @@ int8_t point_segmentation(// out
         // Each eigenvalue is a 1-sigma ellipse of our point cloud. It
         // represents the sum-of-squares of deviations from the mean. The RMS is
         // the useful value: RMS = sqrt(sum_of_squares/N)
-        if(DEBUG_ON_TRUE(eigenvalues_ascending[0] > ctx->threshold_max_rms_fit_error*ctx->threshold_max_rms_fit_error*(float)Npoints_in_plane,
+        if(DEBUG_ON_TRUE_POINT(eigenvalues_ascending[0] > ctx->threshold_max_rms_fit_error*ctx->threshold_max_rms_fit_error*(float)Npoints_in_plane,
                          &points_and_plane[iplane_out].plane.p,
                          "Refined plane doesn't fit the constituent points well-enough: %f > %f",
                          sqrt(eigenvalues_ascending[0]/(float)Npoints_in_plane), ctx->threshold_max_rms_fit_error))
@@ -1691,13 +1701,13 @@ int8_t point_segmentation(// out
         // eigenvalue is 0-ish: we're looking at a plane, and the data must be
         // squished in that way. But the next eigenvalue should be a decent
         // size. Otherwise the data is linear-y instead of plane-y
-        if(DEBUG_ON_TRUE(eigenvalues_ascending[1] < ctx->threshold_min_rms_point_cloud_2nd_dimension*ctx->threshold_min_rms_point_cloud_2nd_dimension*(float)Npoints_in_plane,
+        if(DEBUG_ON_TRUE_POINT(eigenvalues_ascending[1] < ctx->threshold_min_rms_point_cloud_2nd_dimension*ctx->threshold_min_rms_point_cloud_2nd_dimension*(float)Npoints_in_plane,
                          &points_and_plane[iplane_out].plane.p,
                          "Refined plane is degenerate (2nd eigenvalue of point cloud dispersion is too small): %f < %f",
                          sqrt(eigenvalues_ascending[1]/(float)Npoints_in_plane), ctx->threshold_min_rms_point_cloud_2nd_dimension))
             continue;
 
-        if(DEBUG_ON_TRUE(max_norm2_dp*2.*2. > ctx->threshold_max_plane_size*ctx->threshold_max_plane_size,
+        if(DEBUG_ON_TRUE_POINT(max_norm2_dp*2.*2. > ctx->threshold_max_plane_size*ctx->threshold_max_plane_size,
                          &points_and_plane[iplane_out].plane.p,
                          "Refined plane is too big: max_mag_dp*2 > threshold: %f > %f",
                          sqrtf(max_norm2_dp)*2., ctx->threshold_max_plane_size))
