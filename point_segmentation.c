@@ -137,9 +137,48 @@ typedef struct
 _Static_assert(sizeof(segment_cluster_t) == 1024*4, "segment_cluster_t has expected size");
 
 
+static void eigenvector(// out
+                        double* v,
+                        // in
+                        const double l,
+                        const double* M,
+                        const bool normalize_v)
+{
+    // Now to find the corresponding eigenvectors. Following:
+    //   https://en.wikipedia.org/wiki/Eigenvalue_algorithm#Eigenvectors_of_normal_3%C3%973_matrices
+
+
+    // l is an eigenvalue of M (I assume with multiplicity 1). As described on
+    // that wikipedia page, the cross-product of any two linearly-independent
+    // columns of M-eye(3)*l is parallel to the eigenvector. The eigenvector is
+    // in the null space, so rank(M - eye(3)*l) = 2. So you MIGHT have two
+    // columns that aren't linearly independent. I explicitly try two sets of
+    // columns, and pick the larger cross-product.
+
+
+    const double v0[] = {M[0] - l,
+                         M[1],
+                         M[2]};
+    const double v1[] = {M[1],
+                         M[3] - l,
+                         M[4]};
+
+    v[0] = v0[1]*v1[2] - v0[2]*v1[1];
+    v[1] = v0[2]*v1[0] - v0[0]*v1[2];
+    v[2] = v0[0]*v1[1] - v0[1]*v1[0];
+
+    if(normalize_v)
+    {
+        const double mag = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+        for(int i=0; i<3; i++)
+            v[i] /= mag;
+    }
+}
+
 static
 void eig_real_symmetric_3x3( // out
-                             double* vsmallest, // the smallest-eigenvalue eigenvector
+                             double* vsmallest, // the smallest-eigenvalue eigenvector; may be NULL
+                             double* vlargest,  // the largest-eigenvalue  eigenvector; may be NULL
                              double* l,         // ALL the eigenvalues, in ascending order
                              // in
                              const double* M, // shape (6,); packed storage; row-first
@@ -181,36 +220,97 @@ void eig_real_symmetric_3x3( // out
     l[1] = 3.*q - l[2] - l[0];
 
 
-    // Now to find the corresponding eigenvector. Following:
-    //   https://en.wikipedia.org/wiki/Eigenvalue_algorithm#Eigenvectors_of_normal_3%C3%973_matrices
-    //
-    // I expect a well-behaved point cloud. Only one
-    const double v0[] = {M[0] - l[0],
-                         M[1],
-                         M[2]};
-    const double v1[] = {M[1],
-                         M[3] - l[0],
-                         M[4]};
-    vsmallest[0] = v0[1]*v1[2] - v0[2]*v1[1];
-    vsmallest[1] = v0[2]*v1[0] - v0[0]*v1[2];
-    vsmallest[2] = v0[0]*v1[1] - v0[1]*v1[0];
+    if(vsmallest != NULL)
+        eigenvector(vsmallest,
+                    l[0], M, normalize_v);
+    if(vlargest != NULL)
+        eigenvector(vlargest,
+                    l[2], M, normalize_v);
+}
 
-    if(normalize_v)
+static void pca_preprocess_from_ipoint_set( // out
+                                           double*    M,
+                                           point3f_t* pmean,
+                                           float*     max_norm2_dp, // may be NULL
+                                           // in
+                                           const point3f_t* points,
+                                           const ipoint_set_t* ipoint_set)
+{
+    *pmean = (point3f_t){};
+    for(int i=0; i<ipoint_set->n; i++)
+        for(int j=0; j<3; j++)
+            pmean->xyz[j] += points[ipoint_set->ipoint[i]].xyz[j];
+    for(int j=0; j<3; j++)
+        pmean->xyz[j] /= (float)(ipoint_set->n);
+
+
+    if(max_norm2_dp != NULL) *max_norm2_dp = 0.0f;
+
+    for(int i=0; i<ipoint_set->n; i++)
     {
-        const double mag = sqrt(vsmallest[0]*vsmallest[0] + vsmallest[1]*vsmallest[1] + vsmallest[2]*vsmallest[2]);
-        for(int i=0; i<3; i++)
-            vsmallest[i] /= mag;
+        const point3f_t dp = sub(points[ipoint_set->ipoint[i]], *pmean);
+
+        const float norm2_dp = norm2(dp);
+        if(max_norm2_dp != NULL &&
+           *max_norm2_dp < norm2_dp)
+            *max_norm2_dp = norm2_dp;
+
+        M[0] += (double)(dp.xyz[0]*dp.xyz[0]);
+        M[1] += (double)(dp.xyz[0]*dp.xyz[1]);
+        M[2] += (double)(dp.xyz[0]*dp.xyz[2]);
+        M[3] += (double)(dp.xyz[1]*dp.xyz[1]);
+        M[4] += (double)(dp.xyz[1]*dp.xyz[2]);
+        M[5] += (double)(dp.xyz[2]*dp.xyz[2]);
     }
 }
 
-static void _fit_plane_into_points( // out
-                                    plane_t*         plane, // may be normalized or unnormalized
-                                    float*           max_norm2_dp,
-                                    float*           eigenvalues_ascending, // 3 of these
-                                    // in
-                                    const point3f_t* points,
-                                    const ipoint_set_t* ipoint_set,
-                                    const bool normalize_v )
+static void pca_preprocess_from_ipoint0_ipoint1( // out
+                                                double*    M,
+                                                point3f_t* pmean,
+                                                float*     max_norm2_dp, // may be NULL
+                                                // in
+                                                const point3f_t* points,
+                                                const int ipoint0, const int ipoint1)
+{
+    *pmean = (point3f_t){};
+    for(int i=ipoint0; i<=ipoint1; i++)
+        for(int j=0; j<3; j++)
+            pmean->xyz[j] += points[i].xyz[j];
+    for(int j=0; j<3; j++)
+        pmean->xyz[j] /= (float)(ipoint1-ipoint0+1);
+
+
+    if(max_norm2_dp != NULL) *max_norm2_dp = 0.0f;
+
+    for(int i=ipoint0; i<=ipoint1; i++)
+    {
+        const point3f_t dp = sub(points[i], *pmean);
+
+        const float norm2_dp = norm2(dp);
+        if(max_norm2_dp != NULL &&
+           *max_norm2_dp < norm2_dp)
+            *max_norm2_dp = norm2_dp;
+
+        M[0] += (double)(dp.xyz[0]*dp.xyz[0]);
+        M[1] += (double)(dp.xyz[0]*dp.xyz[1]);
+        M[2] += (double)(dp.xyz[0]*dp.xyz[2]);
+        M[3] += (double)(dp.xyz[1]*dp.xyz[1]);
+        M[4] += (double)(dp.xyz[1]*dp.xyz[2]);
+        M[5] += (double)(dp.xyz[2]*dp.xyz[2]);
+    }
+}
+
+static void pca( // out
+                point3f_t* pmean,
+                point3f_t* vsmallest,    // the smallest-eigenvalue eigenvector; may be NULL
+                point3f_t* vlargest,     // the largest-eigenvalue  eigenvector; may be NULL
+                float*     max_norm2_dp, // may be NULL
+                float*     eigenvalues_ascending, // 3 of these; may be NULL
+                // in
+                const point3f_t* points,
+                const ipoint_set_t* ipoint_set, // if NULL, we use [ipoint0,ipoint1]
+                const int ipoint0, const int ipoint1,
+                const bool normalize_v )
 {
     /*
       I fit a plane to a set of points. The most accurate way to do this is to
@@ -242,46 +342,41 @@ static void _fit_plane_into_points( // out
       This is an eigenvalue problem: l,n are eigen(values,vectors) of Q Qt
       E = nt Q Qt n = l nt n = l
 
-    */
-
-    point3f_t pmean = {};
-    for(int i=0; i<ipoint_set->n; i++)
-        for(int j=0; j<3; j++)
-            pmean.xyz[j] += points[ipoint_set->ipoint[i]].xyz[j];
-    for(int j=0; j<3; j++)
-        pmean.xyz[j] /= (float)(ipoint_set->n);
-
-
-    *max_norm2_dp = 0.0f;
+     */
 
     // packed storage; row-first
     // double-precision because this is potentially inaccurate
     double M[3+2+1] = {};
-    for(int i=0; i<ipoint_set->n; i++)
-    {
-        const point3f_t dp = sub(points[ipoint_set->ipoint[i]], pmean);
+    if(ipoint_set != NULL)
+        pca_preprocess_from_ipoint_set( // out
+                                       M,
+                                       pmean,
+                                       max_norm2_dp,
+                                       // in
+                                       points,
+                                       ipoint_set);
+    else
+        pca_preprocess_from_ipoint0_ipoint1( // out
+                                            M,
+                                            pmean,
+                                            max_norm2_dp,
+                                            // in
+                                            points,
+                                            ipoint0,ipoint1);
 
-        const float norm2_dp = norm2(dp);
-        if(*max_norm2_dp < norm2_dp)
-            *max_norm2_dp = norm2_dp;
-
-        M[0] += (double)(dp.xyz[0]*dp.xyz[0]);
-        M[1] += (double)(dp.xyz[0]*dp.xyz[1]);
-        M[2] += (double)(dp.xyz[0]*dp.xyz[2]);
-        M[3] += (double)(dp.xyz[1]*dp.xyz[1]);
-        M[4] += (double)(dp.xyz[1]*dp.xyz[2]);
-        M[5] += (double)(dp.xyz[2]*dp.xyz[2]);
-    }
-
-    double l[3];         // all the eigenvalues, in ascending order
-    double vsmallest[3]; // eigenvector for l[0]
-    eig_real_symmetric_3x3(vsmallest,l,M,
+    double l[3]; // all the eigenvalues, in ascending order
+    double _vsmallest[3];
+    double _vlargest [3];
+    eig_real_symmetric_3x3(vsmallest != NULL ? _vsmallest : NULL,
+                           vlargest  != NULL ? _vlargest  : NULL,
+                           l,M,
                            normalize_v);
-    plane->p = pmean;
-    plane->n = point3f_from_double(vsmallest);
+    if(vsmallest != NULL) *vsmallest = point3f_from_double(_vsmallest);
+    if(vlargest  != NULL) *vlargest  = point3f_from_double(_vlargest);
 
-    for(int i=0; i<3; i++)
-        eigenvalues_ascending[i] = (float)l[i];
+    if(eigenvalues_ascending != NULL)
+        for(int i=0; i<3; i++)
+            eigenvalues_ascending[i] = (float)l[i];
 }
 
 static void fit_plane_into_points__normalized( // out
@@ -292,8 +387,15 @@ static void fit_plane_into_points__normalized( // out
                                                const point3f_t*    points,
                                                const ipoint_set_t* ipoint_set)
 {
-    _fit_plane_into_points(plane,
-                           max_norm2_dp,eigenvalues_ascending,points,ipoint_set, true);
+    pca(&plane->p,
+        &plane->n,
+        NULL,
+        max_norm2_dp,
+        eigenvalues_ascending,
+        points,
+        ipoint_set,
+        -1,-1,
+        true);
 }
 
 static void fit_plane_into_points__unnormalized( // out
@@ -304,8 +406,15 @@ static void fit_plane_into_points__unnormalized( // out
                                                  const point3f_t*      points,
                                                  const ipoint_set_t*   ipoint_set)
 {
-    _fit_plane_into_points((plane_t*)plane_unnormalized,
-                           max_norm2_dp,eigenvalues_ascending,points,ipoint_set, false);
+    pca(&plane_unnormalized->p,
+        &plane_unnormalized->n_unnormalized,
+        NULL,
+        max_norm2_dp,
+        eigenvalues_ascending,
+        points,
+        ipoint_set,
+        -1,-1,
+        false);
 }
 
 
