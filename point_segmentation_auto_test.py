@@ -300,7 +300,7 @@ for test in tests:
                             msg = 'Reported plane normal is a unit vector')
 
     cos_dth = nps.inner(plane_pn[0,3:],test['plane_n'])
-    testutils.confirm_equal(cos_dth, 1,
+    testutils.confirm_equal(np.abs(cos_dth), 1,
                             eps = np.cos(0.1 * np.pi/180.),
                             msg=f'Plane orientation')
 
