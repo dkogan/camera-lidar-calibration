@@ -162,16 +162,47 @@ static void eigenvector(// out
     const double v1[] = {M[1],
                          M[3] - l,
                          M[4]};
+    const double v2[] = {M[2],
+                         M[4],
+                         M[5] - l};
 
-    v[0] = v0[1]*v1[2] - v0[2]*v1[1];
-    v[1] = v0[2]*v1[0] - v0[0]*v1[2];
-    v[2] = v0[0]*v1[1] - v0[1]*v1[0];
+    double* vcross1 = v;
+    double vcross2[3];
 
-    if(normalize_v)
+    vcross1[0] = v0[1]*v1[2] - v0[2]*v1[1];
+    vcross1[1] = v0[2]*v1[0] - v0[0]*v1[2];
+    vcross1[2] = v0[0]*v1[1] - v0[1]*v1[0];
+
+    vcross2[0] = v0[1]*v2[2] - v0[2]*v2[1];
+    vcross2[1] = v0[2]*v2[0] - v0[0]*v2[2];
+    vcross2[2] = v0[0]*v2[1] - v0[1]*v2[0];
+
+    const double norm2_vcross1 = vcross1[0]*vcross1[0] + vcross1[1]*vcross1[1] + vcross1[2]*vcross1[2];
+    const double norm2_vcross2 = vcross2[0]*vcross2[0] + vcross2[1]*vcross2[1] + vcross2[2]*vcross2[2];
+
+    if(norm2_vcross1 > norm2_vcross2)
     {
-        const double mag = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-        for(int i=0; i<3; i++)
-            v[i] /= mag;
+        // we take vcross1. This is already in v
+        if(normalize_v)
+        {
+            const double mag = sqrt(norm2_vcross1);
+            for(int i=0; i<3; i++)
+                v[i] /= mag;
+        }
+    }
+    else
+    {
+        // we take vcross2
+        if(normalize_v)
+        {
+            const double mag = sqrt(norm2_vcross2);
+            for(int i=0; i<3; i++)
+                v[i] = vcross2[i] / mag;
+        }
+        else
+            for(int i=0; i<3; i++)
+                v[i] = vcross2[i];
+
     }
 }
 
