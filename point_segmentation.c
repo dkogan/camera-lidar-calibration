@@ -705,8 +705,23 @@ void stage1_finish_segment(// out
         return;
     }
 
-    segment->p = mean(p[ipoint1], p[ipoint0]);
-    segment->v = sub( p[ipoint1], p[ipoint0]);
+    // We passed the crude test: is_point_segment_planar() says that all the
+    // points lie on my line. I now refine this segment's p,v estimate to make
+    // this all work better with the downstream logic
+
+
+    // This will be a conic section that I'm trying to represent as a line.
+
+    pca(&segment->p,
+        NULL,
+        &segment->v,
+        NULL,
+        NULL,
+        p,
+        NULL,
+        ipoint0, ipoint1,
+        false);
+
     segment->ipoint0 = ipoint0;
     segment->ipoint1 = ipoint1;
 
@@ -1524,13 +1539,16 @@ int8_t point_segmentation(// out
                 if(!(segments[iring*Nsegments_per_rotation + i].v.x == 0 &&
                      segments[iring*Nsegments_per_rotation + i].v.y == 0 &&
                      segments[iring*Nsegments_per_rotation + i].v.z == 0))
+                {
+                    const float magv = mag(segments[iring*Nsegments_per_rotation + i].v);
                     printf("%f %f stage1-segment %f %f %f %f\n",
                            segments[iring*Nsegments_per_rotation + i].p.x,
                            segments[iring*Nsegments_per_rotation + i].p.y,
                            segments[iring*Nsegments_per_rotation + i].p.z,
-                           segments[iring*Nsegments_per_rotation + i].v.x * 0.3,
-                           segments[iring*Nsegments_per_rotation + i].v.y * 0.3,
-                           segments[iring*Nsegments_per_rotation + i].v.z * 0.3 );
+                           segments[iring*Nsegments_per_rotation + i].v.x/magv * .3,
+                           segments[iring*Nsegments_per_rotation + i].v.y/magv * .3,
+                           segments[iring*Nsegments_per_rotation + i].v.z/magv * .3 );
+                }
             }
         }
     }
