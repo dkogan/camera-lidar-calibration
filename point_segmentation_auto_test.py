@@ -253,7 +253,25 @@ for test in tests:
     bag = f"{args.root}/{test['bag']}"
     topic = test['topic']
 
-    vizcmd = f"./point_segmentation_test.py --dump {topic} {bag} | vnl-filter ' -{max_range} < x && x < {max_range} && -{max_range} < y && y < {max_range}' | feedgnuplot --style all 'with dots' --3d --domain --dataid --square --points --tuplesizeall 3 --autolegend --xlabel x --ylabel y --zlabel z"
+    vizcmd = fr'''  x0y0x1y1=(-{max_range} -{max_range} {max_range} {max_range});
+  ./point_segmentation_test.py --dump \
+    {topic} \
+    {bag} \
+  | awk " $x0y0x1y1[1] < \$1 && \$1 < $x0y0x1y1[3] && $x0y0x1y1[2] < \$2 && \$2 < $x0y0x1y1[4]" \
+  | feedgnuplot \
+      --style all "with points pt 7 ps 0.5" \
+      --style stage1-segment "with vectors" \
+      --tuplesize stage1-segment 6 \
+      --3d \
+      --domain \
+      --dataid \
+      --square \
+      --points \
+      --tuplesizeall 3 \
+      --autolegend \
+      --xlabel x \
+      --ylabel y \
+      --zlabel z'''
 
     print(f"Evaluating test. Visualize like this:  {vizcmd}")
 
