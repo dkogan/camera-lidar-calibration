@@ -1102,41 +1102,46 @@ static void try_visit(stack_t* stack,
 
     segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
 
-    if(segment_is_valid(segment) &&
-       !segment->visited &&
-       stage2_plane_segment_compatible(// The initial plane estimate in
-                                       // cluster->plane_unnormalized may be updated by
-                                       // this call, if we return true
-                                       cluster,
-                                       segment,
-                                       iring, isegment,
-                                       icluster,
-                                       segments,
-                                       points, ipoint0_in_ring,
-                                       ctx))
+    if(segment->visited)
+        return;
+
+    if(!segment_is_valid(segment))
+        return;
+
+    if(!stage2_plane_segment_compatible(// The initial plane estimate in
+                                        // cluster->plane_unnormalized may be updated by
+                                        // this call, if we return true
+                                        cluster,
+                                        segment,
+                                        iring, isegment,
+                                        icluster,
+                                        segments,
+                                        points, ipoint0_in_ring,
+                                        ctx))
+        return;
+
+
+    segmentref_t* node = stack_push(stack);
+
+    // Do this before the error checking; otherwise the error conditions may
+    // go into an infinite loop
+    segment->visited = true;
+
+    if(node == NULL)
     {
-        segmentref_t* node = stack_push(stack);
-
-        // Do this before the error checking; otherwise the error conditions may
-        // go into an infinite loop
-        segment->visited = true;
-
-        if(node == NULL)
-        {
-            MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of 'stack_t.nodes'");
-            return;
-        }
-        if(cluster->n == (int)(sizeof(cluster->segments)/sizeof(cluster->segments[0])))
-        {
-            MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of 'cluster_t.segments'");
-            return;
-        }
-
-        node->isegment = isegment;
-        node->iring    = iring;
-
-        cluster->segments[cluster->n++] = *node;
+        MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of 'stack_t.nodes'");
+        return;
     }
+    if(cluster->n == (int)(sizeof(cluster->segments)/sizeof(cluster->segments[0])))
+    {
+        MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of 'cluster_t.segments'");
+        return;
+    }
+
+    node->isegment = isegment;
+    node->iring    = iring;
+
+    cluster->segments[cluster->n++] = *node;
 }
 
 static void stage2_cluster_segments(// out
