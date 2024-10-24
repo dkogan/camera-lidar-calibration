@@ -8,7 +8,7 @@ TAIL_VERSION := 1
 LDLIBS += \
   -lm
 
-CFLAGS    += --std=gnu99
+CFLAGS    += --std=gnu99 -ggdb3
 CCXXFLAGS += -Wno-missing-field-initializers
 
 LIB_SOURCES += point_segmentation.c
