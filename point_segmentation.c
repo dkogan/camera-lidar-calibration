@@ -1748,7 +1748,8 @@ int8_t point_segmentation(// out
         // the useful value: RMS = sqrt(sum_of_squares/N)
         if(DEBUG_ON_TRUE_POINT(eigenvalues_ascending[0] > ctx->threshold_max_rms_fit_error*ctx->threshold_max_rms_fit_error*(float)Npoints_in_plane,
                          &points_and_plane[iplane_out].plane.p,
-                         "Refined plane doesn't fit the constituent points well-enough: %f > %f",
+                         "icluster=%d: refined plane doesn't fit the constituent points well-enough: %f > %f",
+                         icluster,
                          sqrt(eigenvalues_ascending[0]/(float)Npoints_in_plane), ctx->threshold_max_rms_fit_error))
             continue;
 
@@ -1758,13 +1759,15 @@ int8_t point_segmentation(// out
         // size. Otherwise the data is linear-y instead of plane-y
         if(DEBUG_ON_TRUE_POINT(eigenvalues_ascending[1] < ctx->threshold_min_rms_point_cloud_2nd_dimension*ctx->threshold_min_rms_point_cloud_2nd_dimension*(float)Npoints_in_plane,
                          &points_and_plane[iplane_out].plane.p,
-                         "Refined plane is degenerate (2nd eigenvalue of point cloud dispersion is too small): %f < %f",
+                         "icluster=%d: refined plane is degenerate (2nd eigenvalue of point cloud dispersion is too small): %f < %f",
+                         icluster,
                          sqrt(eigenvalues_ascending[1]/(float)Npoints_in_plane), ctx->threshold_min_rms_point_cloud_2nd_dimension))
             continue;
 
         if(DEBUG_ON_TRUE_POINT(max_norm2_dp*2.*2. > ctx->threshold_max_plane_size*ctx->threshold_max_plane_size,
                          &points_and_plane[iplane_out].plane.p,
-                         "Refined plane is too big: max_mag_dp*2 > threshold: %f > %f",
+                         "icluster=%d: refined plane is too big: max_mag_dp*2 > threshold: %f > %f",
+                         icluster,
                          sqrtf(max_norm2_dp)*2., ctx->threshold_max_plane_size))
             continue;
 
