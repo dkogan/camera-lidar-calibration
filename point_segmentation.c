@@ -894,9 +894,22 @@ static bool is_same_direction(const point3f_t a,
         ctx->threshold_min_cos_angle_error_same_direction*ctx->threshold_min_cos_angle_error_same_direction*norm2(a)*norm2(b);
 }
 
+static bool segment_segment_across_rings_close_enough(const point3f_t* dp,
+                                                      const int iring, const int isegment,
+                                                      const bool debug,
+                                                      const context_t* ctx)
+{
+    return
+        !DEBUG_ON_TRUE_SEGMENT(norm2(*dp) > ctx->threshold_max_distance_across_rings*ctx->threshold_max_distance_across_rings,
+                               iring,isegment,
+                               "cross-ring segments are too far apart: %f > %f",
+                               mag(*dp), ctx->threshold_max_distance_across_rings);
+}
+
 static bool plane_from_segment_segment(// out
                                        plane_unnormalized_t* plane_unnormalized,
                                        // in
+                                       const int iring, const int isegment,
                                        const segment_t* s0,
                                        const segment_t* s1,
                                        const context_t* ctx)
@@ -904,6 +917,17 @@ static bool plane_from_segment_segment(// out
     // I want:
     //   inner(p1-p0, n=cross(v0,v1)) = 0
     point3f_t dp = sub(s1->p, s0->p);
+
+    const bool debug =
+        ctx->debug_xmin < s1->p.x && s1->p.x < ctx->debug_xmax &&
+        ctx->debug_ymin < s1->p.y && s1->p.y < ctx->debug_ymax;
+
+    if(!segment_segment_across_rings_close_enough(&dp,
+                                                  iring,isegment,
+                                                  debug,
+                                                  ctx))
+        return false;
+
 
     // The two normal estimates must be close
     point3f_t n0 = cross(dp,s0->v);
@@ -1089,6 +1113,7 @@ static void try_visit(stack_t* stack,
                       // in,out
                       segment_cluster_t* cluster,
                       // what we're trying
+                      const int iring0, // ring we're traversing from
                       const int iring, const int isegment,
                       // context
                       const int icluster,
@@ -1107,6 +1132,26 @@ static void try_visit(stack_t* stack,
 
     if(!segment_is_valid(segment))
         return;
+
+    if(iring0 != iring)
+    {
+        const point3f_t* p  = &segments[iring *Nsegments_per_rotation + isegment].p;
+        const point3f_t* p0 = &segments[iring0*Nsegments_per_rotation + isegment].p;
+
+        const point3f_t dp = sub(*p,*p0);
+
+
+        const bool debug =
+            ctx->debug_xmin < p->x && p->x < ctx->debug_xmax &&
+            ctx->debug_ymin < p->y && p->y < ctx->debug_ymax;
+
+        if(!segment_segment_across_rings_close_enough(&dp,
+                                                      iring,isegment,
+                                                      debug,
+                                                      ctx))
+            return;
+    }
+
 
     if(!stage2_plane_segment_compatible(// The initial plane estimate in
                                         // cluster->plane_unnormalized may be updated by
@@ -1201,6 +1246,7 @@ static void stage2_cluster_segments(// out
                 ctx->debug_xmin < segment->p.x && segment->p.x < ctx->debug_xmax &&
                 ctx->debug_ymin < segment->p.y && segment->p.y < ctx->debug_ymax;
             if(DEBUG_ON_TRUE_SEGMENT(!plane_from_segment_segment(&cluster->plane_unnormalized,
+                                                                 iring1, isegment,
                                                                  segment,segment1,
                                                                  ctx),
                                      iring,isegment,
@@ -1227,6 +1273,7 @@ static void stage2_cluster_segments(// out
                 segmentref_t* node = stack_pop(&stack);
                 try_visit(&stack,
                           cluster,
+                          node->iring,
                           node->iring-1, node->isegment,
                           icluster,
                           segments,
@@ -1234,6 +1281,7 @@ static void stage2_cluster_segments(// out
                           ctx);
                 try_visit(&stack,
                           cluster,
+                          node->iring,
                           node->iring+1, node->isegment,
                           icluster,
                           segments,
@@ -1241,6 +1289,7 @@ static void stage2_cluster_segments(// out
                           ctx);
                 try_visit(&stack,
                           cluster,
+                          node->iring,
                           node->iring, node->isegment-1,
                           icluster,
                           segments,
@@ -1248,6 +1297,7 @@ static void stage2_cluster_segments(// out
                           ctx);
                 try_visit(&stack,
                           cluster,
+                          node->iring,
                           node->iring, node->isegment+1,
                           icluster,
                           segments,

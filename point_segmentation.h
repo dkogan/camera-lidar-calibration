@@ -53,6 +53,7 @@ _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has exp
   _(int,   Npoints_per_segment,                          20,                "i","i") \
   _(int,   threshold_max_Ngap,                           2,                 "i","i") \
   _(float, threshold_max_deviation_off_segment_line,     0.05f,             "f","f") \
+  _(float, threshold_max_distance_across_rings,          0.4f,              "f","f") /* should be a factor of threshold_max_plane_size */  \
   _(int,   Nrings,                                       32,                "i","i") \
   /* cos(90-5deg) */                                                    \
   _(float, threshold_max_cos_angle_error_normal,         0.087155742747f,   "f","f") \
