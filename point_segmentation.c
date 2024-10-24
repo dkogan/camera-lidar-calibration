@@ -680,7 +680,7 @@ static
 void stage1_finish_segment(// out
                            segment_t* segments,
                            // in
-                           const int isegment, const int iring,
+                           const int iring, const int isegment,
                            const int Npoints_invalid_in_segment,
                            const uint64_t* bitarray_invalid,
                            const point3f_t* p,
@@ -785,7 +785,7 @@ stage1_segment_from_ring(// out
         if(isegment != isegment0)
         {
             stage1_finish_segment(segments_thisring,
-                                  isegment0, iring,
+                                  iring, isegment0,
                                   Npoints_invalid_in_segment,
                                   bitarray_invalid,
                                   points_thisring, ipoint0, ipoint-1,
@@ -819,7 +819,7 @@ stage1_segment_from_ring(// out
     }
 
     stage1_finish_segment(segments_thisring,
-                          isegment0, iring,
+                          iring, isegment0,
                           Npoints_invalid_in_segment,
                           bitarray_invalid,
                           points_thisring, ipoint0, Npoints_thisring-1,
