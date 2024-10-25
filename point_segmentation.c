@@ -512,7 +512,13 @@ bool segment_is_valid(const segment_t* segment)
 
 /* bitarray. Test it like this:
 
-int main(int argc, char* argv[])
+#include <stdio.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+#include <inttypes.h>
+int main(int argc      __attribute__((unused)),
+         char* argv[]  __attribute__((unused)))
 {
     const int Nbits = 350;
 
@@ -1370,7 +1376,7 @@ static void stage2_cluster_segments(// out
 
 
 
-            // We're accepting this cluster. TO prepare for the next stage I
+            // We're accepting this cluster. To prepare for the next stage I
             // refine the plane estimate and I normalize the normal vector
             if(!fit_plane_into_cluster(// out
                                        &cluster->plane_unnormalized,
@@ -1505,7 +1511,8 @@ static void stage3_refine_clusters(// out
     const int Nwords_bitarray_visited = bitarray64_nwords(ctx->Npoints_per_rotation); // largest-possible size
     uint64_t bitarray_visited[Nrings_considered][Nwords_bitarray_visited];
 
-    // Start with the best-available plane estimate
+    // Start with the best-available plane estimate. This should be pretty good
+    // already.
     points_and_plane->plane = segment_cluster->plane;
 
     ipoint_set_t* ipoint_set = &points_and_plane->ipoint_set;
@@ -1546,9 +1553,11 @@ static void stage3_refine_clusters(// out
                 ipoint < Npoints[iring];
                 ipoint++)
             {
-                if(!stage3_accumulate_point(ipoint_set,
+                if(!stage3_accumulate_point(// out
+                                            ipoint_set,
                                             bitarray_visited[iring-iring0],
                                             &th_rad_last,
+                                            // in
                                             &points_and_plane->plane,
                                             points,
                                             ipoint0_in_ring[iring],
@@ -1563,9 +1572,11 @@ static void stage3_refine_clusters(// out
                 ipoint >= 0;
                 ipoint--)
             {
-                if(!stage3_accumulate_point(ipoint_set,
+                if(!stage3_accumulate_point(// out
+                                            ipoint_set,
                                             bitarray_visited[iring-iring0],
                                             &th_rad_last,
+                                            // in
                                             &points_and_plane->plane,
                                             points,
                                             ipoint0_in_ring[iring],
