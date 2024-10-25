@@ -31,6 +31,11 @@ import numpysane as nps
 import camera_lidar_calibration
 import testutils
 
+try:
+    import tests_private
+except:
+    tests_private = ()
+
 ctx = camera_lidar_calibration.default_context()
 max_range = ctx['threshold_max_range']
 
@@ -248,7 +253,7 @@ tests = (
     )
 
 
-for test in tests:
+for test in tests + tests_private.tests:
 
     bag = f"{args.root}/{test['bag']}"
     topic = test['topic']
