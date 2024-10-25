@@ -1513,7 +1513,11 @@ static void stage3_refine_clusters(// out
     const bool debug =
         ctx->debug_xmin < segment_cluster->plane.p.x && segment_cluster->plane.p.x < ctx->debug_xmax &&
         ctx->debug_ymin < segment_cluster->plane.p.y && segment_cluster->plane.p.y < ctx->debug_ymax;
-    while(true)
+
+
+#warning FOR NOW I JUST RUN A SINGLE ITERATION
+    const int Niterations = 1;
+    for(int iteration=0; iteration<Niterations; iteration++)
     {
         ipoint_set->n = 0;
         int ipoint_set_n_prev = 0;
@@ -1592,9 +1596,6 @@ static void stage3_refine_clusters(// out
                                           eigenvalues_ascending,
                                           points,
                                           ipoint_set);
-
-#warning FOR NOW I JUST RUN A SINGLE ITERATION
-        return;
     }
 }
 
