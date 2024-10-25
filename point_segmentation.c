@@ -941,9 +941,9 @@ static bool plane_from_segment_segment(// out
     return true;
 }
 
-static bool plane_point_compatible__normalized(const plane_t*   plane,
-                                               const point3f_t* point,
-                                               const context_t* ctx)
+static bool plane_point_compatible_stage3_normalized(const plane_t*   plane,
+                                                     const point3f_t* point,
+                                                     const context_t* ctx)
 {
     // I want (point - p) to be perpendicular to n. I want this in terms of
     // "distance-off-plane" so err = inner( (point - p), n) / mag(n)
@@ -955,9 +955,9 @@ static bool plane_point_compatible__normalized(const plane_t*   plane,
     return ctx->threshold_max_plane_point_error > fabsf(inner(dp, plane->n));
 }
 
-static bool plane_point_compatible_unnormalized(const plane_unnormalized_t* plane_unnormalized,
-                                                const point3f_t* point,
-                                                const context_t* ctx)
+static bool plane_point_compatible_stage2_unnormalized(const plane_unnormalized_t* plane_unnormalized,
+                                                       const point3f_t* point,
+                                                       const context_t* ctx)
 {
     // I want (point - p) to be perpendicular to n. I want this in terms of
     // "distance-off-plane" so err = inner( (point - p), n) / mag(n)
@@ -1049,7 +1049,7 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
                                  iring,isegment,
                                  "icluster=%d: segment isn't plane-consistent during accumulation: the direction isn't in-plane",
                                  icluster) ||
-          DEBUG_ON_TRUE_SEGMENT( !plane_point_compatible_unnormalized(&cluster->plane_unnormalized, &segment->p, ctx),
+          DEBUG_ON_TRUE_SEGMENT( !plane_point_compatible_stage2_unnormalized(&cluster->plane_unnormalized, &segment->p, ctx),
                                  iring,isegment,
                                  "icluster=%d: segment isn't plane-consistent during accumulation: the point isn't in-plane",
                                  icluster)))
@@ -1079,7 +1079,7 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
                              iring,isegment,
                              "icluster=%d: segment isn't plane-consistent during the re-fit check: the direction isn't in-plane",
                              icluster) ||
-       DEBUG_ON_TRUE_SEGMENT( !plane_point_compatible_unnormalized(&plane_unnormalized, &segment->p, ctx),
+       DEBUG_ON_TRUE_SEGMENT( !plane_point_compatible_stage2_unnormalized(&plane_unnormalized, &segment->p, ctx),
                               iring,isegment,
                               "icluster=%d: segment isn't plane-consistent during the re-fit check: the point isn't in-plane",
                               icluster))
@@ -1096,7 +1096,7 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
                                  iring_here,isegment_here,
                                  "icluster=%d: segment isn't plane-consistent during the re-fit check: the direction isn't in-plane",
                                  icluster) ||
-           DEBUG_ON_TRUE_SEGMENT(!plane_point_compatible_unnormalized(&plane_unnormalized, &segment_here->p, ctx),
+           DEBUG_ON_TRUE_SEGMENT(!plane_point_compatible_stage2_unnormalized(&plane_unnormalized, &segment_here->p, ctx),
                                  iring_here,isegment_here,
                                  "icluster=%d: segment isn't plane-consistent during the re-fit check: the isn't in-plane",
                                  icluster))
@@ -1433,9 +1433,9 @@ static bool accumulate_point(// out
     // constructing the candidate segments. So if we got this far, I assume it's
     // good
 
-    if( plane_point_compatible__normalized(plane,
-                                           &points[ipoint0_in_ring + ipoint],
-                                           ctx) )
+    if( plane_point_compatible_stage3_normalized(plane,
+                                                 &points[ipoint0_in_ring + ipoint],
+                                                 ctx) )
     {
         // I will be fitting a plane to a set of points. The most accurate way
         // to do this is to minimize the observation errors (ranges; what the
