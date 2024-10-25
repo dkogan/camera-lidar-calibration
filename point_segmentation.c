@@ -1743,43 +1743,49 @@ int8_t point_segmentation(// out
             ctx->debug_xmin < points_and_plane[iplane_out].plane.p.x && points_and_plane[iplane_out].plane.p.x < ctx->debug_xmax &&
             ctx->debug_ymin < points_and_plane[iplane_out].plane.p.y && points_and_plane[iplane_out].plane.p.y < ctx->debug_ymax;
 
-        // Each eigenvalue is a 1-sigma ellipse of our point cloud. It
-        // represents the sum-of-squares of deviations from the mean. The RMS is
-        // the useful value: RMS = sqrt(sum_of_squares/N)
-        if(DEBUG_ON_TRUE_POINT(eigenvalues_ascending[0] > ctx->threshold_max_rms_fit_error*ctx->threshold_max_rms_fit_error*(float)Npoints_in_plane,
-                         &points_and_plane[iplane_out].plane.p,
-                         "icluster=%d: refined plane doesn't fit the constituent points well-enough: %f > %f",
-                         icluster,
-                         sqrt(eigenvalues_ascending[0]/(float)Npoints_in_plane), ctx->threshold_max_rms_fit_error))
-            continue;
+        const bool rejected =
 
-        // Some point clouds are degenerate, and we throw them away. The first
-        // eigenvalue is 0-ish: we're looking at a plane, and the data must be
-        // squished in that way. But the next eigenvalue should be a decent
-        // size. Otherwise the data is linear-y instead of plane-y
-        if(DEBUG_ON_TRUE_POINT(eigenvalues_ascending[1] < ctx->threshold_min_rms_point_cloud_2nd_dimension*ctx->threshold_min_rms_point_cloud_2nd_dimension*(float)Npoints_in_plane,
-                         &points_and_plane[iplane_out].plane.p,
-                         "icluster=%d: refined plane is degenerate (2nd eigenvalue of point cloud dispersion is too small): %f < %f",
-                         icluster,
-                         sqrt(eigenvalues_ascending[1]/(float)Npoints_in_plane), ctx->threshold_min_rms_point_cloud_2nd_dimension))
-            continue;
+            // Each eigenvalue is a 1-sigma ellipse of our point cloud. It
+            // represents the sum-of-squares of deviations from the mean. The
+            // RMS is the useful value: RMS = sqrt(sum_of_squares/N)
+            DEBUG_ON_TRUE_POINT(eigenvalues_ascending[0] > ctx->threshold_max_rms_fit_error*ctx->threshold_max_rms_fit_error*(float)Npoints_in_plane,
+                                &points_and_plane[iplane_out].plane.p,
+                                "icluster=%d: refined plane doesn't fit the constituent points well-enough: %f > %f",
+                                icluster,
+                                sqrt(eigenvalues_ascending[0]/(float)Npoints_in_plane), ctx->threshold_max_rms_fit_error) ||
 
-        if(DEBUG_ON_TRUE_POINT(max_norm2_dp*2.*2. > ctx->threshold_max_plane_size*ctx->threshold_max_plane_size,
-                         &points_and_plane[iplane_out].plane.p,
-                         "icluster=%d: refined plane is too big: max_mag_dp*2 > threshold: %f > %f",
-                         icluster,
-                         sqrtf(max_norm2_dp)*2., ctx->threshold_max_plane_size))
-            continue;
+            // Some point clouds are degenerate, and we throw them away. The
+            // first eigenvalue is 0-ish: we're looking at a plane, and the data
+            // must be squished in that way. But the next eigenvalue should be a
+            // decent size. Otherwise the data is linear-y instead of plane-y
+            DEBUG_ON_TRUE_POINT(eigenvalues_ascending[1] < ctx->threshold_min_rms_point_cloud_2nd_dimension*ctx->threshold_min_rms_point_cloud_2nd_dimension*(float)Npoints_in_plane,
+                                &points_and_plane[iplane_out].plane.p,
+                                "icluster=%d: refined plane is degenerate (2nd eigenvalue of point cloud dispersion is too small): %f < %f",
+                                icluster,
+                                sqrt(eigenvalues_ascending[1]/(float)Npoints_in_plane), ctx->threshold_min_rms_point_cloud_2nd_dimension) ||
+
+            DEBUG_ON_TRUE_POINT(max_norm2_dp*2.*2. > ctx->threshold_max_plane_size*ctx->threshold_max_plane_size,
+                                &points_and_plane[iplane_out].plane.p,
+                                "icluster=%d: refined plane is too big: max_mag_dp*2 > threshold: %f > %f",
+                                icluster,
+                                sqrtf(max_norm2_dp)*2., ctx->threshold_max_plane_size);
+
+        const char* annotation = rejected ? "-rejected" : "";
 
 
         // We're past all the filters. I accept this plane
         if(ctx->dump)
             for(int i=0; i<points_and_plane[iplane_out].ipoint_set.n; i++)
-                printf("%f %f stage3-refined-points-%d %f\n",
+                printf("%f %f stage3-refined-points-%d%s %f\n",
                        points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].x,
                        points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].y,
                        icluster,
+                       annotation,
                        points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].z);
+
+        if(rejected)
+            continue;
+
         iplane_out++;
     }
 
