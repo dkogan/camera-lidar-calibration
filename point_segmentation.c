@@ -952,7 +952,7 @@ static bool plane_point_compatible_stage3_normalized(const plane_t*   plane,
     // n is normalized here, so I omit the /magn
     const point3f_t dp = sub(*point, plane->p);
 
-    return ctx->threshold_max_plane_point_error > fabsf(inner(dp, plane->n));
+    return ctx->threshold_max_plane_point_error_stage3 > fabsf(inner(dp, plane->n));
 }
 
 static bool plane_point_compatible_stage2_unnormalized(const plane_unnormalized_t* plane_unnormalized,
@@ -966,7 +966,7 @@ static bool plane_point_compatible_stage2_unnormalized(const plane_unnormalized_
     // n is normalized here, so I omit the /magn
     const point3f_t dp = sub(*point, plane_unnormalized->p);
     const float proj = inner(dp, plane_unnormalized->n_unnormalized);
-    return ctx->threshold_max_plane_point_error*norm2(plane_unnormalized->n_unnormalized) > proj*proj;
+    return ctx->threshold_max_plane_point_error_stage2*norm2(plane_unnormalized->n_unnormalized) > proj*proj;
 }
 
 static bool fit_plane_into_cluster(// out

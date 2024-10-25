@@ -49,7 +49,7 @@ _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has exp
   /* This is unnaturally high. I'm comparing it to p-mean(p), but if the points aren't */ \
   /* distributed evenly, mean(p) won't be at the center */ \
   _(float, threshold_max_plane_size,                     1.9f,              "f","f") \
-  _(float, threshold_max_rms_fit_error,                  0.015f,            "f","f") \
+  _(float, threshold_max_rms_fit_error,                  0.02f,            "f","f") \
   _(float, threshold_min_rms_point_cloud_2nd_dimension,  0.1f,              "f","f") \
   /* found empirically in dump-lidar-scan.py */                         \
   _(int,   Npoints_per_rotation,                         1809,              "i","i") \
@@ -61,10 +61,11 @@ _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has exp
   _(float, threshold_max_distance_across_rings,          0.4f,              "f","f") \
   _(int,   Nrings,                                       32,                "i","i") \
   /* cos(90-5deg) */                                                    \
-  _(float, threshold_max_cos_angle_error_normal,         0.087155742747f,   "f","f") \
+  _(float, threshold_max_cos_angle_error_normal,         0.15,   "f","f") \
   /* cos(5deg) */                                                       \
   _(float, threshold_min_cos_angle_error_same_direction, 0.996194698092f,   "f","f") \
-  _(float, threshold_max_plane_point_error,              0.15,              "f","f") \
+  _(float, threshold_max_plane_point_error_stage2,       0.3,               "f","f") \
+  _(float, threshold_max_plane_point_error_stage3,       0.05,              "f","f") \
   _(int,   threshold_max_Nsegments_in_cluster,           150,               "i","i") \
   _(int,   threshold_min_Nsegments_in_cluster,           5,                 "i","i") \
   _(int,   threshold_min_Nrings_in_cluster,              3,                 "i","i") \
