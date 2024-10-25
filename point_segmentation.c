@@ -1395,18 +1395,18 @@ static void stage2_cluster_segments(// out
 
 // Returns true if we processed this point (maybe by accumulating it) and we
 // should keep going. Returns false if we should stop the iteration
-static bool accumulate_point(// out
-                             ipoint_set_t* ipoint_set,
-                             // in,out
-                             uint64_t* bitarray_visited, // indexed by IN-RING points
-                             float* th_rad_last,
-                             // in
-                             const plane_t* plane,
-                             const point3f_t* points,
-                             const int ipoint0_in_ring, // start of this ring in the full points[] array
-                             const int ipoint,          // IN-RING index
-                             const int ipoint_segment_limit,
-                             const context_t* ctx)
+static bool stage3_accumulate_point(// out
+                                    ipoint_set_t* ipoint_set,
+                                    // in,out
+                                    uint64_t* bitarray_visited, // indexed by IN-RING points
+                                    float* th_rad_last,
+                                    // in
+                                    const plane_t* plane,
+                                    const point3f_t* points,
+                                    const int ipoint0_in_ring, // start of this ring in the full points[] array
+                                    const int ipoint,          // IN-RING index
+                                    const int ipoint_segment_limit,
+                                    const context_t* ctx)
 {
     if(bitarray64_check(bitarray_visited, ipoint))
         // We already processed this point, presumably from the other side.
@@ -1542,15 +1542,15 @@ static void stage3_refine_clusters(// out
                 ipoint < Npoints[iring];
                 ipoint++)
             {
-                if(!accumulate_point(ipoint_set,
-                                     bitarray_visited[iring-iring0],
-                                     &th_rad_last,
-                                     &points_and_plane->plane,
-                                     points,
-                                     ipoint0_in_ring[iring],
-                                     ipoint,
-                                     segment->ipoint1,
-                                     ctx))
+                if(!stage3_accumulate_point(ipoint_set,
+                                            bitarray_visited[iring-iring0],
+                                            &th_rad_last,
+                                            &points_and_plane->plane,
+                                            points,
+                                            ipoint0_in_ring[iring],
+                                            ipoint,
+                                            segment->ipoint1,
+                                            ctx))
                     break;
             }
 
@@ -1559,15 +1559,15 @@ static void stage3_refine_clusters(// out
                 ipoint >= 0;
                 ipoint--)
             {
-                if(!accumulate_point(ipoint_set,
-                                     bitarray_visited[iring-iring0],
-                                     &th_rad_last,
-                                     &points_and_plane->plane,
-                                     points,
-                                     ipoint0_in_ring[iring],
-                                     ipoint,
-                                     segment->ipoint0,
-                                     ctx))
+                if(!stage3_accumulate_point(ipoint_set,
+                                            bitarray_visited[iring-iring0],
+                                            &th_rad_last,
+                                            &points_and_plane->plane,
+                                            points,
+                                            ipoint0_in_ring[iring],
+                                            ipoint,
+                                            segment->ipoint0,
+                                            ctx))
                     break;
             }
 
