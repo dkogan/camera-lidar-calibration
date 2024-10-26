@@ -7,10 +7,6 @@
 #include <limits.h>
 #include <float.h>
 
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
 #include "point_segmentation.h"
 
 
