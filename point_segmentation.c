@@ -1397,81 +1397,86 @@ static void stage2_cluster_segments(// out
 
 // Returns true if we processed this point (maybe by accumulating it) and we
 // should keep going. Returns false if we should stop the iteration
-static bool stage3_accumulate_point(// out
-                                    ipoint_set_t* ipoint_set,
-                                    // in,out
-                                    uint64_t* bitarray_visited, // indexed by IN-RING points
-                                    float* th_rad_last,
-                                    // in
-                                    const plane_t* plane,
-                                    const point3f_t* points,
-                                    const int ipoint0_in_ring, // start of this ring in the full points[] array
-                                    const int ipoint,          // IN-RING index
-                                    const int ipoint_segment_limit,
-                                    const context_t* ctx)
+static void stage3_accumulate_points(// out
+                                     ipoint_set_t* ipoint_set,
+                                     // in,out
+                                     uint64_t* bitarray_visited, // indexed by IN-RING points
+                                     // in
+                                     int ipoint, int ipoint_increment, int ipoint_limit, // in-ring
+                                     const plane_t* plane,
+                                     const point3f_t* points,
+                                     const int ipoint0_in_ring, // start of this ring in the full points[] array
+                                     const int ipoint_segment_limit,
+                                     const context_t* ctx)
 {
-    if(bitarray64_check(bitarray_visited, ipoint))
-        // We already processed this point, presumably from the other side.
-        // There's no reason to keep going, since we already approached from the
-        // other side
-        return false;
 
-    const float th_rad = th_from_point(&points[ipoint0_in_ring + ipoint]);
-    if(*th_rad_last < FLT_MAX)
-    {
-        // we have a valid th_rad_last
-        if(fabsf(th_rad - *th_rad_last) > ctx->threshold_max_gap_th_rad)
-            return false;
-    }
-    else
-    {
-        // we do not have a valid th_rad_last. Stop when we reach the segment
-        // limit
-        if(ipoint == ipoint_segment_limit)
-            return false;
-    }
+    float th_rad_last = FLT_MAX; // indicate an invalid value initially
 
-    // no threshold_max_range check here. This was already checked when
-    // constructing the candidate segments. So if we got this far, I assume it's
-    // good
-
-    if( plane_point_compatible_stage3_normalized(plane,
-                                                 &points[ipoint0_in_ring + ipoint],
-                                                 ctx) )
+    for(;
+        ipoint != ipoint_limit;
+        ipoint += ipoint_increment)
     {
-        // I will be fitting a plane to a set of points. The most accurate way
-        // to do this is to minimize the observation errors (ranges; what the
-        // fit ingesting this data will be doing). But that's a nonlinear solve,
-        // and I avoid that here. I simply minimize the norm2 off-plane error
-        // instead:
-        //
-        // - compute pmean
-        // - compute M = sum(outer(p[i]-pmean,p[i]-pmean))
-        // - n = eigenvector of M corresponding to the smallest eigenvalue
-        //
-        // So to accumulate a point I would need two passes over the data: to
-        // compute pmean and then M. I might be able to expand the sum() in M to
-        // make it work in one pass, but that's very likely to produce high
-        // floating point round-off errors. So I actually accumulate the full
-        // points for now, and might do something more efficient later
-        if(ipoint_set->n == (int)(sizeof(ipoint_set->ipoint)/sizeof(ipoint_set->ipoint[0])))
+        if(bitarray64_check(bitarray_visited, ipoint))
+            // We already processed this point, presumably from the other side.
+            // There's no reason to keep going, since we already approached from the
+            // other side
+            break;
+
+        const float th_rad = th_from_point(&points[ipoint0_in_ring + ipoint]);
+        if(th_rad_last < FLT_MAX)
         {
-            MSG("ipoint_set->ipoint overflow. Skipping the reset of the points");
-            return false;
+            // we have a valid th_rad_last
+            if(fabsf(th_rad - th_rad_last) > ctx->threshold_max_gap_th_rad)
+                break;
         }
-        ipoint_set->ipoint[ipoint_set->n++] = ipoint0_in_ring + ipoint;
+        else
+        {
+            // we do not have a valid th_rad_last. Stop when we reach the segment
+            // limit
+            if(ipoint == ipoint_segment_limit)
+                break;
+        }
 
-        bitarray64_set(bitarray_visited, ipoint);
-        *th_rad_last = th_rad;
-    }
-    else
-    {
-        // Not accepting this point, but also not updating th_rad_last. So too
-        // many successive invalid points will create a too-large gap, failing
-        // the threshold_max_gap_th_rad check above
-    }
+        // no threshold_max_range check here. This was already checked when
+        // constructing the candidate segments. So if we got this far, I assume it's
+        // good
 
-    return true;
+        if( plane_point_compatible_stage3_normalized(plane,
+                                                     &points[ipoint0_in_ring + ipoint],
+                                                     ctx) )
+        {
+            // I will be fitting a plane to a set of points. The most accurate way
+            // to do this is to minimize the observation errors (ranges; what the
+            // fit ingesting this data will be doing). But that's a nonlinear solve,
+            // and I avoid that here. I simply minimize the norm2 off-plane error
+            // instead:
+            //
+            // - compute pmean
+            // - compute M = sum(outer(p[i]-pmean,p[i]-pmean))
+            // - n = eigenvector of M corresponding to the smallest eigenvalue
+            //
+            // So to accumulate a point I would need two passes over the data: to
+            // compute pmean and then M. I might be able to expand the sum() in M to
+            // make it work in one pass, but that's very likely to produce high
+            // floating point round-off errors. So I actually accumulate the full
+            // points for now, and might do something more efficient later
+            if(ipoint_set->n == (int)(sizeof(ipoint_set->ipoint)/sizeof(ipoint_set->ipoint[0])))
+            {
+                MSG("ipoint_set->ipoint overflow. Skipping the reset of the points");
+                break;
+            }
+            ipoint_set->ipoint[ipoint_set->n++] = ipoint0_in_ring + ipoint;
+
+            bitarray64_set(bitarray_visited, ipoint);
+            th_rad_last = th_rad;
+        }
+        else
+        {
+            // Not accepting this point, but also not updating th_rad_last. So too
+            // many successive invalid points will create a too-large gap, failing
+            // the threshold_max_gap_th_rad check above
+        }
+    }
 }
 
 
@@ -1542,46 +1547,27 @@ static void stage3_refine_clusters(// out
             // capture all the matching points
             const int ipoint0 = (segment->ipoint0 + segment->ipoint1) / 2;
 
-            float th_rad_last;
+            stage3_accumulate_points(// out
+                                     ipoint_set,
+                                     bitarray_visited[iring-iring0],
+                                     // in
+                                     ipoint0, +1, Npoints[iring],
+                                     &points_and_plane->plane,
+                                     points,
+                                     ipoint0_in_ring[iring],
+                                     segment->ipoint1,
+                                     ctx);
 
-            th_rad_last = FLT_MAX; // indicate an invalid value initially
-            for(int ipoint = ipoint0;
-                ipoint < Npoints[iring];
-                ipoint++)
-            {
-                if(!stage3_accumulate_point(// out
-                                            ipoint_set,
-                                            bitarray_visited[iring-iring0],
-                                            &th_rad_last,
-                                            // in
-                                            &points_and_plane->plane,
-                                            points,
-                                            ipoint0_in_ring[iring],
-                                            ipoint,
-                                            segment->ipoint1,
-                                            ctx))
-                    break;
-            }
-
-            th_rad_last = FLT_MAX; // indicate an invalid value initially
-            for(int ipoint = ipoint0-1;
-                ipoint >= 0;
-                ipoint--)
-            {
-                if(!stage3_accumulate_point(// out
-                                            ipoint_set,
-                                            bitarray_visited[iring-iring0],
-                                            &th_rad_last,
-                                            // in
-                                            &points_and_plane->plane,
-                                            points,
-                                            ipoint0_in_ring[iring],
-                                            ipoint,
-                                            segment->ipoint0,
-                                            ctx))
-                    break;
-            }
-
+            stage3_accumulate_points(// out
+                                     ipoint_set,
+                                     bitarray_visited[iring-iring0],
+                                     // in
+                                     ipoint0-1, -1, -1,
+                                     &points_and_plane->plane,
+                                     points,
+                                     ipoint0_in_ring[iring],
+                                     segment->ipoint0,
+                                     ctx);
 
             // I don't bother to look in rings that don't appear in the
             // segment_cluster. This will by contain not very much data (because
