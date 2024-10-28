@@ -91,7 +91,12 @@ for bag_glob in args.bags:
         sys.exit(1)
 
     for bag in bags:
-        p = next(bag_interface.bag_messages_generator(bag, (lidar_topic,) ))['array']
+        try:
+            p = next(bag_interface.bag_messages_generator(bag, (lidar_topic,) ))['array']
+        except StopIteration:
+            print(f"No messages with {lidar_topic=} in {bag=}. Continuing to next bag, if any",
+                  file = sys.stderr)
+            continue
 
         xyz       = p['xyz']
         intensity = p['intensity']
