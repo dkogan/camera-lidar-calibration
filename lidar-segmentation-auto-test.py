@@ -36,7 +36,7 @@ try:
 except:
     tests_private = ()
 
-ctx = clc.default_context()
+ctx = clc.lidar_segmentation_default_context()
 max_range = ctx['threshold_max_range']
 
 tests = (

@@ -134,7 +134,7 @@ int8_t clc_lidar_segmentation(// out
                           const unsigned int* Npoints,
                           const clc_lidar_segmentation_context_t* ctx);
 
-void clc_default_context(clc_lidar_segmentation_context_t* ctx);
+void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ctx);
 
 
 

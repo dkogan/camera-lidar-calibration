@@ -46,4 +46,4 @@ def lidar_segmentation(bag, lidar_topic,
               plane_p = plane_pn[:,:3],
               plane_n = plane_pn[:,3:] )
 
-default_context = _clc.default_context
+lidar_segmentation_default_context = _clc.lidar_segmentation_default_context

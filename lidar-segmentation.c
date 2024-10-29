@@ -1592,7 +1592,7 @@ static void stage3_refine_clusters(// out
     }
 }
 
-void clc_default_context(clc_lidar_segmentation_context_t* ctx)
+void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ctx)
 {
 #define CLC_LIST_CONTEXT_SET_DEFAULT(type,name,default,...) \
     .name = default,

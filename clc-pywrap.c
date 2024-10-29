@@ -57,7 +57,7 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
     clc_points_and_plane_t points_and_plane[Nplanes_max];
 
     clc_lidar_segmentation_context_t ctx;
-    clc_default_context(&ctx);
+    clc_lidar_segmentation_default_context(&ctx);
 
 
 #define CLC_LIST_CONTEXT_KEYWORDS(   type,name,default,pyparse,...) #name,
@@ -167,13 +167,13 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
 }
 
 
-static PyObject* py_default_context(PyObject* NPY_UNUSED(self),
+static PyObject* py_lidar_segmentation_default_context(PyObject* NPY_UNUSED(self),
                                     PyObject* NPY_UNUSED(args))
 {
     PyObject* result = NULL;
 
     clc_lidar_segmentation_context_t ctx;
-    clc_default_context(&ctx);
+    clc_lidar_segmentation_default_context(&ctx);
 
 
 #define CLC_LIST_CONTEXT_PYBUILD_PATTERN( type,name,default,pyparse,pybuild) "s" pybuild
@@ -190,14 +190,14 @@ static PyObject* py_default_context(PyObject* NPY_UNUSED(self),
 static const char lidar_segmentation_docstring[] =
 #include "lidar_segmentation.docstring.h"
     ;
-static const char default_context_docstring[] =
-#include "default_context.docstring.h"
+static const char lidar_segmentation_default_context_docstring[] =
+#include "lidar_segmentation_default_context.docstring.h"
     ;
 
 static PyMethodDef methods[] =
     {
      PYMETHODDEF_ENTRY(lidar_segmentation,      py_lidar_segmentation,      METH_VARARGS | METH_KEYWORDS),
-     PYMETHODDEF_ENTRY(default_context,         py_default_context,         METH_NOARGS),
+     PYMETHODDEF_ENTRY(lidar_segmentation_default_context,         py_lidar_segmentation_default_context,         METH_NOARGS),
      {}
     };
 
