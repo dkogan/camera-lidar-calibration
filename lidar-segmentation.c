@@ -467,7 +467,7 @@ float th_from_point(const clc_point3f_t* p)
 // ASSUMES th_rad CAME FROM atan2, SO IT'S IN [-pi,pi]
 static
 int isegment_from_th(const float th_rad,
-                     const context_t* ctx)
+                     const clc_lidar_segmentation_context_t* ctx)
 {
     const float segment_width_rad = 2.0f*M_PI * (float)ctx->Npoints_per_segment / (float)ctx->Npoints_per_rotation;
 
@@ -484,7 +484,7 @@ static
 bool point_is_valid__presolve(const clc_point3f_t* p,
                               const float dth_rad,
                               const bool debug,
-                              const context_t* ctx)
+                              const clc_lidar_segmentation_context_t* ctx)
 {
     const int Ngap = (int)( 0.5f + fabsf(dth_rad) * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
 
@@ -642,7 +642,7 @@ bool is_point_segment_planar(const clc_point3f_t* p,
                              const int ipoint0,
                              const int ipoint1,
                              const uint64_t* bitarray_invalid,
-                             const context_t* ctx)
+                             const clc_lidar_segmentation_context_t* ctx)
 {
     const clc_point3f_t* p0 = &p[ipoint0];
     const clc_point3f_t* p1 = &p[ipoint1];
@@ -689,7 +689,7 @@ void stage1_finish_segment(// out
                            const int ipoint0,
                            const int ipoint1,
                            const bool debug_this_ring,
-                           const context_t* ctx)
+                           const clc_lidar_segmentation_context_t* ctx)
 {
     segment_t* segment = &segments[isegment];
 
@@ -752,7 +752,7 @@ stage1_segment_from_ring(// out
                          const int iring,
                          const clc_point3f_t* points_thisring,
                          const int Npoints_thisring,
-                         const context_t* ctx)
+                         const clc_lidar_segmentation_context_t* ctx)
 {
     // I want this to be fast, and I'm looking for very clear planes, so I do a
     // crude thing here:
@@ -867,7 +867,7 @@ static segmentref_t* stack_pop(stack_t* stack)
 
 static bool is_normal(const clc_point3f_t v,
                       const clc_point3f_t n,
-                      const context_t* ctx)
+                      const clc_lidar_segmentation_context_t* ctx)
 {
     // inner(v,n) = cos magv magn ->
     // cos = inner / (magv magn) ->
@@ -882,7 +882,7 @@ static bool is_normal(const clc_point3f_t v,
 
 static bool is_same_direction(const clc_point3f_t a,
                               const clc_point3f_t b,
-                              const context_t* ctx)
+                              const clc_lidar_segmentation_context_t* ctx)
 {
     // inner(a,b) = cos maga magb ->
     // cos = inner / (maga magb) ->
@@ -899,7 +899,7 @@ static bool is_same_direction(const clc_point3f_t a,
 static bool segment_segment_across_rings_close_enough(const clc_point3f_t* dp,
                                                       const int iring, const int isegment,
                                                       const bool debug,
-                                                      const context_t* ctx)
+                                                      const clc_lidar_segmentation_context_t* ctx)
 {
     return
         !DEBUG_ON_TRUE_SEGMENT(norm2(*dp) > ctx->threshold_max_distance_across_rings*ctx->threshold_max_distance_across_rings,
@@ -914,7 +914,7 @@ static bool plane_from_segment_segment(// out
                                        const int iring, const int isegment,
                                        const segment_t* s0,
                                        const segment_t* s1,
-                                       const context_t* ctx)
+                                       const clc_lidar_segmentation_context_t* ctx)
 {
     // I want:
     //   inner(p1-p0, n=cross(v0,v1)) = 0
@@ -945,7 +945,7 @@ static bool plane_from_segment_segment(// out
 
 static bool plane_point_compatible_stage3_normalized(const clc_plane_t*   plane,
                                                      const clc_point3f_t* point,
-                                                     const context_t* ctx)
+                                                     const clc_lidar_segmentation_context_t* ctx)
 {
     // I want (point - p) to be perpendicular to n. I want this in terms of
     // "distance-off-plane" so err = inner( (point - p), n) / mag(n)
@@ -959,7 +959,7 @@ static bool plane_point_compatible_stage3_normalized(const clc_plane_t*   plane,
 
 static bool plane_point_compatible_stage2_unnormalized(const plane_unnormalized_t* plane_unnormalized,
                                                        const clc_point3f_t* point,
-                                                       const context_t* ctx)
+                                                       const clc_lidar_segmentation_context_t* ctx)
 {
     // I want (point - p) to be perpendicular to n. I want this in terms of
     // "distance-off-plane" so err = inner( (point - p), n) / mag(n)
@@ -983,7 +983,7 @@ static bool fit_plane_into_cluster(// out
                                    const segment_t*   segments,
                                    const clc_point3f_t*   points,
                                    const int*         ipoint0_in_ring,
-                                   const context_t*   ctx)
+                                   const clc_lidar_segmentation_context_t*   ctx)
 {
     // Storing the left/right ends of the existing segments (cluster->n of them)
     // and the one candidate new segment
@@ -1037,7 +1037,7 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
                                             const segment_t*   segments,
                                             const clc_point3f_t*   points,
                                             const int*         ipoint0_in_ring,
-                                            const context_t*   ctx)
+                                            const clc_lidar_segmentation_context_t*   ctx)
 {
     // both segment->p and segment->v must lie in the plane
 
@@ -1122,7 +1122,7 @@ static void try_visit(stack_t* stack,
                       segment_t* segments, // non-const to be able to set "visited"
                       const clc_point3f_t*   points,
                       const int*         ipoint0_in_ring,
-                      const context_t* ctx)
+                      const clc_lidar_segmentation_context_t* ctx)
 {
     if(iring    < 0 || iring    >= ctx->Nrings           ) return;
     if(isegment < 0 || isegment >= Nsegments_per_rotation) return;
@@ -1200,7 +1200,7 @@ static void stage2_cluster_segments(// out
                                     segment_t*       segments, // non-const to be able to set "visited"
                                     const clc_point3f_t* points,
                                     const int*       ipoint0_in_ring,
-                                    const context_t* ctx)
+                                    const clc_lidar_segmentation_context_t* ctx)
 {
     *Nclusters = 0;
 
@@ -1407,7 +1407,7 @@ static void stage3_accumulate_points(// out
                                      const clc_point3f_t* points,
                                      const int ipoint0_in_ring, // start of this ring in the full points[] array
                                      const int ipoint_segment_limit,
-                                     const context_t* ctx)
+                                     const clc_lidar_segmentation_context_t* ctx)
 {
 
     float th_rad_last = FLT_MAX; // indicate an invalid value initially
@@ -1491,7 +1491,7 @@ static void stage3_refine_clusters(// out
                                    const clc_point3f_t* points,
                                    const int* ipoint0_in_ring,
                                    const unsigned int* Npoints,
-                                   const context_t* ctx)
+                                   const clc_lidar_segmentation_context_t* ctx)
 {
     /* I have an approximate plane estimate.
 
@@ -1592,12 +1592,12 @@ static void stage3_refine_clusters(// out
     }
 }
 
-void clc_default_context(context_t* ctx)
+void clc_default_context(clc_lidar_segmentation_context_t* ctx)
 {
 #define CLC_LIST_CONTEXT_SET_DEFAULT(type,name,default,...) \
     .name = default,
 
-    *ctx = (context_t)
+    *ctx = (clc_lidar_segmentation_context_t)
         { CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_SET_DEFAULT) };
 
 #undef CLC_LIST_CONTEXT_SET_DEFAULT
@@ -1610,7 +1610,7 @@ int8_t clc_lidar_segmentation(// out
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
                           const clc_point3f_t* points,  // length sum(Npoints)
                           const unsigned int* Npoints,
-                          const context_t* ctx)
+                          const clc_lidar_segmentation_context_t* ctx)
 
 {
     if(!(ctx->Nrings > 0 && ctx->Nrings <= 1024))

@@ -56,7 +56,7 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
 #warning "possibly this is too large"
     clc_points_and_plane_t points_and_plane[Nplanes_max];
 
-    context_t ctx;
+    clc_lidar_segmentation_context_t ctx;
     clc_default_context(&ctx);
 
 
@@ -172,7 +172,7 @@ static PyObject* py_default_context(PyObject* NPY_UNUSED(self),
 {
     PyObject* result = NULL;
 
-    context_t ctx;
+    clc_lidar_segmentation_context_t ctx;
     clc_default_context(&ctx);
 
 

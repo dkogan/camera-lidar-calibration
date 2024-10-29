@@ -122,7 +122,7 @@ typedef struct
 
     CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_DECLARE_C)
 #undef CLC_LIST_CONTEXT_DECLARE_C
-} context_t;
+} clc_lidar_segmentation_context_t;
 
 
 // Returns how many planes were found or <0 on error
@@ -132,9 +132,9 @@ int8_t clc_lidar_segmentation(// out
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
                           const clc_point3f_t* points,  // length sum(Npoints)
                           const unsigned int* Npoints,
-                          const context_t* ctx);
+                          const clc_lidar_segmentation_context_t* ctx);
 
-void clc_default_context(context_t* ctx);
+void clc_default_context(clc_lidar_segmentation_context_t* ctx);
 
 
 
