@@ -32,7 +32,7 @@ import clc
 import testutils
 
 try:
-    import tests_private
+    from tests_private import tests as tests_private
 except:
     tests_private = ()
 
@@ -253,7 +253,7 @@ tests = (
     )
 
 
-for test in tests + tests_private.tests:
+for test in tests + tests_private:
 
     bag = f"{args.root}/{test['bag']}"
     topic = test['topic']
