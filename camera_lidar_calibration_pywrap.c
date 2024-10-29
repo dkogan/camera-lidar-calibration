@@ -6,7 +6,7 @@
 #include <signal.h>
 #include <stddef.h>
 
-#include "point_segmentation.h"
+#include "clc.h"
 
 
 // Python is silly. There's some nuance about signal handling where it sets a
