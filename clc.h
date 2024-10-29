@@ -10,31 +10,31 @@ typedef union
         float x,y,z;
     };
     float xyz[3];
-} point3f_t;
+} clc_point3f_t;
 
 typedef struct
 {
-    point3f_t p; // A point somewhere on the plane
-    point3f_t n; // A unit normal to the plane
-} plane_t;
+    clc_point3f_t p; // A point somewhere on the plane
+    clc_point3f_t n; // A unit normal to the plane
+} clc_plane_t;
 
 typedef struct
 {
-    uint32_t ipoint[8192 - 7]; // -7 to make each points_and_plane_t fit evenly
+    uint32_t ipoint[8192 - 7]; // -7 to make each clc_points_and_plane_t fit evenly
                                // into a round-sized chunk of memory
     int n;
-} ipoint_set_t;
+} clc_ipoint_set_t;
 
 typedef struct
 {
-    ipoint_set_t ipoint_set;
-    plane_t      plane;
-} points_and_plane_t;
-_Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has expected size");
+    clc_ipoint_set_t ipoint_set;
+    clc_plane_t      plane;
+} clc_points_and_plane_t;
+_Static_assert(sizeof(clc_points_and_plane_t) == 8192*4, "clc_points_and_plane_t has expected size");
 
 
 
-#define LIST_CONTEXT(_)                                                 \
+#define CLC_LIST_CONTEXT(_)                                                 \
   /* bool, but PyArg_ParseTupleAndKeywords("p") wants an int */         \
   _(int,   dump,                                         (int)false,        "p","i") \
   _(int,   debug_iring,                                  -1,                "i","i") \
@@ -77,21 +77,21 @@ _Static_assert(sizeof(points_and_plane_t) == 8192*4, "points_and_plane_t has exp
 
 typedef struct
 {
-#define LIST_CONTEXT_DECLARE_C(type,name, ...) \
+#define CLC_LIST_CONTEXT_DECLARE_C(type,name, ...) \
     type name;
 
-    LIST_CONTEXT(LIST_CONTEXT_DECLARE_C)
-#undef LIST_CONTEXT_DECLARE_C
+    CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_DECLARE_C)
+#undef CLC_LIST_CONTEXT_DECLARE_C
 } context_t;
 
 
 // Returns how many planes were found or <0 on error
-int8_t point_segmentation(// out
-                          points_and_plane_t* points_and_plane,
+int8_t clc_lidar_segmentation(// out
+                          clc_points_and_plane_t* points_and_plane,
                           // in
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
-                          const point3f_t* points,  // length sum(Npoints)
+                          const clc_point3f_t* points,  // length sum(Npoints)
                           const int* Npoints,
                           const context_t* ctx);
 
-void default_context(context_t* ctx);
+void clc_default_context(context_t* ctx);

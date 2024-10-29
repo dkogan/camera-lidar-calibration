@@ -44,14 +44,14 @@
 
 
 __attribute__((unused))
-static point3f_t point3f_from_double(const double* p)
+static clc_point3f_t point3f_from_double(const double* p)
 {
-    return (point3f_t){ .x = (float)p[0],
+    return (clc_point3f_t){ .x = (float)p[0],
                         .y = (float)p[1],
                         .z = (float)p[2]};
 }
 __attribute__((unused))
-static float inner(const point3f_t a, const point3f_t b)
+static float inner(const clc_point3f_t a, const clc_point3f_t b)
 {
     return
         a.x*b.x +
@@ -59,39 +59,39 @@ static float inner(const point3f_t a, const point3f_t b)
         a.z*b.z;
 }
 __attribute__((unused))
-static float norm2(const point3f_t a)
+static float norm2(const clc_point3f_t a)
 {
     return inner(a,a);
 }
 __attribute__((unused))
-static float mag(const point3f_t a)
+static float mag(const clc_point3f_t a)
 {
     return sqrtf(norm2(a));
 }
 __attribute__((unused))
-static point3f_t add(const point3f_t a, const point3f_t b)
+static clc_point3f_t add(const clc_point3f_t a, const clc_point3f_t b)
 {
-    return (point3f_t){ .x = a.x + b.x,
+    return (clc_point3f_t){ .x = a.x + b.x,
                         .y = a.y + b.y,
                         .z = a.z + b.z };
 }
 __attribute__((unused))
-static point3f_t mean(const point3f_t a, const point3f_t b)
+static clc_point3f_t mean(const clc_point3f_t a, const clc_point3f_t b)
 {
-    return (point3f_t){ .x = (a.x + b.x)/2.,
+    return (clc_point3f_t){ .x = (a.x + b.x)/2.,
                         .y = (a.y + b.y)/2.,
                         .z = (a.z + b.z)/2. };
 }
 __attribute__((unused))
-static point3f_t sub(const point3f_t a, const point3f_t b)
+static clc_point3f_t sub(const clc_point3f_t a, const clc_point3f_t b)
 {
-    return (point3f_t){ .x = a.x - b.x,
+    return (clc_point3f_t){ .x = a.x - b.x,
                         .y = a.y - b.y,
                         .z = a.z - b.z };
 }
-static point3f_t cross(const point3f_t a, const point3f_t b)
+static clc_point3f_t cross(const clc_point3f_t a, const clc_point3f_t b)
 {
-    return (point3f_t){ .x = a.y*b.z - a.z*b.y,
+    return (clc_point3f_t){ .x = a.y*b.z - a.z*b.y,
                         .y = a.z*b.x - a.x*b.z,
                         .z = a.x*b.y - a.y*b.x };
 }
@@ -100,8 +100,8 @@ static point3f_t cross(const point3f_t a, const point3f_t b)
 
 typedef struct
 {
-    point3f_t p; // the center
-    point3f_t v; // a direction vector in the plane; may not be normalized
+    clc_point3f_t p; // the center
+    clc_point3f_t v; // a direction vector in the plane; may not be normalized
 
     // point indices inside each ring
     int ipoint0;
@@ -111,11 +111,11 @@ typedef struct
 
 typedef struct
 {
-    point3f_t p; // A point somewhere on the plane
+    clc_point3f_t p; // A point somewhere on the plane
 
     // A normal to the plane direction vector in the plane; not necessarily
     // normalized
-    point3f_t n_unnormalized;
+    clc_point3f_t n_unnormalized;
 } plane_unnormalized_t;
 
 typedef struct
@@ -133,7 +133,7 @@ typedef struct
 {
     union
     {
-        plane_t              plane;
+        clc_plane_t              plane;
         plane_unnormalized_t plane_unnormalized;
     };
 
@@ -267,13 +267,13 @@ void eig_real_symmetric_3x3( // out
 
 static void pca_preprocess_from_ipoint_set( // out
                                            double*    M,
-                                           point3f_t* pmean,
+                                           clc_point3f_t* pmean,
                                            float*     max_norm2_dp, // may be NULL
                                            // in
-                                           const point3f_t* points,
-                                           const ipoint_set_t* ipoint_set)
+                                           const clc_point3f_t* points,
+                                           const clc_ipoint_set_t* ipoint_set)
 {
-    *pmean = (point3f_t){};
+    *pmean = (clc_point3f_t){};
     for(int i=0; i<ipoint_set->n; i++)
         for(int j=0; j<3; j++)
             pmean->xyz[j] += points[ipoint_set->ipoint[i]].xyz[j];
@@ -285,7 +285,7 @@ static void pca_preprocess_from_ipoint_set( // out
 
     for(int i=0; i<ipoint_set->n; i++)
     {
-        const point3f_t dp = sub(points[ipoint_set->ipoint[i]], *pmean);
+        const clc_point3f_t dp = sub(points[ipoint_set->ipoint[i]], *pmean);
 
         const float norm2_dp = norm2(dp);
         if(max_norm2_dp != NULL &&
@@ -303,13 +303,13 @@ static void pca_preprocess_from_ipoint_set( // out
 
 static void pca_preprocess_from_ipoint0_ipoint1( // out
                                                 double*    M,
-                                                point3f_t* pmean,
+                                                clc_point3f_t* pmean,
                                                 float*     max_norm2_dp, // may be NULL
                                                 // in
-                                                const point3f_t* points,
+                                                const clc_point3f_t* points,
                                                 const int ipoint0, const int ipoint1)
 {
-    *pmean = (point3f_t){};
+    *pmean = (clc_point3f_t){};
     for(int i=ipoint0; i<=ipoint1; i++)
         for(int j=0; j<3; j++)
             pmean->xyz[j] += points[i].xyz[j];
@@ -321,7 +321,7 @@ static void pca_preprocess_from_ipoint0_ipoint1( // out
 
     for(int i=ipoint0; i<=ipoint1; i++)
     {
-        const point3f_t dp = sub(points[i], *pmean);
+        const clc_point3f_t dp = sub(points[i], *pmean);
 
         const float norm2_dp = norm2(dp);
         if(max_norm2_dp != NULL &&
@@ -338,14 +338,14 @@ static void pca_preprocess_from_ipoint0_ipoint1( // out
 }
 
 static void pca( // out
-                point3f_t* pmean,
-                point3f_t* vsmallest,    // the smallest-eigenvalue eigenvector; may be NULL
-                point3f_t* vlargest,     // the largest-eigenvalue  eigenvector; may be NULL
+                clc_point3f_t* pmean,
+                clc_point3f_t* vsmallest,    // the smallest-eigenvalue eigenvector; may be NULL
+                clc_point3f_t* vlargest,     // the largest-eigenvalue  eigenvector; may be NULL
                 float*     max_norm2_dp, // may be NULL
                 float*     eigenvalues_ascending, // 3 of these; may be NULL
                 // in
-                const point3f_t* points,
-                const ipoint_set_t* ipoint_set, // if NULL, we use [ipoint0,ipoint1]
+                const clc_point3f_t* points,
+                const clc_ipoint_set_t* ipoint_set, // if NULL, we use [ipoint0,ipoint1]
                 const int ipoint0, const int ipoint1,
                 const bool normalize_v )
 {
@@ -417,12 +417,12 @@ static void pca( // out
 }
 
 static void fit_plane_into_points__normalized( // out
-                                               plane_t*            plane,
+                                               clc_plane_t*            plane,
                                                float*              max_norm2_dp,
                                                float*              eigenvalues_ascending, // 3 of these
                                                // in
-                                               const point3f_t*    points,
-                                               const ipoint_set_t* ipoint_set)
+                                               const clc_point3f_t*    points,
+                                               const clc_ipoint_set_t* ipoint_set)
 {
     pca(&plane->p,
         &plane->n,
@@ -440,8 +440,8 @@ static void fit_plane_into_points__unnormalized( // out
                                                  float*                max_norm2_dp,
                                                  float*                eigenvalues_ascending, // 3 of these
                                                  // in
-                                                 const point3f_t*      points,
-                                                 const ipoint_set_t*   ipoint_set)
+                                                 const clc_point3f_t*      points,
+                                                 const clc_ipoint_set_t*   ipoint_set)
 {
     pca(&plane_unnormalized->p,
         &plane_unnormalized->n_unnormalized,
@@ -458,7 +458,7 @@ static void fit_plane_into_points__unnormalized( // out
 
 
 static
-float th_from_point(const point3f_t* p)
+float th_from_point(const clc_point3f_t* p)
 {
     return atan2f(p->y, p->x);
 }
@@ -481,7 +481,7 @@ int isegment_from_th(const float th_rad,
     return i;
 }
 static
-bool point_is_valid__presolve(const point3f_t* p,
+bool point_is_valid__presolve(const clc_point3f_t* p,
                               const float dth_rad,
                               const bool debug,
                               const context_t* ctx)
@@ -638,16 +638,16 @@ static void bitarray64_set_range(uint64_t* bitarray,
 
 
 static
-bool is_point_segment_planar(const point3f_t* p,
+bool is_point_segment_planar(const clc_point3f_t* p,
                              const int ipoint0,
                              const int ipoint1,
                              const uint64_t* bitarray_invalid,
                              const context_t* ctx)
 {
-    const point3f_t* p0 = &p[ipoint0];
-    const point3f_t* p1 = &p[ipoint1];
+    const clc_point3f_t* p0 = &p[ipoint0];
+    const clc_point3f_t* p1 = &p[ipoint1];
 
-    const point3f_t v01 = sub(*p1,*p0);
+    const clc_point3f_t v01 = sub(*p1,*p0);
 
     const float recip_norm2_v01 = 1.f / norm2(v01);
 
@@ -658,7 +658,7 @@ bool is_point_segment_planar(const point3f_t* p,
         if(bitarray64_check(bitarray_invalid,ipoint-ipoint0))
             continue;
 
-        const point3f_t v = sub(p[ipoint], *p0);
+        const clc_point3f_t v = sub(p[ipoint], *p0);
 
         // I'm trying hard to avoid using anything other that +,-,*. Even /
         // is used just once, in the outer loop
@@ -685,7 +685,7 @@ void stage1_finish_segment(// out
                            const int iring, const int isegment,
                            const int Npoints_invalid_in_segment,
                            const uint64_t* bitarray_invalid,
-                           const point3f_t* p,
+                           const clc_point3f_t* p,
                            const int ipoint0,
                            const int ipoint1,
                            const bool debug_this_ring,
@@ -750,7 +750,7 @@ stage1_segment_from_ring(// out
 
                          // in
                          const int iring,
-                         const point3f_t* points_thisring,
+                         const clc_point3f_t* points_thisring,
                          const int Npoints_thisring,
                          const context_t* ctx)
 {
@@ -865,8 +865,8 @@ static segmentref_t* stack_pop(stack_t* stack)
     return &stack->nodes[--stack->n];
 }
 
-static bool is_normal(const point3f_t v,
-                      const point3f_t n,
+static bool is_normal(const clc_point3f_t v,
+                      const clc_point3f_t n,
                       const context_t* ctx)
 {
     // inner(v,n) = cos magv magn ->
@@ -880,8 +880,8 @@ static bool is_normal(const point3f_t v,
         ctx->threshold_max_cos_angle_error_normal*ctx->threshold_max_cos_angle_error_normal*norm2(n)*norm2(v);
 }
 
-static bool is_same_direction(const point3f_t a,
-                              const point3f_t b,
+static bool is_same_direction(const clc_point3f_t a,
+                              const clc_point3f_t b,
                               const context_t* ctx)
 {
     // inner(a,b) = cos maga magb ->
@@ -896,7 +896,7 @@ static bool is_same_direction(const point3f_t a,
         ctx->threshold_min_cos_angle_error_same_direction*ctx->threshold_min_cos_angle_error_same_direction*norm2(a)*norm2(b);
 }
 
-static bool segment_segment_across_rings_close_enough(const point3f_t* dp,
+static bool segment_segment_across_rings_close_enough(const clc_point3f_t* dp,
                                                       const int iring, const int isegment,
                                                       const bool debug,
                                                       const context_t* ctx)
@@ -918,7 +918,7 @@ static bool plane_from_segment_segment(// out
 {
     // I want:
     //   inner(p1-p0, n=cross(v0,v1)) = 0
-    point3f_t dp = sub(s1->p, s0->p);
+    clc_point3f_t dp = sub(s1->p, s0->p);
 
     const bool debug =
         ctx->debug_xmin < s1->p.x && s1->p.x < ctx->debug_xmax &&
@@ -932,8 +932,8 @@ static bool plane_from_segment_segment(// out
 
 
     // The two normal estimates must be close
-    point3f_t n0 = cross(dp,s0->v);
-    point3f_t n1 = cross(dp,s1->v);
+    clc_point3f_t n0 = cross(dp,s0->v);
+    clc_point3f_t n1 = cross(dp,s1->v);
 
     if(!is_same_direction(n0,n1,ctx))
         return false;
@@ -943,8 +943,8 @@ static bool plane_from_segment_segment(// out
     return true;
 }
 
-static bool plane_point_compatible_stage3_normalized(const plane_t*   plane,
-                                                     const point3f_t* point,
+static bool plane_point_compatible_stage3_normalized(const clc_plane_t*   plane,
+                                                     const clc_point3f_t* point,
                                                      const context_t* ctx)
 {
     // I want (point - p) to be perpendicular to n. I want this in terms of
@@ -952,13 +952,13 @@ static bool plane_point_compatible_stage3_normalized(const plane_t*   plane,
     //
     // Accept if threshold > inner( (point - p), n) / mag(n)
     // n is normalized here, so I omit the /magn
-    const point3f_t dp = sub(*point, plane->p);
+    const clc_point3f_t dp = sub(*point, plane->p);
 
     return ctx->threshold_max_plane_point_error_stage3 > fabsf(inner(dp, plane->n));
 }
 
 static bool plane_point_compatible_stage2_unnormalized(const plane_unnormalized_t* plane_unnormalized,
-                                                       const point3f_t* point,
+                                                       const clc_point3f_t* point,
                                                        const context_t* ctx)
 {
     // I want (point - p) to be perpendicular to n. I want this in terms of
@@ -966,7 +966,7 @@ static bool plane_point_compatible_stage2_unnormalized(const plane_unnormalized_
     //
     // Accept if threshold > inner( (point - p), n) / mag(n)
     // n is normalized here, so I omit the /magn
-    const point3f_t dp = sub(*point, plane_unnormalized->p);
+    const clc_point3f_t dp = sub(*point, plane_unnormalized->p);
     const float proj = inner(dp, plane_unnormalized->n_unnormalized);
     return ctx->threshold_max_plane_point_error_stage2*norm2(plane_unnormalized->n_unnormalized) > proj*proj;
 }
@@ -981,18 +981,18 @@ static bool fit_plane_into_cluster(// out
                                    const int          iring0,
 
                                    const segment_t*   segments,
-                                   const point3f_t*   points,
+                                   const clc_point3f_t*   points,
                                    const int*         ipoint0_in_ring,
                                    const context_t*   ctx)
 {
     // Storing the left/right ends of the existing segments (cluster->n of them)
     // and the one candidate new segment
     const int Nsegments = cluster->n + (segment0 != NULL ? 1 : 0);
-    ipoint_set_t ipoint_set = {.n = 2*Nsegments};
+    clc_ipoint_set_t ipoint_set = {.n = 2*Nsegments};
 
     if( 2*Nsegments > (int)(sizeof(ipoint_set.ipoint)/sizeof(ipoint_set.ipoint[0])))
     {
-        MSG("sizeof(ipoint_set_t.ipoint) exceeded. plane_segment_compatible() is giving up and returning false. Bump up the size");
+        MSG("sizeof(clc_ipoint_set_t.ipoint) exceeded. plane_segment_compatible() is giving up and returning false. Bump up the size");
         return false;
     }
 
@@ -1035,7 +1035,7 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
                                             const int          iring, const int isegment,
                                             const int          icluster,
                                             const segment_t*   segments,
-                                            const point3f_t*   points,
+                                            const clc_point3f_t*   points,
                                             const int*         ipoint0_in_ring,
                                             const context_t*   ctx)
 {
@@ -1120,7 +1120,7 @@ static void try_visit(stack_t* stack,
                       // context
                       const int icluster,
                       segment_t* segments, // non-const to be able to set "visited"
-                      const point3f_t*   points,
+                      const clc_point3f_t*   points,
                       const int*         ipoint0_in_ring,
                       const context_t* ctx)
 {
@@ -1137,10 +1137,10 @@ static void try_visit(stack_t* stack,
 
     if(iring0 != iring)
     {
-        const point3f_t* p  = &segments[iring *Nsegments_per_rotation + isegment].p;
-        const point3f_t* p0 = &segments[iring0*Nsegments_per_rotation + isegment].p;
+        const clc_point3f_t* p  = &segments[iring *Nsegments_per_rotation + isegment].p;
+        const clc_point3f_t* p0 = &segments[iring0*Nsegments_per_rotation + isegment].p;
 
-        const point3f_t dp = sub(*p,*p0);
+        const clc_point3f_t dp = sub(*p,*p0);
 
 
         const bool debug =
@@ -1198,7 +1198,7 @@ static void stage2_cluster_segments(// out
 
                                     // in
                                     segment_t*       segments, // non-const to be able to set "visited"
-                                    const point3f_t* points,
+                                    const clc_point3f_t* points,
                                     const int*       ipoint0_in_ring,
                                     const context_t* ctx)
 {
@@ -1398,13 +1398,13 @@ static void stage2_cluster_segments(// out
 // Returns true if we processed this point (maybe by accumulating it) and we
 // should keep going. Returns false if we should stop the iteration
 static void stage3_accumulate_points(// out
-                                     ipoint_set_t* ipoint_set,
+                                     clc_ipoint_set_t* ipoint_set,
                                      // in,out
                                      uint64_t* bitarray_visited, // indexed by IN-RING points
                                      // in
                                      int ipoint, int ipoint_increment, int ipoint_limit, // in-ring
-                                     const plane_t* plane,
-                                     const point3f_t* points,
+                                     const clc_plane_t* plane,
+                                     const clc_point3f_t* points,
                                      const int ipoint0_in_ring, // start of this ring in the full points[] array
                                      const int ipoint_segment_limit,
                                      const context_t* ctx)
@@ -1481,14 +1481,14 @@ static void stage3_accumulate_points(// out
 
 
 static void stage3_refine_clusters(// out
-                                   points_and_plane_t* points_and_plane,
+                                   clc_points_and_plane_t* points_and_plane,
                                    float*              max_norm2_dp,
                                    float*              eigenvalues_ascending, // 3 of these
                                    // in
                                    const int icluster,
                                    const segment_cluster_t* segment_cluster,
                                    const segment_t* segments,
-                                   const point3f_t* points,
+                                   const clc_point3f_t* points,
                                    const int* ipoint0_in_ring,
                                    const int* Npoints,
                                    const context_t* ctx)
@@ -1516,7 +1516,7 @@ static void stage3_refine_clusters(// out
     // already.
     points_and_plane->plane = segment_cluster->plane;
 
-    ipoint_set_t* ipoint_set = &points_and_plane->ipoint_set;
+    clc_ipoint_set_t* ipoint_set = &points_and_plane->ipoint_set;
 
     const bool debug =
         ctx->debug_xmin < segment_cluster->plane.p.x && segment_cluster->plane.p.x < ctx->debug_xmax &&
@@ -1592,23 +1592,23 @@ static void stage3_refine_clusters(// out
     }
 }
 
-void default_context(context_t* ctx)
+void clc_default_context(context_t* ctx)
 {
-#define LIST_CONTEXT_SET_DEFAULT(type,name,default,...) \
+#define CLC_LIST_CONTEXT_SET_DEFAULT(type,name,default,...) \
     .name = default,
 
     *ctx = (context_t)
-        { LIST_CONTEXT(LIST_CONTEXT_SET_DEFAULT) };
+        { CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_SET_DEFAULT) };
 
-#undef LIST_CONTEXT_SET_DEFAULT
+#undef CLC_LIST_CONTEXT_SET_DEFAULT
 }
 
 // Returns how many planes were found or <0 on error
-int8_t point_segmentation(// out
-                          points_and_plane_t* points_and_plane,
+int8_t clc_lidar_segmentation(// out
+                          clc_points_and_plane_t* points_and_plane,
                           // in
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
-                          const point3f_t* points,  // length sum(Npoints)
+                          const clc_point3f_t* points,  // length sum(Npoints)
                           const int* Npoints,
                           const context_t* ctx)
 

@@ -54,32 +54,32 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
 
 #warning "I should define a complex dtype to pass points_and_plane from a preallocated numpy array. Instead I do this in C and then copy the results. For now"
 #warning "possibly this is too large"
-    points_and_plane_t points_and_plane[Nplanes_max];
+    clc_points_and_plane_t points_and_plane[Nplanes_max];
 
     context_t ctx;
-    default_context(&ctx);
+    clc_default_context(&ctx);
 
 
-#define LIST_CONTEXT_KEYWORDS(   type,name,default,pyparse,...) #name,
-#define LIST_CONTEXT_PYPARSE(    type,name,default,pyparse,...) pyparse
-#define LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse,...) &ctx.name,
+#define CLC_LIST_CONTEXT_KEYWORDS(   type,name,default,pyparse,...) #name,
+#define CLC_LIST_CONTEXT_PYPARSE(    type,name,default,pyparse,...) pyparse
+#define CLC_LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse,...) &ctx.name,
     char* keywords[] = { "points",
                          "Npoints",
-                         LIST_CONTEXT(LIST_CONTEXT_KEYWORDS)
+                         CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O&O&" "|$" LIST_CONTEXT(LIST_CONTEXT_PYPARSE)
+                                     "O&O&" "|$" CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_PYPARSE)
                                      ,
                                      keywords,
                                      PyArray_Converter, &points,
                                      PyArray_Converter, &Npoints,
-                                     LIST_CONTEXT(LIST_CONTEXT_ADDRESS_CTX)
+                                     CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_ADDRESS_CTX)
                                      NULL))
         goto done;
 
-#undef LIST_CONTEXT_KEYWORDS
-#undef LIST_CONTEXT_PYPARSE
-#undef LIST_CONTEXT_ADDRESS_CTX
+#undef CLC_LIST_CONTEXT_KEYWORDS
+#undef CLC_LIST_CONTEXT_PYPARSE
+#undef CLC_LIST_CONTEXT_ADDRESS_CTX
 
 
     if(! (PyArray_TYPE(points) == NPY_FLOAT32 &&
@@ -115,11 +115,11 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
     }
 
     int8_t Nplanes =
-        point_segmentation( // out
+        clc_lidar_segmentation( // out
                             points_and_plane,
                             // in
                             Nplanes_max,
-                            (const point3f_t*)PyArray_DATA(points),
+                            (const clc_point3f_t*)PyArray_DATA(points),
                             (const int*)PyArray_DATA(Npoints),
                             &ctx);
     if(Nplanes < 0)
@@ -138,8 +138,8 @@ static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
     plane_pn = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Nplanes,6}), NPY_FLOAT32);
     if(plane_pn == NULL)
         goto done;
-    static_assert(offsetof(plane_t,p) == 0 && offsetof(plane_t,n) == sizeof(point3f_t) && sizeof(plane_t) == 2*sizeof(point3f_t),
-                  "plane_t is expected to densely store p and then n");
+    static_assert(offsetof(clc_plane_t,p) == 0 && offsetof(clc_plane_t,n) == sizeof(clc_point3f_t) && sizeof(clc_plane_t) == 2*sizeof(clc_point3f_t),
+                  "clc_plane_t is expected to densely store p and then n");
     for(int i=0; i<Nplanes; i++)
         memcpy( &((float*)PyArray_DATA(plane_pn))[6*i], &points_and_plane[i].plane, sizeof(points_and_plane[i].plane));
 
@@ -173,31 +173,31 @@ static PyObject* py_default_context(PyObject* NPY_UNUSED(self),
     PyObject* result = NULL;
 
     context_t ctx;
-    default_context(&ctx);
+    clc_default_context(&ctx);
 
 
-#define LIST_CONTEXT_PYBUILD_PATTERN( type,name,default,pyparse,pybuild) "s" pybuild
-#define LIST_CONTEXT_PYBUILD_KEYVALUE(type,name,default,pyparse,pybuild) ,#name, ctx.name
-    result = Py_BuildValue("{" LIST_CONTEXT(LIST_CONTEXT_PYBUILD_PATTERN) "}"
-                           LIST_CONTEXT(LIST_CONTEXT_PYBUILD_KEYVALUE));
-#undef LIST_CONTEXT_PYBUILD_PATTERN
-#undef LIST_CONTEXT_PYBUILD_KEYVALUE
+#define CLC_LIST_CONTEXT_PYBUILD_PATTERN( type,name,default,pyparse,pybuild) "s" pybuild
+#define CLC_LIST_CONTEXT_PYBUILD_KEYVALUE(type,name,default,pyparse,pybuild) ,#name, ctx.name
+    result = Py_BuildValue("{" CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_PYBUILD_PATTERN) "}"
+                           CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_PYBUILD_KEYVALUE));
+#undef CLC_LIST_CONTEXT_PYBUILD_PATTERN
+#undef CLC_LIST_CONTEXT_PYBUILD_KEYVALUE
 
     // If Py_BuildValue failed, this will already be NULL
     return result;
 }
 
-static const char point_segmentation_docstring[] =
-#include "point_segmentation.docstring.h"
+static const char clc_lidar_segmentation_docstring[] =
+#include "clc_lidar_segmentation.docstring.h"
     ;
-static const char default_context_docstring[] =
-#include "default_context.docstring.h"
+static const char clc_default_context_docstring[] =
+#include "clc_default_context.docstring.h"
     ;
 
 static PyMethodDef methods[] =
     {
-     PYMETHODDEF_ENTRY(point_segmentation,      py_point_segmentation,      METH_VARARGS | METH_KEYWORDS),
-     PYMETHODDEF_ENTRY(default_context,         py_default_context,         METH_NOARGS),
+     PYMETHODDEF_ENTRY(clc_lidar_segmentation,      py_point_segmentation,      METH_VARARGS | METH_KEYWORDS),
+     PYMETHODDEF_ENTRY(clc_default_context,         py_default_context,         METH_NOARGS),
      {}
     };
 
