@@ -204,13 +204,13 @@ static PyMethodDef methods[] =
 static struct PyModuleDef module_def =
     {
      PyModuleDef_HEAD_INIT,
-     "_camera_lidar_calibration",
+     "_clc",
      "Geometric alignment of camera and LIDAR sensors",
      -1,
      methods
     };
 
-PyMODINIT_FUNC PyInit__camera_lidar_calibration(void)
+PyMODINIT_FUNC PyInit__clc(void)
 {
     import_array();
     return PyModule_Create(&module_def);

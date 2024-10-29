@@ -28,7 +28,7 @@ args = parse_args()
 
 import numpy as np
 import numpysane as nps
-import camera_lidar_calibration
+import clc
 import testutils
 
 try:
@@ -36,7 +36,7 @@ try:
 except:
     tests_private = ()
 
-ctx = camera_lidar_calibration.default_context()
+ctx = clc.default_context()
 max_range = ctx['threshold_max_range']
 
 tests = (
@@ -284,7 +284,7 @@ for test in tests + tests_private.tests:
     print(f"Evaluating test. Visualize like this:  {vizcmd}")
 
     segmentation = \
-        camera_lidar_calibration.lidar_segmentation(bag, topic)
+        clc.lidar_segmentation(bag, topic)
 
     Nplanes_found = len(segmentation['plane_p'])
 

@@ -183,7 +183,7 @@ import mrcal
 import mrcal.calibration
 
 import calibration_data_import
-import camera_lidar_calibration
+import clc
 
 
 # from mrcal/scales.h:
@@ -1309,8 +1309,8 @@ def get_joint_observation(bag,
 
     def get_one_board(ilidar):
         segmentation = \
-            camera_lidar_calibration.lidar_segmentation(bag,
-                                                        args.lidar_topic[ilidar])
+            clc.lidar_segmentation(bag,
+                                   args.lidar_topic[ilidar])
         points = segmentation['points']
         if len(points) == 0:
             return None

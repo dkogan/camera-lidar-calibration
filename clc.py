@@ -6,7 +6,7 @@ import numpysane as nps
 import os
 
 import bag_interface
-import _camera_lidar_calibration
+import _clc
 
 def lidar_segmentation(bag, lidar_topic,
                        **kwargs):
@@ -35,10 +35,10 @@ def lidar_segmentation(bag, lidar_topic,
                        dtype = np.int32)
 
     ipoint, plane_pn = \
-        _camera_lidar_calibration.lidar_segmentation(points  = points_sorted,
-                                                     Npoints = Npoints,
-                                                     Nrings  = len(Npoints),
-                                                     **kwargs)
+        _clc.lidar_segmentation(points  = points_sorted,
+                                Npoints = Npoints,
+                                Nrings  = len(Npoints),
+                                **kwargs)
     Nplanes = len(ipoint)
 
     return \
@@ -46,4 +46,4 @@ def lidar_segmentation(bag, lidar_topic,
               plane_p = plane_pn[:,:3],
               plane_n = plane_pn[:,3:] )
 
-default_context = _camera_lidar_calibration.default_context
+default_context = _clc.default_context

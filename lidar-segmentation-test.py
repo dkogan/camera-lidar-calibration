@@ -53,7 +53,7 @@ args = parse_args()
 import bag_interface
 import numpy as np
 import numpysane as nps
-import camera_lidar_calibration
+import clc
 
 kwargs = dict(dump = args.dump)
 if args.debug is not None:
@@ -65,9 +65,9 @@ if args.debug is not None:
 
 
 segmentation = \
-    camera_lidar_calibration.lidar_segmentation(args.bag,
-                                                getattr(args, 'lidar-topic'),
-                                                **kwargs)
+    clc.lidar_segmentation(args.bag,
+                           getattr(args, 'lidar-topic'),
+                           **kwargs)
 if args.dump or args.debug is not None:
     # Write the planes out to stdout, in a way that can be cut/pasted into
     # lidar-segmentation-auto-test.py
