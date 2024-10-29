@@ -1278,52 +1278,89 @@ def fit( joint_observations,
 
     return state,Var_b
 
-def get_joint_observation(bag,
-                          *,
+def get_joint_observation(*,
+                          bag,
                           board_size_for_min,
                           board_size_for_max,
-                          # Both input and output
+                          camera_topic,    # used if bag is not None
+                          lidar_topic,     # used if bag is not None
+                          images   = None, # Ncameras of these; used if bag is None
+                          p_lidars = None, # Nlidars  of these; used if bag is None
+                          rings    = None, # Nlidars  of these; used if bag is None
+                          # Both input and output; used only if bag is not None
                           cache = None):
     r'''Compute ONE lidar observation and/or ONE camera observation
 
     from a bag of ostensibly-stationary data'''
 
-    bagname = os.path.split(os.path.splitext(os.path.basename(bag))[0])[1]
+    if bag is not None:
 
-    if cache is not None:
-        if bagname not in cache:
-            cache[bagname] = dict()
-        cache = cache[bagname]
+        bagname = os.path.split(os.path.splitext(os.path.basename(bag))[0])[1]
 
-    print(f"===== Looking for joint observations in '{bagname}'")
+        if cache is not None:
+            if bagname not in cache:
+                cache[bagname] = dict()
+            cache = cache[bagname]
 
-    Ncameras = len(args.camera_topic)
-    q_observed = \
-        [ calibration_data_import.chessboard_corners( \
-                             bag,
-                             args.camera_topic[icamera],
-                             bagname = bagname,
-                             cache   = cache ) \
-          for icamera in range(Ncameras) ]
+        print(f"===== Looking for joint observations in '{bagname}'")
+
+        Ncameras = len(camera_topic)
+        q_observed = \
+            [ calibration_data_import.chessboard_corners_from_bag( \
+                                 bag,
+                                 camera_topic[icamera],
+                                 bagname = bagname,
+                                 cache   = cache ) \
+              for icamera in range(Ncameras) ]
 
 
-    def get_one_board(ilidar):
-        segmentation = \
-            clc.lidar_segmentation(bag,
-                                   args.lidar_topic[ilidar])
-        points = segmentation['points']
-        if len(points) == 0:
-            return None
-        if len(points) > 1:
-            print("WARNING: More than one chessboard found in view",
-                  file = sys.stderr)
-            return None
-        return points[0].astype(float)
+        def get_one_board(ilidar):
+            segmentation = \
+                clc.lidar_segmentation(bag         = bag,
+                                       lidar_topic = lidar_topic[ilidar])
+            points = segmentation['points']
+            if len(points) == 0:
+                return None
+            if len(points) > 1:
+                print("WARNING: More than one chessboard found in view",
+                      file = sys.stderr)
+                return None
+            return points[0].astype(float)
 
-    Nlidars = len(args.lidar_topic)
-    p_lidar = \
-        [ get_one_board(ilidar) \
-          for ilidar in range(Nlidars)]
+        Nlidars = len(lidar_topic)
+        p_lidar = \
+            [ get_one_board(ilidar) \
+              for ilidar in range(Nlidars)]
+
+
+    else:
+        Ncameras = len(images)
+        q_observed = \
+            [ calibration_data_import.chessboard_corners_from_image( \
+                                 images[icamera]) \
+              for icamera in range(Ncameras) ]
+
+
+        def get_one_board(ilidar):
+            segmentation = \
+                clc.lidar_segmentation(points = p_lidars[ilidar],
+                                       ring   = rings   [ilidar])
+            points = segmentation['points']
+            if len(points) == 0:
+                return None
+            if len(points) > 1:
+                print("WARNING: More than one chessboard found in view",
+                      file = sys.stderr)
+                return None
+            return points[0].astype(float)
+
+        Nlidars = len(p_lidars)
+        p_lidar = \
+            [ get_one_board(ilidar) \
+              for ilidar in range(Nlidars)]
+
+
+
 
     if all(x is None for x in q_observed) and \
        all(x is None for x in p_lidar):
@@ -1941,9 +1978,12 @@ else:
     cache = dict()
 
 # read AND write the cache dict
-joint_observations = [get_joint_observation(bag, cache=cache,
+joint_observations = [get_joint_observation(bag                = bag,
+                                            cache              = cache,
                                             board_size_for_min = board_size_for_min,
-                                            board_size_for_max = board_size_for_max) \
+                                            board_size_for_max = board_size_for_max,
+                                            camera_topic       = args.camera_topic,
+                                            lidar_topic        = args.lidar_topic) \
                       for bag in args.bag ]
 
 if not args.read_cache:

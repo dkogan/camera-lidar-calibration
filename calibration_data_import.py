@@ -758,10 +758,35 @@ def cluster_and_find_planes(points, idx,
              i_cluster_accepted    = i_cluster_accepted,
              i_subcluster_accepted = i_subcluster_accepted)
 
-def chessboard_corners(bag, camera_topic,
-                       *,
-                       bagname,
-                       cache = None):
+
+def chessboard_corners_from_image(image,
+                                  filename = None, # for diagnostics
+                                  cache    = None):
+
+    if image is None:
+        return None
+
+    if not hasattr(chessboard_corners_from_bag, 'clahe'):
+        chessboard_corners_from_bag.clahe = cv2.createCLAHE()
+        chessboard_corners_from_bag.clahe.setClipLimit(8)
+    image = chessboard_corners_from_bag.clahe.apply(image)
+    cv2.blur(image, (3,3), dst=image)
+
+    q_observed = mrgingham.find_board(image, gridn=14)
+
+    if filename is not None:
+        if q_observed is None: print(f"NO chessboard in '{filename}'")
+        else:                  print(f"FOUND chessboard in '{filename}'")
+
+    if cache is not None: cache[camera_topic] = q_observed
+
+    return q_observed
+
+
+def chessboard_corners_from_bag(bag, camera_topic,
+                                *,
+                                bagname,
+                                cache = None):
 
     try:
         import mrgingham
@@ -799,26 +824,14 @@ def chessboard_corners(bag, camera_topic,
                image_filename_target)
 
     print(f"=== Looking for board in image '{image_filename_target}'....")
-
     image = mrcal.load_image(image_filename_target,
                              bits_per_pixel = 8,
                              channels       = 1)
 
-    if not hasattr(chessboard_corners, 'clahe'):
-        chessboard_corners.clahe = cv2.createCLAHE()
-        chessboard_corners.clahe.setClipLimit(8)
-    image = chessboard_corners.clahe.apply(image)
-    cv2.blur(image, (3,3), dst=image)
+    return chessboard_corners_from_image(image,
+                                         filename = image_filename_target,
+                                         cache    = cache)
 
-    q_observed = mrgingham.find_board(image, gridn=14)
-    if q_observed is None:
-        print(f"NO chessboard in '{image_filename_target}'")
-    else:
-        print(f"FOUND chessboard in '{image_filename_target}'")
-
-    if cache is not None: cache[camera_topic] = q_observed
-
-    return q_observed
 
 def get_lidar_observation(bag, lidar_topic,
                           *,

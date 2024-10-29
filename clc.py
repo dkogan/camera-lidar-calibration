@@ -8,16 +8,21 @@ import os
 import bag_interface
 import _clc
 
-def lidar_segmentation(bag, lidar_topic,
+def lidar_segmentation(*,
+                       bag, lidar_topic,
+                       # used if bag,lidar_topic are None
+                       points = None,
+                       ring   = None,
                        **kwargs):
 
-    if not os.path.exists(bag):
-        raise Exception(f"Bag path '{bag}' does not exist")
+    if bag is not None:
+        if not os.path.exists(bag):
+            raise Exception(f"Bag path '{bag}' does not exist")
 
-    array = next(bag_interface.bag_messages_generator(bag, (lidar_topic,) ))['array']
+        array = next(bag_interface.bag_messages_generator(bag, (lidar_topic,) ))['array']
 
-    points = array['xyz']
-    ring   = array['ring']
+        points = array['xyz']
+        ring   = array['ring']
 
     rings = np.unique(ring) # unique and sorted
 
