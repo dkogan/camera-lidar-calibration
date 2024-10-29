@@ -120,7 +120,7 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
                             // in
                             Nplanes_max,
                             (const clc_point3f_t*)PyArray_DATA(points),
-                            (const int*)PyArray_DATA(Npoints),
+                            (const unsigned int*)PyArray_DATA(Npoints),
                             &ctx);
     if(Nplanes < 0)
         goto done;

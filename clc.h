@@ -24,7 +24,7 @@ typedef struct
 {
     uint32_t ipoint[8192 - 7]; // -7 to make each clc_points_and_plane_t fit evenly
                                // into a round-sized chunk of memory
-    int n;
+    unsigned int n;
 } clc_ipoint_set_t;
 
 typedef struct
@@ -45,9 +45,9 @@ _Static_assert((int)sizeof(clc_is_bgr_mask_t)*8 >= clc_Ncameras_max,
 
 typedef struct
 {
-    clc_point3f_t* points;  // 3D points, in the lidar frame
-    uint16_t*  rings;   // For each point, which laser observed the point
-    int        Npoints; // How many {point,ring} tuples are stored here
+    clc_point3f_t* points;      // 3D points, in the lidar frame
+    uint16_t*      rings;       // For each point, which laser observed the point
+    unsigned int   Npoints;     // How many {point,ring} tuples are stored here
 } clc_lidar_scan_t;
 
 typedef struct
@@ -131,7 +131,7 @@ int8_t clc_lidar_segmentation(// out
                           // in
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
                           const clc_point3f_t* points,  // length sum(Npoints)
-                          const int* Npoints,
+                          const unsigned int* Npoints,
                           const context_t* ctx);
 
 void clc_default_context(context_t* ctx);
@@ -153,12 +153,11 @@ bool clc(// out
 
          // in
          const clc_sensor_snapshot_t* sensor_snapshots,
-         const int                Nsensor_snapshots,
+         const unsigned int           Nsensor_snapshots,
 
          // These apply to ALL the sensor_snapshots[]
-         const int Nlidars,
-         const int Ncameras,
-
+         const unsigned int Nlidars,
+         const unsigned int Ncameras,
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
@@ -168,11 +167,11 @@ bool clc(// out
 bool
 clc_overlapping_regions(// out
                         clc_yaw_sector_t* yaw_sectors,
-                        int*          Nyaw_sectors,
+                        unsigned int*     Nyaw_sectors,
 
                         // in
-                        const int Nyaw_sectors_max,
+                        const unsigned int  Nyaw_sectors_max,
                         const mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these
                         const mrcal_pose_t* rt_ref_camera, // Ncameras of these
-                        const int Nlidars,
-                        const int Ncameras);
+                        const unsigned int  Nlidars,
+                        const unsigned int  Ncameras);

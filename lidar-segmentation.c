@@ -274,7 +274,7 @@ static void pca_preprocess_from_ipoint_set( // out
                                            const clc_ipoint_set_t* ipoint_set)
 {
     *pmean = (clc_point3f_t){};
-    for(int i=0; i<ipoint_set->n; i++)
+    for(unsigned int i=0; i<ipoint_set->n; i++)
         for(int j=0; j<3; j++)
             pmean->xyz[j] += points[ipoint_set->ipoint[i]].xyz[j];
     for(int j=0; j<3; j++)
@@ -283,7 +283,7 @@ static void pca_preprocess_from_ipoint_set( // out
 
     if(max_norm2_dp != NULL) *max_norm2_dp = 0.0f;
 
-    for(int i=0; i<ipoint_set->n; i++)
+    for(unsigned int i=0; i<ipoint_set->n; i++)
     {
         const clc_point3f_t dp = sub(points[ipoint_set->ipoint[i]], *pmean);
 
@@ -1490,7 +1490,7 @@ static void stage3_refine_clusters(// out
                                    const segment_t* segments,
                                    const clc_point3f_t* points,
                                    const int* ipoint0_in_ring,
-                                   const int* Npoints,
+                                   const unsigned int* Npoints,
                                    const context_t* ctx)
 {
     /* I have an approximate plane estimate.
@@ -1609,7 +1609,7 @@ int8_t clc_lidar_segmentation(// out
                           // in
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
                           const clc_point3f_t* points,  // length sum(Npoints)
-                          const int* Npoints,
+                          const unsigned int* Npoints,
                           const context_t* ctx)
 
 {
@@ -1638,7 +1638,7 @@ int8_t clc_lidar_segmentation(// out
 
         if(ctx->dump)
         {
-            for(int i=0; i<Npoints[iring]; i++)
+            for(unsigned int i=0; i<Npoints[iring]; i++)
                 printf("%f %f all %f\n",
                        points[ipoint0_in_ring[iring] + i].x,
                        points[ipoint0_in_ring[iring] + i].y,
@@ -1769,7 +1769,7 @@ int8_t clc_lidar_segmentation(// out
 
         // We're past all the filters. I accept this plane
         if(ctx->dump)
-            for(int i=0; i<points_and_plane[iplane_out].ipoint_set.n; i++)
+            for(unsigned int i=0; i<points_and_plane[iplane_out].ipoint_set.n; i++)
                 printf("%f %f stage3-refined-points-%d%s %f\n",
                        points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].x,
                        points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].y,
