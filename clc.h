@@ -45,8 +45,11 @@ _Static_assert((int)sizeof(clc_is_bgr_mask_t)*8 >= clc_Ncameras_max,
 
 typedef struct
 {
+    // These point to the FIRST point,ring and are NOT stored densely. The
+    // stride for both of these is given in lidar_packet_stride
     clc_point3f_t* points;      // 3D points, in the lidar frame
     uint16_t*      rings;       // For each point, which laser observed the point
+
     unsigned int   Npoints;     // How many {point,ring} tuples are stored here
 } clc_lidar_scan_t;
 
@@ -154,6 +157,9 @@ bool clc(// out
          // in
          const clc_sensor_snapshot_t* sensor_snapshots,
          const unsigned int           Nsensor_snapshots,
+         // The stride, in bytes, between each successive points or rings value
+         // in clc_lidar_scan_t
+         const unsigned int           lidar_packet_stride,
 
          // These apply to ALL the sensor_snapshots[]
          const unsigned int Nlidars,
