@@ -187,17 +187,17 @@ static PyObject* py_default_context(PyObject* NPY_UNUSED(self),
     return result;
 }
 
-static const char clc_lidar_segmentation_docstring[] =
-#include "clc_lidar_segmentation.docstring.h"
+static const char lidar_segmentation_docstring[] =
+#include "lidar_segmentation.docstring.h"
     ;
-static const char clc_default_context_docstring[] =
-#include "clc_default_context.docstring.h"
+static const char default_context_docstring[] =
+#include "default_context.docstring.h"
     ;
 
 static PyMethodDef methods[] =
     {
-     PYMETHODDEF_ENTRY(clc_lidar_segmentation,      py_lidar_segmentation,      METH_VARARGS | METH_KEYWORDS),
-     PYMETHODDEF_ENTRY(clc_default_context,         py_default_context,         METH_NOARGS),
+     PYMETHODDEF_ENTRY(lidar_segmentation,      py_lidar_segmentation,      METH_VARARGS | METH_KEYWORDS),
+     PYMETHODDEF_ENTRY(default_context,         py_default_context,         METH_NOARGS),
      {}
     };
 
