@@ -2,6 +2,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <mrcal/mrcal-image.h>
+#include <mrcal/basic-geometry.h>
 
 typedef union
 {
@@ -31,6 +33,44 @@ typedef struct
     clc_plane_t      plane;
 } clc_points_and_plane_t;
 _Static_assert(sizeof(clc_points_and_plane_t) == 8192*4, "clc_points_and_plane_t has expected size");
+
+
+
+#define clc_Nlidars_max  16
+#define clc_Ncameras_max 16
+
+typedef uint32_t clc_is_bgr_mask_t;
+_Static_assert((int)sizeof(clc_is_bgr_mask_t)*8 >= clc_Ncameras_max,
+               "is_bgr_mask should be large-enough to index all the possible cameras");
+
+typedef struct
+{
+    clc_point3f_t* points;  // 3D points, in the lidar frame
+    uint16_t*  rings;   // For each point, which laser observed the point
+    int        Npoints; // How many {point,ring} tuples are stored here
+} clc_lidar_scan_t;
+
+typedef struct
+{
+    uint64_t time_us_since_epoch;
+
+    clc_lidar_scan_t lidar_scans[clc_Nlidars_max];
+
+    // The caller has to know which camera is grayscale and which is color. This
+    // would be indicated by a bit array on a higher level
+    union
+    {
+        mrcal_image_uint8_t uint8;
+        mrcal_image_bgr_t   bgr;
+    } images[clc_Ncameras_max];
+} clc_sensor_snapshot_t;
+
+typedef struct
+{
+    // Wrapping is assumed to make sure that az_rad01[1] > az_rad01[0] and that
+    // az_rad01[1]-az_rad01[0] < 2*pi
+    double az_rad01[2];
+} clc_yaw_sector_t;
 
 
 
@@ -95,3 +135,44 @@ int8_t clc_lidar_segmentation(// out
                           const context_t* ctx);
 
 void clc_default_context(context_t* ctx);
+
+
+
+
+// Each sensor is uniquely identified by its position in the
+// sensor_snapshots[].lidar_scans[] or .images[] arrays. An unobserved sensor in
+// some sensor snapshot should be indicated by lidar_scans[] = {} or images[] =
+// {}
+//
+// On output, the rt_ref_lidar[] and rt_ref_camera[] arrays will be filled-in.
+// If solving for ALL the sensor geometry wasn't possible, we return false. On
+// success, we return true
+bool clc(// out
+         mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
+         mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+
+         // in
+         const clc_sensor_snapshot_t* sensor_snapshots,
+         const int                Nsensor_snapshots,
+
+         // These apply to ALL the sensor_snapshots[]
+         const int Nlidars,
+         const int Ncameras,
+
+
+         // bits indicating whether a camera in
+         // sensor_snapshots.images[] is color or not
+         const clc_is_bgr_mask_t is_bgr_mask);
+
+
+bool
+clc_overlapping_regions(// out
+                        clc_yaw_sector_t* yaw_sectors,
+                        int*          Nyaw_sectors,
+
+                        // in
+                        const int Nyaw_sectors_max,
+                        const mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these
+                        const mrcal_pose_t* rt_ref_camera, // Ncameras of these
+                        const int Nlidars,
+                        const int Ncameras);
