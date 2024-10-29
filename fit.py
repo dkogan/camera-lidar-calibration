@@ -1309,7 +1309,7 @@ def get_joint_observation(bag,
 
     def get_one_board(ilidar):
         segmentation = \
-            camera_lidar_calibration.point_segmentation(bag,
+            camera_lidar_calibration.lidar_segmentation(bag,
                                                         args.lidar_topic[ilidar])
         points = segmentation['points']
         if len(points) == 0:

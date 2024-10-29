@@ -4,7 +4,7 @@ r'''LIDAR point-cloud-segmentation test suite
 
 SYNOPSIS
 
-  $ ./point_segmentation_auto_test.py testdata/     \
+  $ ./lidar-segmentation-auto-test.py testdata/     \
     ....
     All tests passed
 
@@ -260,7 +260,7 @@ for test in tests + tests_private.tests:
 
     vizcmd = fr'''
   x0y0x1y1=(-{max_range} -{max_range} {max_range} {max_range});
-  ./point_segmentation_test.py --dump \
+  ./lidar-segmentation-test.py --dump \
     {topic} \
     {bag} \
   | awk " $x0y0x1y1[1] < \$1 && \$1 < $x0y0x1y1[3] && $x0y0x1y1[2] < \$2 && \$2 < $x0y0x1y1[4]" \
@@ -284,7 +284,7 @@ for test in tests + tests_private.tests:
     print(f"Evaluating test. Visualize like this:  {vizcmd}")
 
     segmentation = \
-        camera_lidar_calibration.point_segmentation(bag, topic)
+        camera_lidar_calibration.lidar_segmentation(bag, topic)
 
     Nplanes_found = len(segmentation['plane_p'])
 

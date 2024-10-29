@@ -4,7 +4,7 @@ r'''Find the board in a point cloud
 
 SYNOPSIS
 
-  $ ./point_segmentation_test.py     \
+  $ ./lidar-segmentation-test.py     \
       /lidar/vl_points_1     \
       'camera-lidar*.bag'
 
@@ -65,12 +65,12 @@ if args.debug is not None:
 
 
 segmentation = \
-    camera_lidar_calibration.point_segmentation(args.bag,
+    camera_lidar_calibration.lidar_segmentation(args.bag,
                                                 getattr(args, 'lidar-topic'),
                                                 **kwargs)
 if args.dump or args.debug is not None:
     # Write the planes out to stdout, in a way that can be cut/pasted into
-    # point_segmentation_auto_test.py
+    # lidar-segmentation-auto-test.py
     plane_p = segmentation['plane_p']
     plane_n = segmentation['plane_n']
     for i in range(len(plane_p)):

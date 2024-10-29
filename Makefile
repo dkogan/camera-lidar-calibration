@@ -11,7 +11,7 @@ LDLIBS += \
 CFLAGS    += --std=gnu99 -ggdb3
 CCXXFLAGS += -Wno-missing-field-initializers
 
-LIB_SOURCES += point_segmentation.c
+LIB_SOURCES += lidar-segmentation.c
 
 camera_lidar_calibration_pywrap.o: CFLAGS += $(PY_MRBUILD_CFLAGS)
 camera_lidar_calibration_pywrap.o: $(addsuffix .h,$(wildcard *.docstring))

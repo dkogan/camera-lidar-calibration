@@ -37,7 +37,7 @@ do {                                                                    \
                                                         name ## _docstring}
 
 
-static PyObject* py_point_segmentation(PyObject* NPY_UNUSED(self),
+static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
                                        PyObject* args,
                                        PyObject* kwargs)
 {
@@ -196,7 +196,7 @@ static const char clc_default_context_docstring[] =
 
 static PyMethodDef methods[] =
     {
-     PYMETHODDEF_ENTRY(clc_lidar_segmentation,      py_point_segmentation,      METH_VARARGS | METH_KEYWORDS),
+     PYMETHODDEF_ENTRY(clc_lidar_segmentation,      py_lidar_segmentation,      METH_VARARGS | METH_KEYWORDS),
      PYMETHODDEF_ENTRY(clc_default_context,         py_default_context,         METH_NOARGS),
      {}
     };

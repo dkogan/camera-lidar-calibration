@@ -8,7 +8,7 @@ import os
 import bag_interface
 import _camera_lidar_calibration
 
-def point_segmentation(bag, lidar_topic,
+def lidar_segmentation(bag, lidar_topic,
                        **kwargs):
 
     if not os.path.exists(bag):
@@ -35,7 +35,7 @@ def point_segmentation(bag, lidar_topic,
                        dtype = np.int32)
 
     ipoint, plane_pn = \
-        _camera_lidar_calibration.point_segmentation(points  = points_sorted,
+        _camera_lidar_calibration.lidar_segmentation(points  = points_sorted,
                                                      Npoints = Npoints,
                                                      Nrings  = len(Npoints),
                                                      **kwargs)
