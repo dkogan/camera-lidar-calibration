@@ -1594,13 +1594,13 @@ static void stage3_refine_clusters(// out
 
 void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ctx)
 {
-#define CLC_LIST_CONTEXT_SET_DEFAULT(type,name,default,...) \
+#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_SET_DEFAULT(type,name,default,...) \
     .name = default,
 
     *ctx = (clc_lidar_segmentation_context_t)
-        { CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_SET_DEFAULT) };
+        { CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_SET_DEFAULT) };
 
-#undef CLC_LIST_CONTEXT_SET_DEFAULT
+#undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_SET_DEFAULT
 }
 
 // Returns how many planes were found or <0 on error

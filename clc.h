@@ -74,7 +74,7 @@ typedef struct
 
 
 
-#define CLC_LIST_CONTEXT(_)                                                 \
+#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(_)                                                 \
   /* bool, but PyArg_ParseTupleAndKeywords("p") wants an int */         \
   _(int,   dump,                                         (int)false,        "p","i") \
   _(int,   debug_iring,                                  -1,                "i","i") \
@@ -117,11 +117,11 @@ typedef struct
 
 typedef struct
 {
-#define CLC_LIST_CONTEXT_DECLARE_C(type,name, ...) \
+#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_DECLARE_C(type,name, ...) \
     type name;
 
-    CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_DECLARE_C)
-#undef CLC_LIST_CONTEXT_DECLARE_C
+    CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_DECLARE_C)
+#undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_DECLARE_C
 } clc_lidar_segmentation_context_t;
 
 

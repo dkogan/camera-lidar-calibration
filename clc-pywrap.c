@@ -60,26 +60,26 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
     clc_lidar_segmentation_default_context(&ctx);
 
 
-#define CLC_LIST_CONTEXT_KEYWORDS(   type,name,default,pyparse,...) #name,
-#define CLC_LIST_CONTEXT_PYPARSE(    type,name,default,pyparse,...) pyparse
-#define CLC_LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse,...) &ctx.name,
+#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS(   type,name,default,pyparse,...) #name,
+#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE(    type,name,default,pyparse,...) pyparse
+#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse,...) &ctx.name,
     char* keywords[] = { "points",
                          "Npoints",
-                         CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_KEYWORDS)
+                         CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O&O&" "|$" CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_PYPARSE)
+                                     "O&O&" "|$" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
                                      ,
                                      keywords,
                                      PyArray_Converter, &points,
                                      PyArray_Converter, &Npoints,
-                                     CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_ADDRESS_CTX)
+                                     CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX)
                                      NULL))
         goto done;
 
-#undef CLC_LIST_CONTEXT_KEYWORDS
-#undef CLC_LIST_CONTEXT_PYPARSE
-#undef CLC_LIST_CONTEXT_ADDRESS_CTX
+#undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS
+#undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE
+#undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX
 
 
     if(! (PyArray_TYPE(points) == NPY_FLOAT32 &&
@@ -176,12 +176,12 @@ static PyObject* py_lidar_segmentation_default_context(PyObject* NPY_UNUSED(self
     clc_lidar_segmentation_default_context(&ctx);
 
 
-#define CLC_LIST_CONTEXT_PYBUILD_PATTERN( type,name,default,pyparse,pybuild) "s" pybuild
-#define CLC_LIST_CONTEXT_PYBUILD_KEYVALUE(type,name,default,pyparse,pybuild) ,#name, ctx.name
-    result = Py_BuildValue("{" CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_PYBUILD_PATTERN) "}"
-                           CLC_LIST_CONTEXT(CLC_LIST_CONTEXT_PYBUILD_KEYVALUE));
-#undef CLC_LIST_CONTEXT_PYBUILD_PATTERN
-#undef CLC_LIST_CONTEXT_PYBUILD_KEYVALUE
+#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_PATTERN( type,name,default,pyparse,pybuild) "s" pybuild
+#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_KEYVALUE(type,name,default,pyparse,pybuild) ,#name, ctx.name
+    result = Py_BuildValue("{" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_PATTERN) "}"
+                           CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_KEYVALUE));
+#undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_PATTERN
+#undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_KEYVALUE
 
     // If Py_BuildValue failed, this will already be NULL
     return result;
