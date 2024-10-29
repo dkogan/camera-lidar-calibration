@@ -12,11 +12,6 @@ CFLAGS    += --std=gnu99 -ggdb3
 CCXXFLAGS += -Wno-missing-field-initializers
 
 LIB_SOURCES += point_segmentation.c
-point-segmentation.o: point_segmentation.usage.h
-%.usage.h: %.usage
-	< $^ sed 's/\\/\\\\/g; s/"/\\"/g; s/^/"/; s/$$/\\n"/;' > $@
-EXTRA_CLEAN += *.usage.h
-
 
 camera_lidar_calibration_pywrap.o: CFLAGS += $(PY_MRBUILD_CFLAGS)
 camera_lidar_calibration_pywrap.o: $(addsuffix .h,$(wildcard *.docstring))
