@@ -32,7 +32,7 @@ typedef struct
     clc_ipoint_set_t ipoint_set;
     clc_plane_t      plane;
 } clc_points_and_plane_t;
-_Static_assert(sizeof(clc_points_and_plane_t) == 8192*4, "clc_points_and_plane_t has expected size");
+_Static_assert(sizeof(clc_points_and_plane_t) == 8192*4, "clc_points_and_plane_t should hhas expected size");
 
 
 
@@ -41,7 +41,7 @@ _Static_assert(sizeof(clc_points_and_plane_t) == 8192*4, "clc_points_and_plane_t
 
 typedef uint32_t clc_is_bgr_mask_t;
 _Static_assert((int)sizeof(clc_is_bgr_mask_t)*8 >= clc_Ncameras_max,
-               "is_bgr_mask should be large-enough to index all the possible cameras");
+               "is_bgr_mask should be large-enough to index all the possible cameras: need at least one bit per camera");
 
 typedef struct
 {
