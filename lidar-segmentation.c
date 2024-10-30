@@ -943,9 +943,8 @@ static bool plane_from_segment_segment(// out
     return true;
 }
 
-static bool plane_point_compatible_stage3_normalized(const clc_plane_t*   plane,
-                                                     const clc_point3f_t* point,
-                                                     const clc_lidar_segmentation_context_t* ctx)
+static float plane_point_error_stage3_normalized(const clc_plane_t*   plane,
+                                                 const clc_point3f_t* point)
 {
     // I want (point - p) to be perpendicular to n. I want this in terms of
     // "distance-off-plane" so err = inner( (point - p), n) / mag(n)
@@ -954,7 +953,7 @@ static bool plane_point_compatible_stage3_normalized(const clc_plane_t*   plane,
     // n is normalized here, so I omit the /magn
     const clc_point3f_t dp = sub(*point, plane->p);
 
-    return ctx->threshold_max_plane_point_error_stage3 > fabsf(inner(dp, plane->n));
+    return inner(dp, plane->n);
 }
 
 static bool plane_point_compatible_stage2_unnormalized(const plane_unnormalized_t* plane_unnormalized,
@@ -1441,9 +1440,9 @@ static void stage3_accumulate_points(// out
         // constructing the candidate segments. So if we got this far, I assume it's
         // good
 
-        if( plane_point_compatible_stage3_normalized(plane,
-                                                     &points[ipoint0_in_ring + ipoint],
-                                                     ctx) )
+        if( ctx->threshold_max_plane_point_error_stage3 >
+            fabsf(plane_point_error_stage3_normalized(plane,
+                                                      &points[ipoint0_in_ring + ipoint])) )
         {
             // I will be fitting a plane to a set of points. The most accurate way
             // to do this is to minimize the observation errors (ranges; what the
