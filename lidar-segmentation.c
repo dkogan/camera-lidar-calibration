@@ -8,9 +8,7 @@
 #include <float.h>
 
 #include "clc.h"
-
-
-#define MSG(fmt, ...) fprintf(stderr, "%s(%d) %s(): " fmt "\n", __FILE__, __LINE__, __func__, ##__VA_ARGS__)
+#include "util.h"
 
 
 #define DEBUG_ON_TRUE_POINT(what, p, fmt, ...)                          \
