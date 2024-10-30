@@ -1401,7 +1401,7 @@ static void stage3_accumulate_points(// out
                                      // in,out
                                      uint64_t* bitarray_visited, // indexed by IN-RING points
                                      // in
-                                     int ipoint, int ipoint_increment, int ipoint_limit, // in-ring
+                                     int ipoint, const int ipoint_increment, const int ipoint_limit, // in-ring
                                      const clc_plane_t* plane,
                                      const clc_point3f_t* points,
                                      const int ipoint0_in_ring, // start of this ring in the full points[] array
