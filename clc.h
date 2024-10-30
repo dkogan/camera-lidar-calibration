@@ -109,6 +109,7 @@ typedef struct
   _(float, threshold_min_cos_angle_error_same_direction, 0.996194698092f,   "f","f") \
   _(float, threshold_max_plane_point_error_stage2,       0.3,               "f","f") \
   _(float, threshold_max_plane_point_error_stage3,       0.05,              "f","f") \
+  _(float, threshold_min_plane_point_error_isolation,    0.3,               "f","f") \
   _(int,   threshold_max_Nsegments_in_cluster,           150,               "i","i") \
   _(int,   threshold_min_Nsegments_in_cluster,           5,                 "i","i") \
   _(int,   threshold_min_Nrings_in_cluster,              3,                 "i","i") \

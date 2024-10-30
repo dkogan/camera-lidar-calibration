@@ -1479,7 +1479,279 @@ static void stage3_accumulate_points(// out
 }
 
 
-static void stage3_refine_clusters(// out
+static int
+stage3_cull_bloom_and_count_non_isolated(// out
+                                         clc_ipoint_set_t* ipoint_set,
+                                         // in
+                                         const int ipoint_increment, const int ipoint_limit, // in-ring
+                                         const clc_plane_t* plane,
+                                         const clc_point3f_t* points,
+                                         const int ipoint_set_start_this_ring,
+                                         const int ipoint0_in_ring, // start of this ring in the full points[] array
+                                         const int icluster, const int iring,
+                                         const bool final_iteration,
+                                         const bool debug __attribute__((unused)),
+                                         const clc_lidar_segmentation_context_t* ctx)
+{
+    /*
+      Ideally, the board I'm looking for should be floating in space:
+      immediately around the board I should see either invalid data or points
+      far away from the board. If this is violated, then it's likely I'm looking
+      not at a board, but at a flat region of a larger object.
+
+      Furthermore, lidar observations exhibit a blooming effect: just past the
+      edge of an object in space we might observe extra points that might be a
+      bit too far or a bit too near, but this is usually consistent. I want to
+      identify and throw out these bloomed regions, but retain the full
+      observation.
+
+      So the full logic at the observation edge is:
+
+      - Compute the plane residual (a signed scalar). At the edge of each ring, this
+      projection will lie on one side of 0, and eventually cross over. All points
+      before this crossover are potentially a part of the bloom, and should be
+      discarded
+
+      - Now that we have thrown out the bloom, we check for past-the-edge
+      detections that would invalidate this whole plane. I require at least X
+      radians of empty-or-far-away-from-board space on either side, any
+      blooming excepted (X should be larger than any expected bloom size)
+    */
+
+
+
+    const float threshold_bloom = 0.02f;
+
+    const float th_bloom_allowed_rad     = 1.0f * M_PI/180.f;
+    const float th_deadzone_required_rad = 2.0f * M_PI/180.f;
+
+    const float threshold_isolation = 0.2;
+
+
+
+
+    const int ipoint_set_n_before_cull_bloom = ipoint_set->n;
+
+
+    float err_previous =
+        plane_point_error_stage3_normalized(plane,
+                                            &points[ ipoint_set->ipoint[ipoint_set->n-1] ]);
+    if(fabsf(err_previous) < threshold_bloom)
+    {
+        // The edge point is very near the plane. There's no blooming I can
+        // reliably see, and I'm done with the bloom-removal stuff
+    }
+    else
+    {
+        // if(icluster==0 && iring==3)
+        // {
+        //     MSG("%f %f %f %f",
+        //         points[ ipoint_set->ipoint[ipoint_set->n-1] ].x,
+        //         points[ ipoint_set->ipoint[ipoint_set->n-1] ].y,
+        //         points[ ipoint_set->ipoint[ipoint_set->n-1] ].z,
+        //         err_previous);
+        // }
+
+        bool err_positive_first = err_previous > 0.0f;
+
+
+        for( int i = ipoint_set->n-2;
+             i >= ipoint_set_start_this_ring;
+             i-- )
+        {
+            const float err =
+                plane_point_error_stage3_normalized(plane,
+                                                    &points[ ipoint_set->ipoint[i] ]);
+
+            // I stop the cull when the error turns around at the other side of 0
+            bool err_positive_now        = err > 0.0f;
+            bool err_positive_derivative = err > err_previous;
+
+
+
+            // if(icluster==0 && iring==3)
+            // {
+            //     MSG("%f %f %f %f",
+            //         points[ ipoint_set->ipoint[i] ].x,
+            //         points[ ipoint_set->ipoint[i] ].y,
+            //         points[ ipoint_set->ipoint[i] ].z,
+            //         err);
+            // }
+
+
+
+
+            if( fabsf(err) < threshold_bloom ||
+                ((err_positive_now ^ err_positive_first) &&
+                 (err_positive_now ^ err_positive_derivative)) )
+            {
+                // We're at the first "good" point. Cull everything else
+                const int ipoint_set_n_new = i+1;
+                if(final_iteration && ctx->dump)
+                    for(unsigned int j=ipoint_set_n_new; j<ipoint_set->n; j++)
+                        printf("%f %f stage3-culled-bloom %f\n",
+                               points[ ipoint_set->ipoint[j] ].x,
+                               points[ ipoint_set->ipoint[j] ].y,
+                               points[ ipoint_set->ipoint[j] ].z);
+
+
+
+                ipoint_set->n = ipoint_set_n_new;
+                break;
+            }
+
+            err_previous = err;
+        }
+
+        /* if(too few points remaining) */
+        /*  complain and exit; */
+
+        // if we get here without ever finding a "good" point, do something
+    }
+
+
+
+    if(!final_iteration)
+        return 0;
+
+
+    ////////////////////////////////////////////////////////
+
+
+
+
+
+    // I start at the edge, and move outwards. I want to see
+    //
+    // - Maybe a small angular region where this more-or-less fit (bloom)
+    // - A minimum-angle region of no data or points that fit very badly
+    //
+    // If I see anything else, this isn't an isolated ring, and I conclude that
+    // I'm not looking at a valid board, and I reject the whole thing
+
+    // last accepted point
+    const int ipoint0 = ipoint_set->ipoint[ipoint_set_n_before_cull_bloom-1] - ipoint0_in_ring;
+    float th0_rad = th_from_point(&points[ipoint0_in_ring + ipoint0]);
+
+    float th0_deadzone_start_rad;
+
+    bool in_bloom_region = true;
+
+    if(debug)
+    {
+        fprintf(stderr, "\n");
+        MSG("iring=%d: starting at edge: (%f,%f,%f)",
+            iring,
+            points[ipoint0_in_ring + ipoint0].x,
+            points[ipoint0_in_ring + ipoint0].y,
+            points[ipoint0_in_ring + ipoint0].z);
+    }
+
+
+    int Npoints_non_isolated = 0;
+
+    for(int ipoint = ipoint0 + ipoint_increment;
+        ipoint != ipoint_limit;
+        ipoint += ipoint_increment)
+    {
+        if(debug)
+        {
+            MSG("iring=%d: looking at (%f,%f,%f)",
+                iring,
+                points[ipoint0_in_ring + ipoint].x,
+                points[ipoint0_in_ring + ipoint].y,
+                points[ipoint0_in_ring + ipoint].z);
+        }
+
+        const float th_rad = th_from_point(&points[ipoint0_in_ring + ipoint]);
+
+        if(in_bloom_region)
+        {
+            const float dth = th_rad - th0_rad;
+            if(fabsf(dth) <= th_bloom_allowed_rad)
+            {
+                const float err =
+                    fabsf(plane_point_error_stage3_normalized(plane,
+                                                              &points[ipoint0_in_ring + ipoint]));
+                if(DEBUG_ON_TRUE_POINT(threshold_isolation > err,
+                                       &points[ipoint0_in_ring + ipoint],
+                                       "iring=%d: bloom; point is in-plane; continuing; %f > %f",
+                                       iring,
+                                       threshold_isolation, err))
+                {
+                    continue;
+                }
+
+                if(debug)
+                {
+                    MSG("iring=%d: bloom; point is NOT in-plane; looking for the dead-zone early: %f < %f",
+                        iring,
+                        threshold_isolation, err);
+                }
+                // We start the deadzone early. Right at this badly-fitting
+                // point
+                th0_deadzone_start_rad = th_rad;
+            }
+            else
+            {
+                th0_deadzone_start_rad = th0_rad + copysignf(th_bloom_allowed_rad, dth);
+
+                if(debug)
+                {
+                    MSG("iring=%d: looking for the dead-zone",
+                        iring);
+                }
+
+            }
+
+            // We're past where blooming is expected or the point doesn't fit. This is not a bloom anymore, and we change
+            // modes, and fall through
+            in_bloom_region = false;
+        }
+
+        const float dth = th_rad - th0_deadzone_start_rad;
+        if(fabsf(dth) > th_deadzone_required_rad)
+        {
+            // We're past the deadzone. Done!
+            if(debug)
+            {
+                MSG("iring=%d: past the dead zone; done",
+                    iring);
+            }
+            return Npoints_non_isolated;
+        }
+
+        const float err =
+            fabsf(plane_point_error_stage3_normalized(plane,
+                                                      &points[ipoint0_in_ring + ipoint]));
+        if(DEBUG_ON_TRUE_POINT(ctx->threshold_min_plane_point_error_isolation > err,
+                               &points[ipoint0_in_ring + ipoint],
+                               "iring=%d: looking for the dead zone, but point is too close. Plane NOT isolated: %f > %f",
+                               iring,
+                               ctx->threshold_min_plane_point_error_isolation,
+                               err))
+        {
+            if(ctx->dump)
+                printf("%f %f stage3-non-isolated %f\n",
+                       points[ipoint0_in_ring + ipoint].x,
+                       points[ipoint0_in_ring + ipoint].y,
+                       points[ipoint0_in_ring + ipoint].z);
+
+            // Too close. This plane isn't isolated. Throw it out
+            Npoints_non_isolated++;
+        }
+        if(debug)
+        {
+            MSG("iring=%d: looking for the dead zone, and point is far-enough. Continuing",
+                iring);
+        }
+    }
+
+#warning "reached the end of the scan. We probably should wrap around, but for now I just reject the plane and move on"
+    return INT_MAX;
+}
+
+static bool stage3_refine_clusters(// out
                                    clc_points_and_plane_t* points_and_plane,
                                    float*              max_norm2_dp,
                                    float*              eigenvalues_ascending, // 3 of these
@@ -1521,16 +1793,34 @@ static void stage3_refine_clusters(// out
         ctx->debug_xmin < segment_cluster->plane.p.x && segment_cluster->plane.p.x < ctx->debug_xmax &&
         ctx->debug_ymin < segment_cluster->plane.p.y && segment_cluster->plane.p.y < ctx->debug_ymax;
 
+    // will only be modified on the final iteration
+    int Npoints_non_isolated = 0;
 
 #warning FOR NOW I JUST RUN A SINGLE ITERATION
     const int Niterations = 1;
     for(int iteration=0; iteration<Niterations; iteration++)
     {
+        const bool final_iteration = (iteration == Niterations-1);
+
         ipoint_set->n = 0;
         int ipoint_set_n_prev = 0;
 
         for(int i=0; i<Nrings_considered; i++)
             memset(bitarray_visited[i], 0, Nwords_bitarray_visited*sizeof(uint64_t));
+
+
+
+
+
+        if(Nrings_considered > 64)
+        {
+            MSG("Too many rings");
+            return false;
+        }
+        // all the rings fit into one uint64_t word
+        uint64_t bitarray_ring_visited = 0;
+
+
 
         for(int isegment_in_cluster=0; isegment_in_cluster<segment_cluster->n; isegment_in_cluster++)
         {
@@ -1539,6 +1829,18 @@ static void stage3_refine_clusters(// out
             const int iring    = segmentref->iring;
             const int isegment = segmentref->isegment;
 
+
+
+
+            /////////// This is temporary, until I reimplement the way data is
+            /////////// passed to this function. It should just be a list of
+            /////////// rings and a single seed point for each
+            if(bitarray_ring_visited & (1U << (iring-iring0)))
+                continue;
+            bitarray_ring_visited |= 1U << (iring-iring0);
+
+
+
             const segment_t* segment =
                 &segments[iring*Nsegments_per_rotation + isegment];
 
@@ -1546,6 +1848,10 @@ static void stage3_refine_clusters(// out
             // capture all the matching points
             const int ipoint0 = (segment->ipoint0 + segment->ipoint1) / 2;
 
+            unsigned int ipoint_set_start_this_ring;
+
+
+            ipoint_set_start_this_ring = ipoint_set->n;
             stage3_accumulate_points(// out
                                      ipoint_set,
                                      bitarray_visited[iring-iring0],
@@ -1557,6 +1863,41 @@ static void stage3_refine_clusters(// out
                                      segment->ipoint1,
                                      ctx);
 
+            if(ipoint_set->n > ipoint_set_start_this_ring)
+            {
+                // some points were added
+
+                // I cull the bloom points at the edges. This will need to
+                // un-accumulate some points. stage3_accumulate_points() does:
+                //
+                //   ipoint_set->ipoint[ipoint_set->n++] = ipoint0_in_ring + ipoint;
+                //   bitarray64_set(bitarray_visited, ipoint);
+                //
+                // I can easily update the ipoint_set: I pull some points off the
+                // end. The bitarray_visited doesn't matter, since I will never
+                // process this ring again
+                //
+                // After we get a final-ish fit. I check to see if this board
+                // isn't isolated in space. And if it isn't, I reject it
+
+                // This will be non-zero ONLY if final_iteration
+                Npoints_non_isolated +=
+                    stage3_cull_bloom_and_count_non_isolated(// out
+                                                             ipoint_set,
+                                                             // in
+                                                             +1, Npoints[iring],
+                                                             &points_and_plane->plane,
+                                                             points,
+                                                             ipoint_set_start_this_ring,
+                                                             ipoint0_in_ring[iring],
+                                                             icluster, iring,
+                                                             final_iteration,
+                                                             debug,
+                                                             ctx);
+            }
+
+
+            ipoint_set_start_this_ring = ipoint_set->n;
             stage3_accumulate_points(// out
                                      ipoint_set,
                                      bitarray_visited[iring-iring0],
@@ -1567,6 +1908,23 @@ static void stage3_refine_clusters(// out
                                      ipoint0_in_ring[iring],
                                      segment->ipoint0,
                                      ctx);
+            if(ipoint_set->n > ipoint_set_start_this_ring)
+            {
+                // This will be non-zero ONLY if final_iteration
+                Npoints_non_isolated +=
+                    stage3_cull_bloom_and_count_non_isolated(// out
+                                                             ipoint_set,
+                                                             // in
+                                                             -1, -1,
+                                                             &points_and_plane->plane,
+                                                             points,
+                                                             ipoint_set_start_this_ring,
+                                                             ipoint0_in_ring[iring],
+                                                             icluster, iring,
+                                                             final_iteration,
+                                                             debug,
+                                                             ctx);
+            }
 
             // I don't bother to look in rings that don't appear in the
             // segment_cluster. This will by contain not very much data (because
@@ -1589,6 +1947,13 @@ static void stage3_refine_clusters(// out
                                           points,
                                           ipoint_set);
     }
+
+    const int threshold_non_isolated = 25;
+
+    return !DEBUG_ON_TRUE_POINT(Npoints_non_isolated >= threshold_non_isolated,
+                                &segment_cluster->plane.p,
+                                "Too many non-isolated points around the plane: %d >= %d",
+                                Npoints_non_isolated, threshold_non_isolated);
 }
 
 void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ctx)
@@ -1721,14 +2086,15 @@ int8_t clc_lidar_segmentation(// out
 
         float max_norm2_dp;
         float eigenvalues_ascending[3];
-        stage3_refine_clusters(&points_and_plane[iplane_out],
-                               &max_norm2_dp,
-                               eigenvalues_ascending,
-                               icluster,
-                               segment_cluster,
-                               segments,
-                               points, ipoint0_in_ring, Npoints,
-                               ctx);
+        bool not_rejected =
+            stage3_refine_clusters(&points_and_plane[iplane_out],
+                                   &max_norm2_dp,
+                                   eigenvalues_ascending,
+                                   icluster,
+                                   segment_cluster,
+                                   segments,
+                                   points, ipoint0_in_ring, Npoints,
+                                   ctx);
 
         const int Npoints_in_plane = points_and_plane[iplane_out].ipoint_set.n;
 
@@ -1737,6 +2103,8 @@ int8_t clc_lidar_segmentation(// out
             ctx->debug_ymin < points_and_plane[iplane_out].plane.p.y && points_and_plane[iplane_out].plane.p.y < ctx->debug_ymax;
 
         const bool rejected =
+
+            !not_rejected ||
 
             // Each eigenvalue is a 1-sigma ellipse of our point cloud. It
             // represents the sum-of-squares of deviations from the mean. The
