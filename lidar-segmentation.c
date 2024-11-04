@@ -1970,10 +1970,12 @@ int8_t clc_lidar_segmentation(// out
                           clc_points_and_plane_t* points_and_plane,
                           // in
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
-                          const clc_point3f_t* points,  // length sum(Npoints)
+                          // length sum(Npoints). Sorted by ring and then by
+                          // azimuth
+                          const clc_point3f_t* points,
+                          // length ctx->Nrings
                           const unsigned int* Npoints,
                           const clc_lidar_segmentation_context_t* ctx)
-
 {
     if(!(ctx->Nrings > 0 && ctx->Nrings <= 1024))
     {

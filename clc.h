@@ -70,8 +70,6 @@ typedef struct
 {
     uint64_t time_us_since_epoch;
 
-    clc_lidar_scan_t lidar_scans[clc_Nlidars_max];
-
     // The caller has to know which camera is grayscale and which is color. This
     // would be indicated by a bit array on a higher level
     union
@@ -79,6 +77,9 @@ typedef struct
         mrcal_image_uint8_t uint8;
         mrcal_image_bgr_t   bgr;
     } images[clc_Ncameras_max];
+
+    clc_lidar_scan_t lidar_scans[clc_Nlidars_max];
+
 } clc_sensor_snapshot_t;
 
 typedef struct
@@ -147,7 +148,10 @@ int8_t clc_lidar_segmentation(// out
                           clc_points_and_plane_t* points_and_plane,
                           // in
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
-                          const clc_point3f_t* points,  // length sum(Npoints)
+                          // length sum(Npoints). Sorted by ring and then by
+                          // azimuth
+                          const clc_point3f_t* points,
+                          // length ctx->Nrings
                           const unsigned int* Npoints,
                           const clc_lidar_segmentation_context_t* ctx);
 
@@ -176,8 +180,8 @@ bool clc(// out
          const unsigned int           lidar_packet_stride,
 
          // These apply to ALL the sensor_snapshots[]
-         const unsigned int Nlidars,
          const unsigned int Ncameras,
+         const unsigned int Nlidars,
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
