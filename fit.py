@@ -1278,6 +1278,10 @@ def fit( joint_observations,
 
     return state,Var_b
 
+# Works off ONE instant in time only. returns
+# list_over_cameras,list_over_lidars. So get_joint_observation()[1][ilidar] is
+# the lidar points of the board at that time; or None if a unique board
+# segmentation wasn't possible
 def get_joint_observation(*,
                           bag,
                           board_size_for_min,
@@ -1978,6 +1982,10 @@ else:
     cache = dict()
 
 # read AND write the cache dict
+
+
+# joint_observation[itime][1][ilidar] is the lidar board observations at that
+# time
 joint_observations = [get_joint_observation(bag                = bag,
                                             cache              = cache,
                                             board_size_for_min = board_size_for_min,
