@@ -32,16 +32,29 @@ typedef struct
     clc_ipoint_set_t ipoint_set;
     clc_plane_t      plane;
 } clc_points_and_plane_t;
-_Static_assert(sizeof(clc_points_and_plane_t) == 8192*4, "clc_points_and_plane_t should hhas expected size");
-
+// I can't find a single static assertion invocation that works in both C++ and
+// C. The below is ugly, but works
+#ifdef __cplusplus
+static_assert (sizeof(clc_points_and_plane_t) == 8192*4, "clc_points_and_plane_t has expected size");
+#else
+_Static_assert(sizeof(clc_points_and_plane_t) == 8192*4, "clc_points_and_plane_t has expected size");
+#endif
 
 
 #define clc_Nlidars_max  16
 #define clc_Ncameras_max 16
 
 typedef uint32_t clc_is_bgr_mask_t;
+// I can't find a single static assertion invocation that works in both C++ and
+// C. The below is ugly, but works
+#ifdef __cplusplus
+static_assert ((int)sizeof(clc_is_bgr_mask_t)*8 >= clc_Ncameras_max,
+               "is_bgr_mask should be large-enough to index all the possible cameras: need at least one bit per camera");
+#else
 _Static_assert((int)sizeof(clc_is_bgr_mask_t)*8 >= clc_Ncameras_max,
                "is_bgr_mask should be large-enough to index all the possible cameras: need at least one bit per camera");
+#endif
+
 
 typedef struct
 {
