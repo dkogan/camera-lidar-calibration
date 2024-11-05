@@ -1,3 +1,5 @@
+#define _GNU_SOURCE // for qsort_r
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -2153,6 +2155,100 @@ int8_t clc_lidar_segmentation(// out
     return iplane_out;
 }
 
+typedef struct
+{
+    unsigned int lidar_packet_stride; // applies to rings, not to az
+    uint16_t*    rings;
+
+    float*       az;
+} compare_ring_az_ctx_t;
+static int compare_ring_az(const void* _a, const void* _b, void* cookie)
+{
+    const compare_ring_az_ctx_t* ctx = (const compare_ring_az_ctx_t*)cookie;
+
+    const uint32_t a = *(const uint32_t*)_a;
+    const uint32_t b = *(const uint32_t*)_b;
+
+    const uint16_t* ring_a = (uint16_t*)&((uint8_t*)ctx->rings )[ctx->lidar_packet_stride*a];
+    const uint16_t* ring_b = (uint16_t*)&((uint8_t*)ctx->rings )[ctx->lidar_packet_stride*b];
+    if(*ring_a < *ring_b) return -1;
+    if(*ring_a > *ring_b) return  1;
+
+    if(ctx->az[a] < ctx->az[b]) return -1;
+    if(ctx->az[a] > ctx->az[b]) return  1;
+
+    return 0;
+}
+// Sorts the lidar data by ring and azimuth, to be passable to
+// clc_lidar_segmentation()
+void clc_lidar_sort(// out
+                    //
+                    // These buffers must be pre-allocated
+                    // length sum(Npoints). Sorted by ring and then by azimuth
+                    clc_point3f_t* points,
+                    // length Nrings
+                    unsigned int* Npoints,
+
+                    // in
+                    int Nrings,
+                    // The stride, in bytes, between each successive points or
+                    // rings value in clc_lidar_scan_t
+                    const unsigned int      lidar_packet_stride,
+                    const clc_lidar_scan_t* scan)
+{
+    uint32_t ipoint[scan->Npoints];
+    float    az    [scan->Npoints];
+    for(unsigned int i=0; i<scan->Npoints; i++)
+    {
+        ipoint[i] = i;
+
+        clc_point3f_t* p = (clc_point3f_t*)&((uint8_t*)scan->points)[lidar_packet_stride*i];
+        az[i] = atan2f( p->y, p->x );
+    }
+
+    compare_ring_az_ctx_t ctx = {.lidar_packet_stride = lidar_packet_stride,
+                                 .rings               = scan->rings,
+                                 .az                  = az};
+    qsort_r(ipoint, scan->Npoints, sizeof(ipoint[0]),
+            &compare_ring_az, (void*)&ctx);
+
+    // I now have the sorted indices in ipoint. Copy everything
+    int      i_ring_prev_start = 0;
+    uint16_t ring_prev         = UINT16_MAX;
+    for(unsigned int i=0; i<scan->Npoints; i++)
+    {
+        points[i]          = *((clc_point3f_t*)&((uint8_t*)scan->points)[lidar_packet_stride*ipoint[i]]);
+        uint16_t ring_here = *((uint16_t*)     &((uint8_t*)scan->rings )[lidar_packet_stride*ipoint[i]]);
+
+        if(ring_prev != ring_here)
+        {
+            // see new ring. Update Npoints[]
+            if(ring_prev < ring_here)
+            {
+                // normal path
+                Npoints[ring_prev] = i - i_ring_prev_start;
+            }
+            else
+            {
+                // Initial condition. No points for ring 0
+                // Nothing to do. this for() loop will roll around and take care
+                // of everything
+            }
+            // account for any rings we didn't see at all
+            for(ring_prev++; ring_prev<ring_here; ring_prev++)
+                Npoints[ring_prev] = 0;
+            i_ring_prev_start = i;
+            ring_prev = ring_here;
+        }
+    }
+
+    // handle last ring
+    uint16_t ring_here = Nrings;
+    Npoints[ring_prev] = scan->Npoints - i_ring_prev_start;
+    // account for any rings we didn't see at all
+    for(ring_prev++; ring_prev<ring_here; ring_prev++)
+        Npoints[ring_prev] = 0;
+}
 
 /*
 The segment finder should use missing points or too-long ranges as breaks. The

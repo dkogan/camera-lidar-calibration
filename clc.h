@@ -143,6 +143,24 @@ typedef struct
 } clc_lidar_segmentation_context_t;
 
 
+// Sorts the lidar data by ring and azimuth, to be passable to
+// clc_lidar_segmentation()
+void clc_lidar_sort(// out
+                    //
+                    // These buffers must be pre-allocated
+                    // length sum(Npoints). Sorted by ring and then by azimuth
+                    clc_point3f_t* points,
+                    // length Nrings
+                    unsigned int* Npoints,
+
+                    // in
+                    int Nrings,
+                    // The stride, in bytes, between each successive points or
+                    // rings value in clc_lidar_scan_t
+                    const unsigned int      lidar_packet_stride,
+                    const clc_lidar_scan_t* scan);
+
+
 // Returns how many planes were found or <0 on error
 int8_t clc_lidar_segmentation(// out
                           clc_points_and_plane_t* points_and_plane,
