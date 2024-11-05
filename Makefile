@@ -11,7 +11,7 @@ LDLIBS += \
 CFLAGS    += --std=gnu99 -ggdb3
 CCXXFLAGS += -Wno-missing-field-initializers -Wno-unused-parameter
 
-LIB_SOURCES += lidar-segmentation.c
+LIB_SOURCES += lidar-segmentation.c clc.c
 
 clc-pywrap.o: CFLAGS += $(PY_MRBUILD_CFLAGS)
 clc-pywrap.o: $(addsuffix .h,$(wildcard *.docstring))
