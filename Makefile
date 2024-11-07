@@ -5,11 +5,16 @@ PROJECT_NAME := clc
 ABI_VERSION  := 0
 TAIL_VERSION := 1
 
-LDLIBS += \
-  -lm
+LDLIBS += -lm
 
 CFLAGS    += --std=gnu99 -ggdb3
 CCXXFLAGS += -Wno-missing-field-initializers -Wno-unused-parameter
+
+# I need the bleeding-edge mrcal
+MRCAL=/home/dima/projects/mrcal
+CCXXFLAGS += -I$(MRCAL)/..
+LDFLAGS   += -L$(MRCAL) -Wl,-rpath=$(MRCAL)
+
 
 LIB_SOURCES += lidar-segmentation.c clc.c
 
