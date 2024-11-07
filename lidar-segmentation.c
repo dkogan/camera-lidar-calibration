@@ -418,8 +418,8 @@ static void pca( // out
 
 static void fit_plane_into_points__normalized( // out
                                                clc_plane_t*            plane,
-                                               float*              max_norm2_dp,
-                                               float*              eigenvalues_ascending, // 3 of these
+                                               float*                  max_norm2_dp,
+                                               float*                  eigenvalues_ascending, // 3 of these
                                                // in
                                                const clc_point3f_t*    points,
                                                const clc_ipoint_set_t* ipoint_set)
