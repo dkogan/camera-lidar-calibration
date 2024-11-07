@@ -16,8 +16,12 @@ typedef union
 
 typedef struct
 {
-    clc_point3f_t p; // A point somewhere on the plane
-    clc_point3f_t n; // A unit normal to the plane
+    // A point in the plane region. The observed points might be very unevenly
+    // distributed, pushing this mean far off-center
+    clc_point3f_t p_mean;
+
+    // A unit normal to the plane
+    clc_point3f_t n;
 } clc_plane_t;
 
 typedef struct

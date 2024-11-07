@@ -138,7 +138,7 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
     plane_pn = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Nplanes,6}), NPY_FLOAT32);
     if(plane_pn == NULL)
         goto done;
-    static_assert(offsetof(clc_plane_t,p) == 0 && offsetof(clc_plane_t,n) == sizeof(clc_point3f_t) && sizeof(clc_plane_t) == 2*sizeof(clc_point3f_t),
+    static_assert(offsetof(clc_plane_t,p_mean) == 0 && offsetof(clc_plane_t,n) == sizeof(clc_point3f_t) && sizeof(clc_plane_t) == 2*sizeof(clc_point3f_t),
                   "clc_plane_t is expected to densely store p and then n");
     for(int i=0; i<Nplanes; i++)
         memcpy( &((float*)PyArray_DATA(plane_pn))[6*i], &points_and_plane[i].plane, sizeof(points_and_plane[i].plane));

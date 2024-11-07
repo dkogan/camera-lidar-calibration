@@ -511,7 +511,7 @@ compute_board_poses(// out
             mrcal_point3_from_clc_point3f(&n,
                                           &sensor_snapshot->lidar_scans[ilidar_first].points_and_plane->plane.n);
             mrcal_point3_from_clc_point3f(&plidar_mean,
-                                          &sensor_snapshot->lidar_scans[ilidar_first].points_and_plane->plane.p);
+                                          &sensor_snapshot->lidar_scans[ilidar_first].points_and_plane->plane.p_mean);
 
             // I have the normal to the board, in lidar coordinates. Compute an
             // arbitrary rotation that matches this normal. This is unique only
@@ -593,9 +593,9 @@ bool align_point_clouds(// out
         mrcal_point3_from_clc_point3f(&normals1[Nbuffer],
                                       &sensor_snapshot->lidar_scans[ilidar1].points_and_plane->plane.n);
         mrcal_point3_from_clc_point3f(&points0[Nbuffer],
-                                      &sensor_snapshot->lidar_scans[ilidar0].points_and_plane->plane.p);
+                                      &sensor_snapshot->lidar_scans[ilidar0].points_and_plane->plane.p_mean);
         mrcal_point3_from_clc_point3f(&points1[Nbuffer],
-                                      &sensor_snapshot->lidar_scans[ilidar1].points_and_plane->plane.p);
+                                      &sensor_snapshot->lidar_scans[ilidar1].points_and_plane->plane.p_mean);
         Nbuffer++;
     }
 
@@ -911,14 +911,14 @@ fit_seed(// out
                 mrcal_point3_from_clc_point3f(&n_lidar0_observed,
                                               &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.n);
                 mrcal_point3_from_clc_point3f(&p0_lidar0_observed,
-                                              &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.p);
+                                              &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.p_mean);
             }
             else
             {
                 mrcal_point3_from_clc_point3f(&n_lidar0_observed,
                                               &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.n);
                 mrcal_point3_from_clc_point3f(&p0_lidar0_observed,
-                                              &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.p);
+                                              &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.p_mean);
 
                 mrcal_rotate_point_R(n_lidar0_observed.xyz, NULL, NULL,
                                      &Rt_lidar0_lidar[(ilidar-1)*4*3],

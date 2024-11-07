@@ -424,7 +424,7 @@ static void fit_plane_into_points__normalized( // out
                                                const clc_point3f_t*    points,
                                                const clc_ipoint_set_t* ipoint_set)
 {
-    pca(&plane->p,
+    pca(&plane->p_mean,
         &plane->n,
         NULL,
         max_norm2_dp,
@@ -951,7 +951,7 @@ static float plane_point_error_stage3_normalized(const clc_plane_t*   plane,
     //
     // Accept if threshold > inner( (point - p), n) / mag(n)
     // n is normalized here, so I omit the /magn
-    const clc_point3f_t dp = sub(*point, plane->p);
+    const clc_point3f_t dp = sub(*point, plane->p_mean);
 
     return inner(dp, plane->n);
 }
@@ -1790,8 +1790,8 @@ static bool stage3_refine_clusters(// out
     clc_ipoint_set_t* ipoint_set = &points_and_plane->ipoint_set;
 
     const bool debug =
-        ctx->debug_xmin < segment_cluster->plane.p.x && segment_cluster->plane.p.x < ctx->debug_xmax &&
-        ctx->debug_ymin < segment_cluster->plane.p.y && segment_cluster->plane.p.y < ctx->debug_ymax;
+        ctx->debug_xmin < segment_cluster->plane.p_mean.x && segment_cluster->plane.p_mean.x < ctx->debug_xmax &&
+        ctx->debug_ymin < segment_cluster->plane.p_mean.y && segment_cluster->plane.p_mean.y < ctx->debug_ymax;
 
     // will only be modified on the final iteration
     int Npoints_non_isolated = 0;
@@ -1951,7 +1951,7 @@ static bool stage3_refine_clusters(// out
     const int threshold_non_isolated = 25;
 
     return !DEBUG_ON_TRUE_POINT(Npoints_non_isolated >= threshold_non_isolated,
-                                &segment_cluster->plane.p,
+                                &segment_cluster->plane.p_mean,
                                 "Too many non-isolated points around the plane: %d >= %d",
                                 Npoints_non_isolated, threshold_non_isolated);
 }
@@ -2101,8 +2101,8 @@ int8_t clc_lidar_segmentation(// out
         const int Npoints_in_plane = points_and_plane[iplane_out].ipoint_set.n;
 
         const bool debug =
-            ctx->debug_xmin < points_and_plane[iplane_out].plane.p.x && points_and_plane[iplane_out].plane.p.x < ctx->debug_xmax &&
-            ctx->debug_ymin < points_and_plane[iplane_out].plane.p.y && points_and_plane[iplane_out].plane.p.y < ctx->debug_ymax;
+            ctx->debug_xmin < points_and_plane[iplane_out].plane.p_mean.x && points_and_plane[iplane_out].plane.p_mean.x < ctx->debug_xmax &&
+            ctx->debug_ymin < points_and_plane[iplane_out].plane.p_mean.y && points_and_plane[iplane_out].plane.p_mean.y < ctx->debug_ymax;
 
         const bool rejected =
 
@@ -2112,7 +2112,7 @@ int8_t clc_lidar_segmentation(// out
             // represents the sum-of-squares of deviations from the mean. The
             // RMS is the useful value: RMS = sqrt(sum_of_squares/N)
             DEBUG_ON_TRUE_POINT(eigenvalues_ascending[0] > ctx->threshold_max_rms_fit_error*ctx->threshold_max_rms_fit_error*(float)Npoints_in_plane,
-                                &points_and_plane[iplane_out].plane.p,
+                                &points_and_plane[iplane_out].plane.p_mean,
                                 "icluster=%d: refined plane doesn't fit the constituent points well-enough: %f > %f",
                                 icluster,
                                 sqrt(eigenvalues_ascending[0]/(float)Npoints_in_plane), ctx->threshold_max_rms_fit_error) ||
@@ -2122,13 +2122,13 @@ int8_t clc_lidar_segmentation(// out
             // must be squished in that way. But the next eigenvalue should be a
             // decent size. Otherwise the data is linear-y instead of plane-y
             DEBUG_ON_TRUE_POINT(eigenvalues_ascending[1] < ctx->threshold_min_rms_point_cloud_2nd_dimension*ctx->threshold_min_rms_point_cloud_2nd_dimension*(float)Npoints_in_plane,
-                                &points_and_plane[iplane_out].plane.p,
+                                &points_and_plane[iplane_out].plane.p_mean,
                                 "icluster=%d: refined plane is degenerate (2nd eigenvalue of point cloud dispersion is too small): %f < %f",
                                 icluster,
                                 sqrt(eigenvalues_ascending[1]/(float)Npoints_in_plane), ctx->threshold_min_rms_point_cloud_2nd_dimension) ||
 
             DEBUG_ON_TRUE_POINT(max_norm2_dp*2.*2. > ctx->threshold_max_plane_size*ctx->threshold_max_plane_size,
-                                &points_and_plane[iplane_out].plane.p,
+                                &points_and_plane[iplane_out].plane.p_mean,
                                 "icluster=%d: refined plane is too big: max_mag_dp*2 > threshold: %f > %f",
                                 icluster,
                                 sqrtf(max_norm2_dp)*2., ctx->threshold_max_plane_size);
