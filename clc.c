@@ -1205,6 +1205,21 @@ bool clc(// out
             MSG("fit_seed() failed");
             goto done;
         }
+
+        for(unsigned int i=0; i<Ncameras; i++)
+        {
+            mrcal_rt_from_Rt(rt_ref_camera[i].r.xyz, NULL,
+                             &Rt_lidar0_camera[i*4*3]);
+            rt_ref_camera[i].t = *(mrcal_point3_t*)&Rt_lidar0_camera[i*4*3 + 9];
+        }
+        memset(rt_ref_lidar, 0, sizeof(*rt_ref_lidar)); // lidar0 has the reference transform
+        for(unsigned int i=0; i<Nlidars-1; i++)
+        {
+            mrcal_rt_from_Rt(rt_ref_lidar[i+1].r.xyz, NULL,
+                             &Rt_lidar0_lidar[i*4*3]);
+            rt_ref_lidar[i+1].t = *(mrcal_point3_t*)&Rt_lidar0_lidar[i*4*3 + 9];
+        }
+
     }
 
     result = true;
