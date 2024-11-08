@@ -16,6 +16,10 @@ typedef union
 
 typedef struct
 {
+    // These are both defined in the sensor coordinate system. The sensor is at
+    // the origin
+
+
     // A point in the plane region. The observed points might be very unevenly
     // distributed, pushing this mean far off-center
     clc_point3f_t p_mean;
