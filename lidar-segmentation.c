@@ -83,6 +83,12 @@ static clc_point3f_t mean(const clc_point3f_t a, const clc_point3f_t b)
                         .z = (a.z + b.z)/2. };
 }
 __attribute__((unused))
+static clc_point3f_t scale(const clc_point3f_t a, const float s)
+{
+    return (clc_point3f_t){ .x = a.x * s,
+                            .y = a.y * s,
+                            .z = a.z * s };
+}
 static clc_point3f_t sub(const clc_point3f_t a, const clc_point3f_t b)
 {
     return (clc_point3f_t){ .x = a.x - b.x,
@@ -1946,6 +1952,15 @@ static bool stage3_refine_clusters(// out
                                           eigenvalues_ascending,
                                           points,
                                           ipoint_set);
+    }
+
+    // I want the normals need to be consistent here. I point them away from the
+    // sensor, to match the coordinate system of chessboards
+    if(inner(points_and_plane->plane.p_mean,
+             points_and_plane->plane.n)
+       < 0)
+    {
+        points_and_plane->plane.n = scale(points_and_plane->plane.n, -1.f);
     }
 
     const int threshold_non_isolated = 25;
