@@ -50,7 +50,8 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
     PyObject* py_ipoint      = NULL;
 
     const int Nplanes_max = 16;
-    PyArrayObject* ipoint[Nplanes_max] = {};
+    PyArrayObject* ipoint[Nplanes_max];
+    memset(ipoint, 0, Nplanes_max*sizeof(ipoint[0]));
 
 #warning "I should define a complex dtype to pass points_and_plane from a preallocated numpy array. Instead I do this in C and then copy the results. For now"
 #warning "possibly this is too large"
