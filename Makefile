@@ -11,7 +11,7 @@ CFLAGS    += --std=gnu99 -ggdb3
 CCXXFLAGS += -Wno-missing-field-initializers -Wno-unused-parameter
 
 # I need the bleeding-edge mrcal
-MRCAL=/home/dima/projects/mrcal
+MRCAL     ?= /home/dima/projects/mrcal
 CCXXFLAGS += -I$(MRCAL)/..
 LDFLAGS   += -L$(MRCAL) -Wl,-rpath=$(MRCAL)
 
