@@ -572,11 +572,15 @@ bool align_point_clouds(// out
     // Nsensor_snapshots_filtered is the max number I will need
     // These are double instead of float, since that's what the alignment code
     // uses
-    mrcal_point3_t normals0[Nsensor_snapshots_filtered] = {}; // init to pacify compiler; I don't need to do this
-    mrcal_point3_t normals1[Nsensor_snapshots_filtered] = {};
+    mrcal_point3_t normals0[Nsensor_snapshots_filtered];
+    mrcal_point3_t normals1[Nsensor_snapshots_filtered];
     mrcal_point3_t points0 [Nsensor_snapshots_filtered];
     mrcal_point3_t points1 [Nsensor_snapshots_filtered];
     int Nbuffer = 0;
+
+    // to pacify the compiler
+    normals0[0].x = 0;
+    normals1[0].x = 0;
 
     // Loop through all the observations
     for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
