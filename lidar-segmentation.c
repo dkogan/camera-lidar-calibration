@@ -2006,7 +2006,8 @@ int8_t clc_lidar_segmentation(// out
     for(int i=1; i<ctx->Nrings; i++)
         ipoint0_in_ring[i] = ipoint0_in_ring[i-1] + Npoints[i-1];
 
-    segment_t segments[ctx->Nrings*Nsegments_per_rotation] = {};
+    segment_t segments[ctx->Nrings*Nsegments_per_rotation];
+    memset(segments, 0, ctx->Nrings*Nsegments_per_rotation*sizeof(segments[0]));
 
     for(int iring=0; iring<ctx->Nrings; iring++)
     {
