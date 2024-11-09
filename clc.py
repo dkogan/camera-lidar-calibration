@@ -12,7 +12,7 @@ def lidar_segmentation(*,
                        bag, lidar_topic,
                        # used if bag,lidar_topic are None
                        points = None,
-                       ring   = None,
+                       rings  = None,
                        **kwargs):
 
     if bag is not None:
@@ -22,11 +22,11 @@ def lidar_segmentation(*,
         array = next(bag_interface.bag_messages_generator(bag, (lidar_topic,) ))['array']
 
         points = array['xyz']
-        ring  = array['ring']
+        rings  = array['ring']
 
     ipoint, plane_pn = \
         _clc.lidar_segmentation(points = points,
-                                rings  = ring,
+                                rings  = rings,
                                 **kwargs)
     Nplanes = len(ipoint)
 
