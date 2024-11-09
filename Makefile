@@ -5,7 +5,7 @@ PROJECT_NAME := clc
 ABI_VERSION  := 0
 TAIL_VERSION := 1
 
-LDLIBS += -lm
+LDLIBS += -lm -lmrcal
 
 CFLAGS    += --std=gnu99 -ggdb3
 CCXXFLAGS += -Wno-missing-field-initializers -Wno-unused-parameter
