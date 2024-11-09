@@ -22,32 +22,16 @@ def lidar_segmentation(*,
         array = next(bag_interface.bag_messages_generator(bag, (lidar_topic,) ))['array']
 
         points = array['xyz']
-        ring   = array['ring']
-
-    rings = np.unique(ring) # unique and sorted
-
-    # I need to sort by ring and then by th
-    th = np.arctan2( points[:,1], points[:,0] )
-    def points_from_rings():
-        for iring in rings:
-            idx = ring==iring
-            yield points[idx][ np.argsort(th[idx]) ]
-
-    points_sorted = nps.glue( *points_from_rings(),
-                              axis = -2 )
-
-    Npoints = np.array([np.count_nonzero(ring==iring) for iring in rings],
-                       dtype = np.int32)
+        ring  = array['ring']
 
     ipoint, plane_pn = \
-        _clc.lidar_segmentation(points  = points_sorted,
-                                Npoints = Npoints,
-                                Nrings  = len(Npoints),
+        _clc.lidar_segmentation(points = points,
+                                rings  = ring,
                                 **kwargs)
     Nplanes = len(ipoint)
 
     return \
-        dict( points  = [points_sorted[ipoint[i]] for i in range(Nplanes)],
+        dict( points  = [points[ipoint[i]] for i in range(Nplanes)],
               plane_p = plane_pn[:,:3],
               plane_n = plane_pn[:,3:] )
 

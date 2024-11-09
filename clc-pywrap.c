@@ -43,11 +43,12 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
 {
     PyObject* result = NULL;
 
-    // Each is an iterable of length Nrings
     PyArrayObject* points    = NULL;
-    PyArrayObject* Npoints   = NULL;
+    PyArrayObject* rings     = NULL;
+
+    // output
     PyArrayObject* plane_pn  = NULL;
-    PyObject* py_ipoint      = NULL;
+    PyObject*      py_ipoint = NULL;
 
     const int Nplanes_max = 16;
     PyArrayObject* ipoint[Nplanes_max];
@@ -65,7 +66,7 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE(    type,name,default,pyparse,...) pyparse
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse,...) &ctx.name,
     char* keywords[] = { "points",
-                         "Npoints",
+                         "rings",
                          CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
@@ -73,7 +74,7 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
                                      ,
                                      keywords,
                                      PyArray_Converter, &points,
-                                     PyArray_Converter, &Npoints,
+                                     PyArray_Converter, &rings,
                                      CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX)
                                      NULL))
         goto done;
@@ -86,79 +87,101 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
     if(! (PyArray_TYPE(points) == NPY_FLOAT32 &&
           PyArray_NDIM(points) == 2 &&
           PyArray_DIMS(points)[1] == 3 &&
-          PyArray_STRIDES(points)[1] == sizeof(float) &&
-          PyArray_STRIDES(points)[0] == sizeof(float)*3) )
+          PyArray_STRIDES(points)[1] == sizeof(float)) )
     {
-        PyErr_SetString(PyExc_RuntimeError, "'points' must be a densely-stored array of shape (N,3) containing 32-bit floats");
+        PyErr_SetString(PyExc_RuntimeError, "'points' must be an array of shape (N,3) containing 32-bit floats, each xyz stored densely");
         goto done;
     }
 
-    if(! (PyArray_TYPE(Npoints) == NPY_INT &&
-          PyArray_NDIM(Npoints) == 1 &&
-          PyArray_DIMS(Npoints)[0] == ctx.Nrings &&
-          PyArray_STRIDES(Npoints)[0] == sizeof(int)) )
+    const int          Npoints_total       = PyArray_DIMS   (points)[0];
+    const unsigned int lidar_packet_stride = PyArray_STRIDES(points)[0];
+
+    if(! (PyArray_TYPE(rings) == NPY_UINT16 &&
+          PyArray_NDIM(rings) == 1) )
     {
         PyErr_Format(PyExc_RuntimeError,
-                     "'Npoints' must be a densely-stored array of shape (Nrings=%d,) containing ints",
-                     ctx.Nrings);
+                     "'rings' must be a 1-dimensional array containing uint16");
         goto done;
     }
 
-    int Npoints_all = 0;
-    for(int i=0; i<ctx.Nrings; i++)
-        Npoints_all += ((int*)PyArray_DATA(Npoints))[i];
-    if(Npoints_all != PyArray_DIMS(points)[0])
+    if(! (PyArray_DIMS(rings)[0] == Npoints_total) )
     {
-        PyErr_Format(PyExc_RuntimeError, "'Npoints' says there are %d total points, but 'points' says %d. These must match",
-                     Npoints_all,
-                     (int)(PyArray_DIMS(points)[0]));
+        PyErr_Format(PyExc_RuntimeError,
+                     "'rings' and 'points' must describe the same number of points; instead len(points)=%d, but len(rings)=%d",
+                     Npoints_total, PyArray_DIMS(rings)[0]);
+        goto done;
+    }
+    if(! (lidar_packet_stride == PyArray_STRIDES(rings)[0]) )
+    {
+        PyErr_Format(PyExc_RuntimeError,
+                     "'rings' and 'points' must have the same point stride; instead points.stride[0]=%d, but rings.stride[0]=%d",
+                     lidar_packet_stride,
+                     PyArray_STRIDES(rings)[0]);
         goto done;
     }
 
-    int8_t Nplanes =
-        clc_lidar_segmentation( // out
-                            points_and_plane,
-                            // in
-                            Nplanes_max,
-                            (const clc_point3f_t*)PyArray_DATA(points),
-                            (const unsigned int*)PyArray_DATA(Npoints),
-                            &ctx);
-    if(Nplanes < 0)
-        goto done;
 
-    // Success. Allocate the output and copy
-    for(int i=0; i<Nplanes; i++)
     {
-        ipoint[i] = (PyArrayObject*)PyArray_SimpleNew(1, ((npy_intp[]){points_and_plane[i].ipoint_set.n}), NPY_UINT32);
-        if(ipoint[i] == NULL)
+        const
+            clc_lidar_scan_t scan = {.points  = (clc_point3f_t*)PyArray_DATA(points),
+                                     .rings   = (uint16_t     *)PyArray_DATA(rings),
+                                     .Npoints = Npoints_total};
+
+        clc_point3f_t points_sorted[Npoints_total];
+        unsigned int  Npoints      [ctx.Nrings];
+
+        clc_lidar_sort(// out
+                       points_sorted,
+                       Npoints,
+                       // in
+                       ctx.Nrings,
+                       lidar_packet_stride,
+                       &scan);
+
+        int8_t Nplanes =
+            clc_lidar_segmentation( // out
+                                    points_and_plane,
+                                    // in
+                                    Nplanes_max,
+                                    points_sorted,
+                                    Npoints,
+                                    &ctx);
+        if(Nplanes < 0)
             goto done;
 
-        memcpy(PyArray_DATA(ipoint[i]), points_and_plane[i].ipoint_set.ipoint, sizeof(points_and_plane[i].ipoint_set.ipoint[0])*points_and_plane[i].ipoint_set.n);
+        // Success. Allocate the output and copy
+        for(int i=0; i<Nplanes; i++)
+        {
+            ipoint[i] = (PyArrayObject*)PyArray_SimpleNew(1, ((npy_intp[]){points_and_plane[i].ipoint_set.n}), NPY_UINT32);
+            if(ipoint[i] == NULL)
+                goto done;
+
+            memcpy(PyArray_DATA(ipoint[i]), points_and_plane[i].ipoint_set.ipoint, sizeof(points_and_plane[i].ipoint_set.ipoint[0])*points_and_plane[i].ipoint_set.n);
+        }
+
+        plane_pn = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Nplanes,6}), NPY_FLOAT32);
+        if(plane_pn == NULL)
+            goto done;
+        static_assert(offsetof(clc_plane_t,p_mean) == 0 && offsetof(clc_plane_t,n) == sizeof(clc_point3f_t) && sizeof(clc_plane_t) == 2*sizeof(clc_point3f_t),
+                      "clc_plane_t is expected to densely store p and then n");
+        for(int i=0; i<Nplanes; i++)
+            memcpy( &((float*)PyArray_DATA(plane_pn))[6*i], &points_and_plane[i].plane, sizeof(points_and_plane[i].plane));
+
+        py_ipoint = PyTuple_New(Nplanes);
+        if(py_ipoint == NULL) goto done;
+        for(int i=0; i<Nplanes; i++)
+        {
+            PyTuple_SET_ITEM(py_ipoint, i, ipoint[i]);
+            Py_INCREF(ipoint[i]);
+        }
     }
-
-    plane_pn = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Nplanes,6}), NPY_FLOAT32);
-    if(plane_pn == NULL)
-        goto done;
-    static_assert(offsetof(clc_plane_t,p_mean) == 0 && offsetof(clc_plane_t,n) == sizeof(clc_point3f_t) && sizeof(clc_plane_t) == 2*sizeof(clc_point3f_t),
-                  "clc_plane_t is expected to densely store p and then n");
-    for(int i=0; i<Nplanes; i++)
-        memcpy( &((float*)PyArray_DATA(plane_pn))[6*i], &points_and_plane[i].plane, sizeof(points_and_plane[i].plane));
-
-    py_ipoint = PyTuple_New(Nplanes);
-    if(py_ipoint == NULL) goto done;
-    for(int i=0; i<Nplanes; i++)
-    {
-        PyTuple_SET_ITEM(py_ipoint, i, ipoint[i]);
-        Py_INCREF(ipoint[i]);
-    }
-
     result = Py_BuildValue("OO",
                            py_ipoint,
                            plane_pn);
 
  done:
     Py_XDECREF(points);
-    Py_XDECREF(Npoints);
+    Py_XDECREF(rings);
     for(int i=0; i<Nplanes_max; i++)
         Py_XDECREF(ipoint[i]);
     Py_XDECREF(py_ipoint);
