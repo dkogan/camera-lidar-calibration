@@ -2173,7 +2173,9 @@ int8_t clc_lidar_segmentation(// out
 
 typedef struct
 {
-    unsigned int lidar_packet_stride; // applies to rings, not to az
+    // applies to rings, not to az. If lidar_packet_stride==0, dense storage is
+    // assumed
+    unsigned int lidar_packet_stride;
     uint16_t*    rings;
 
     float*       az;
@@ -2185,11 +2187,21 @@ static int compare_ring_az(const void* _a, const void* _b, void* cookie)
     const uint32_t a = *(const uint32_t*)_a;
     const uint32_t b = *(const uint32_t*)_b;
 
-    const uint16_t* ring_a = (uint16_t*)&((uint8_t*)ctx->rings )[ctx->lidar_packet_stride*a];
-    const uint16_t* ring_b = (uint16_t*)&((uint8_t*)ctx->rings )[ctx->lidar_packet_stride*b];
-    if(*ring_a < *ring_b) return -1;
-    if(*ring_a > *ring_b) return  1;
-
+    if(ctx->lidar_packet_stride > 0)
+    {
+        const uint16_t* ring_a = (uint16_t*)&((uint8_t*)ctx->rings )[ctx->lidar_packet_stride*a];
+        const uint16_t* ring_b = (uint16_t*)&((uint8_t*)ctx->rings )[ctx->lidar_packet_stride*b];
+        if(*ring_a < *ring_b) return -1;
+        if(*ring_a > *ring_b) return  1;
+    }
+    else
+    {
+        // dense storage
+        const uint16_t ring_a = ctx->rings[a];
+        const uint16_t ring_b = ctx->rings[b];
+        if(ring_a < ring_b) return -1;
+        if(ring_a > ring_b) return  1;
+    }
     if(ctx->az[a] < ctx->az[b]) return -1;
     if(ctx->az[a] > ctx->az[b]) return  1;
 
@@ -2208,7 +2220,8 @@ void clc_lidar_sort(// out
                     // in
                     int Nrings,
                     // The stride, in bytes, between each successive points or
-                    // rings value in clc_lidar_scan_t
+                    // rings value in clc_lidar_scan_t. If
+                    // lidar_packet_stride==0, dense storage is assumed
                     const unsigned int      lidar_packet_stride,
                     const clc_lidar_scan_t* scan)
 {
@@ -2218,8 +2231,17 @@ void clc_lidar_sort(// out
     {
         ipoint[i] = i;
 
-        clc_point3f_t* p = (clc_point3f_t*)&((uint8_t*)scan->points)[lidar_packet_stride*i];
-        az[i] = atan2f( p->y, p->x );
+        if(lidar_packet_stride > 0)
+        {
+            clc_point3f_t* p = (clc_point3f_t*)&((uint8_t*)scan->points)[lidar_packet_stride*i];
+            az[i] = atan2f( p->y, p->x );
+        }
+        else
+        {
+            // dense storage
+            clc_point3f_t* p = &scan->points[i];
+            az[i] = atan2f( p->y, p->x );
+        }
     }
 
     compare_ring_az_ctx_t ctx = {.lidar_packet_stride = lidar_packet_stride,
@@ -2233,8 +2255,18 @@ void clc_lidar_sort(// out
     uint16_t ring_prev         = UINT16_MAX;
     for(unsigned int i=0; i<scan->Npoints; i++)
     {
-        points[i]          = *((clc_point3f_t*)&((uint8_t*)scan->points)[lidar_packet_stride*ipoint[i]]);
-        uint16_t ring_here = *((uint16_t*)     &((uint8_t*)scan->rings )[lidar_packet_stride*ipoint[i]]);
+        uint16_t ring_here;
+        if(lidar_packet_stride > 0)
+        {
+            points[i] = *((clc_point3f_t*)&((uint8_t*)scan->points)[lidar_packet_stride*ipoint[i]]);
+            ring_here = *((uint16_t*)     &((uint8_t*)scan->rings )[lidar_packet_stride*ipoint[i]]);
+        }
+        else
+        {
+            // dense storage
+            points[i] = scan->points[ipoint[i]];
+            ring_here = scan->rings [ipoint[i]];
+        }
 
         if(ring_prev != ring_here)
         {
