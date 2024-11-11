@@ -702,15 +702,19 @@ fit_seed(// out
     return !validation_failed;
 }
 
-bool clc(// out
+static
+bool _clc_internal(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
 
          // in
-         const clc_sensor_snapshot_t* sensor_snapshots,
-         const unsigned int           Nsensor_snapshots,
+
+         // Exactly one of these should be non-NULL
+         const clc_sensor_snapshot_unsorted_t* sensor_snapshots_unsorted,
+         const clc_sensor_snapshot_sorted_t*   sensor_snapshots_sorted,
+         const unsigned int                    Nsensor_snapshots,
          // The stride, in bytes, between each successive points or rings value
-         // in clc_lidar_scan_t
+         // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
 
          // These apply to ALL the sensor_snapshots[]
@@ -721,6 +725,14 @@ bool clc(// out
          // sensor_snapshots.images[] is color or not
          const clc_is_bgr_mask_t is_bgr_mask)
 {
+    if(1 !=
+       (sensor_snapshots_unsorted != NULL) +
+       (sensor_snapshots_sorted != NULL))
+    {
+        MSG("Exactly one of (sensor_snapshots_sorted,sensor_snapshots_unsorted) should be non-NULL");
+        return false;
+    }
+
     bool result = false;
 
     clc_point3f_t* points_pool = NULL;
@@ -755,7 +767,14 @@ bool clc(// out
     {
         int Nsensors_observing = 0;
 
-        const clc_sensor_snapshot_t* sensor_snapshot = &sensor_snapshots[isnapshot];
+        const clc_sensor_snapshot_unsorted_t* sensor_snapshot_unsorted =
+            (sensor_snapshots_unsorted != NULL ) ?
+            &sensor_snapshots_unsorted[isnapshot] :
+            NULL;
+        const clc_sensor_snapshot_sorted_t* sensor_snapshot_sorted =
+            (sensor_snapshots_sorted != NULL ) ?
+            &sensor_snapshots_sorted[isnapshot] :
+            NULL;
 
         for(unsigned int icamera=0; icamera<Ncameras; icamera++)
             sensor_snapshots_filtered[Nsensor_snapshots_filtered].images[icamera].uint8 =
@@ -767,26 +786,67 @@ bool clc(// out
             sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar] =
                 (points_and_plane_full_t){};
 
-            const clc_lidar_scan_t* scan = &sensor_snapshot->lidar_scans[ilidar];
+            const clc_lidar_scan_unsorted_t* scan_unsorted =
+                (sensor_snapshot_unsorted != NULL) ?
+                &sensor_snapshot_unsorted->lidar_scans[ilidar] :
+                NULL;
+            const clc_lidar_scan_sorted_t* scan_sorted =
+                (sensor_snapshot_sorted != NULL) ?
+                &sensor_snapshot_sorted->lidar_scans[ilidar] :
+                NULL;
 
-            if(scan->Npoints == 0)
-                continue;
 
             // We have data from this lidar. Try to find the chessboard
 
+            int            points_pool_bytes_used_here = 0;
+            clc_point3f_t* points_here                 = NULL;
+            unsigned int   _Npoints[Nrings];
+            unsigned int*  Npoints = _Npoints;
 
-            // We need another chunk of memory. realloc()
-            const int points_pool_bytes_used_here =
-                scan->Npoints * sizeof(points_pool[0]);
-            points_pool =
-                (clc_point3f_t*)realloc(points_pool,
-                                        points_pool_bytes_used +
-                                        points_pool_bytes_used_here);
-            if(points_pool == NULL)
+            if(scan_unsorted != NULL)
             {
-                MSG("realloc() failed. Giving up");
-                goto done;
+                if(scan_unsorted->Npoints == 0)
+                    continue;
+
+                // We need another chunk of memory. realloc()
+                points_pool_bytes_used_here =
+                    scan_unsorted->Npoints * sizeof(points_pool[0]);
+                points_pool =
+                    (clc_point3f_t*)realloc(points_pool,
+                                            points_pool_bytes_used +
+                                            points_pool_bytes_used_here);
+                if(points_pool == NULL)
+                {
+                    MSG("realloc() failed. Giving up");
+                    goto done;
+                }
+                points_here =
+                    (clc_point3f_t*)
+                    &(((uint8_t*)points_pool          )[points_pool_bytes_used]);
+
+                clc_lidar_sort(// out
+                               //
+                               // These buffers must be pre-allocated
+                               // length sum(Npoints). Sorted by ring and then by azimuth
+                               points_here,
+                               // length Nrings
+                               Npoints,
+
+                               // in
+                               Nrings,
+                               // The stride, in bytes, between each successive points or
+                               // rings value in clc_lidar_scan_unsorted_t
+                               lidar_packet_stride,
+                               scan_unsorted);
+
+
             }
+            else
+            {
+                points_here = scan_sorted->points;
+                Npoints     = scan_sorted->Npoints;
+            }
+
 
 #warning "This is ugly. I should only store one plane's worth of info, and clc_lidar_segmentation() should tell me if it would have reported more"
             const int Nplanes_max = 2;
@@ -805,50 +865,28 @@ bool clc(// out
                 goto done;
             }
 
-            clc_point3f_t* points_here =
-                (clc_point3f_t*)
-                &(((uint8_t*)points_pool          )[points_pool_bytes_used]);
             clc_points_and_plane_t* points_and_plane_here =
                 (clc_points_and_plane_t*)
                 &(((uint8_t*)points_and_plane_pool)[points_and_plane_pool_bytes_used]);
 
-            unsigned int Npoints[Nrings];
-
-            clc_lidar_sort(// out
-                           //
-                           // These buffers must be pre-allocated
-                           // length sum(Npoints). Sorted by ring and then by azimuth
-                           points_here,
-                           // length Nrings
-                           Npoints,
-
-                           // in
-                           Nrings,
-                           // The stride, in bytes, between each successive points or
-                           // rings value in clc_lidar_scan_t
-                           lidar_packet_stride,
-                           scan);
 
             clc_lidar_segmentation_context_t ctx;
             clc_lidar_segmentation_default_context(&ctx);
 
             int8_t Nplanes_found =
-                clc_lidar_segmentation(// out
+                clc_lidar_segmentation_sorted(// out
                                        points_and_plane_here,
                                        // in
                                        Nplanes_max,
-                                       // length sum(Npoints). Sorted by ring and then by
-                                       // azimuth
-                                       points_here,
-                                       // length ctx->Nrings
-                                       Npoints,
+                                       &(clc_lidar_scan_sorted_t){.points  = points_here,
+                                                                      .Npoints = Npoints},
                                        &ctx);
 
             // If we didn't see a clear plane, I keep the previous
             // ..._pool_bytes_used value, reusing this memory on the next round.
             // If we see a clear plane, but filter this data out at a later
             // point, I will not be reusing the memory; instead I'll carry it
-            // around until the whole thing is freed at the end of clc()
+            // around until the whole thing is freed at the end of clc_unsorted()
             if(Nplanes_found == 0)
             {
                 MSG("No planes found for isnapshot=%d ilidar=%d.",
@@ -972,4 +1010,65 @@ bool clc(// out
     free(points_pool);
     free(points_and_plane_pool);
     return result;
+}
+
+bool clc_unsorted(// out
+         mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
+         mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+
+         // in
+         const clc_sensor_snapshot_unsorted_t* sensor_snapshots,
+         const unsigned int                    Nsensor_snapshots,
+         // The stride, in bytes, between each successive points or rings value
+         // in clc_lidar_scan_unsorted_t
+         const unsigned int           lidar_packet_stride,
+
+         // These apply to ALL the sensor_snapshots[]
+         const unsigned int Ncameras,
+         const unsigned int Nlidars,
+
+         // bits indicating whether a camera in
+         // sensor_snapshots.images[] is color or not
+         const clc_is_bgr_mask_t is_bgr_mask)
+{
+    return _clc_internal(// out
+                         rt_ref_lidar,
+                         rt_ref_camera,
+
+                         // in
+                         sensor_snapshots, NULL,
+                         Nsensor_snapshots,
+                         lidar_packet_stride,
+                         Ncameras,
+                         Nlidars,
+                         is_bgr_mask);
+}
+
+bool clc_sorted(// out
+         mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
+         mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+
+         // in
+         const clc_sensor_snapshot_sorted_t* sensor_snapshots,
+         const unsigned int                  Nsensor_snapshots,
+
+         // These apply to ALL the sensor_snapshots[]
+         const unsigned int Ncameras,
+         const unsigned int Nlidars,
+
+         // bits indicating whether a camera in
+         // sensor_snapshots.images[] is color or not
+         const clc_is_bgr_mask_t is_bgr_mask)
+{
+    return _clc_internal(// out
+                         rt_ref_lidar,
+                         rt_ref_camera,
+
+                         // in
+                         NULL, sensor_snapshots,
+                         Nsensor_snapshots,
+                         0,
+                         Ncameras,
+                         Nlidars,
+                         is_bgr_mask);
 }

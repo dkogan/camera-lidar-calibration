@@ -72,7 +72,16 @@ typedef struct
     uint16_t*      rings;       // For each point, which laser observed the point
 
     unsigned int   Npoints;     // How many {point,ring} tuples are stored here
-} clc_lidar_scan_t;
+} clc_lidar_scan_unsorted_t;
+
+typedef struct
+{
+    // length sum(Npoints). Sorted by ring and then by
+    // azimuth. Use clc_lidar_sort() to do this
+    clc_point3f_t* points;
+    // length ctx->Nrings
+    unsigned int* Npoints;
+} clc_lidar_scan_sorted_t;
 
 typedef struct
 {
@@ -84,9 +93,23 @@ typedef struct
         mrcal_image_bgr_t   bgr;
     } images[clc_Ncameras_max];
 
-    clc_lidar_scan_t lidar_scans[clc_Nlidars_max];
+    clc_lidar_scan_unsorted_t lidar_scans[clc_Nlidars_max];
 
-} clc_sensor_snapshot_t;
+} clc_sensor_snapshot_unsorted_t;
+
+typedef struct
+{
+    // The caller has to know which camera is grayscale and which is color. This
+    // would be indicated by a bit array on a higher level
+    union
+    {
+        mrcal_image_uint8_t uint8;
+        mrcal_image_bgr_t   bgr;
+    } images[clc_Ncameras_max];
+
+    clc_lidar_scan_sorted_t lidar_scans[clc_Nlidars_max];
+
+} clc_sensor_snapshot_sorted_t;
 
 typedef struct
 {
@@ -150,7 +173,7 @@ typedef struct
 
 
 // Sorts the lidar data by ring and azimuth, to be passable to
-// clc_lidar_segmentation()
+// clc_lidar_segmentation_sorted()
 void clc_lidar_sort(// out
                     //
                     // These buffers must be pre-allocated
@@ -162,21 +185,28 @@ void clc_lidar_sort(// out
                     // in
                     int Nrings,
                     // The stride, in bytes, between each successive points or
-                    // rings value in clc_lidar_scan_t
+                    // rings value in clc_lidar_scan_unsorted_t
                     const unsigned int      lidar_packet_stride,
-                    const clc_lidar_scan_t* scan);
+                    const clc_lidar_scan_unsorted_t* scan);
 
 
 // Returns how many planes were found or <0 on error
-int8_t clc_lidar_segmentation(// out
+int8_t clc_lidar_segmentation_unsorted(// out
                           clc_points_and_plane_t* points_and_plane,
                           // in
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
-                          // length sum(Npoints). Sorted by ring and then by
-                          // azimuth. Use clc_lidar_sort() to do this
-                          const clc_point3f_t* points,
-                          // length ctx->Nrings
-                          const unsigned int* Npoints,
+                          const clc_lidar_scan_unsorted_t* scan,
+                          // The stride, in bytes, between each successive points or rings value
+                          // in clc_lidar_scan_unsorted_t
+                          const unsigned int lidar_packet_stride,
+                          const clc_lidar_segmentation_context_t* ctx);
+
+// Returns how many planes were found or <0 on error
+int8_t clc_lidar_segmentation_sorted(// out
+                          clc_points_and_plane_t* points_and_plane,
+                          // in
+                          const int8_t Nplanes_max, // buffer length of points_and_plane[]
+                          const clc_lidar_scan_sorted_t* scan,
                           const clc_lidar_segmentation_context_t* ctx);
 
 void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ctx);
@@ -192,16 +222,33 @@ void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ct
 // On output, the rt_ref_lidar[] and rt_ref_camera[] arrays will be filled-in.
 // If solving for ALL the sensor geometry wasn't possible, we return false. On
 // success, we return true
-bool clc(// out
+bool clc_unsorted(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
 
          // in
-         const clc_sensor_snapshot_t* sensor_snapshots,
-         const unsigned int           Nsensor_snapshots,
+         const clc_sensor_snapshot_unsorted_t* sensor_snapshots,
+         const unsigned int                    Nsensor_snapshots,
          // The stride, in bytes, between each successive points or rings value
-         // in clc_lidar_scan_t
+         // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
+
+         // These apply to ALL the sensor_snapshots[]
+         const unsigned int Ncameras,
+         const unsigned int Nlidars,
+
+         // bits indicating whether a camera in
+         // sensor_snapshots.images[] is color or not
+         const clc_is_bgr_mask_t is_bgr_mask);
+
+
+bool clc_sorted(// out
+         mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
+         mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+
+         // in
+         const clc_sensor_snapshot_sorted_t* sensor_snapshots,
+         const unsigned int                  Nsensor_snapshots,
 
          // These apply to ALL the sensor_snapshots[]
          const unsigned int Ncameras,

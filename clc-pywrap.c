@@ -134,7 +134,7 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
 
     {
         const
-            clc_lidar_scan_t scan = {.points  = (clc_point3f_t*)PyArray_DATA(points),
+            clc_lidar_scan_unsorted_t scan = {.points  = (clc_point3f_t*)PyArray_DATA(points),
                                      .rings   = (uint16_t     *)PyArray_DATA(rings),
                                      .Npoints = Npoints_total};
 
@@ -150,12 +150,12 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
                        &scan);
 
         int8_t Nplanes =
-            clc_lidar_segmentation( // out
+            clc_lidar_segmentation_sorted( // out
                                     points_and_plane,
                                     // in
                                     Nplanes_max,
-                                    points_sorted,
-                                    Npoints,
+                                    &(clc_lidar_scan_sorted_t){.points  = points_sorted,
+                                                               .Npoints = Npoints},
                                     &ctx);
         if(Nplanes < 0)
             goto done;

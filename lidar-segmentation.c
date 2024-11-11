@@ -1983,15 +1983,11 @@ void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ct
 }
 
 // Returns how many planes were found or <0 on error
-int8_t clc_lidar_segmentation(// out
+int8_t clc_lidar_segmentation_sorted(// out
                           clc_points_and_plane_t* points_and_plane,
                           // in
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
-                          // length sum(Npoints). Sorted by ring and then by
-                          // azimuth. Use clc_lidar_sort() to do this
-                          const clc_point3f_t* points,
-                          // length ctx->Nrings
-                          const unsigned int* Npoints,
+                          const clc_lidar_scan_sorted_t* scan,
                           const clc_lidar_segmentation_context_t* ctx)
 {
     if(!(ctx->Nrings > 0 && ctx->Nrings <= 1024))
@@ -2004,7 +2000,7 @@ int8_t clc_lidar_segmentation(// out
     int ipoint0_in_ring[ctx->Nrings];
     ipoint0_in_ring[0] = 0;
     for(int i=1; i<ctx->Nrings; i++)
-        ipoint0_in_ring[i] = ipoint0_in_ring[i-1] + Npoints[i-1];
+        ipoint0_in_ring[i] = ipoint0_in_ring[i-1] + scan->Npoints[i-1];
 
     segment_t segments[ctx->Nrings*Nsegments_per_rotation];
     memset(segments, 0, ctx->Nrings*Nsegments_per_rotation*sizeof(segments[0]));
@@ -2015,16 +2011,16 @@ int8_t clc_lidar_segmentation(// out
                                  &segments[Nsegments_per_rotation*iring],
                                  // in
                                  iring,
-                                 &points[ipoint0_in_ring[iring]], Npoints[iring],
+                                 &scan->points[ipoint0_in_ring[iring]], scan->Npoints[iring],
                                  ctx);
 
         if(ctx->dump)
         {
-            for(unsigned int i=0; i<Npoints[iring]; i++)
+            for(unsigned int i=0; i<scan->Npoints[iring]; i++)
                 printf("%f %f all %f\n",
-                       points[ipoint0_in_ring[iring] + i].x,
-                       points[ipoint0_in_ring[iring] + i].y,
-                       points[ipoint0_in_ring[iring] + i].z);
+                       scan->points[ipoint0_in_ring[iring] + i].x,
+                       scan->points[ipoint0_in_ring[iring] + i].y,
+                       scan->points[ipoint0_in_ring[iring] + i].z);
 
             for(int i=0; i<Nsegments_per_rotation; i++)
             {
@@ -2056,7 +2052,7 @@ int8_t clc_lidar_segmentation(// out
                             &Nclusters,
                             (int)(sizeof(segment_clusters)/sizeof(segment_clusters[0])),
                             segments,
-                            points, ipoint0_in_ring,
+                            scan->points, ipoint0_in_ring,
                             ctx);
 
     if(ctx->dump)
@@ -2081,10 +2077,10 @@ int8_t clc_lidar_segmentation(// out
                     ipoint++)
                 {
                     printf("%f %f stage2-cluster-points-%d %f\n",
-                           points[ipoint0_in_ring[iring] + ipoint].x,
-                           points[ipoint0_in_ring[iring] + ipoint].y,
+                           scan->points[ipoint0_in_ring[iring] + ipoint].x,
+                           scan->points[ipoint0_in_ring[iring] + ipoint].y,
                            icluster,
-                           points[ipoint0_in_ring[iring] + ipoint].z);
+                           scan->points[ipoint0_in_ring[iring] + ipoint].z);
                 }
             }
         }
@@ -2111,7 +2107,7 @@ int8_t clc_lidar_segmentation(// out
                                    icluster,
                                    segment_cluster,
                                    segments,
-                                   points, ipoint0_in_ring, Npoints,
+                                   scan->points, ipoint0_in_ring, scan->Npoints,
                                    ctx);
 
         const int Npoints_in_plane = points_and_plane[iplane_out].ipoint_set.n;
@@ -2156,11 +2152,11 @@ int8_t clc_lidar_segmentation(// out
         if(ctx->dump)
             for(unsigned int i=0; i<points_and_plane[iplane_out].ipoint_set.n; i++)
                 printf("%f %f stage3-refined-points-%d%s %f\n",
-                       points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].x,
-                       points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].y,
+                       scan->points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].x,
+                       scan->points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].y,
                        icluster,
                        annotation,
-                       points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].z);
+                       scan->points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].z);
 
         if(rejected)
             continue;
@@ -2169,6 +2165,44 @@ int8_t clc_lidar_segmentation(// out
     }
 
     return iplane_out;
+}
+
+int8_t clc_lidar_segmentation_unsorted(// out
+                          clc_points_and_plane_t* points_and_plane,
+                          // in
+                          const int8_t Nplanes_max, // buffer length of points_and_plane[]
+                          const clc_lidar_scan_unsorted_t* scan,
+                          // The stride, in bytes, between each successive points or rings value
+                          // in clc_lidar_scan_unsorted_t
+                          const unsigned int lidar_packet_stride,
+                          const clc_lidar_segmentation_context_t* ctx)
+{
+    clc_point3f_t points[scan->Npoints];
+    unsigned int Npoints[ctx->Nrings];
+
+    clc_lidar_sort(// out
+                   //
+                   // These buffers must be pre-allocated
+                   // length sum(Npoints). Sorted by ring and then by azimuth
+                   points,
+                   // length Nrings
+                   Npoints,
+
+                   // in
+                   ctx->Nrings,
+                   // The stride, in bytes, between each successive points or
+                   // rings value in clc_lidar_scan_unsorted_t
+                   lidar_packet_stride,
+                   scan);
+
+    return
+        clc_lidar_segmentation_sorted(// out
+                               points_and_plane,
+                               // in
+                               Nplanes_max,
+                               &(clc_lidar_scan_sorted_t){.points  = points,
+                                                          .Npoints = Npoints},
+                               ctx);
 }
 
 typedef struct
@@ -2208,7 +2242,7 @@ static int compare_ring_az(const void* _a, const void* _b, void* cookie)
     return 0;
 }
 // Sorts the lidar data by ring and azimuth, to be passable to
-// clc_lidar_segmentation()
+// clc_lidar_segmentation_sorted()
 void clc_lidar_sort(// out
                     //
                     // These buffers must be pre-allocated
@@ -2223,7 +2257,7 @@ void clc_lidar_sort(// out
                     // rings value in clc_lidar_scan_t. If
                     // lidar_packet_stride==0, dense storage is assumed
                     const unsigned int      lidar_packet_stride,
-                    const clc_lidar_scan_t* scan)
+                    const clc_lidar_scan_unsorted_t* scan)
 {
     uint32_t ipoint[scan->Npoints];
     float    az    [scan->Npoints];
