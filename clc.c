@@ -22,8 +22,6 @@ typedef struct
 
 typedef struct
 {
-    uint64_t time_us_since_epoch;
-
     union
     {
         mrcal_image_uint8_t uint8;
@@ -882,9 +880,6 @@ bool clc(// out
             MSG("Need at least 2. Throwing out this snapshot");
             continue;
         }
-
-        sensor_snapshots_filtered[Nsensor_snapshots_filtered].time_us_since_epoch =
-            sensor_snapshot->time_us_since_epoch;
 
         MSG("pre-filter isnapshot=%d corresponds to %d",
             isnapshot, Nsensor_snapshots_filtered);

@@ -76,8 +76,6 @@ typedef struct
 
 typedef struct
 {
-    uint64_t time_us_since_epoch;
-
     // The caller has to know which camera is grayscale and which is color. This
     // would be indicated by a bit array on a higher level
     union
