@@ -175,7 +175,7 @@ int8_t clc_lidar_segmentation(// out
                           // in
                           const int8_t Nplanes_max, // buffer length of points_and_plane[]
                           // length sum(Npoints). Sorted by ring and then by
-                          // azimuth
+                          // azimuth. Use clc_lidar_sort() to do this
                           const clc_point3f_t* points,
                           // length ctx->Nrings
                           const unsigned int* Npoints,
