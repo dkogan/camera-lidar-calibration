@@ -65,8 +65,8 @@ if args.debug is not None:
 
 
 segmentation = \
-    clc.lidar_segmentation(args.bag,
-                           getattr(args, 'lidar-topic'),
+    clc.lidar_segmentation(bag         = args.bag,
+                           lidar_topic = getattr(args, 'lidar-topic'),
                            **kwargs)
 if args.dump or args.debug is not None:
     # Write the planes out to stdout, in a way that can be cut/pasted into

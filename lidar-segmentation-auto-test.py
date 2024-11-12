@@ -284,7 +284,8 @@ for test in tests + tests_private:
     print(f"Evaluating test. Visualize like this:  {vizcmd}")
 
     segmentation = \
-        clc.lidar_segmentation(bag, topic)
+        clc.lidar_segmentation(bag         = bag,
+                               lidar_topic = topic)
 
     Nplanes_found = len(segmentation['plane_p'])
 
