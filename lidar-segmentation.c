@@ -1945,6 +1945,10 @@ static bool stage3_refine_clusters(// out
             }
         }
 
+        if(DEBUG_ON_TRUE_POINT(ipoint_set->n == 0,
+                                &segment_cluster->plane.p_mean,
+                               "All points thrown out during refinement"))
+            return false;
 
         // Got a set of points. Fit a plane
         fit_plane_into_points__normalized(&points_and_plane->plane,
