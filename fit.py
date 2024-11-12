@@ -824,7 +824,8 @@ def fit_seed( joint_observations,
             print(msg)
         print("To exclude the really bad bags:")
         print(bag_exclusions)
-        raise Exception(f"ERROR: seed pose inconsistent. Giving up")
+        print("ERROR: seed pose inconsistent. Giving up", file=sys.stderr)
+        sys.exit(1)
 
     return \
         dict(rt_ref_board  = \
