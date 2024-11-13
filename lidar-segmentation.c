@@ -2184,11 +2184,15 @@ int8_t clc_lidar_segmentation_unsorted(// out
     clc_point3f_t points[scan->Npoints];
     unsigned int Npoints[ctx->Nrings];
 
+    uint32_t ipoint_unsorted_in_sorted_order[scan->Npoints];
+
     clc_lidar_sort(// out
                    //
                    // These buffers must be pre-allocated
                    // length sum(Npoints). Sorted by ring and then by azimuth
                    points,
+                   // indices; length(sum(Npoints)); may be NULL
+                   ipoint_unsorted_in_sorted_order,
                    // length Nrings
                    Npoints,
 
@@ -2199,14 +2203,25 @@ int8_t clc_lidar_segmentation_unsorted(// out
                    lidar_packet_stride,
                    scan);
 
-    return
+    int8_t Nplanes =
         clc_lidar_segmentation_sorted(// out
-                               points_and_plane,
-                               // in
-                               Nplanes_max,
-                               &(clc_lidar_scan_sorted_t){.points  = points,
-                                                          .Npoints = Npoints},
-                               ctx);
+                                      points_and_plane,
+                                      // in
+                                      Nplanes_max,
+                                      &(clc_lidar_scan_sorted_t){.points  = points,
+                                                                 .Npoints = Npoints},
+                                      ctx);
+    if(Nplanes <= 0)
+        return Nplanes;
+
+
+    // Update ipoints to point to the unsorted points
+    for(int i=0; i<Nplanes; i++)
+        for(unsigned int j=0; j<points_and_plane[i].ipoint_set.n; j++)
+            points_and_plane[i].ipoint_set.ipoint[j] =
+                ipoint_unsorted_in_sorted_order[ points_and_plane[i].ipoint_set.ipoint[j] ];
+
+    return Nplanes;
 }
 
 typedef struct
@@ -2252,6 +2267,8 @@ void clc_lidar_sort(// out
                     // These buffers must be pre-allocated
                     // length sum(Npoints). Sorted by ring and then by azimuth
                     clc_point3f_t* points,
+                    // indices; length(sum(Npoints))
+                    uint32_t* ipoint_unsorted_in_sorted_order,
                     // length Nrings
                     unsigned int* Npoints,
 
@@ -2263,11 +2280,10 @@ void clc_lidar_sort(// out
                     const unsigned int      lidar_packet_stride,
                     const clc_lidar_scan_unsorted_t* scan)
 {
-    uint32_t ipoint[scan->Npoints];
     float    az    [scan->Npoints];
     for(unsigned int i=0; i<scan->Npoints; i++)
     {
-        ipoint[i] = i;
+        ipoint_unsorted_in_sorted_order[i] = i;
 
         if(lidar_packet_stride > 0)
         {
@@ -2285,10 +2301,10 @@ void clc_lidar_sort(// out
     compare_ring_az_ctx_t ctx = {.lidar_packet_stride = lidar_packet_stride,
                                  .rings               = scan->rings,
                                  .az                  = az};
-    qsort_r(ipoint, scan->Npoints, sizeof(ipoint[0]),
+    qsort_r(ipoint_unsorted_in_sorted_order, scan->Npoints, sizeof(ipoint_unsorted_in_sorted_order[0]),
             &compare_ring_az, (void*)&ctx);
 
-    // I now have the sorted indices in ipoint. Copy everything
+    // I now have the sorted indices in ipoint_unsorted_in_sorted_order. Copy everything
     int      i_ring_prev_start = 0;
     uint16_t ring_prev         = UINT16_MAX;
     for(unsigned int i=0; i<scan->Npoints; i++)
@@ -2296,14 +2312,14 @@ void clc_lidar_sort(// out
         uint16_t ring_here;
         if(lidar_packet_stride > 0)
         {
-            points[i] = *((clc_point3f_t*)&((uint8_t*)scan->points)[lidar_packet_stride*ipoint[i]]);
-            ring_here = *((uint16_t*)     &((uint8_t*)scan->rings )[lidar_packet_stride*ipoint[i]]);
+            points[i] = *((clc_point3f_t*)&((uint8_t*)scan->points)[lidar_packet_stride*ipoint_unsorted_in_sorted_order[i]]);
+            ring_here = *((uint16_t*)     &((uint8_t*)scan->rings )[lidar_packet_stride*ipoint_unsorted_in_sorted_order[i]]);
         }
         else
         {
             // dense storage
-            points[i] = scan->points[ipoint[i]];
-            ring_here = scan->rings [ipoint[i]];
+            points[i] = scan->points[ipoint_unsorted_in_sorted_order[i]];
+            ring_here = scan->rings [ipoint_unsorted_in_sorted_order[i]];
         }
 
         if(ring_prev != ring_here)

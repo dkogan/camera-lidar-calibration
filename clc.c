@@ -824,11 +824,13 @@ bool _clc_internal(// out
                     (clc_point3f_t*)
                     &(((uint8_t*)points_pool          )[points_pool_bytes_used]);
 
+                uint32_t ipoint_unsorted_in_sorted_order[scan_unsorted->Npoints];
                 clc_lidar_sort(// out
                                //
                                // These buffers must be pre-allocated
                                // length sum(Npoints). Sorted by ring and then by azimuth
                                points_here,
+                               ipoint_unsorted_in_sorted_order,
                                // length Nrings
                                Npoints,
 

@@ -179,6 +179,8 @@ void clc_lidar_sort(// out
                     // These buffers must be pre-allocated
                     // length sum(Npoints). Sorted by ring and then by azimuth
                     clc_point3f_t* points,
+                    // indices; length(sum(Npoints))
+                    uint32_t* ipoint_unsorted_in_sorted_order,
                     // length Nrings
                     unsigned int* Npoints,
 
