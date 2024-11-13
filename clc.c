@@ -882,7 +882,7 @@ bool _clc_internal(// out
                                        // in
                                        Nplanes_max,
                                        &(clc_lidar_scan_sorted_t){.points  = points_here,
-                                                                      .Npoints = Npoints},
+                                                                  .Npoints = Npoints},
                                        &ctx);
 
             // If we didn't see a clear plane, I keep the previous
@@ -924,7 +924,7 @@ bool _clc_internal(// out
 
         MSG("Sensor snapshot %d observed by %d sensors",
             isnapshot, Nsensors_observing);
-        MSG("pre-filter isnapshot=%d corresponds to %d",
+        MSG("isnapshot_original=%d corresponds to isnapshot_filtered=%d",
             isnapshot, Nsensor_snapshots_filtered);
         Nsensor_snapshots_filtered++;
     }
