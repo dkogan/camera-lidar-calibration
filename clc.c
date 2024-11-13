@@ -891,14 +891,14 @@ bool _clc_internal(// out
             // around until the whole thing is freed at the end of clc_unsorted()
             if(Nplanes_found == 0)
             {
-                MSG("No planes found for isnapshot=%d ilidar=%d.",
-                    isnapshot, ilidar);
+                // MSG("No planes found for isnapshot=%d ilidar=%d.",
+                //     isnapshot, ilidar);
                 continue;
             }
             if(Nplanes_found > 1)
             {
-                MSG("Too many planes found for isnapshot=%d ilidar=%d.",
-                    isnapshot, ilidar);
+                // MSG("Too many planes found for isnapshot=%d ilidar=%d.",
+                //     isnapshot, ilidar);
                 continue;
             }
 
@@ -913,14 +913,16 @@ bool _clc_internal(// out
         }
 
 
-        MSG("Sensor snapshot %d observed by %d sensors",
-            isnapshot, Nsensors_observing);
         if(Nsensors_observing < 2)
         {
-            MSG("Need at least 2. Throwing out this snapshot");
+            // MSG("Sensor snapshot %d observed by %d sensors",
+            //     isnapshot, Nsensors_observing);
+            // MSG("Need at least 2. Throwing out this snapshot");
             continue;
         }
 
+        MSG("Sensor snapshot %d observed by %d sensors",
+            isnapshot, Nsensors_observing);
         MSG("pre-filter isnapshot=%d corresponds to %d",
             isnapshot, Nsensor_snapshots_filtered);
         Nsensor_snapshots_filtered++;
