@@ -961,9 +961,11 @@ bool _clc_internal(// out
     {
         const int NlidarObservations_this = NlidarObservations[i];
         if (NlidarObservations_this < 3)
+        {
             MSG("I need at least 3 observations of each lidar to unambiguously set the translation (the set of all plane normals must span R^3). Got only %d for lidar %d",
                 NlidarObservations_this, i);
-        goto done;
+            goto done;
+        }
     }
 
 
