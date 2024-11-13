@@ -66,7 +66,8 @@ print_full_symmetric_matrix_from_upper_triangle(const uint16_t* A,
     for(int i=0; i<N; i++)
     {
         for(int j=0; j<N; j++)
-            fprintf(stderr, "%d ", A[pairwise_index(i,j,N)]);
+            fprintf(stderr, "%d ",
+                    i==j ? 0 : A[pairwise_index(i,j,N)]);
         fprintf(stderr, "\n");
     }
 }
