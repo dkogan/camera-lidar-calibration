@@ -362,10 +362,10 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     int          Nsensor_snapshots   = -1;
 
     // sensor_snapshots is a tuple. Each slice corresponds to
-    // clc_lidar_scan_t; it is a tuple:
+    // clc_sensor_snapshot_unsorted_t; it is a tuple:
     //
     // - images      (an tuple, each element corresponding to a mrcal_image_uint8_t)
-    // - lidar_scans (an tuple, each element corresponding to clc_lidar_scan_t)
+    // - lidar_scans (an tuple, each element corresponding to clc_lidar_scan_unsorted_t)
     //
     // Ncameras and Nlidars must be consistent across all sensor snapshots. The
     // data stride inside each lidar scan is read into lidar_packet_stride, and
