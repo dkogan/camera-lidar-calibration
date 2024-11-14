@@ -694,9 +694,9 @@ fit_seed(// out
 
             if(validation_failed_here) validation_failed = true;
 
-            MSG("%sisnapshot=%d p0_err=%.2f th_err_deg=%.2f",
+            MSG("%sisnapshot=%d ilidar=%d p0_err=%.2f th_err_deg=%.2f",
                 validation_failed_here ? "FAILED: " : "",
-                isnapshot, p0_err, th_err_deg);
+                isnapshot, ilidar, p0_err, th_err_deg);
         }
     }
 
