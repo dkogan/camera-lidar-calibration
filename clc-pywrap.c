@@ -215,6 +215,14 @@ static bool ingest_camera_snapshot(// out
                                    const PyObject* py_snapshot)
 {
     PyObject* images = PyTuple_GET_ITEM(py_snapshot, 0);
+
+    if(images == Py_None)
+    {
+        memset(snapshot->images, 0, sizeof(snapshot->images));
+        *Ncameras = 0;
+        return true;
+    }
+
     int Ncameras_here;
     if(!PyTuple_Check(images))
     {
