@@ -680,7 +680,7 @@ fit_seed(// out
             const mrcal_point3_t p0_err = mrcal_point3_sub(*p0_lidar0_should, p0_lidar0_observed);
             const double p0_err_mag = mrcal_point3_mag(p0_err);
 
-            bool validation_failed_here = p0_err_mag > 4. || th_err_deg > 20.;
+            bool validation_failed_here = p0_err_mag > 0.5 || th_err_deg > 10.;
 
             if(validation_failed_here) validation_failed = true;
 
