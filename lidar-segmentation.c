@@ -1623,8 +1623,8 @@ stage3_cull_bloom_and_count_non_isolated(// out
     if(debug)
     {
         fprintf(stderr, "\n");
-        MSG("iring=%d: starting at edge: (%f,%f,%f)",
-            iring,
+        MSG("iring=%d ipoint_increment=%d: starting at edge: (%f,%f,%f)",
+            iring, ipoint_increment,
             points[ipoint0_in_ring + ipoint0].x,
             points[ipoint0_in_ring + ipoint0].y,
             points[ipoint0_in_ring + ipoint0].z);
@@ -1639,8 +1639,8 @@ stage3_cull_bloom_and_count_non_isolated(// out
     {
         if(debug)
         {
-            MSG("iring=%d: looking at (%f,%f,%f)",
-                iring,
+            MSG("iring=%d ipoint_increment=%d: looking at (%f,%f,%f)",
+                iring, ipoint_increment,
                 points[ipoint0_in_ring + ipoint].x,
                 points[ipoint0_in_ring + ipoint].y,
                 points[ipoint0_in_ring + ipoint].z);
@@ -1667,8 +1667,8 @@ stage3_cull_bloom_and_count_non_isolated(// out
 
                 if(debug)
                 {
-                    MSG("iring=%d: bloom; point is NOT in-plane; looking for the dead-zone early: %f < %f",
-                        iring,
+                    MSG("iring=%d ipoint_increment=%d: bloom; point is NOT in-plane; looking for the dead-zone early: %f < %f",
+                        iring, ipoint_increment,
                         threshold_isolation, err);
                 }
                 // We start the deadzone early. Right at this badly-fitting
@@ -1681,8 +1681,8 @@ stage3_cull_bloom_and_count_non_isolated(// out
 
                 if(debug)
                 {
-                    MSG("iring=%d: looking for the dead-zone",
-                        iring);
+                    MSG("iring=%d ipoint_increment=%d: looking for the dead-zone",
+                        iring, ipoint_increment);
                 }
 
             }
@@ -1698,8 +1698,8 @@ stage3_cull_bloom_and_count_non_isolated(// out
             // We're past the deadzone. Done!
             if(debug)
             {
-                MSG("iring=%d: past the dead zone; done",
-                    iring);
+                MSG("iring=%d ipoint_increment=%d: past the dead zone; done",
+                    iring, ipoint_increment);
             }
             return Npoints_non_isolated;
         }
@@ -1724,13 +1724,13 @@ stage3_cull_bloom_and_count_non_isolated(// out
             Npoints_non_isolated++;
         }
         if(debug)
-        {
-            MSG("iring=%d: looking for the dead zone, and point is far-enough. Continuing",
-                iring);
-        }
+            MSG("iring=%d ipoint_increment=%d: looking for the dead zone, and point is far-enough. Continuing",
+                iring, ipoint_increment);
     }
 
-#warning "reached the end of the scan. We probably should wrap around, but for now I just reject the whole plane and move on"
+    if(debug)
+        MSG("iring=%d ipoint_increment=%d: reached the end of the scan. We reject the whole plane",
+            iring, ipoint_increment);
     return INT_MAX;
 }
 
