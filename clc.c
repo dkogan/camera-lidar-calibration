@@ -658,20 +658,12 @@ fit_seed(// out
             mrcal_point3_t n_lidar0_observed;
             mrcal_point3_t p0_lidar0_observed;
 
-            if(ilidar == 0)
+            mrcal_point3_from_clc_point3f(&n_lidar0_observed,
+                                          &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.n);
+            mrcal_point3_from_clc_point3f(&p0_lidar0_observed,
+                                          &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.p_mean);
+            if(ilidar != 0)
             {
-                mrcal_point3_from_clc_point3f(&n_lidar0_observed,
-                                              &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.n);
-                mrcal_point3_from_clc_point3f(&p0_lidar0_observed,
-                                              &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.p_mean);
-            }
-            else
-            {
-                mrcal_point3_from_clc_point3f(&n_lidar0_observed,
-                                              &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.n);
-                mrcal_point3_from_clc_point3f(&p0_lidar0_observed,
-                                              &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.p_mean);
-
                 mrcal_rotate_point_R(n_lidar0_observed.xyz, NULL, NULL,
                                      &Rt_lidar0_lidar[(ilidar-1)*4*3],
                                      n_lidar0_observed.xyz);
@@ -680,27 +672,21 @@ fit_seed(// out
                                          p0_lidar0_observed.xyz);
             }
 
-            double cos_err = 0.;
-            for(int i=0; i<3; i++)
-                cos_err += n_lidar0_observed.xyz[i] * n_lidar0_should.xyz[i];
+            double cos_err = mrcal_point3_inner(n_lidar0_observed,n_lidar0_should);
             if(cos_err < -1.0) cos_err = -1.0;
             if(cos_err >  1.0) cos_err =  1.0;
 
             const double th_err_deg = acos(cos_err) * 180. / M_PI;
-            double p0_err_norm2 = 0.0;
-            for(int i=0; i<3; i++)
-                p0_err_norm2 +=
-                    (p0_lidar0_should->xyz[i] - p0_lidar0_observed.xyz[i]) *
-                    (p0_lidar0_should->xyz[i] - p0_lidar0_observed.xyz[i]);
-            const double p0_err = sqrt(p0_err_norm2);
+            const mrcal_point3_t p0_err = mrcal_point3_sub(*p0_lidar0_should, p0_lidar0_observed);
+            const double p0_err_mag = mrcal_point3_mag(p0_err);
 
-            bool validation_failed_here = p0_err > 4. || th_err_deg > 20.;
+            bool validation_failed_here = p0_err_mag > 4. || th_err_deg > 20.;
 
             if(validation_failed_here) validation_failed = true;
 
-            MSG("%sisnapshot=%d ilidar=%d p0_err=%.2f th_err_deg=%.2f",
+            MSG("%sisnapshot=%d ilidar=%d p0_err_mag=%.2f th_err_deg=%.2f",
                 validation_failed_here ? "FAILED: " : "",
-                isnapshot, ilidar, p0_err, th_err_deg);
+                isnapshot, ilidar, p0_err_mag, th_err_deg);
         }
     }
 
