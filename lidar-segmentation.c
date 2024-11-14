@@ -760,6 +760,9 @@ stage1_segment_from_ring(// out
                          const int Npoints_thisring,
                          const clc_lidar_segmentation_context_t* ctx)
 {
+    if(Npoints_thisring <= 0)
+        return;
+
     // I want this to be fast, and I'm looking for very clear planes, so I do a
     // crude thing here:
     //
