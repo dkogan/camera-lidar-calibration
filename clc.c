@@ -362,7 +362,11 @@ bool align_point_clouds(// out
 
     // Now the translation. R01 x1 + t01 ~ x0
     // -> t01 ~ x0 - R01 x1
+    //
+    // I now have an estimate for t01 for each observation. Ideally they should
+    // be self-consistent, so I compute the mean:
     // -> t01 = mean(x0 - R01 x1)
+    *(mrcal_point3_t*)(&Rt01[9]) = (mrcal_point3_t){};
     for(int i=0; i<Nbuffer; i++)
     {
         double R01_x1[3];
@@ -370,7 +374,7 @@ bool align_point_clouds(// out
                              Rt01,
                              points1[i].xyz);
         for(int j=0; j<3; j++)
-            Rt01[9 + j] = points0[i].xyz[j] - R01_x1[j];
+            Rt01[9 + j] += points0[i].xyz[j] - R01_x1[j];
     }
     for(int j=0; j<3; j++)
         Rt01[9 + j] /= (double)Nbuffer;
