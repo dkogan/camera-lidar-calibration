@@ -1549,15 +1549,6 @@ stage3_cull_bloom_and_count_non_isolated(// out
     }
     else
     {
-        // if(icluster==0 && iring==3)
-        // {
-        //     MSG("%f %f %f %f",
-        //         points[ ipoint_set->ipoint[ipoint_set->n-1] ].x,
-        //         points[ ipoint_set->ipoint[ipoint_set->n-1] ].y,
-        //         points[ ipoint_set->ipoint[ipoint_set->n-1] ].z,
-        //         err_previous);
-        // }
-
         bool err_positive_first = err_previous > 0.0f;
 
 
@@ -1572,20 +1563,6 @@ stage3_cull_bloom_and_count_non_isolated(// out
             // I stop the cull when the error turns around at the other side of 0
             bool err_positive_now        = err > 0.0f;
             bool err_positive_derivative = err > err_previous;
-
-
-
-            // if(icluster==0 && iring==3)
-            // {
-            //     MSG("%f %f %f %f",
-            //         points[ ipoint_set->ipoint[i] ].x,
-            //         points[ ipoint_set->ipoint[i] ].y,
-            //         points[ ipoint_set->ipoint[i] ].z,
-            //         err);
-            // }
-
-
-
 
             if( fabsf(err) < threshold_bloom ||
                 ((err_positive_now ^ err_positive_first) &&
