@@ -360,6 +360,26 @@ bool align_point_clouds(// out
                                            NULL))
         return false;
 
+    // We computed a rotation. It should fit the data decently well. If it
+    // doesn't, something is broken, and we should complain
+    for(int i=0; i<Nbuffer; i++)
+    {
+        mrcal_point3_t normals0_validation;
+        mrcal_rotate_point_R(normals0_validation.xyz, NULL, NULL,
+                             Rt01,
+                             normals1[i].xyz);
+
+        const double cos_err = mrcal_point3_inner(normals0_validation, normals0[i]);
+
+#warning unhardcode
+        const double cos_threshold = cos(5.*M_PI/180.);
+        if(cos_err < cos_threshold)
+        {
+            MSG("Inconsistent seed rotation. Giving up");
+            return false;
+        }
+    }
+
     // Now the translation. R01 x1 + t01 ~ x0
     // -> t01 ~ x0 - R01 x1
     //
@@ -369,15 +389,39 @@ bool align_point_clouds(// out
     *(mrcal_point3_t*)(&Rt01[9]) = (mrcal_point3_t){};
     for(int i=0; i<Nbuffer; i++)
     {
-        double R01_x1[3];
-        mrcal_rotate_point_R(R01_x1, NULL, NULL,
+        mrcal_point3_t R01_x1;
+        mrcal_rotate_point_R(R01_x1.xyz, NULL, NULL,
                              Rt01,
                              points1[i].xyz);
+        mrcal_point3_t t01 = mrcal_point3_sub(points0[i],R01_x1);
         for(int j=0; j<3; j++)
-            Rt01[9 + j] += points0[i].xyz[j] - R01_x1[j];
+            Rt01[9 + j] += t01.xyz[j];
     }
     for(int j=0; j<3; j++)
         Rt01[9 + j] /= (double)Nbuffer;
+
+    // We computed a seed translation as a mean of candidate translations. They
+    // should have been self-consistent, and each one should be close to the
+    // mean. If not, something is broken, and we should complain
+    for(int i=0; i<Nbuffer; i++)
+    {
+        mrcal_point3_t R01_x1;
+        mrcal_rotate_point_R(R01_x1.xyz, NULL, NULL,
+                             Rt01,
+                             points1[i].xyz);
+        mrcal_point3_t t01 = mrcal_point3_sub(points0[i],R01_x1);
+
+        mrcal_point3_t t01_err = mrcal_point3_sub(t01,
+                                                  *(mrcal_point3_t*)(&Rt01[9]));
+        double norm2_t01_err = mrcal_point3_norm2(t01_err);
+
+#warning unhardcode
+        if(norm2_t01_err > 0.5*0.5)
+        {
+            MSG("Inconsistent seed translation. Giving up");
+            return false;
+        }
+    }
 
     return true;
 }
