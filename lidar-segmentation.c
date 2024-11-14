@@ -1753,7 +1753,7 @@ stage3_cull_bloom_and_count_non_isolated(// out
         }
     }
 
-#warning "reached the end of the scan. We probably should wrap around, but for now I just reject the plane and move on"
+#warning "reached the end of the scan. We probably should wrap around, but for now I just reject the whole plane and move on"
     return INT_MAX;
 }
 
