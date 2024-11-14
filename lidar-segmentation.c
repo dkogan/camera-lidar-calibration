@@ -1757,6 +1757,33 @@ static bool stage3_refine_clusters(// out
      */
 
 
+    // I'm turning this off for now. It doesn't work right. I'm at ddc519d. This
+    // fails:
+    //
+    //   ./lidar-segmentation-test.py --dump --debug -1 ${^x0y0x1y1} \
+    //     /vl_points_1 \
+    //     2023-11-01/images-and-lidar-24.bag \
+    //   | awk " $x0y0x1y1[1] < \$1 && \$1 < $x0y0x1y1[3] && $x0y0x1y1[2] < \$2 && \$2 < $x0y0x1y1[4]" \
+    //   | feedgnuplot \
+    //       --style label "with labels" \
+    //       --tuplesize label 4 \
+    //       --style all "with points pt 7 ps 0.5" \
+    //       --style stage1-segment "with vectors" \
+    //       --tuplesize stage1-segment 6 \
+    //       --3d \
+    //       --domain \
+    //       --dataid \
+    //       --square \
+    //       --points \
+    //       --tuplesizeall 3 \
+    //       --autolegend \
+    //       --xlabel x \
+    //       --ylabel y \
+    //       --zlabel z
+    const bool enable_bloom_culling = false;
+
+
+
     int iring0,iring1;
     ring_minmax_from_segment_cluster(&iring0, &iring1, segment_cluster);
 
@@ -1846,7 +1873,7 @@ static bool stage3_refine_clusters(// out
                                      segment->ipoint1,
                                      ctx);
 
-            if(ipoint_set->n > ipoint_set_start_this_ring)
+            if(enable_bloom_culling && ipoint_set->n > ipoint_set_start_this_ring)
             {
                 // some points were added
 
@@ -1895,7 +1922,7 @@ static bool stage3_refine_clusters(// out
                                      ipoint0_in_ring[iring],
                                      segment->ipoint0,
                                      ctx);
-            if(ipoint_set->n > ipoint_set_start_this_ring)
+            if(enable_bloom_culling && ipoint_set->n > ipoint_set_start_this_ring)
             {
                 // This will be non-zero ONLY if final_iteration
                 int Npoints_non_isolated_here =
