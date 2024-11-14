@@ -1887,7 +1887,7 @@ static bool stage3_refine_clusters(// out
                 // isn't isolated in space. And if it isn't, I reject it
 
                 // This will be non-zero ONLY if final_iteration
-                Npoints_non_isolated +=
+                int Npoints_non_isolated_here =
                     stage3_cull_bloom_and_count_non_isolated(// out
                                                              ipoint_set,
                                                              // in
@@ -1900,6 +1900,10 @@ static bool stage3_refine_clusters(// out
                                                              final_iteration,
                                                              debug,
                                                              ctx);
+                if(Npoints_non_isolated_here == INT_MAX)
+                    Npoints_non_isolated = Npoints_non_isolated_here;
+                else
+                    Npoints_non_isolated += Npoints_non_isolated_here;
             }
 
 
@@ -1917,7 +1921,7 @@ static bool stage3_refine_clusters(// out
             if(ipoint_set->n > ipoint_set_start_this_ring)
             {
                 // This will be non-zero ONLY if final_iteration
-                Npoints_non_isolated +=
+                int Npoints_non_isolated_here =
                     stage3_cull_bloom_and_count_non_isolated(// out
                                                              ipoint_set,
                                                              // in
@@ -1930,6 +1934,10 @@ static bool stage3_refine_clusters(// out
                                                              final_iteration,
                                                              debug,
                                                              ctx);
+                if(Npoints_non_isolated_here == INT_MAX)
+                    Npoints_non_isolated = Npoints_non_isolated_here;
+                else
+                    Npoints_non_isolated += Npoints_non_isolated_here;
             }
 
             // I don't bother to look in rings that don't appear in the
