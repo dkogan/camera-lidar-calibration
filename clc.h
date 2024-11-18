@@ -85,6 +85,14 @@ typedef struct
 
 typedef struct
 {
+    // The segmented point cloud, as indices into points[]
+    clc_points_and_plane_t points_and_plane;
+    // assumed stored densely
+    clc_point3f_t* points;
+} clc_lidar_scan_segmented_t;
+
+typedef struct
+{
     // The caller has to know which camera is grayscale and which is color. This
     // would be indicated by a bit array on a higher level
     union
@@ -110,6 +118,20 @@ typedef struct
     clc_lidar_scan_sorted_t lidar_scans[clc_Nlidars_max];
 
 } clc_sensor_snapshot_sorted_t;
+
+typedef struct
+{
+    // The caller has to know which camera is grayscale and which is color. This
+    // would be indicated by a bit array on a higher level
+    union
+    {
+        mrcal_image_uint8_t uint8;
+        mrcal_image_bgr_t   bgr;
+    } images[clc_Ncameras_max];
+
+    clc_lidar_scan_segmented_t lidar_scans[clc_Nlidars_max];
+
+} clc_sensor_snapshot_segmented_t;
 
 typedef struct
 {
@@ -251,6 +273,23 @@ bool clc_sorted(// out
          // in
          const clc_sensor_snapshot_sorted_t* sensor_snapshots,
          const unsigned int                  Nsensor_snapshots,
+
+         // These apply to ALL the sensor_snapshots[]
+         const unsigned int Ncameras,
+         const unsigned int Nlidars,
+
+         // bits indicating whether a camera in
+         // sensor_snapshots.images[] is color or not
+         const clc_is_bgr_mask_t is_bgr_mask);
+
+
+bool clc_lidar_segmented(// out
+         mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
+         mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+
+         // in
+         const clc_sensor_snapshot_segmented_t* sensor_snapshots,
+         const unsigned int                     Nsensor_snapshots,
 
          // These apply to ALL the sensor_snapshots[]
          const unsigned int Ncameras,
