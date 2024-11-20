@@ -1951,50 +1951,53 @@ bool _clc_internal(// out
             unsigned int   _Npoints[Nrings];
             unsigned int*  Npoints = _Npoints;
 
-            if(scan_unsorted != NULL)
+            if(scan_unsorted != NULL ||
+               scan_sorted != NULL)
             {
-                if(scan_unsorted->Npoints == 0)
-                    continue;
 
-                // We need another chunk of memory. realloc()
-                points_pool_bytes_used_here =
-                    scan_unsorted->Npoints * sizeof(points_pool[0]);
-                points_pool =
-                    (clc_point3f_t*)realloc(points_pool,
-                                            points_pool_bytes_used +
-                                            points_pool_bytes_used_here);
-                if(points_pool == NULL)
+                if(scan_unsorted != NULL)
                 {
-                    MSG("realloc() failed. Giving up");
-                    goto done;
+                    if(scan_unsorted->Npoints == 0)
+                        continue;
+
+                    // We need another chunk of memory. realloc()
+                    points_pool_bytes_used_here =
+                        scan_unsorted->Npoints * sizeof(points_pool[0]);
+                    points_pool =
+                        (clc_point3f_t*)realloc(points_pool,
+                                                points_pool_bytes_used +
+                                                points_pool_bytes_used_here);
+                    if(points_pool == NULL)
+                    {
+                        MSG("realloc() failed. Giving up");
+                        goto done;
+                    }
+                    points_here =
+                        (clc_point3f_t*)
+                        &(((uint8_t*)points_pool          )[points_pool_bytes_used]);
+
+                    uint32_t ipoint_unsorted_in_sorted_order[scan_unsorted->Npoints];
+                    clc_lidar_sort(// out
+                                   //
+                                   // These buffers must be pre-allocated
+                                   // length sum(Npoints). Sorted by ring and then by azimuth
+                                   points_here,
+                                   ipoint_unsorted_in_sorted_order,
+                                   // length Nrings
+                                   Npoints,
+
+                                   // in
+                                   Nrings,
+                                   // The stride, in bytes, between each successive points or
+                                   // rings value in clc_lidar_scan_unsorted_t
+                                   lidar_packet_stride,
+                                   scan_unsorted);
                 }
-                points_here =
-                    (clc_point3f_t*)
-                    &(((uint8_t*)points_pool          )[points_pool_bytes_used]);
-
-                uint32_t ipoint_unsorted_in_sorted_order[scan_unsorted->Npoints];
-                clc_lidar_sort(// out
-                               //
-                               // These buffers must be pre-allocated
-                               // length sum(Npoints). Sorted by ring and then by azimuth
-                               points_here,
-                               ipoint_unsorted_in_sorted_order,
-                               // length Nrings
-                               Npoints,
-
-                               // in
-                               Nrings,
-                               // The stride, in bytes, between each successive points or
-                               // rings value in clc_lidar_scan_unsorted_t
-                               lidar_packet_stride,
-                               scan_unsorted);
-
-
-            }
-            else if(scan_sorted != NULL)
-            {
-                points_here = scan_sorted->points;
-                Npoints     = scan_sorted->Npoints;
+                else
+                {
+                    points_here = scan_sorted->points;
+                    Npoints     = scan_sorted->Npoints;
+                }
 
 #warning "This is ugly. I should only store one plane's worth of info, and clc_lidar_segmentation() should tell me if it would have reported more"
                 const int Nplanes_max = 2;
