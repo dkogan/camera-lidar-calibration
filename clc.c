@@ -1875,11 +1875,8 @@ bool _clc_internal(// out
 
     bool result = false;
 
-    clc_point3f_t* points_pool = NULL;
-    int points_pool_bytes_used = 0;
-
-    clc_points_and_plane_t* points_and_plane_pool            = NULL;
-    int                     points_and_plane_pool_bytes_used = 0;
+    // contains the points_pool and the points_and_plane_pool
+    uint8_t* pool = NULL;
 
     // I start by finding the chessboard in the raw sensor data, and throwing
     // out the sensor snapshots with too few shared-sensor observations
@@ -1900,6 +1897,37 @@ bool _clc_internal(// out
 
 #warning hardcoded
     const unsigned int Nrings = 32;
+
+    // If we need to sort or segment the lidar data, I need to allocate memory.
+    // Here I get the buffer sizes
+    int Npoints_buffer      = 0;
+    int Nlidar_scans_buffer = 0;
+    for(unsigned int isnapshot=0; isnapshot < Nsensor_snapshots; isnapshot++)
+        for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
+        {
+            if(sensor_snapshots_unsorted != NULL)
+                Npoints_buffer += sensor_snapshots_unsorted[isnapshot].lidar_scans[ilidar].Npoints;
+            Nlidar_scans_buffer++;
+        }
+
+#warning "This is ugly. I should only store one plane's worth of info, and clc_lidar_segmentation() should tell me if it would have reported more"
+    const int Nplanes_max = 2;
+    // I allocate Nplanes_max extra planes so that clc_lidar_segmentation()
+    // can use them, but I only use one plane's worth
+
+    pool = malloc(Npoints_buffer * sizeof(clc_point3f_t) +
+                  (Nlidar_scans_buffer + Nplanes_max) * sizeof(clc_points_and_plane_t));
+    if(pool == NULL)
+    {
+        MSG("malloc() failed. Giving up");
+        goto done;
+    }
+
+    clc_point3f_t*          points_pool           = (clc_point3f_t*)pool;
+    clc_points_and_plane_t* points_and_plane_pool = (clc_points_and_plane_t*)&pool[Npoints_buffer * sizeof(clc_point3f_t)];
+
+    int points_pool_index           = 0;
+    int points_and_plane_pool_index = 0;
 
 
     int Nsensor_snapshots_filtered = 0;
@@ -1946,13 +1974,12 @@ bool _clc_internal(// out
 
             // We have data from this lidar. Try to find the chessboard
 
-            int            points_pool_bytes_used_here = 0;
-            clc_point3f_t* points_here                 = NULL;
+            clc_point3f_t* points_here = NULL;
             unsigned int   _Npoints[Nrings];
             unsigned int*  Npoints = _Npoints;
 
             if(scan_unsorted != NULL ||
-               scan_sorted != NULL)
+               scan_sorted   != NULL)
             {
 
                 if(scan_unsorted != NULL)
@@ -1960,21 +1987,8 @@ bool _clc_internal(// out
                     if(scan_unsorted->Npoints == 0)
                         continue;
 
-                    // We need another chunk of memory. realloc()
-                    points_pool_bytes_used_here =
-                        scan_unsorted->Npoints * sizeof(points_pool[0]);
-                    points_pool =
-                        (clc_point3f_t*)realloc(points_pool,
-                                                points_pool_bytes_used +
-                                                points_pool_bytes_used_here);
-                    if(points_pool == NULL)
-                    {
-                        MSG("realloc() failed. Giving up");
-                        goto done;
-                    }
-                    points_here =
-                        (clc_point3f_t*)
-                        &(((uint8_t*)points_pool          )[points_pool_bytes_used]);
+                    points_here = &points_pool[points_pool_index];
+                    points_pool_index += scan_unsorted->Npoints;
 
                     uint32_t ipoint_unsorted_in_sorted_order[scan_unsorted->Npoints];
                     clc_lidar_sort(// out
@@ -1999,26 +2013,9 @@ bool _clc_internal(// out
                     Npoints     = scan_sorted->Npoints;
                 }
 
-#warning "This is ugly. I should only store one plane's worth of info, and clc_lidar_segmentation() should tell me if it would have reported more"
-                const int Nplanes_max = 2;
-                // I allocate Nplanes_max planes so that clc_lidar_segmentation()
-                // can use them, but I only use one plane's worth. So
-                // points_and_plane_pool_bytes_used_here has just one plane
-                const int points_and_plane_pool_bytes_used_here =
-                    sizeof(points_and_plane_pool[0]);
-                points_and_plane_pool =
-                    (clc_points_and_plane_t*)realloc(points_and_plane_pool,
-                                                     points_and_plane_pool_bytes_used +
-                                                     Nplanes_max * points_and_plane_pool_bytes_used_here);
-                if(points_and_plane_pool == NULL)
-                {
-                    MSG("realloc() failed. Giving up");
-                    goto done;
-                }
-
                 clc_points_and_plane_t* points_and_plane_here =
-                    (clc_points_and_plane_t*)
-                    &(((uint8_t*)points_and_plane_pool)[points_and_plane_pool_bytes_used]);
+                    &points_and_plane_pool[points_and_plane_pool_index];
+                points_and_plane_pool_index++;
 
 
                 clc_lidar_segmentation_context_t ctx;
@@ -2055,8 +2052,6 @@ bool _clc_internal(// out
                 sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar] =
                     (points_and_plane_full_t){ .points           = points_here,
                                                .points_and_plane = points_and_plane_here };
-                points_pool_bytes_used           += points_pool_bytes_used_here;
-                points_and_plane_pool_bytes_used += points_and_plane_pool_bytes_used_here;
 
                 Nsensors_observing++;
             }
@@ -2321,8 +2316,7 @@ bool _clc_internal(// out
     result = true;
 
  done:
-    free(points_pool);
-    free(points_and_plane_pool);
+    free(pool);
     return result;
 }
 
