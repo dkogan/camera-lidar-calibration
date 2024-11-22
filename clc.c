@@ -802,6 +802,40 @@ static int num_states(const callback_context_t* ctx)
         num_states_boards(ctx);
 }
 
+static int measurement_index_camera(const unsigned int isnapshot,
+                                    const unsigned int icamera,
+                                    const callback_context_t* ctx)
+{
+    return -1;
+}
+
+static int measurement_index_lidar(const unsigned int isnapshot,
+                                   const unsigned int ilidar,
+                                   const callback_context_t* ctx)
+{
+    int imeas = 0;
+
+    for(unsigned int _isnapshot=0; _isnapshot < ctx->Nsnapshots; _isnapshot++)
+    {
+        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[_isnapshot];
+        for(unsigned int _ilidar=0; _ilidar<ctx->Nlidars; _ilidar++)
+        {
+            if(isnapshot == _isnapshot && ilidar == _ilidar)
+                return imeas;
+
+            const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[_ilidar];
+
+            if(points_and_plane_full->points == NULL)
+                continue;
+
+            const clc_ipoint_set_t* set =
+                &points_and_plane_full->points_and_plane->ipoint_set;
+            imeas += set->n;
+        }
+    }
+    return -1;
+}
+
 static int num_measurements_lidars(const callback_context_t* ctx)
 {
     int Nmeasurements = 0;
@@ -827,6 +861,13 @@ static int num_measurements_cameras(const callback_context_t* ctx)
 {
     return 0;
 }
+static int measurement_index_regularization(const callback_context_t* ctx)
+{
+    return
+        num_measurements_lidars(ctx) +
+        num_measurements_cameras(ctx);
+}
+
 static int num_measurements_regularization(const callback_context_t* ctx)
 {
     return 6*ctx->Nsnapshots;
