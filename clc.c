@@ -1539,83 +1539,202 @@ static void cost(const double*   b,
         Jrowptr[Nmeasurements] = iJacobian;
 }
 
-
-
-#warning "disabled plot_residuals() and plot_geometry() for now"
-#if 1
-#define plot_residuals(...)
-#define plot_geometry(...)
-#else
-plot_residuals(filename_base,
-                   *,
-                   x_camera,
-                   x_lidar,
-                   x_regularization)
+static bool
+plot_residuals(const char* filename_base,
+               const double* x,
+               const callback_context_t* ctx)
 {
-    imeas_all = list(measurement_indices());
+    char filename[1024];
+    char cmd[2048];
+    FILE* fp;
+    int result;
 
-    measurement_boundaries =
-        [ x
-          for imeas,what in imeas_all
-          for x in
-          (f'arrow from {imeas}, graph 0 to {imeas}, graph 1 nohead',
-           f'label "{what}" at {imeas},graph 0 left front offset 0,character 2 boxed') ];
+    const int imeas_lidar_0                = measurement_index_lidar(0,0, ctx);
+    const int Nmeas_lidar_observation_all  = num_measurements_lidars(ctx);
+    const int imeas_camera_0               = measurement_index_camera(0,0, ctx);
+    const int Nmeas_camera_observation_all = num_measurements_cameras(ctx);
+    const int imeas_regularization_0       = measurement_index_regularization(ctx);
+    const int Nmeas_regularization         = num_measurements_regularization(ctx);
 
-    filename = f'{filename_base}.gp';
-    gp.plot((imeas_camera_0 + np.arange(Nmeas_camera_observation_all),
-             x_camera*SCALE_MEASUREMENT_PX,
-             dict(legend = "Camera residuals")),
-            (imeas_lidar_0 + np.arange(Nmeas_lidar_observation_all),
-             x_lidar*SCALE_MEASUREMENT_M,
-             dict(legend = "LIDAR residuals",
-                  y2     = True)),
-            (imeas_regularization_0 + np.arange(Nmeas_regularization),
-             x_regularization*SCALE_MEASUREMENT_PX,
-             dict(legend = "Regularization residuals; plotted in pixels on the left y axis")),
-            _with = 'points',
-            _set  = measurement_boundaries +
-                    [f'link y2 via y/{SCALE_MEASUREMENT_PX}*{SCALE_MEASUREMENT_M} inverse y*{SCALE_MEASUREMENT_PX}/{SCALE_MEASUREMENT_M}'],
-            ylabel  = 'Camera fit residual (pixels)',
-            y2label = 'LIDAR fit residual (m)',
-            hardcopy = filename);
-    print(f"Wrote '{filename}'");
+    if( (int)sizeof(filename) <= snprintf(filename, sizeof(filename),
+                                          "%s.gp", filename_base) )
+    {
+        MSG("sizeof(filename) exceeded. Giving up making the plot");
+        return false;
+    }
 
-    filename = f'{filename_base}-histogram.gp';
-    if(x_camera.size)
-        data_tuple_cameras =
-            (x_camera*SCALE_MEASUREMENT_PX,
-             dict(histogram=True,
-                  binwidth = SCALE_MEASUREMENT_PX/10,
-                  xrange   = (-3*SCALE_MEASUREMENT_PX,3*SCALE_MEASUREMENT_PX),
-                  xlabel   = "Camera residual (px)",
-                  ylabel   = "frequency"));
-    else
-        data_tuple_cameras = None;
+#warning "plot the measurement boundaries"
+    // imeas_all = list(measurement_indices());
 
-    data_tuple_lidars =
-        (x_lidar*SCALE_MEASUREMENT_M,
-         dict(histogram=True,
-              binwidth = SCALE_MEASUREMENT_M/10,
-              xrange   = (-3*SCALE_MEASUREMENT_M,3*SCALE_MEASUREMENT_M),
-              xlabel   = "LIDAR residual (m)",
-              ylabel   = "frequency"));
+    // measurement_boundaries =
+    //     [ x
+    //       for imeas,what in imeas_all
+    //       for x in
+    //       (f'arrow from {imeas}, graph 0 to {imeas}, graph 1 nohead',
+    //        f'label "{what}" at {imeas},graph 0 left front offset 0,character 2 boxed') ];
+    //_set  = measurement_boundaries +
 
-    if(data_tuple_cameras is not None)
-        gp.plot( data_tuple_cameras,
-                 data_tuple_lidars,
-                 multiplot='title "LIDAR-camera calibration residuals" layout 2,1',
-                 hardcopy = filename);
-    else
-        gp.plot( // Not a multiplot; pass the mixed plot/process options the
-                 // gp.plot(), and let it figure out what's what
-                 data_tuple_lidars[:-1],
-                 **data_tuple_lidars[-1],
-                 hardcopy = filename);
+    if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),
+                                     "feedgnuplot "
+                                     "--domain --dataid "
+                                     "--legend lidar 'LIDAR residuals' "
+                                     "--legend camera 'Camera residuals' "
+                                     "--legend regularization 'Regularization residuals; plotted in pixels on the left y axis' "
+                                     "--y2 lidar "
+                                     "--with points "
+                                     "--set 'link y2 via y*%f inverse y*%f' "
+                                     "--ylabel   'Camera fit residual (pixels)' "
+                                     "--y2label  'LIDAR fit residual (m)' "
+                                     "--hardcopy '%s' ",
+                                     SCALE_MEASUREMENT_M/SCALE_MEASUREMENT_PX,
+                                     SCALE_MEASUREMENT_PX/SCALE_MEASUREMENT_M,
+                                     filename) )
+    {
+        MSG("sizeof(cmd) exceeded. Giving up making the plot");
+        return false;
+    }
 
-    print(f"Wrote '{filename}'");
+    fp = popen(cmd, "w");
+    if(fp == NULL)
+    {
+        MSG("popen(feedgnuplot ...) failed");
+        return false;
+    }
+
+    for(int i=0; i<Nmeas_lidar_observation_all; i++)
+        fprintf(fp, "%d lidar %f\n",
+                imeas_lidar_0 + i,
+                x[imeas_lidar_0 + i] * SCALE_MEASUREMENT_M);
+    for(int i=0; i<Nmeas_camera_observation_all; i++)
+        fprintf(fp, "%d camera %f\n",
+                imeas_camera_0 + i,
+                x[imeas_camera_0 + i] * SCALE_MEASUREMENT_PX);
+    for(int i=0; i<Nmeas_regularization; i++)
+        fprintf(fp, "%d regularization %f\n",
+                imeas_regularization_0 + i,
+                x[imeas_regularization_0 + i] * SCALE_MEASUREMENT_PX);
+
+    result = pclose(fp);
+    if(result < 0)
+    {
+        MSG("pclose() failed. Giving up making the plot");
+        return false;
+    }
+    if(result > 0)
+    {
+        MSG("feedgnuplot failed. Giving up making the plot");
+        return false;
+    }
+    MSG("Wrote '%s'", filename);
+
+
+
+    if( (int)sizeof(filename) <= snprintf(filename, sizeof(filename),
+                                          "%s-histogram-lidar.gp", filename_base) )
+    {
+        MSG("sizeof(filename) exceeded. Giving up making the plot");
+        return false;
+    }
+
+    if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),
+                                     "feedgnuplot "
+                                     "--histogram 0 "
+                                     "--binwidth %f "
+                                     "--xmin %f --xmax %f "
+                                     "--xlabel 'LIDAR residual (m)' "
+                                     "--ylabel 'frequency' "
+                                     "--hardcopy '%s' ",
+                                     SCALE_MEASUREMENT_M/10.,
+                                     -3.*SCALE_MEASUREMENT_M,
+                                     3.*SCALE_MEASUREMENT_M,
+                                     filename) )
+
+    {
+        MSG("sizeof(cmd) exceeded. Giving up making the plot");
+        return false;
+    }
+
+    fp = popen(cmd, "w");
+    if(fp == NULL)
+    {
+        MSG("popen(feedgnuplot ...) failed");
+        return false;
+    }
+    for(int i=0; i<Nmeas_lidar_observation_all; i++)
+        fprintf(fp, "%f\n",
+                x[imeas_lidar_0 + i] * SCALE_MEASUREMENT_M);
+    result = pclose(fp);
+    if(result < 0)
+    {
+        MSG("pclose() failed. Giving up making the plot");
+        return false;
+    }
+    if(result > 0)
+    {
+        MSG("feedgnuplot failed. Giving up making the plot");
+        return false;
+    }
+    MSG("Wrote '%s'", filename);
+
+
+    if(Nmeas_camera_observation_all)
+    {
+        if( (int)sizeof(filename) <= snprintf(filename, sizeof(filename),
+                                              "%s-histogram-camera.gp", filename_base) )
+        {
+            MSG("sizeof(filename) exceeded. Giving up making the plot");
+            return false;
+        }
+
+        if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),
+                                         "feedgnuplot "
+                                         "--histogram 0 "
+                                         "--binwidth %f "
+                                         "--xmin %f --xmax %f "
+                                         "--xlabel 'CAMERA residual (px)' "
+                                         "--ylabel 'frequency' "
+                                         "--hardcopy '%s' ",
+                                         SCALE_MEASUREMENT_PX/10.,
+                                         -3.*SCALE_MEASUREMENT_PX,
+                                         3.*SCALE_MEASUREMENT_PX,
+                                         filename) )
+
+        {
+            MSG("sizeof(cmd) exceeded. Giving up making the plot");
+            return false;
+        }
+
+        fp = popen(cmd, "w");
+            if(fp == NULL)
+            {
+                MSG("popen(feedgnuplot ...) failed");
+                return false;
+            }
+        for(int i=0; i<Nmeas_camera_observation_all; i++)
+            fprintf(fp, "%f\n",
+                    x[imeas_camera_0 + i] * SCALE_MEASUREMENT_M);
+
+        result = pclose(fp);
+        if(result < 0)
+        {
+            MSG("pclose() failed. Giving up making the plot");
+            return false;
+        }
+        if(result > 0)
+        {
+            MSG("feedgnuplot failed. Giving up making the plot");
+            return false;
+        }
+        MSG("Wrote '%s'", filename);
+    }
+
+    return true;
 }
 
-
+#warning "disabled plot_geometry() for now"
+#if 1
+#define plot_geometry(...)
+#else
 def plot_geometry(filename,
                   *,
                   rt_ref_board,
@@ -1769,7 +1888,7 @@ fit(// in,out
                       &ctx);
 
     cost(b, x, NULL, &ctx);
-    plot_residuals("/tmp/residuals-seed", x);
+    plot_residuals("/tmp/residuals-seed", x, &ctx);
 
     for(int i=0; i<Nmeasurements; i++)
         if( fabs(x[i])*SCALE_MEASUREMENT_PX > 1000 ||
@@ -1911,7 +2030,7 @@ fit(// in,out
     // MSG("norm2(error_regularization)/norm2(error): %.3f m",
     //     norm2(x_regularization)/norm2(x));
 
-    plot_residuals("/tmp/residuals", x);
+    plot_residuals("/tmp/residuals", x, &ctx);
 
     if(solver_context != NULL)
         dogleg_freeContext(&solver_context);
