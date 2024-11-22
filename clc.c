@@ -1666,7 +1666,10 @@ fit(// in,out
 
     // bits indicating whether a camera in
     // sensor_snapshots.images[] is color or not
-    const clc_is_bgr_mask_t is_bgr_mask)
+    const clc_is_bgr_mask_t is_bgr_mask,
+
+    bool check_gradient__use_distance_to_plane,
+    bool check_gradient )
 {
     double rt_lidar0_board [6*Nsensor_snapshots_filtered];
     double rt_lidar0_lidar [6*(Nlidars-1)];
@@ -1691,12 +1694,26 @@ fit(// in,out
                               .report_imeas          = false};
     dogleg_parameters2_t dogleg_parameters;
     dogleg_getDefaultParameters(&dogleg_parameters);
+    if(!(check_gradient__use_distance_to_plane || check_gradient))
+        dogleg_parameters.dogleg_debug = DOGLEG_DEBUG_VNLOG;
 
     dogleg_solverContext_t* solver_context = NULL;
 
     const int Nstate        = num_states(&ctx);
     const int Nmeasurements = num_measurements(&ctx);
     const int Njnnz         = num_j_nonzero(&ctx);
+
+    printf("## Nstate=%d Nmeasurements=%d Nlidars=%d Ncameras=%d Nsnapshots=%d\n",
+           Nstate,Nmeasurements,Nlidars,Ncameras,Nsensor_snapshots_filtered);
+    if(Ncameras > 0)
+        printf("## States rt_lidar0_lidar in [%d,%d], rt_lidar0_camera in [%d,%d], rt_lidar0_board in [%d,%d]\n",
+               state_index_lidar (1, &ctx), state_index_lidar (1, &ctx)+num_states_lidars (&ctx)-1,
+               state_index_camera(0, &ctx), state_index_camera(0, &ctx)+num_states_cameras(&ctx)-1,
+               state_index_board (0, &ctx), state_index_board (0, &ctx)+num_states_boards (&ctx)-1);
+    else
+        printf("## States rt_lidar0_lidar in [%d,%d], rt_lidar0_board in [%d,%d]\n",
+               state_index_lidar (1, &ctx), state_index_lidar (1, &ctx)+num_states_lidars (&ctx)-1,
+               state_index_board (0, &ctx), state_index_board (0, &ctx)+num_states_boards (&ctx)-1);
 
     double b[Nstate];
     double x[Nmeasurements];
@@ -1723,20 +1740,42 @@ fit(// in,out
 
     MSG("Starting pre-solve");
     ctx.use_distance_to_plane = true;
-    norm2x = dogleg_optimize2(b,
-                              Nstate, Nmeasurements, Njnnz,
-                              (dogleg_callback_t*)&cost, &ctx,
-                              &dogleg_parameters,
-                              &solver_context);
+    if(!check_gradient__use_distance_to_plane)
+    {
+        norm2x = dogleg_optimize2(b,
+                                  Nstate, Nmeasurements, Njnnz,
+                                  (dogleg_callback_t*)&cost, &ctx,
+                                  &dogleg_parameters,
+                                  &solver_context);
+    }
+    else
+    {
+        for(int ivar=0; ivar<Nstate; ivar++)
+            dogleg_testGradient(ivar, b,
+                                Nstate, Nmeasurements, Njnnz,
+                                (dogleg_callback_t*)&cost, &ctx);
+        return true;
+    }
 
     MSG("Finished pre-solve; started full solve;");
 
     ctx.use_distance_to_plane = false;
-    norm2x = dogleg_optimize2(b,
-                              Nstate, Nmeasurements, Njnnz,
-                              (dogleg_callback_t*)&cost, &ctx,
-                              &dogleg_parameters,
-                              &solver_context);
+    if(!check_gradient)
+    {
+        norm2x = dogleg_optimize2(b,
+                                  Nstate, Nmeasurements, Njnnz,
+                                  (dogleg_callback_t*)&cost, &ctx,
+                                  &dogleg_parameters,
+                                  &solver_context);
+    }
+    else
+    {
+        for(int ivar=0; ivar<Nstate; ivar++)
+            dogleg_testGradient(ivar, b,
+                                Nstate, Nmeasurements, Njnnz,
+                                (dogleg_callback_t*)&cost, &ctx);
+        return true;
+    }
 
     MSG("Finished full solve");
 
@@ -1862,7 +1901,10 @@ bool _clc_internal(// out
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
-         const clc_is_bgr_mask_t is_bgr_mask)
+         const clc_is_bgr_mask_t is_bgr_mask,
+
+         bool check_gradient__use_distance_to_plane,
+         bool check_gradient )
 {
     if(1 !=
        (sensor_snapshots_unsorted != NULL) +
@@ -2173,9 +2215,18 @@ bool _clc_internal(// out
 
                 // bits indicating whether a camera in
                 // sensor_snapshots.images[] is color or not
-                is_bgr_mask))
+                is_bgr_mask,
+
+                check_gradient__use_distance_to_plane,
+                check_gradient))
         {
             MSG("fit_seed() failed");
+            goto done;
+        }
+
+        if(check_gradient__use_distance_to_plane || check_gradient)
+        {
+            result = true;
             goto done;
         }
 
@@ -2337,7 +2388,10 @@ bool clc_unsorted(// out
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
-         const clc_is_bgr_mask_t is_bgr_mask)
+         const clc_is_bgr_mask_t is_bgr_mask,
+
+         bool check_gradient__use_distance_to_plane,
+         bool check_gradient)
 {
     return _clc_internal(// out
                          rt_ref_lidar,
@@ -2349,7 +2403,10 @@ bool clc_unsorted(// out
                          lidar_packet_stride,
                          Ncameras,
                          Nlidars,
-                         is_bgr_mask);
+                         is_bgr_mask,
+
+                         check_gradient__use_distance_to_plane,
+                         check_gradient);
 }
 
 bool clc_sorted(// out
@@ -2366,7 +2423,10 @@ bool clc_sorted(// out
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
-         const clc_is_bgr_mask_t is_bgr_mask)
+         const clc_is_bgr_mask_t is_bgr_mask,
+
+         bool check_gradient__use_distance_to_plane,
+         bool check_gradient)
 {
     return _clc_internal(// out
                          rt_ref_lidar,
@@ -2378,7 +2438,10 @@ bool clc_sorted(// out
                          0,
                          Ncameras,
                          Nlidars,
-                         is_bgr_mask);
+                         is_bgr_mask,
+
+                         check_gradient__use_distance_to_plane,
+                         check_gradient);
 }
 
 bool clc_lidar_segmented(// out
@@ -2395,7 +2458,10 @@ bool clc_lidar_segmented(// out
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
-         const clc_is_bgr_mask_t is_bgr_mask)
+         const clc_is_bgr_mask_t is_bgr_mask,
+
+         bool check_gradient__use_distance_to_plane,
+         bool check_gradient)
 {
     return _clc_internal(// out
                          rt_ref_lidar,
@@ -2407,6 +2473,9 @@ bool clc_lidar_segmented(// out
                          0,
                          Ncameras,
                          Nlidars,
-                         is_bgr_mask);
+                         is_bgr_mask,
+
+                         check_gradient__use_distance_to_plane,
+                         check_gradient);
 }
 

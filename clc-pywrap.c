@@ -369,6 +369,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     int          Nlidars             = -1;
     int          Nsensor_snapshots   = -1;
 
+    int check_gradient__use_distance_to_plane = 0;
+    int check_gradient                        = 0;
     // sensor_snapshots is a tuple. Each slice corresponds to
     // clc_sensor_snapshot_unsorted_t; it is a tuple:
     //
@@ -387,13 +389,17 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE(    type,name,default,pyparse,...) pyparse
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse,...) &ctx.name,
     char* keywords[] = { "sensor_snapshots",
+                         "check_gradient__use_distance_to_plane",
+                         "check_gradient",
                          CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
+                                     "O" "|$" "pp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
                                      ,
                                      keywords,
                                      (PyTupleObject*)&py_sensor_snapshots,
+                                     &check_gradient__use_distance_to_plane,
+                                     &check_gradient,
                                      CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX)
                                      NULL))
         goto done;
@@ -461,7 +467,9 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          lidar_packet_stride,
                          Ncameras,
                          Nlidars,
-                         (clc_is_bgr_mask_t)0))
+                         (clc_is_bgr_mask_t)0,
+                         check_gradient__use_distance_to_plane,
+                         check_gradient))
         {
             BARF("clc_unsorted() failed");
             goto done;

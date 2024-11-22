@@ -37,7 +37,10 @@ def lidar_segmentation(*,
 
 
 def calibrate(*,
-              bags, lidar_topics):
+              bags, lidar_topics,
+              check_gradient__use_distance_to_plane = False,
+              check_gradient                        = False,
+              **kwargs):
 
     def lidar_points(bag, lidar_topic):
         array = next(bag_interface.bag_messages_generator(bag, (lidar_topic,) ))['array']
@@ -55,11 +58,16 @@ def calibrate(*,
             raise Exception(f"Bag path '{bag}' does not exist")
         return (None, lidar_points_all_topics(bag))
 
-    for i,bag in enumerate(bags):
-        print(f"Bag {i: 3d} {bag}")
-    for i,topic in enumerate(lidar_topics):
-        print(f"Topic {i: 2d} {topic}")
+    if not (check_gradient__use_distance_to_plane or \
+            check_gradient ):
+        for i,bag in enumerate(bags):
+            print(f"Bag {i: 3d} {bag}")
+        for i,topic in enumerate(lidar_topics):
+            print(f"Topic {i: 2d} {topic}")
 
-    return _clc.calibrate( tuple(sensor_snapshot(bag) for bag in bags) )
+    return _clc.calibrate( tuple(sensor_snapshot(bag) for bag in bags),
+                           check_gradient__use_distance_to_plane = check_gradient__use_distance_to_plane,
+                           check_gradient                        = check_gradient,
+                           **kwargs)
 
 lidar_segmentation_default_context = _clc.lidar_segmentation_default_context
