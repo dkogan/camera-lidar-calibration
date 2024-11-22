@@ -1291,7 +1291,7 @@ static void cost(const double*   b,
                         // = - extra_neg_dtbl2__dt_lidar0_board inv_Rbl2_p
                         for(int i=0; i<3; i++)
                             STORE_JACOBIAN(ivar + i + 3,
-                                           extra_neg_dtbl2__dt_lidar0_board->xyz[i] * inv_Rbl2_p
+                                           - extra_neg_dtbl2__dt_lidar0_board->xyz[i] * inv_Rbl2_p
                                            * SCALE_TRANSLATION_FRAME/SCALE_MEASUREMENT_M * magp);
 
                         iMeasurement++;
@@ -1380,7 +1380,7 @@ static void cost(const double*   b,
                         // = - extra_neg_dtbl2__dt_lidar0_board inv_Rbl2_p
                         for(int i=0; i<3; i++)
                             STORE_JACOBIAN(ivar + i + 3,
-                                           extra_neg_dtbl2__dt_lidar0_board->xyz[i] * inv_Rbl2_p
+                                           - extra_neg_dtbl2__dt_lidar0_board->xyz[i] * inv_Rbl2_p
                                            * SCALE_TRANSLATION_FRAME/SCALE_MEASUREMENT_M * magp);
 
                         ivar = state_index_lidar(ilidar, ctx);
