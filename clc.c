@@ -1731,82 +1731,280 @@ plot_residuals(const char* filename_base,
     return true;
 }
 
-#warning "disabled plot_geometry() for now"
-#if 1
-#define plot_geometry(...)
-#else
-def plot_geometry(filename,
-                  *,
-                  rt_ref_board,
-                  rt_camera_ref,
-                  rt_lidar_ref,
-                  only_axes = False):
+static void
+write_axes(FILE* fp,
+           const char* curveid,
+           const double* Rt_ref_sensor,
+           const double scale)
+{
+    if(Rt_ref_sensor != NULL)
+    {
+        fprintf(fp, "%f %f %s %f %f %f %f\n",
+                Rt_ref_sensor[3*3 + 0],
+                Rt_ref_sensor[3*3 + 1],
+                "axes",
+                Rt_ref_sensor[3*3 + 2],
+                Rt_ref_sensor[0*3 + 0] * scale,
+                Rt_ref_sensor[1*3 + 0] * scale,
+                Rt_ref_sensor[2*3 + 0] * scale);
+        fprintf(fp, "%f %f %s %f %f %f %f\n",
+                Rt_ref_sensor[3*3 + 0],
+                Rt_ref_sensor[3*3 + 1],
+                "axes",
+                Rt_ref_sensor[3*3 + 2],
+                Rt_ref_sensor[0*3 + 1] * scale,
+                Rt_ref_sensor[1*3 + 1] * scale,
+                Rt_ref_sensor[2*3 + 1] * scale);
+        fprintf(fp, "%f %f %s %f %f %f %f\n",
+                Rt_ref_sensor[3*3 + 0],
+                Rt_ref_sensor[3*3 + 1],
+                "axes",
+                Rt_ref_sensor[3*3 + 2],
+                Rt_ref_sensor[0*3 + 2] * scale * 2.,// "forward": longer axis
+                Rt_ref_sensor[1*3 + 2] * scale * 2.,// "forward": longer axis
+                Rt_ref_sensor[2*3 + 2] * scale * 2. // "forward": longer axis
+                );
+
+        fprintf(fp, "%f %f labels %f x\n",
+                Rt_ref_sensor[3*3 + 0] + Rt_ref_sensor[0*3 + 0] * scale      * 1.01,
+                Rt_ref_sensor[3*3 + 1] + Rt_ref_sensor[1*3 + 0] * scale      * 1.01,
+                Rt_ref_sensor[3*3 + 2] + Rt_ref_sensor[2*3 + 0] * scale * 2. * 1.01);
+        fprintf(fp, "%f %f labels %f y\n",
+                Rt_ref_sensor[3*3 + 0] + Rt_ref_sensor[0*3 + 1] * scale      * 1.01,
+                Rt_ref_sensor[3*3 + 1] + Rt_ref_sensor[1*3 + 1] * scale      * 1.01,
+                Rt_ref_sensor[3*3 + 2] + Rt_ref_sensor[2*3 + 1] * scale * 2. * 1.01);
+        fprintf(fp, "%f %f labels %f z\n",
+                Rt_ref_sensor[3*3 + 0] + Rt_ref_sensor[0*3 + 2] * scale      * 1.01,
+                Rt_ref_sensor[3*3 + 1] + Rt_ref_sensor[1*3 + 2] * scale      * 1.01,
+                Rt_ref_sensor[3*3 + 2] + Rt_ref_sensor[2*3 + 2] * scale * 2. * 1.01);
+
+        fprintf(fp, "%f %f labels %f %s\n",
+                Rt_ref_sensor[3*3 + 0] - (Rt_ref_sensor[0*3 + 0] +
+                                          Rt_ref_sensor[0*3 + 1] +
+                                          Rt_ref_sensor[0*3 + 2]) * scale * .1,
+                Rt_ref_sensor[3*3 + 1] - (Rt_ref_sensor[1*3 + 0] +
+                                          Rt_ref_sensor[1*3 + 1] +
+                                          Rt_ref_sensor[1*3 + 2]) * scale * .1,
+                Rt_ref_sensor[3*3 + 2] - (Rt_ref_sensor[2*3 + 0] +
+                                          Rt_ref_sensor[2*3 + 1] +
+                                          Rt_ref_sensor[2*3 + 2]) * scale * .1,
+                curveid);
+    }
+    else
+    {
+        // No explicit Rt_ref_sensor. Use the identity
+        fprintf(fp, "%f %f %s %f %f %f %f\n",
+                0., 0.,
+                "axes",
+                0.,
+                scale,0.,0.);
+        fprintf(fp, "%f %f %s %f %f %f %f\n",
+                0., 0.,
+                "axes",
+                0.,
+                0.,scale,0.);
+        fprintf(fp, "%f %f %s %f %f %f %f\n",
+                0., 0.,
+                "axes",
+                0.,
+                0.,0.,scale*2 // "forward": longer axis
+                );
+
+        fprintf(fp, "%f 0 labels 0  x\n",
+                scale * 1.01);
+        fprintf(fp, "0 %f labels 0  y\n",
+                scale * 1.01);
+        fprintf(fp, "0  0 labels %f z\n",
+                scale * 2. * 1.01);
 
 
-    def observations_camera(joint_observations):
-        for iboard in range(len(joint_observations)):
-            q_observed_all = joint_observations[iboard][0]
-            for icamera in range(len(q_observed_all)):
-                q_observed = q_observed_all[icamera]
-                if q_observed is None:
-                    continue
+        fprintf(fp, "%f %f labels %f %s\n",
+                - scale * .1,
+                - scale * .1,
+                - scale * .1,
+                curveid);
+    }
+}
 
-                yield (q_observed,iboard,icamera)
+static bool
+plot_geometry(const char* filename,
 
-    def observations_lidar(joint_observations):
-        for iboard in range(len(joint_observations)):
-            plidar_all = joint_observations[iboard][1]
-            for ilidar in range(len(plidar_all)):
-                plidar = plidar_all[ilidar]
-                if plidar is None:
-                    continue
+              const double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+              const double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
+              const double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
 
-                yield (plidar,iboard,ilidar)
+              const sensor_snapshot_segmented_t* snapshots,
+              const unsigned int                 Nsnapshots,
+
+              // These apply to ALL the sensor_snapshots[]
+              const unsigned int Ncameras,
+              const unsigned int Nlidars,
+              bool only_axes)
+{
+    char cmd[2048];
+    FILE* fp;
+    int result;
+    bool failed = true;
 
 
-    data_tuples, plot_options = \
-        mrcal.show_geometry(nps.glue(rt_camera_ref,
-                                     rt_lidar_ref,
-                                     axis = -2),
-                            cameranames = (*args.camera_topic,
-                                           *args.lidar_topic),
-                            show_calobjects  = None,
-                            axis_scale       = 1.0,
-                            return_plot_args = True)
 
-    if not only_axes:
-        points_camera_observations = \
+    if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),
+                                     "feedgnuplot "
+                                     "--domain --dataid --3d "
+                                     "--square "
+                                     "--xlabel x " \
+                                     "--ylabel y " \
+                                     "--zlabel z " \
+                                     "--title \"Camera geometry\" "
+                                     "--autolegend "
+                                     "--style axes \"with vectors\"  --tuplesize axes   6 "
+                                     "--style labels \"with labels\" --tuplesize labels 4 "
+                                     "--with points --tuplesizeall 3 "
+                                     "--hardcopy '%s' ",
+                                     filename) )
+    {
+        MSG("sizeof(cmd) exceeded. Giving up making the plot");
+        return false;
+    }
+
+    fp = popen(cmd, "w");
+    if(fp == NULL)
+    {
+        MSG("popen(feedgnuplot ...) failed");
+        return false;
+    }
+
+    const double axis_scale = 1.0;
+
+
+    for(unsigned int i=0; i<Nlidars; i++)
+    {
+        if(i == 0)
+            write_axes(fp, "lidar0", NULL, axis_scale);
+        else
+        {
+            const double* Rt_ref_sensor = &Rt_lidar0_lidar[4*3*(i-1)];
+
+            char curveid[16];
+            if( (int)sizeof(curveid) <= snprintf(curveid, sizeof(curveid),
+                                                 "lidar%d",
+                                                 i) )
+            {
+                MSG("sizeof(curveid) exceeded. Giving up making the plot");
+                goto done;
+            }
+
+            write_axes(fp, curveid, Rt_ref_sensor, axis_scale);
+
+        }
+    }
+
+    for(unsigned int i=0; i<Ncameras; i++)
+    {
+        const double* Rt_ref_sensor = &Rt_lidar0_camera[4*3*i];
+
+        char curveid[16];
+        if( (int)sizeof(curveid) <= snprintf(curveid, sizeof(curveid),
+                                             "camera%d",
+                                             i) )
+        {
+            MSG("sizeof(curveid) exceeded. Giving up making the plot");
+            goto done;
+        }
+
+        write_axes(fp, curveid, Rt_ref_sensor, axis_scale);
+    }
+
+    if(!only_axes)
+    {
+        // camera stuff
+
+#if 0
+        points_camera_observations =
             [ mrcal.transform_point_rt(rt_ref_board[iboard],
-                                       nps.clump(p_board_local,n=2) ) \
-              for (q_observed,iboard,icamera) in observations_camera(joint_observations) ]
-        legend_camera_observations = \
-            [ f"{iboard=} {icamera=}" \
-              for (q_observed,iboard,icamera) in observations_camera(joint_observations) ]
-        points_lidar_observations = \
-            [ mrcal.transform_point_rt(mrcal.invert_rt(rt_lidar_ref[ilidar]),
-                                       plidar) \
-                    for (plidar,iboard,ilidar) in observations_lidar(joint_observations) ]
-        legend_lidar_observations = \
-            [ f"{iboard=} {ilidar=}" \
-              for (plidar,iboard,ilidar) in observations_lidar(joint_observations) ]
-
+                                       nps.clump(p_board_local,n=2) );
+              for (q_observed,iboard,icamera) in observations_camera(joint_observations) ];
+        legend_camera_observations =
+            [ f"{iboard=} {icamera=}"
+              for (q_observed,iboard,icamera) in observations_camera(joint_observations) ];
         data_tuples = (*data_tuples,
                        *[ (points_camera_observations[i],
                            dict(_with     = 'lines',
                                 legend    = legend_camera_observations[i],
-                                tuplesize = -3)) \
+                                tuplesize = -3))
                           for i in range(len(points_camera_observations)) ],
-                       *[ (points_lidar_observations[i],
-                           dict(_with     = 'points',
-                                legend    = legend_lidar_observations[i],
-                                tuplesize = -3)) \
-                          for i in range(len(points_lidar_observations)) ] )
-
-    gp.plot(*data_tuples,
-            **plot_options,
-            hardcopy = filename)
-    print(f"Wrote '{filename}'")
+                       );
 #endif
+        for(unsigned int isnapshot=0; isnapshot < Nsnapshots; isnapshot++)
+        {
+            char curveid[Nlidars][32];
+            for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
+            {
+                if( (int)sizeof(curveid[0]) <= snprintf(curveid[ilidar], sizeof(curveid[0]),
+                                                        "isnapshot=%d_ilidar=%d",
+                                                        isnapshot,ilidar) )
+                {
+                    MSG("sizeof(curveidxs]) exceeded. Giving up making the plot");
+                    goto done;
+                }
+            }
+
+            const sensor_snapshot_segmented_t* sensor_snapshot = &snapshots[isnapshot];
+
+            for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
+            {
+                const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[ilidar];
+
+                if(points_and_plane_full->points == NULL)
+                    continue;
+
+                const clc_ipoint_set_t* set =
+                    &points_and_plane_full->points_and_plane->ipoint_set;
+
+                const double* Rt_ref_sensor = NULL;
+                if(ilidar > 0)
+                    Rt_ref_sensor = &Rt_lidar0_lidar[4*3*(ilidar-1)];
+
+                for(unsigned int iipoint=0; iipoint<set->n; iipoint++)
+                {
+                    mrcal_point3_t p;
+                    int ipoint = set->ipoint[iipoint];
+                    mrcal_point3_from_clc_point3f(&p,
+                                                  &points_and_plane_full->points[ipoint]);
+
+                    if(Rt_ref_sensor != NULL)
+                        mrcal_transform_point_Rt(p.xyz, NULL, NULL,
+                                                 Rt_ref_sensor, p.xyz);
+
+                    fprintf(fp, "%f %f %s %f\n",
+                            p.x, p.y, curveid[ilidar], p.z);
+                }
+            }
+        }
+    }
+
+    failed = false;
+
+ done:
+    result = pclose(fp);
+    if(result < 0)
+    {
+        MSG("pclose() failed. Giving up making the plot");
+        return false;
+    }
+    if(result > 0)
+    {
+        MSG("feedgnuplot failed. Giving up making the plot");
+        return false;
+    }
+
+    if(failed)
+        return false;
+
+    MSG("Wrote '%s'", filename);
+
+    return true;
+}
 
 // Align the LIDAR and camera geometry
 static bool
@@ -2354,10 +2552,23 @@ bool _clc_internal(// out
         }
 
         plot_geometry("/tmp/geometry-seed.gp",
-                      **seed_state);
+                      Rt_lidar0_board,
+                      Rt_lidar0_lidar,
+                      Rt_lidar0_camera,
+                      sensor_snapshots_filtered,
+                      Nsensor_snapshots_filtered,
+                      Ncameras,
+                      Nlidars,
+                      false);
         plot_geometry("/tmp/geometry-seed-onlyaxes.gp",
-                      only_axes = True,
-                      **seed_state);
+                      Rt_lidar0_board,
+                      Rt_lidar0_lidar,
+                      Rt_lidar0_camera,
+                      sensor_snapshots_filtered,
+                      Nsensor_snapshots_filtered,
+                      Ncameras,
+                      Nlidars,
+                      true);
 
         if(!fit(// in,out
                 // seed state on input
@@ -2391,10 +2602,23 @@ bool _clc_internal(// out
         }
 
         plot_geometry("/tmp/geometry.gp",
-                      **solved_state);
+                      Rt_lidar0_board,
+                      Rt_lidar0_lidar,
+                      Rt_lidar0_camera,
+                      sensor_snapshots_filtered,
+                      Nsensor_snapshots_filtered,
+                      Ncameras,
+                      Nlidars,
+                      false);
         plot_geometry("/tmp/geometry-onlyaxes.gp",
-                      only_axes = True,
-                      **solved_state);
+                      Rt_lidar0_board,
+                      Rt_lidar0_lidar,
+                      Rt_lidar0_camera,
+                      sensor_snapshots_filtered,
+                      Nsensor_snapshots_filtered,
+                      Ncameras,
+                      Nlidars,
+                      true);
 
 /*
         for(imodel in range(len(args.models)))
