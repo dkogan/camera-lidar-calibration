@@ -1985,6 +1985,16 @@ else:
 # read AND write the cache dict
 
 
+if True:
+    print("Using the C core")
+    result = clc.calibrate(bags         = args.bag,
+                           lidar_topics = args.lidar_topic,
+                           check_gradient = False)
+    sys.exit()
+
+
+
+
 # joint_observation[itime][1][ilidar] is the lidar board observations at that
 # time
 joint_observations = [get_joint_observation(bag                = bag,
