@@ -1798,7 +1798,7 @@ static bool stage3_refine_clusters(// out
 
     // Start with the best-available plane estimate. This should be pretty good
     // already.
-    points_and_plane->plane = segment_cluster->plane;
+    clc_plane_t plane_out = segment_cluster->plane;
 
     clc_ipoint_set_t* ipoint_set = &points_and_plane->ipoint_set;
 
@@ -1870,7 +1870,7 @@ static bool stage3_refine_clusters(// out
                                      bitarray_visited[iring-iring0],
                                      // in
                                      ipoint0, +1, Npoints[iring],
-                                     &points_and_plane->plane,
+                                     &plane_out,
                                      points,
                                      ipoint0_in_ring[iring],
                                      segment->ipoint1,
@@ -1899,7 +1899,7 @@ static bool stage3_refine_clusters(// out
                                                              ipoint_set,
                                                              // in
                                                              +1, Npoints[iring],
-                                                             &points_and_plane->plane,
+                                                             &plane_out,
                                                              points,
                                                              ipoint_set_start_this_ring,
                                                              ipoint0_in_ring[iring],
@@ -1920,7 +1920,7 @@ static bool stage3_refine_clusters(// out
                                      bitarray_visited[iring-iring0],
                                      // in
                                      ipoint0-1, -1, -1,
-                                     &points_and_plane->plane,
+                                     &plane_out,
                                      points,
                                      ipoint0_in_ring[iring],
                                      segment->ipoint0,
@@ -1933,7 +1933,7 @@ static bool stage3_refine_clusters(// out
                                                              ipoint_set,
                                                              // in
                                                              -1, -1,
-                                                             &points_and_plane->plane,
+                                                             &plane_out,
                                                              points,
                                                              ipoint_set_start_this_ring,
                                                              ipoint0_in_ring[iring],
@@ -1966,12 +1966,14 @@ static bool stage3_refine_clusters(// out
             return false;
 
         // Got a set of points. Fit a plane
-        fit_plane_into_points__normalized(&points_and_plane->plane,
+        fit_plane_into_points__normalized(&plane_out,
                                           max_norm2_dp,
                                           eigenvalues_ascending,
                                           points,
                                           ipoint_set);
     }
+
+    points_and_plane->plane = plane_out;
 
     // I want the normals need to be consistent here. I point them away from the
     // sensor, to match the coordinate system of chessboards
