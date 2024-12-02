@@ -1580,14 +1580,14 @@ plot_residuals(const char* filename_base,
                                      "--legend lidar 'LIDAR residuals' "
                                      "--legend camera 'Camera residuals' "
                                      "--legend regularization 'Regularization residuals; plotted in pixels on the left y axis' "
-                                     "--y2 lidar "
+                                     "--y2 camera "
                                      "--with points "
                                      "--set 'link y2 via y*%f inverse y*%f' "
-                                     "--ylabel   'Camera fit residual (pixels)' "
-                                     "--y2label  'LIDAR fit residual (m)' "
+                                     "--ylabel  'LIDAR fit residual (m)' "
+                                     "--y2label 'Camera fit residual (pixels)' "
                                      "--hardcopy '%s' ",
-                                     SCALE_MEASUREMENT_M/SCALE_MEASUREMENT_PX,
                                      SCALE_MEASUREMENT_PX/SCALE_MEASUREMENT_M,
+                                     SCALE_MEASUREMENT_M/SCALE_MEASUREMENT_PX,
                                      filename) )
     {
         MSG("sizeof(cmd) exceeded. Giving up making the plot");
@@ -1601,6 +1601,8 @@ plot_residuals(const char* filename_base,
         return false;
     }
 
+    // All measurements plotted using the nominal SCALE_MEASUREMENT_M. The
+    // camera residuals in pixels are shown on the y2 axis for convenience
     for(int i=0; i<Nmeas_lidar_observation_all; i++)
         fprintf(fp, "%d lidar %f\n",
                 imeas_lidar_0 + i,
@@ -1608,11 +1610,11 @@ plot_residuals(const char* filename_base,
     for(int i=0; i<Nmeas_camera_observation_all; i++)
         fprintf(fp, "%d camera %f\n",
                 imeas_camera_0 + i,
-                x[imeas_camera_0 + i] * SCALE_MEASUREMENT_PX);
+                x[imeas_camera_0 + i] * SCALE_MEASUREMENT_M);
     for(int i=0; i<Nmeas_regularization; i++)
         fprintf(fp, "%d regularization %f\n",
                 imeas_regularization_0 + i,
-                x[imeas_regularization_0 + i] * SCALE_MEASUREMENT_PX);
+                x[imeas_regularization_0 + i] * SCALE_MEASUREMENT_M);
 
     result = pclose(fp);
     if(result < 0)
