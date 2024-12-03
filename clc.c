@@ -2787,9 +2787,11 @@ bool _clc_internal(// out
         {
             const int NcameraObservations_this = NcameraObservations[i];
             if (NcameraObservations_this == 0)
+            {
                 MSG("I need at least 1 observation of each camera. Got only %d for camera %d",
                     NcameraObservations_this, i);
-            goto done;
+                goto done;
+            }
         }
 
         for(unsigned int i=0; i<Nlidars; i++)
