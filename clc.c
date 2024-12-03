@@ -2618,15 +2618,9 @@ bool _clc_internal(// out
 
     bool result = false;
 
-    // contains the points_pool and the points_and_plane_pool
-    uint8_t* pool = NULL;
-
     // I start by finding the chessboard in the raw sensor data, and throwing
     // out the sensor snapshots with too few shared-sensor observations
     sensor_snapshot_segmented_t sensor_snapshots_filtered[Nsensor_snapshots];
-
-    int NcameraObservations[Ncameras];
-    int NlidarObservations [Nlidars ];
 
 
     if(Ncameras != 0)
@@ -2658,8 +2652,9 @@ bool _clc_internal(// out
     // I allocate Nplanes_max extra planes so that clc_lidar_segmentation()
     // can use them, but I only use one plane's worth
 
-    pool = malloc(Npoints_buffer * sizeof(clc_point3f_t) +
-                  (Nlidar_scans_buffer + Nplanes_max) * sizeof(clc_points_and_plane_t));
+    // contains the points_pool and the points_and_plane_pool
+    uint8_t* pool = malloc(Npoints_buffer * sizeof(clc_point3f_t) +
+                           (Nlidar_scans_buffer + Nplanes_max) * sizeof(clc_points_and_plane_t));
     if(pool == NULL)
     {
         MSG("malloc() failed. Giving up");
@@ -2738,44 +2733,47 @@ bool _clc_internal(// out
 
     MSG("Have %d joint observations", Nsensor_snapshots_filtered);
 
-
-    // I pass through the observations again, to make sure that I count the
-    // FILTERED snapshots, not the original ones
-    for(unsigned int i=0; i<Ncameras; i++) NcameraObservations[i] = 0;
-    for(unsigned int i=0; i<Nlidars;  i++) NlidarObservations [i] = 0;
-
-    for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
+        int NlidarObservations [Nlidars ];
+        int NcameraObservations[Ncameras];
 
-        for(unsigned int icamera=0; icamera<Ncameras; icamera++)
-            if(sensor_snapshot->images[icamera].uint8.width != 0)
-                NcameraObservations[icamera]++;
+        // I pass through the observations again, to make sure that I count the
+        // FILTERED snapshots, not the original ones
+        for(unsigned int i=0; i<Ncameras; i++) NcameraObservations[i] = 0;
+        for(unsigned int i=0; i<Nlidars;  i++) NlidarObservations [i] = 0;
 
-        for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
-            if(sensor_snapshot->lidar_scans[ilidar].points != NULL)
-                NlidarObservations[ilidar]++;
-    }
-    for(unsigned int i=0; i<Ncameras; i++)
-    {
-        const int NcameraObservations_this = NcameraObservations[i];
-        if (NcameraObservations_this == 0)
-            MSG("I need at least 1 observation of each camera. Got only %d for camera %d",
-                NcameraObservations_this, i);
-        goto done;
-    }
-
-    for(unsigned int i=0; i<Nlidars; i++)
-    {
-        const int NlidarObservations_this = NlidarObservations[i];
-        if (NlidarObservations_this < 3)
+        for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
         {
-            MSG("I need at least 3 observations of each lidar to unambiguously set the translation (the set of all plane normals must span R^3). Got only %d for lidar %d",
-                NlidarObservations_this, i);
+            const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
+
+            for(unsigned int icamera=0; icamera<Ncameras; icamera++)
+                if(sensor_snapshot->images[icamera].uint8.width != 0)
+                    NcameraObservations[icamera]++;
+
+            for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
+                if(sensor_snapshot->lidar_scans[ilidar].points != NULL)
+                    NlidarObservations[ilidar]++;
+        }
+        for(unsigned int i=0; i<Ncameras; i++)
+        {
+            const int NcameraObservations_this = NcameraObservations[i];
+            if (NcameraObservations_this == 0)
+                MSG("I need at least 1 observation of each camera. Got only %d for camera %d",
+                    NcameraObservations_this, i);
             goto done;
         }
-    }
 
+        for(unsigned int i=0; i<Nlidars; i++)
+        {
+            const int NlidarObservations_this = NlidarObservations[i];
+            if (NlidarObservations_this < 3)
+            {
+                MSG("I need at least 3 observations of each lidar to unambiguously set the translation (the set of all plane normals must span R^3). Got only %d for lidar %d",
+                    NlidarObservations_this, i);
+                goto done;
+            }
+        }
+    }
 
     {
         double Rt_lidar0_board [Nsensor_snapshots_filtered * 4*3];
