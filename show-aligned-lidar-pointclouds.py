@@ -119,7 +119,7 @@ import calibration_data_import
 
 try:
     pointcloud_msgs = \
-        [ next(calibration_data_import.bag_messages_generator(args.bag, (topic,))) \
+        [ next(calibration_data_import.messages(args.bag, (topic,))) \
           for topic in args.lidar_topic ]
 except:
     raise Exception(f"Bag '{args.bag}' doesn't have at least one message for each of {args.lidar_topic}")

@@ -18,7 +18,7 @@ import cv2
 import inspect
 import re
 
-from bag_interface import bag_messages_generator
+from bag_interface import messages
 
 def find_stationary_frame(t, rt_rf):
 
@@ -806,7 +806,7 @@ def chessboard_corners_from_bag(bag, camera_topic,
 
     raise Exception("THIS IS CURRENTLY UNIMPLEMENTED. debag -> rosbags conversion broke it. Bring it back")
     metadata = \
-        next(bag_messages_generator(bag, (camera_topic,)),
+        next(messages(bag, (camera_topic,)),
              None)
 
     if len(metadata) == 0:
@@ -854,7 +854,7 @@ def get_lidar_observation(bag, lidar_topic,
         return cache[lidar_topic]
 
     try:
-        msg = next(bag_messages_generator(bag, (lidar_topic,)))
+        msg = next(messages(bag, (lidar_topic,)))
     except StopIteration:
         msg = None
     except Exception as e:

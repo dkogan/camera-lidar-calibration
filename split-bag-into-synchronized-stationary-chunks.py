@@ -220,7 +220,7 @@ with rosbags.rosbag2.Reader(args.bag) as reader:
 # sequence of events is monotonically increasing, and that all the topics
 # cross each period threshold together
 print(topics)
-for msg in bag_interface.bag_messages_generator(args.bag, topics):
+for msg in bag_interface.messages(args.bag, topics):
     t = msg["time_ns"]
     if not t_0:
         t_0 = t

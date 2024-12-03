@@ -19,7 +19,7 @@ def lidar_segmentation(*,
         if not os.path.exists(bag):
             raise Exception(f"Bag path '{bag}' does not exist")
 
-        array = next(bag_interface.bag_messages_generator(bag, (lidar_topic,) ))['array']
+        array = next(bag_interface.messages(bag, (lidar_topic,) ))['array']
 
         points = array['xyz']
         rings  = array['ring']

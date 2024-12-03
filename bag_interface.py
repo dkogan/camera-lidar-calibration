@@ -8,11 +8,11 @@ import rosbags.highlevel.anyreader
 import rosbags.typesys
 
 
-def bag_messages_generator(bag, topics):
+def messages(bag, topics):
 
     dtype_cache = dict()
 
-    # Read-only stuff for reading rosbags. Used by bag_messages_generator() only. I
+    # Read-only stuff for reading rosbags. Used by messages() only. I
     # want to evaluate this stuff only once
     name_from_type = { np.float32: 'FLOAT32',
                        np.float64: 'FLOAT64',
@@ -23,7 +23,7 @@ def bag_messages_generator(bag, topics):
                        np.uint32:  'UINT32',
                        np.uint8:   'UINT8' }
     # These are what I always see, so I hard-code it. I make sure it's right in
-    # bag_messages_generator(). If it's ever wrong, I will need to parse it at
+    # messages(). If it's ever wrong, I will need to parse it at
     # runtime
     types = { 1: np.int8,
               2: np.uint8,
@@ -169,7 +169,7 @@ def first_message_from_each_topic(bag, topics):
     for i,t in enumerate(topics): idx[t] = i
     Nstored = 0
 
-    for msg in bag_messages_generator(bag, topics):
+    for msg in messages(bag, topics):
         i = idx[msg['topic']]
         if out[i] is None:
             out[i] = msg
