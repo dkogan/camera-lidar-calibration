@@ -2358,7 +2358,7 @@ print(Var - Var_c)
                     goto done;
                 }
 
-                for(int j=0; j<V.ncol; j++)
+                for(int j=0; j<(int)(V.ncol); j++)
                     memcpy(&Var_rt_lidar0_sensor[(i-V.ncol+1 + j)*Nstate_sensor_poses],
                            &v_x[j*Nstate],
                            Nstate_sensor_poses*sizeof(Var_rt_lidar0_sensor[0]));
