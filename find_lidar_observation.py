@@ -295,7 +295,7 @@ elif args.check:
                                    'one_cal_data_2023-10-19-20-42-11': array([ 0.22857706,  4.50893072, -0.22291771])}}
 
 
-lidar_topics = getattr(args, 'lidar-topic')
+lidar_topic = getattr(args, 'lidar-topic')
 bags = glob.glob(args.bag)
 if len(bags) == 0:
     print(f"No files matched the glob '{args.bag}'", file=sys.stderr)
@@ -306,10 +306,10 @@ if args.viz is not None:
     viz = args.viz
 else:
     # default viz
-    viz = (len(bags) == 1 and len(lidar_topics) == 1)
+    viz = (len(bags) == 1 and len(lidar_topic) == 1)
 
 Nfail = 0
-for lidar_topic in lidar_topics:
+for lidar_topic in lidar_topic:
     print(f"======== Looking for observations of '{lidar_topic}'")
 
     for bag in bags:

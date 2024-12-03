@@ -1988,7 +1988,7 @@ else:
 if True:
     print("Using the C core")
     result = clc.calibrate(bags         = args.bag,
-                           lidar_topics = args.lidar_topic,
+                           lidar_topic = args.lidar_topic,
                            check_gradient = False)
     sys.exit()
 
@@ -2205,12 +2205,12 @@ if Ncameras > 0:
 
 
 # Write the inter-multisense lidar
-lidar_topics          = []
+lidar_topic          = []
 str_lidar_poses       = ''
 str_lidar_poses_other = ''
 for ilidar in range(Nlidars):
     topic = args.lidar_topic[ilidar]
-    lidar_topics.append(topic)
+    lidar_topic.append(topic)
 
     rt_lidar_lidar0 = solved_state['rt_lidar_ref'][ilidar]
     str_lidar_poses += \
@@ -2220,7 +2220,7 @@ for ilidar in range(Nlidars):
     xyz = rt_lidar_lidar0[3:]
     str_lidar_poses_other += \
         f"  {rpy=} {xyz=}\n"
-print(f"  --lidar-topic {','.join(lidar_topics)} \\")
+print(f"  --lidar-topic {','.join(lidar_topic)} \\")
 print(str_lidar_poses, end='')
 print('  ' + args.bag[0])
 print('\nOr pass in any of the other bags\n')

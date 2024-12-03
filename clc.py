@@ -37,7 +37,7 @@ def lidar_segmentation(*,
 
 
 def calibrate(*,
-              bags, lidar_topics,
+              bags, lidar_topic,
               check_gradient__use_distance_to_plane = False,
               check_gradient                        = False,
               **kwargs):
@@ -51,7 +51,7 @@ def calibrate(*,
         return (points,rings)
 
     def lidar_points_all_topics(bag):
-        return tuple( lidar_points(bag, lidar_topic) for lidar_topic in lidar_topics )
+        return tuple( lidar_points(bag, lidar_topic) for lidar_topic in lidar_topic )
 
     def sensor_snapshot(bag):
         if not os.path.exists(bag):
@@ -62,7 +62,7 @@ def calibrate(*,
             check_gradient ):
         for i,bag in enumerate(bags):
             print(f"Bag {i: 3d} {bag}")
-        for i,topic in enumerate(lidar_topics):
+        for i,topic in enumerate(lidar_topic):
             print(f"Topic {i: 2d} {topic}")
 
     return _clc.calibrate( tuple(sensor_snapshot(bag) for bag in bags),
