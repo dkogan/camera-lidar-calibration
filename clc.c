@@ -10,6 +10,7 @@
 #include "clc.h"
 #include "util.h"
 #include "minimath/minimath_generated.h"
+#include "mrgingham-c-bridge.hh"
 
 typedef struct
 {
@@ -22,12 +23,11 @@ typedef struct
 
 typedef struct
 {
-    #warning "This should be board detections, NOT raw images"
-    union
-    {
-        mrcal_image_uint8_t uint8;
-        mrcal_image_bgr_t   bgr;
-    } images[clc_Ncameras_max];
+    // If no chessboard corners were found, each pointer is NULL
+    //
+    // If the corners were found, this is a gridn_width*gridn_height buffer of
+    // points. gridn_width and gridn_height are available in the caller
+    mrcal_point2_t* chessboard_corners[clc_Ncameras_max];
 
     points_and_plane_full_t lidar_scans[clc_Nlidars_max];
 } sensor_snapshot_segmented_t;
@@ -2595,6 +2595,9 @@ bool _clc_internal(// out
          // The stride, in bytes, between each successive points or rings value
          // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
+         // The dimensions of the chessboard grid being detected in the images
+         const int gridn_height,
+         const int gridn_width,
 
          // These apply to ALL the sensor_snapshots[]
          const unsigned int Ncameras,
@@ -2622,16 +2625,6 @@ bool _clc_internal(// out
     // out the sensor snapshots with too few shared-sensor observations
     sensor_snapshot_segmented_t sensor_snapshots_filtered[Nsensor_snapshots];
 
-
-    if(Ncameras != 0)
-    {
-        MSG("Only LIDAR-LIDAR calibrations implemented for now");
-        goto done;
-    }
-
-
-
-
 #warning hardcoded
     const unsigned int Nrings = 32;
 
@@ -2652,9 +2645,18 @@ bool _clc_internal(// out
     // I allocate Nplanes_max extra planes so that clc_lidar_segmentation()
     // can use them, but I only use one plane's worth
 
-    // contains the points_pool and the points_and_plane_pool
-    uint8_t* pool = malloc(Npoints_buffer * sizeof(clc_point3f_t) +
-                           (Nlidar_scans_buffer + Nplanes_max) * sizeof(clc_points_and_plane_t));
+    // round up to the next multiple of 8
+    const int Nbytes_pool_lidar =
+        ( Npoints_buffer * sizeof(clc_point3f_t) +
+          (Nlidar_scans_buffer + Nplanes_max) * sizeof(clc_points_and_plane_t)
+          + (8-1)) & ~(8-1);
+    const int Nbytes_pool_camera =
+        Nsensor_snapshots*Ncameras*gridn_width*gridn_height*sizeof(mrcal_point2_t);
+
+    // contains the points_pool and the points_and_plane_pool and the chessboard
+    // grid detections
+    uint8_t* pool = malloc(Nbytes_pool_lidar +
+                           Nbytes_pool_camera);
     if(pool == NULL)
     {
         MSG("malloc() failed. Giving up");
@@ -2663,9 +2665,10 @@ bool _clc_internal(// out
 
     clc_point3f_t*          points_pool           = (clc_point3f_t*)pool;
     clc_points_and_plane_t* points_and_plane_pool = (clc_points_and_plane_t*)&pool[Npoints_buffer * sizeof(clc_point3f_t)];
-
     int points_pool_index           = 0;
     int points_and_plane_pool_index = 0;
+
+    mrcal_point2_t* chessboard_corners_pool = (mrcal_point2_t*)&pool[Nbytes_pool_lidar];
 
 
     int Nsensor_snapshots_filtered = 0;
@@ -2685,11 +2688,6 @@ bool _clc_internal(// out
             (sensor_snapshots_segmented != NULL ) ?
             &sensor_snapshots_segmented[isnapshot] :
             NULL;
-
-        for(unsigned int icamera=0; icamera<Ncameras; icamera++)
-            sensor_snapshots_filtered[Nsensor_snapshots_filtered].images[icamera].uint8 =
-                (mrcal_image_uint8_t){};
-        if(Ncameras) assert(0); // a lot more to do above
 
         for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
         {
@@ -2715,17 +2713,47 @@ bool _clc_internal(// out
             Nsensors_observing++;
         }
 
-
-        if(Nsensors_observing < 2)
+        for(unsigned int icamera=0; icamera<Ncameras; icamera++)
         {
-            // MSG("Sensor snapshot %d observed by %d sensors",
-            //     isnapshot, Nsensors_observing);
-            // MSG("Need at least 2. Throwing out this snapshot");
-            continue;
+            sensor_snapshots_filtered[Nsensor_snapshots_filtered].chessboard_corners[icamera] =
+                &chessboard_corners_pool[ (isnapshot*Ncameras +
+                                           icamera) * gridn_width*gridn_height ];
+
+            const mrcal_image_uint8_t* image;
+            if(     sensor_snapshot_unsorted  != NULL) image = &sensor_snapshot_unsorted ->images[icamera].uint8;
+            else if(sensor_snapshot_sorted    != NULL) image = &sensor_snapshot_sorted   ->images[icamera].uint8;
+            else if(sensor_snapshot_segmented != NULL) image = &sensor_snapshot_segmented->images[icamera].uint8;
+            else
+                assert(0);
+
+            if(image->data == NULL)
+            {
+                sensor_snapshots_filtered[Nsensor_snapshots_filtered].chessboard_corners[icamera] = NULL;
+                continue;
+            }
+
+            if(!chessboard_detection_mrgingham(sensor_snapshots_filtered[Nsensor_snapshots_filtered].chessboard_corners[icamera],
+
+                                               image,
+                                               gridn_height,
+                                               gridn_width))
+            {
+                sensor_snapshots_filtered[Nsensor_snapshots_filtered].chessboard_corners[icamera] = NULL;
+                continue;
+            }
+            Nsensors_observing++;
         }
 
         MSG("Sensor snapshot %d observed by %d sensors",
             isnapshot, Nsensors_observing);
+
+        if(Nsensors_observing < 2)
+        {
+            MSG("Need at least 2. Throwing out isnapshot=%d",
+                isnapshot);
+            continue;
+        }
+
         MSG("isnapshot_original=%d corresponds to isnapshot_filtered=%d",
             isnapshot, Nsensor_snapshots_filtered);
         Nsensor_snapshots_filtered++;
@@ -2746,13 +2774,14 @@ bool _clc_internal(// out
         {
             const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
 
-            for(unsigned int icamera=0; icamera<Ncameras; icamera++)
-                if(sensor_snapshot->images[icamera].uint8.width != 0)
-                    NcameraObservations[icamera]++;
-
             for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
                 if(sensor_snapshot->lidar_scans[ilidar].points != NULL)
                     NlidarObservations[ilidar]++;
+
+            for(unsigned int icamera=0; icamera<Ncameras; icamera++)
+                if(sensor_snapshot->chessboard_corners[icamera] != NULL)
+                    NcameraObservations[icamera]++;
+
         }
         for(unsigned int i=0; i<Ncameras; i++)
         {
@@ -3017,6 +3046,9 @@ bool clc_unsorted(// out
          // The stride, in bytes, between each successive points or rings value
          // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
+         // The dimensions of the chessboard grid being detected in the images
+         const int gridn_height,
+         const int gridn_width,
 
          // These apply to ALL the sensor_snapshots[]
          const unsigned int Ncameras,
@@ -3037,6 +3069,7 @@ bool clc_unsorted(// out
                          sensor_snapshots, NULL, NULL,
                          Nsensor_snapshots,
                          lidar_packet_stride,
+                         gridn_height, gridn_width,
                          Ncameras,
                          Nlidars,
                          is_bgr_mask,
@@ -3052,6 +3085,9 @@ bool clc_sorted(// out
          // in
          const clc_sensor_snapshot_sorted_t* sensor_snapshots,
          const unsigned int                  Nsensor_snapshots,
+         // The dimensions of the chessboard grid being detected in the images
+         const int gridn_height,
+         const int gridn_width,
 
          // These apply to ALL the sensor_snapshots[]
          const unsigned int Ncameras,
@@ -3072,6 +3108,7 @@ bool clc_sorted(// out
                          NULL, sensor_snapshots, NULL,
                          Nsensor_snapshots,
                          0,
+                         gridn_height, gridn_width,
                          Ncameras,
                          Nlidars,
                          is_bgr_mask,
@@ -3087,6 +3124,9 @@ bool clc_lidar_segmented(// out
          // in
          const clc_sensor_snapshot_segmented_t* sensor_snapshots,
          const unsigned int                     Nsensor_snapshots,
+         // The dimensions of the chessboard grid being detected in the images
+         const int gridn_height,
+         const int gridn_width,
 
          // These apply to ALL the sensor_snapshots[]
          const unsigned int Ncameras,
@@ -3107,6 +3147,7 @@ bool clc_lidar_segmented(// out
                          NULL, NULL, sensor_snapshots,
                          Nsensor_snapshots,
                          0,
+                         gridn_height, gridn_width,
                          Ncameras,
                          Nlidars,
                          is_bgr_mask,

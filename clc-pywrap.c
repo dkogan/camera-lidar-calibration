@@ -412,6 +412,9 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     int          Nlidars             = -1;
     int          Nsensor_snapshots   = -1;
 
+    int gridn_height = -1;
+    int gridn_width  = -1;
+
     int check_gradient__use_distance_to_plane = 0;
     int check_gradient                        = 0;
     // sensor_snapshots is a tuple. Each slice corresponds to
@@ -432,15 +435,19 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE(    type,name,default,pyparse,...) pyparse
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse,...) &ctx.name,
     char* keywords[] = { "sensor_snapshots",
+                         "gridn_height",
+                         "gridn_width",
                          "check_gradient__use_distance_to_plane",
                          "check_gradient",
                          CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" "pp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
+                                     "O" "|$" "iipp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
                                      ,
                                      keywords,
                                      (PyTupleObject*)&py_sensor_snapshots,
+                                     &gridn_height,
+                                     &gridn_width,
                                      &check_gradient__use_distance_to_plane,
                                      &check_gradient,
                                      CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX)
@@ -459,6 +466,12 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     if(0 > (Nsensor_snapshots = PyTuple_Size((PyObject*)py_sensor_snapshots)))
     {
         BARF("Couldn't get len(sensor_snapshots)");
+        goto done;
+    }
+
+    if(0 >= gridn_height || 0 >= gridn_width)
+    {
+        BARF("gridn_height and gridn_width must both be given and both be >0");
         goto done;
     }
 
@@ -508,6 +521,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          sensor_snapshots,
                          Nsensor_snapshots,
                          lidar_packet_stride,
+                         gridn_height,
+                         gridn_width,
                          Ncameras,
                          Nlidars,
                          (clc_is_bgr_mask_t)0,
