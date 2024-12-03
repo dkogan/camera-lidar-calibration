@@ -124,6 +124,7 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
     clc_lidar_segmentation_context_t ctx;
     clc_lidar_segmentation_default_context(&ctx);
 
+    SET_SIGINT();
 
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS(   type,name,default,pyparse,...) #name,
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE(    type,name,default,pyparse,...) pyparse
@@ -204,6 +205,8 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
         Py_XDECREF(ipoint[i]);
     Py_XDECREF(py_ipoint);
     Py_XDECREF(plane_pn);
+
+    RESET_SIGINT();
 
     return result;
 }
@@ -357,6 +360,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                               PyObject* args,
                               PyObject* kwargs)
 {
+    SET_SIGINT();
+
     PyObject* result = NULL;
 
     PyTupleObject* py_sensor_snapshots = NULL;
@@ -484,6 +489,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     Py_XDECREF(rt_ref_lidar);
     Py_XDECREF(rt_ref_camera);
     Py_XDECREF(py_sensor_snapshots);
+
+    RESET_SIGINT();
 
     return result;
 }
