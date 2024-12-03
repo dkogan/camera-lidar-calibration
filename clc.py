@@ -43,13 +43,16 @@ def calibrate(*,
               **kwargs):
 
     def lidar_points(msg):
+        if msg is None: return None
         array = msg['array']
         return \
             (array['xyz' ],
              array['ring'])
 
     def images(msg):
-        raise
+        if msg is None: return None
+        return msg['array']
+
 
     def sensor_snapshot(bag):
         if not os.path.exists(bag):
@@ -59,7 +62,6 @@ def calibrate(*,
             bag_interface. \
             first_message_from_each_topic(bag,
                                           lidar_topic + camera_topic)
-
         Nlidar = len(lidar_topic)
         return \
             ( tuple(lidar_points(msg) for msg in messages[:Nlidar]),

@@ -217,9 +217,9 @@ static bool ingest_camera_snapshot(// out
                                    // in
                                    const PyObject* py_snapshot)
 {
-    PyObject* images = PyTuple_GET_ITEM(py_snapshot, 1);
+    PyObject* py_images = PyTuple_GET_ITEM(py_snapshot, 1);
 
-    if(images == Py_None)
+    if(py_images == Py_None)
     {
         memset(snapshot->images, 0, sizeof(snapshot->images));
         *Ncameras = 0;
@@ -227,12 +227,12 @@ static bool ingest_camera_snapshot(// out
     }
 
     int Ncameras_here;
-    if(!PyTuple_Check(images))
+    if(!PyTuple_Check(py_images))
     {
         BARF("Each sensor_snapshot[0] should be a tuple of images for each camera, or None if that camera had no observations");
         return false;
     }
-    if(0 > (Ncameras_here = PyTuple_Size(images)))
+    if(0 > (Ncameras_here = PyTuple_Size(py_images)))
     {
         BARF("Couldn't get Ncameras_here");
         return false;
@@ -248,15 +248,41 @@ static bool ingest_camera_snapshot(// out
             return false;
         }
     }
-
     if(*Ncameras == 0)
         return true;
 
-    // write stuff to snapshot->images[i]
+    if(*Ncameras > clc_Ncameras_max)
+    {
+        BARF("Number of cameras give exceeds the static limit of clc_Ncameras_max=%d. Raise clc_Ncameras_max",
+             clc_Ncameras_max);
+        return false;
+    }
 
+    for(int i=0; i<*Ncameras; i++)
+    {
+        mrcal_image_uint8_t* image = &snapshot->images[i].uint8;
 
-    BARF("Camera stuff not done yet");
-    return false;
+        PyArrayObject* py_image = (PyArrayObject*)PyTuple_GET_ITEM(py_images, i);
+        if((PyObject*)py_image == Py_None)
+        {
+            *image = (mrcal_image_uint8_t){};
+            continue;
+        }
+
+        if(! (PyArray_TYPE(py_image) == NPY_UINT8 &&
+              PyArray_NDIM(py_image) == 2 &&
+              PyArray_STRIDES(py_image)[1] == sizeof(uint8_t)) )
+        {
+            PyErr_SetString(PyExc_RuntimeError, "'py_image' must be an array of shape (width,height) containing 8-bit uint, each pixel stored densely");
+            return false;
+        }
+
+        *image = (mrcal_image_uint8_t){.width  = PyArray_DIM (py_image,1),
+                                       .height = PyArray_DIM (py_image,0),
+                                       .stride = PyArray_DIM (py_image,1),
+                                       .data   = PyArray_DATA(py_image) };
+    }
+    return true;
 }
 
 static bool ingest_lidar_snapshot(// out
@@ -290,6 +316,15 @@ static bool ingest_lidar_snapshot(// out
                  *Nlidars, Nlidars_here);
             return false;
         }
+    }
+    if(*Nlidars == 0)
+        return true;
+
+    if(*Nlidars > clc_Nlidars_max)
+    {
+        BARF("Number of lidars give exceeds the static limit of clc_Nlidars_max=%d. Raise clc_Nlidars_max",
+             clc_Nlidars_max);
+        return false;
     }
 
     for(int i=0; i<*Nlidars; i++)

@@ -6,6 +6,7 @@ import numpy as np
 import pathlib
 import rosbags.highlevel.anyreader
 import rosbags.typesys
+import re
 
 
 def messages(bag, topics):
@@ -116,7 +117,7 @@ def messages(bag, topics):
                         if c.topic == topic ]
 
         if len(connections) == 0:
-            raise Exception(f"Topic '{topic}' not found in '{bag}'; the available topics are {globals()['topics'](bag)}")
+            return None
         if len(connections) > 1:
             raise Exception(f"Multiple connections for topic '{topic}' found in '{bag}'; I expect exactly one")
         return connections[0]
@@ -128,6 +129,7 @@ def messages(bag, topics):
         # I expect exactly one matching connection for each topic given
         connections = [ connection_from_topic(reader.connections, topic) \
                         for topic in topics ]
+        connections = [ c for c in connections if c is not None ]
 
         for connection, time_ns, rawdata in \
                 reader.messages( connections = connections ):
@@ -138,17 +140,33 @@ def messages(bag, topics):
                 # Sometimes we don't have this, like when looking at ros1 data
                 qos = None
 
-            msg   = reader.deserialize(rawdata, connection.msgtype)
-            dtype = dtype_from_msg(msg, connection.msgtype)
-            data  = np.frombuffer(msg.data, dtype = dtype)
+            msg = reader.deserialize(rawdata, connection.msgtype)
 
-            # 2023-11-01 dataset contains data that is almost completely
-            # comprised of duplicated points. The only difference in these
-            # duplicates is the 'ret' field. This is always 0 or 1. Mostly these
-            # alternate, with a small period of all 1. I have no idea what this
-            # means, so I only take ret==0; this suppresses the duplicates
-            if 'ret' in dtype.fields:
-                data = data[data['ret'] == 0]
+            if re.search(r'\bsensor_msgs__msg__PointCloud2\b', str(type(msg))):
+                dtype = dtype_from_msg(msg, connection.msgtype)
+                data  = np.frombuffer(msg.data, dtype = dtype)
+
+                # 2023-11-01 dataset contains data that is almost completely
+                # comprised of duplicated points. The only difference in these
+                # duplicates is the 'ret' field. This is always 0 or 1. Mostly these
+                # alternate, with a small period of all 1. I have no idea what this
+                # means, so I only take ret==0; this suppresses the duplicates
+                if 'ret' in dtype.fields:
+                    data = data[data['ret'] == 0]
+
+            elif re.search(r'\bsensor_msgs__msg__Image\b', str(type(msg))):
+                data = msg.data
+                shape = data.shape
+                if not ( len(shape) == 1 and \
+                         shape[0] == msg.width*msg.height and \
+                         data.dtype == np.uint8 and \
+                         msg.width == msg.step ):
+                    raise Exception("rosbags.usertypes.sensor_msgs__msg__Image data should contain a flattened, dense byte array")
+
+                data = data.reshape(msg.height,msg.width)
+
+            else:
+                raise Exception(f"Unknown message type {type(msg)=}")
 
             time_header_ns = msg.header.stamp.sec*1000000000 + msg.header.stamp.nanosec
 
