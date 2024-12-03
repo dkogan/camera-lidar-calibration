@@ -217,7 +217,7 @@ static bool ingest_camera_snapshot(// out
                                    // in
                                    const PyObject* py_snapshot)
 {
-    PyObject* images = PyTuple_GET_ITEM(py_snapshot, 0);
+    PyObject* images = PyTuple_GET_ITEM(py_snapshot, 1);
 
     if(images == Py_None)
     {
@@ -249,6 +249,9 @@ static bool ingest_camera_snapshot(// out
         }
     }
 
+    if(*Ncameras == 0)
+        return true;
+
     // write stuff to snapshot->images[i]
 
 
@@ -263,7 +266,7 @@ static bool ingest_lidar_snapshot(// out
                                   // in
                                   const PyObject* py_snapshot)
 {
-    PyObject* py_lidar_scans = PyTuple_GET_ITEM(py_snapshot, 1);
+    PyObject* py_lidar_scans = PyTuple_GET_ITEM(py_snapshot, 0);
 
     if(!PyTuple_Check(py_lidar_scans))
     {
@@ -379,8 +382,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     // sensor_snapshots is a tuple. Each slice corresponds to
     // clc_sensor_snapshot_unsorted_t; it is a tuple:
     //
-    // - images      (an tuple, each element corresponding to a mrcal_image_uint8_t)
     // - lidar_scans (an tuple, each element corresponding to clc_lidar_scan_unsorted_t)
+    // - images      (an tuple, each element corresponding to a mrcal_image_uint8_t)
     //
     // Ncameras and Nlidars must be consistent across all sensor snapshots. The
     // data stride inside each lidar scan is read into lidar_packet_stride, and
@@ -444,10 +447,10 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                 goto done;
             }
 
-            if(!ingest_camera_snapshot(snapshot, &Ncameras,
+            if(!ingest_lidar_snapshot (snapshot, &Nlidars, &lidar_packet_stride,
                                        py_snapshot))
                 goto done;
-            if(!ingest_lidar_snapshot (snapshot, &Nlidars, &lidar_packet_stride,
+            if(!ingest_camera_snapshot(snapshot, &Ncameras,
                                        py_snapshot))
                 goto done;
         }

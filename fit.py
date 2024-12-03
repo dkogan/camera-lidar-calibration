@@ -1987,8 +1987,9 @@ else:
 
 if True:
     print("Using the C core")
-    result = clc.calibrate(bags         = args.bag,
-                           lidar_topic = args.lidar_topic,
+    result = clc.calibrate(bags          = args.bag,
+                           lidar_topic   = args.lidar_topic,
+                           camera_topic  = args.camera_topic,
                            check_gradient = False)
     sys.exit()
 

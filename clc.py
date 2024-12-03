@@ -37,33 +37,42 @@ def lidar_segmentation(*,
 
 
 def calibrate(*,
-              bags, lidar_topic,
+              bags, lidar_topic, camera_topic,
               check_gradient__use_distance_to_plane = False,
               check_gradient                        = False,
               **kwargs):
 
-    def lidar_points(bag, lidar_topic):
-        array = next(bag_interface.bag_messages_generator(bag, (lidar_topic,) ))['array']
+    def lidar_points(msg):
+        array = msg['array']
+        return \
+            (array['xyz' ],
+             array['ring'])
 
-        points = array['xyz']
-        rings  = array['ring']
-
-        return (points,rings)
-
-    def lidar_points_all_topics(bag):
-        return tuple( lidar_points(bag, lidar_topic) for lidar_topic in lidar_topic )
+    def images(msg):
+        raise
 
     def sensor_snapshot(bag):
         if not os.path.exists(bag):
             raise Exception(f"Bag path '{bag}' does not exist")
-        return (None, lidar_points_all_topics(bag))
+
+        messages = \
+            bag_interface. \
+            first_message_from_each_topic(bag,
+                                          lidar_topic + camera_topic)
+
+        Nlidar = len(lidar_topic)
+        return \
+            ( tuple(lidar_points(msg) for msg in messages[:Nlidar]),
+              tuple(images      (msg) for msg in messages[Nlidar:]) )
 
     if not (check_gradient__use_distance_to_plane or \
             check_gradient ):
         for i,bag in enumerate(bags):
             print(f"Bag {i: 3d} {bag}")
         for i,topic in enumerate(lidar_topic):
-            print(f"Topic {i: 2d} {topic}")
+            print(f"LIDAR topic {i: 2d} {topic}")
+        for i,topic in enumerate(camera_topic):
+            print(f"Camera topic {i: 2d} {topic}")
 
     return _clc.calibrate( tuple(sensor_snapshot(bag) for bag in bags),
                            check_gradient__use_distance_to_plane = check_gradient__use_distance_to_plane,

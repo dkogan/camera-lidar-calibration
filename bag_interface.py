@@ -161,6 +161,29 @@ def bag_messages_generator(bag, topics):
                         rawdata        = rawdata,
                         qos            = qos )
 
+
+def first_message_from_each_topic(bag, topics):
+
+    out = [None] * len(topics)
+    idx = dict()
+    for i,t in enumerate(topics): idx[t] = i
+    Nstored = 0
+
+    for msg in bag_messages_generator(bag, topics):
+        i = idx[msg['topic']]
+        if out[i] is None:
+            out[i] = msg
+            Nstored += 1
+            if Nstored == len(topics):
+                return out
+
+    if not any(out):
+        raise Exception(f"{bag=} doesn't contain ANY messages from any of {topics=}")
+
+    # we have messages from SOME topics. Missing ones are None
+    return out
+
+
 def topics(bag):
     with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
         return [c.topic for c in reader.connections]
