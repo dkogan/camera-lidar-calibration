@@ -1,0 +1,27 @@
+This is a LIDAR-camera calibration toolkit using sets of stationary chessboard
+observations to calibrate the two sets of sensors together.
+
+* Dependencies
+The bulk of this is C code. To build you need to
+
+#+begin_src sh
+sudo apt install libmrgingham-dev libdogleg-dev libopencv-dev libpython3-dev
+#+end_src
+
+You also need to build the bleeding-edge mrcal tree:
+
+#+begin_src sh
+sudo apt build-dep mrcal
+
+D=YOUR_DIRECTORY_FOR_SOURCES
+cd $D
+git clone https://github.com/dkogan/mrcal.git
+cd mrcal
+make
+#+end_src
+
+To make this available, build =clc= like this:
+
+#+begin_src sh
+MRCAL=$D/mrcal make
+#+end_src
