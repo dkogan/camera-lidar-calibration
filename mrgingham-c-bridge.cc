@@ -50,7 +50,7 @@ __attribute__((visibility("hidden")))
 bool
 chessboard_detection_mrgingham(// out
                                mrcal_point2_t* chessboard_corners,
-                               // int
+                               // in
                                const mrcal_image_uint8_t* image,
                                const int object_height_n,
                                const int object_width_n)
