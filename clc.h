@@ -2,8 +2,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <mrcal/mrcal-image.h>
-#include <mrcal/basic-geometry.h>
+#include <mrcal/mrcal.h>
 
 typedef union
 {
@@ -256,13 +255,15 @@ bool clc_unsorted(// out
          // The stride, in bytes, between each successive points or rings value
          // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
+
+         // These apply to ALL the sensor_snapshots[]
+         const unsigned int Nlidars,
+         const unsigned int Ncameras,
+         const mrcal_cameramodel_t*const* models, // Ncameras of these
          // The dimensions of the chessboard grid being detected in the images
          const int object_height_n,
          const int object_width_n,
-
-         // These apply to ALL the sensor_snapshots[]
-         const unsigned int Ncameras,
-         const unsigned int Nlidars,
+         const double object_spacing,
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
@@ -279,13 +280,15 @@ bool clc_sorted(// out
          // in
          const clc_sensor_snapshot_sorted_t* sensor_snapshots,
          const unsigned int                  Nsensor_snapshots,
+
+         // These apply to ALL the sensor_snapshots[]
+         const unsigned int Nlidars,
+         const unsigned int Ncameras,
+         const mrcal_cameramodel_t*const* models, // Ncameras of these
          // The dimensions of the chessboard grid being detected in the images
          const int object_height_n,
          const int object_width_n,
-
-         // These apply to ALL the sensor_snapshots[]
-         const unsigned int Ncameras,
-         const unsigned int Nlidars,
+         const double object_spacing,
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
@@ -302,13 +305,15 @@ bool clc_lidar_segmented(// out
          // in
          const clc_sensor_snapshot_segmented_t* sensor_snapshots,
          const unsigned int                     Nsensor_snapshots,
+
+         // These apply to ALL the sensor_snapshots[]
+         const unsigned int Nlidars,
+         const unsigned int Ncameras,
+         const mrcal_cameramodel_t*const* models, // Ncameras of these
          // The dimensions of the chessboard grid being detected in the images
          const int object_height_n,
          const int object_width_n,
-
-         // These apply to ALL the sensor_snapshots[]
-         const unsigned int Ncameras,
-         const unsigned int Nlidars,
+         const double object_spacing,
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not

@@ -11,6 +11,7 @@
 #include "util.h"
 #include "minimath/minimath_generated.h"
 #include "mrgingham-c-bridge.hh"
+#include "opencv-c-bridge.hh"
 
 typedef struct
 {
@@ -102,41 +103,38 @@ connectivity_matrix(// out
     {
         const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
 
-#if 0
-        // camera stuff; not done yet
-
-        // "icamera" and "ilidar" used to mean two things here. Look at fit.py
-        for(int icamera0=0; icamera0<Ncameras-1; icamera0++)
+        for(int icamera0=0; icamera0<Ncameras; icamera0++)
         {
-            icamera0,q_observed0 = cameras[icamera0];
+            // camera-camera links
 
-            pcenter_normal_camera0 = \
-                pcenter_normal_camera(q_observed0,
-                                      isnapshot,
-                                      icamera0,
-                                      what = f"{isnapshot=},icamera={icamera0}");
+            if(sensor_snapshot->chessboard_corners[icamera0] == NULL)
+                continue;
+
             for(int icamera1=icamera0+1; icamera1<Ncameras; icamera1++)
             {
-                icamera1,q_observed1 = cameras[icamera1]
+                if(sensor_snapshot->chessboard_corners[icamera1] == NULL)
+                    continue;
 
-                    idx = pairwise_index(Nlidars+icamera0,
-                                         Nlidars+icamera1,
-                                         Nsensors);
+                const int idx = pairwise_index(Nlidars+icamera0,
+                                               Nlidars+icamera1,
+                                               Nsensors);
+                shared_observation_counts[idx]++;
+            }
 
-                // shape (Nsensors=2,pcenter_normal=2,3)
-                pcloud_normal_next = get_pcloud_normal_next(idx);
-                pcloud_normal_next[0] = pcenter_normal_camera0;
-                pcenter_normal_camera(q_observed1,
-                                      isnapshot,
-                                      icamera1,
-                                      what = f"{isnapshot=},icamera={icamera1}",
-                                      out = pcloud_normal_next[1]);
+            // camera-lidar links
+            for(int ilidar1=0; ilidar1<Nlidars; ilidar1++)
+            {
+                if(sensor_snapshot->lidar_scans[ilidar1].points == NULL)
+                    continue;
 
-                shared_observation_counts[idx] += 1;
+                const int idx = pairwise_index(ilidar1,
+                                               Nlidars+icamera0,
+                                               Nsensors);
+                shared_observation_counts[idx]++;
             }
         }
-#endif
 
+        // lidar-lidar links
         for(int ilidar0=0; ilidar0<Nlidars-1; ilidar0++)
         {
             if(sensor_snapshot->lidar_scans[ilidar0].points == NULL)
@@ -152,43 +150,6 @@ connectivity_matrix(// out
                 shared_observation_counts[idx]++;
             }
         }
-
-#if 0
-        // camera stuff; not done yet
-
-        // "icamera" and "ilidar" used to mean two things here. Look at fit.py
-
-        for(icamera in range(Ncameras))
-        {
-            icamera,q_observed = cameras[icamera]
-
-                pcenter_normal_camera0 = \
-                pcenter_normal_camera(q_observed,
-                                      isnapshot,
-                                      icamera,
-                                      what = f"{isnapshot=},icamera={icamera}");
-
-            for(ilidar in range(Nlidars))
-            {
-                ilidar,plidar = lidars[ilidar]
-
-                    idx = pairwise_index(ilidar,
-                                         Nlidars+icamera,
-                                         Nsensors);
-
-                // shape (Nsensors=2,pcenter_normal=2,3)
-                pcloud_normal_next = get_pcloud_normal_next(idx);
-                // isensor(camera) > isensor(lidar) always, so I store the
-                // camera into pcloud_normal_next[1] and the lidar into
-                // pcloud_normal_next[0]
-                pcloud_normal_next[1] = pcenter_normal_camera0;
-                pcenter_normal_lidar(plidar,
-                                     out = pcloud_normal_next[0]);
-
-                shared_observation_counts[idx] += 1;
-            }
-        }
-#endif
     }
 }
 
@@ -208,9 +169,13 @@ compute_board_poses(// out
                     const int                          Nsensor_snapshots_filtered,
                     const int                          Ncameras,
                     const int                          Nlidars,
-                    const double*                      Rt_lidar0_lidar,
-                    const mrcal_point3_t*              p_center_board)
+                    const double*                      Rt_lidar0_lidar)
 {
+
+
+
+
+
     for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
     {
 
@@ -268,7 +233,17 @@ compute_board_poses(// out
             // p + t_board_lidar = p_center_board
             for(int i=0; i<3; i++)
             {
-                Rt_board_lidar[9+i] = p_center_board->xyz[i];
+
+
+
+                // TEMPORARY
+                mrcal_point3_t p_center_board = {};
+
+
+
+
+
+                Rt_board_lidar[9+i] = p_center_board.xyz[i];
                 for(int j=0; j<3; j++)
                     Rt_board_lidar[9+i] -=
                         Rt_board_lidar[i*3 + j] * plidar_mean.xyz[j];
@@ -294,6 +269,283 @@ compute_board_poses(// out
     return true;
 }
 
+
+
+
+
+
+
+// Exact C port of
+// mrcal.calibration._estimate_camera_pose_from_fixed_point_observations(). Not
+// pushed to mrcal itself because it calls OpenCV, but mrcal does not link to it
+// in its C library
+static
+bool
+_estimate_camera_pose_from_fixed_point_observations(// out
+                                                    double* Rt_cam_points,
+                                                    // in
+                                                    const mrcal_lensmodel_t* lensmodel,
+                                                    const double*            intrinsics,
+                                                    const mrcal_point2_t*    observations,
+                                                    const mrcal_point3_t*    points_ref,
+                                                    const int                N,
+                                                    const char*              what)
+{
+    // if z<0, try again with bigger f
+    // if too few points: try again with smaller f
+    double scale = 1.0;
+    while(true)
+    {
+        const double fx = intrinsics[0];
+        const double fy = intrinsics[1];
+        const double cx = intrinsics[2];
+        const double cy = intrinsics[3];
+
+        const double camera_matrix[] =
+            { fx*scale, 0,       cx,
+              0,       fy*scale, cy,
+              0,       0,        1 };
+
+        mrcal_point2_t observations_local[N];
+        mrcal_point3_t ref_object        [N];
+        int Nobservations = 0;
+        for(int i=0; i<N; i++)
+        {
+            mrcal_point2_t q =
+                { .x = (observations[i].x - cx) / scale + cx,
+                  .y = (observations[i].y - cy) / scale + cy };
+            mrcal_point3_t v;
+            if(!mrcal_unproject( &v,
+                                 &q, 1, lensmodel, intrinsics))
+                continue;
+            if( !isfinite(v.x) ||
+                !isfinite(v.y) ||
+                !isfinite(v.z) )
+            {
+                continue;
+            }
+
+            mrcal_project( &observations_local[Nobservations], NULL, NULL,
+                           &v, 1, &(mrcal_lensmodel_t){.type = MRCAL_LENSMODEL_PINHOLE}, intrinsics );
+
+            // observation_qxqy_pinhole = (observation_qxqy_pinhole - cxy)*scale + cxy
+            observations_local[i].x *= scale;
+            observations_local[i].y *= scale;
+            observations_local[i].x += cx*(1. - scale);
+            observations_local[i].y += cy*(1. - scale);
+
+            // accept point
+            ref_object[Nobservations] = points_ref[i];
+            Nobservations++;
+        }
+
+        if(Nobservations < 4)
+        {
+            if(scale == 1.0)
+            {
+                scale = 0.7;
+                continue;
+            }
+            MSG("Insufficient observations; need at least 4; got %d instead. Cannot estimate initial extrinsics for %s",
+                Nobservations,
+                what);
+            return false;
+        }
+
+        double rtvec[6];
+        mrcal_point3_t* rvec = (mrcal_point3_t*)&rtvec[0];
+        mrcal_point3_t* tvec = (mrcal_point3_t*)&rtvec[3];
+        if(!cv_solvePnP(// in/out
+                        rvec, tvec,
+                        // in
+                        ref_object,
+                        observations_local,
+                        Nobservations,
+                        camera_matrix,
+                        false))
+        {
+            MSG("solvePnP() failed! Cannot estimate initial extrinsics for %s", what);
+            return false;
+        }
+        if(tvec->z <= 0)
+        {
+            // The object ended up behind the camera. I flip it, and try to solve
+            // again
+            for(int i=0; i<3; i++) tvec->xyz[i] *= -1;
+
+            if(!cv_solvePnP(// in/out
+                            rvec, tvec,
+                            // in
+                            ref_object,
+                            observations_local,
+                            Nobservations,
+                            camera_matrix,
+                            true))
+            {
+                MSG("Retried solvePnP() failed! Cannot estimate initial extrinsics for %s", what);
+                return false;
+            }
+            if(tvec->z <= 0)
+            {
+                if(scale == 1.0)
+                {
+                    scale = 1.5;
+                    continue;
+                }
+                MSG("Retried solvePnP() insists that tvec->z <= 0 (i.e. the chessboard is behind us). Cannot estimate initial extrinsics for %s",
+                    what);
+                return false;
+            }
+        }
+
+        mrcal_Rt_from_rt(Rt_cam_points, NULL,
+                         rtvec);
+        return true;
+    }
+
+    // unreachable
+    return false;
+}
+
+
+static
+bool pcenter_normal_camera(// out
+                           mrcal_point3_t*            p_center_board__cam_coords,
+                           mrcal_point3_t*            normal_board__cam_coords,
+                           // in
+                           const mrcal_cameramodel_t* model,
+                           const mrcal_point2_t*      observations,
+                           const int                  object_height_n,
+                           const int                  object_width_n,
+                           const double               object_spacing)
+{
+    // The estimate of the center of the board, in board coords. The board
+    // geometry is usually computed by mrcal.ref_calibration_object(): the
+    // coordinates move as
+    //
+    //   x = linspace(0,object_width_n-1,object_width_n)*object_spacing
+    //-> x = i*object_spacing
+    // In the center i = (object_width_n-1)/2
+    //-> x_center = (object_width_n-1)/2*object_spacing
+    //
+    // I'm also assuming no board warp, so z=0
+    const double p_center_board[] =
+        { (object_width_n -1)/2*object_spacing,
+          (object_height_n-1)/2*object_spacing,
+          0. };
+
+    const int N = object_height_n*object_width_n;
+    mrcal_point3_t points_ref[N];
+    for(int i=0; i<object_height_n; i++)
+        for(int j=0; j<object_width_n; j++)
+        {
+            points_ref[i*object_width_n + j].x = (double)j*object_spacing;
+            points_ref[i*object_width_n + j].y = (double)i*object_spacing;
+            points_ref[i*object_width_n + j].z = 0.;
+        }
+
+    double Rt_camera_board[4*3];
+    if(!_estimate_camera_pose_from_fixed_point_observations( Rt_camera_board,
+                                                             &model->lensmodel,
+                                                             model->intrinsics,
+                                                             observations,
+                                                             points_ref,
+                                                             N,
+                                                             "fit_seed" ))
+        return false;
+    if(Rt_camera_board[3*3 + 2] <= 0)
+    {
+        MSG("Chessboard is behind the camera");
+        return false;
+    }
+
+
+    // diagnostics
+#if 0
+    q_perfect = mrcal.project(mrcal.transform_point_Rt(Rt_camera_board,
+                                                       nps.clump(p_board_local,n=2)),
+                              *models[icamera].intrinsics());
+
+    rms_error = np.sqrt(np.mean(nps.norm2(q_perfect - q_observed)));
+    print(f"RMS error: {rms_error}");
+    gp.plot(q_perfect,
+            tuplesize = -2,
+            _with = 'linespoints pt 2 ps 2 lw 2',
+            rgbimage = image_filename,
+            square = True,
+            yinv = True,
+            wait = True);
+#endif
+
+    // Rt_camera_board_cache[iboard,icamera] = Rt_camera_board;
+
+    mrcal_transform_point_Rt(p_center_board__cam_coords->xyz, NULL, NULL,
+                             Rt_camera_board, p_center_board);
+    normal_board__cam_coords->x = Rt_camera_board[3*0 + 0];
+    normal_board__cam_coords->y = Rt_camera_board[3*1 + 0];
+    normal_board__cam_coords->z = Rt_camera_board[3*2 + 0];
+
+    // I make sure that the normal points towards the sensor; for consistency
+    if(mrcal_point3_inner(*normal_board__cam_coords,
+                          *p_center_board__cam_coords) > 0)
+    {
+        *normal_board__cam_coords =
+            mrcal_point3_scale(*normal_board__cam_coords, -1.);
+    }
+    return true;
+}
+
+
+static
+bool ingest_pcenter_normal(// out
+                           mrcal_point3_t* point,
+                           mrcal_point3_t* normal,
+                           // in
+                           const uint16_t                     isensor,
+                           const sensor_snapshot_segmented_t* sensor_snapshot,
+                           const int                          Nlidars,
+                           const int                          Ncameras,
+                           const mrcal_cameramodel_t*const*   models,
+                           const int                          object_height_n,
+                           const int                          object_width_n,
+                           const double                       object_spacing)
+{
+    if(isensor < Nlidars)
+    {
+        // this is a lidar
+        const int ilidar = isensor;
+
+        const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+        if(lidar_scan->points == NULL)
+            return false;
+
+        mrcal_point3_from_clc_point3f(point, &lidar_scan->points_and_plane->plane.p_mean);
+        mrcal_point3_from_clc_point3f(normal, &lidar_scan->points_and_plane->plane.n);
+    }
+    else
+    {
+        // this is a camera
+        const int icamera = isensor - Nlidars;
+
+        const mrcal_point2_t* chessboard_corners = sensor_snapshot->chessboard_corners[icamera];
+        if(chessboard_corners == NULL)
+            return false;
+
+        if(!pcenter_normal_camera(// out
+                                  point,
+                                  normal,
+                                  // in
+                                  models[icamera],
+                                  chessboard_corners,
+                                  object_height_n,
+                                  object_width_n,
+                                  object_spacing))
+            return false;
+    }
+
+    return true;
+}
+
 static
 bool align_point_clouds(// out
                         double* Rt01,
@@ -303,24 +555,20 @@ bool align_point_clouds(// out
 
                         const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
                         const int                          Nsensor_snapshots_filtered,
+                        const int                          Nlidars,
                         const int                          Ncameras,
-                        const int                          Nlidars)
+                        const mrcal_cameramodel_t*const*   models,
+                        const int                          object_height_n,
+                        const int                          object_width_n,
+                        const double                       object_spacing)
 {
-    // cameras
-    if(isensor0 >= Nlidars) assert(0);
-    if(isensor1 >= Nlidars) assert(0);
-
-    const int ilidar0 = isensor0;
-    const int ilidar1 = isensor1;
-
-
     // Nsensor_snapshots_filtered is the max number I will need
     // These are double instead of float, since that's what the alignment code
     // uses
-    mrcal_point3_t normals0[Nsensor_snapshots_filtered];
-    mrcal_point3_t normals1[Nsensor_snapshots_filtered];
     mrcal_point3_t points0 [Nsensor_snapshots_filtered];
     mrcal_point3_t points1 [Nsensor_snapshots_filtered];
+    mrcal_point3_t normals0[Nsensor_snapshots_filtered];
+    mrcal_point3_t normals1[Nsensor_snapshots_filtered];
     int Nbuffer = 0;
 
     // to pacify the compiler
@@ -328,24 +576,35 @@ bool align_point_clouds(// out
     normals1[0].x = 0;
 
     // Loop through all the observations
-#warning "I ignore all the cameras here"
     for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
-
-        if(sensor_snapshot->lidar_scans[ilidar0].points == NULL)
+        if(!ingest_pcenter_normal(// out
+                                  &points0[Nbuffer],
+                                  &normals0[Nbuffer],
+                                  // in
+                                  isensor0,
+                                  &sensor_snapshots_filtered[isnapshot],
+                                  Nlidars,
+                                  Ncameras,
+                                  models,
+                                  object_height_n,
+                                  object_width_n,
+                                  object_spacing) ||
+           !ingest_pcenter_normal(// out
+                                  &points1[Nbuffer],
+                                  &normals1[Nbuffer],
+                                  // in
+                                  isensor1,
+                                  &sensor_snapshots_filtered[isnapshot],
+                                  Nlidars,
+                                  Ncameras,
+                                  models,
+                                  object_height_n,
+                                  object_width_n,
+                                  object_spacing))
+        {
             continue;
-        if(sensor_snapshot->lidar_scans[ilidar1].points == NULL)
-            continue;
-
-        mrcal_point3_from_clc_point3f(&normals0[Nbuffer],
-                                      &sensor_snapshot->lidar_scans[ilidar0].points_and_plane->plane.n);
-        mrcal_point3_from_clc_point3f(&normals1[Nbuffer],
-                                      &sensor_snapshot->lidar_scans[ilidar1].points_and_plane->plane.n);
-        mrcal_point3_from_clc_point3f(&points0[Nbuffer],
-                                      &sensor_snapshot->lidar_scans[ilidar0].points_and_plane->plane.p_mean);
-        mrcal_point3_from_clc_point3f(&points1[Nbuffer],
-                                      &sensor_snapshot->lidar_scans[ilidar1].points_and_plane->plane.p_mean);
+        }
         Nbuffer++;
     }
 
@@ -433,10 +692,16 @@ typedef struct
 {
     const sensor_snapshot_segmented_t* sensor_snapshots_filtered;
     const int                          Nsensor_snapshots_filtered;
-    const int                          Ncameras;
     const int                          Nlidars;
+    const int                          Ncameras;
+    const mrcal_cameramodel_t*const*   models; // Ncameras of these
+    // The dimensions of the chessboard grid being detected in the images
+    const int                          object_height_n;
+    const int                          object_width_n;
+    const double                       object_spacing;
     double*                            Rt_lidar0_lidar;
 } cb_sensor_link_cookie_t;
+
 static
 bool cb_sensor_link(const uint16_t isensor1,
                     const uint16_t isensor0,
@@ -448,16 +713,15 @@ bool cb_sensor_link(const uint16_t isensor1,
 
     cb_sensor_link_cookie_t* cookie = (cb_sensor_link_cookie_t*)_cookie;
 
-    const sensor_snapshot_segmented_t* sensor_snapshots_filtered =
-        cookie->sensor_snapshots_filtered;
-    const int                          Nsensor_snapshots_filtered =
-        cookie->Nsensor_snapshots_filtered;
-    const int                          Ncameras =
-        cookie->Ncameras;
-    const int                          Nlidars =
-        cookie->Nlidars;
-    double*                            Rt_lidar0_lidar =
-        cookie->Rt_lidar0_lidar;
+    const sensor_snapshot_segmented_t* sensor_snapshots_filtered  = cookie->sensor_snapshots_filtered;
+    const int                          Nsensor_snapshots_filtered = cookie->Nsensor_snapshots_filtered;
+    const int                          Nlidars                    = cookie->Nlidars;
+    const int                          Ncameras                   = cookie->Ncameras;
+    const mrcal_cameramodel_t*const*   models                     = cookie->models;
+    const int                          object_height_n            = cookie->object_height_n;
+    const int                          object_width_n             = cookie->object_width_n;
+    const double                       object_spacing             = cookie->object_spacing;
+    double*                            Rt_lidar0_lidar            = cookie->Rt_lidar0_lidar;
 
 
 
@@ -469,8 +733,12 @@ bool cb_sensor_link(const uint16_t isensor1,
                            isensor0,
                            sensor_snapshots_filtered,
                            Nsensor_snapshots_filtered,
+                           Nlidars,
                            Ncameras,
-                           Nlidars))
+                           models,
+                           object_height_n,
+                           object_width_n,
+                           object_spacing))
         return false;
 
     if(isensor1 >= Nlidars)
@@ -565,40 +833,20 @@ fit_seed(// out
          const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
          const unsigned int                 Nsensor_snapshots_filtered,
 
+
          // These apply to ALL the sensor_snapshots[]
-         const unsigned int Ncameras,
          const unsigned int Nlidars,
+         const unsigned int Ncameras,
+         const mrcal_cameramodel_t*const* models, // Ncameras of these
+         // The dimensions of the chessboard grid being detected in the images
+         const int object_height_n,
+         const int object_width_n,
+         const double object_spacing,
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
          const clc_is_bgr_mask_t is_bgr_mask)
 {
-    mrcal_point3_t p_center_board = {};
-
-    if(Ncameras > 0)
-    {
-        // The estimate of the center of the board, in board coords. This doesn't
-        // need to be precise. If the board has an even number of corners, I just
-        // take the nearest one
-
-        assert(0);
-
-        // Nh,Nw = p_board_local.shape[:2];
-        // p_center_board = p_board_local[Nh/2,Nw/2,:];
-
-    }
-    else
-    {
-        // LIDAR-only solve. I don't have the board geometry and I don't know how
-        // big the board is. But I eventually only look at distances to an
-        // infinite plane (the LIDAR error metric), so it doesn't matter. I set
-        // the board origin to 0
-
-        // p_center_board is already 0, so there's nothing to do
-    }
-
-
-
     const int Nsensors = Ncameras + Nlidars;
     uint16_t shared_observation_counts[pairwise_N(Nsensors)];
     connectivity_matrix(// out
@@ -618,11 +866,14 @@ fit_seed(// out
 
     cb_sensor_link_cookie_t cookie =
         {
-
             .sensor_snapshots_filtered  = sensor_snapshots_filtered,
             .Nsensor_snapshots_filtered = Nsensor_snapshots_filtered,
-            .Ncameras                   = Ncameras,
             .Nlidars                    = Nlidars,
+            .Ncameras                   = Ncameras,
+            .models                     = models,
+            .object_height_n            = object_height_n,
+            .object_width_n             = object_width_n,
+            .object_spacing             = object_spacing,
             .Rt_lidar0_lidar            = Rt_lidar0_lidar
         };
 
@@ -639,21 +890,23 @@ fit_seed(// out
     // Traversed all the sensor links. It's possible that some sensors don't
     // even have transitive overlap to the root sensor (lidar0). I can detect
     // this by seeing an uninitialized Rt_lidar0_camera or Rt_lidar0_lidar.
-
+    bool any_connections_missing = false;
     for(unsigned int i=0; i<Ncameras; i++)
         if( Rt_is_all_zero(&Rt_lidar0_camera[i*4*3]))
         {
             MSG("ERROR: Don't have complete observations overlap: camera %d not connected",
                 i);
-            return false;
+            any_connections_missing = true;
         }
     for(unsigned int i=0; i<Nlidars-1; i++)
         if( Rt_is_all_zero(&Rt_lidar0_lidar[i*4*3]))
         {
             MSG("ERROR: Don't have complete observations overlap: lidar %d not connected",
                 i+1);
-            return false;
+            any_connections_missing = true;
         }
+    if(any_connections_missing)
+        return false;
 
 
     // All the sensor-sensor transforms computed. I compute the pose of the
@@ -665,8 +918,7 @@ fit_seed(// out
                             Nsensor_snapshots_filtered,
                             Ncameras,
                             Nlidars,
-                            Rt_lidar0_lidar,
-                            &p_center_board))
+                            Rt_lidar0_lidar))
     {
         MSG("compute_board_poses() failed");
         return false;
@@ -2029,8 +2281,14 @@ fit(// out
     const unsigned int                 Nsensor_snapshots_filtered,
 
     // These apply to ALL the sensor_snapshots[]
-    const unsigned int Ncameras,
     const unsigned int Nlidars,
+    const unsigned int Ncameras,
+    const mrcal_cameramodel_t*const* models, // Ncameras of these
+
+    // The dimensions of the chessboard grid being detected in the images
+    const int object_height_n,
+    const int object_width_n,
+    const double object_spacing,
 
     // bits indicating whether a camera in
     // sensor_snapshots.images[] is color or not
@@ -2595,13 +2853,15 @@ bool _clc_internal(// out
          // The stride, in bytes, between each successive points or rings value
          // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
+
+         // These apply to ALL the sensor_snapshots[]
+         const unsigned int Nlidars,
+         const unsigned int Ncameras,
+         const mrcal_cameramodel_t*const* models, // Ncameras of these
          // The dimensions of the chessboard grid being detected in the images
          const int object_height_n,
          const int object_width_n,
-
-         // These apply to ALL the sensor_snapshots[]
-         const unsigned int Ncameras,
-         const unsigned int Nlidars,
+         const double object_spacing,
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
@@ -2820,8 +3080,12 @@ bool _clc_internal(// out
                      Nsensor_snapshots_filtered,
 
                      // These apply to ALL the sensor_snapshots[]
-                     Ncameras,
                      Nlidars,
+                     Ncameras,
+                     models,
+                     object_height_n,
+                     object_width_n,
+                     object_spacing,
 
                      // bits indicating whether a camera in
                      // sensor_snapshots.images[] is color or not
@@ -2864,8 +3128,12 @@ bool _clc_internal(// out
                 Nsensor_snapshots_filtered,
 
                 // These apply to ALL the sensor_snapshots[]
-                Ncameras,
                 Nlidars,
+                Ncameras,
+                models,
+                object_height_n,
+                object_width_n,
+                object_spacing,
 
                 // bits indicating whether a camera in
                 // sensor_snapshots.images[] is color or not
@@ -3048,13 +3316,15 @@ bool clc_unsorted(// out
          // The stride, in bytes, between each successive points or rings value
          // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
+
+         // These apply to ALL the sensor_snapshots[]
+         const unsigned int Nlidars,
+         const unsigned int Ncameras,
+         const mrcal_cameramodel_t*const* models, // Ncameras of these
          // The dimensions of the chessboard grid being detected in the images
          const int object_height_n,
          const int object_width_n,
-
-         // These apply to ALL the sensor_snapshots[]
-         const unsigned int Ncameras,
-         const unsigned int Nlidars,
+         const double object_spacing,
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
@@ -3071,9 +3341,10 @@ bool clc_unsorted(// out
                          sensor_snapshots, NULL, NULL,
                          Nsensor_snapshots,
                          lidar_packet_stride,
-                         object_height_n, object_width_n,
-                         Ncameras,
                          Nlidars,
+                         Ncameras,
+                         models,
+                         object_height_n, object_width_n, object_spacing,
                          is_bgr_mask,
 
                          check_gradient__use_distance_to_plane,
@@ -3087,13 +3358,15 @@ bool clc_sorted(// out
          // in
          const clc_sensor_snapshot_sorted_t* sensor_snapshots,
          const unsigned int                  Nsensor_snapshots,
+
+         // These apply to ALL the sensor_snapshots[]
+         const unsigned int Nlidars,
+         const unsigned int Ncameras,
+         const mrcal_cameramodel_t*const* models, // Ncameras of these
          // The dimensions of the chessboard grid being detected in the images
          const int object_height_n,
          const int object_width_n,
-
-         // These apply to ALL the sensor_snapshots[]
-         const unsigned int Ncameras,
-         const unsigned int Nlidars,
+         const double object_spacing,
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
@@ -3110,9 +3383,10 @@ bool clc_sorted(// out
                          NULL, sensor_snapshots, NULL,
                          Nsensor_snapshots,
                          0,
-                         object_height_n, object_width_n,
-                         Ncameras,
                          Nlidars,
+                         Ncameras,
+                         models,
+                         object_height_n, object_width_n, object_spacing,
                          is_bgr_mask,
 
                          check_gradient__use_distance_to_plane,
@@ -3126,13 +3400,15 @@ bool clc_lidar_segmented(// out
          // in
          const clc_sensor_snapshot_segmented_t* sensor_snapshots,
          const unsigned int                     Nsensor_snapshots,
+
+         // These apply to ALL the sensor_snapshots[]
+         const unsigned int Nlidars,
+         const unsigned int Ncameras,
+         const mrcal_cameramodel_t*const* models, // Ncameras of these
          // The dimensions of the chessboard grid being detected in the images
          const int object_height_n,
          const int object_width_n,
-
-         // These apply to ALL the sensor_snapshots[]
-         const unsigned int Ncameras,
-         const unsigned int Nlidars,
+         const double object_spacing,
 
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
@@ -3149,9 +3425,10 @@ bool clc_lidar_segmented(// out
                          NULL, NULL, sensor_snapshots,
                          Nsensor_snapshots,
                          0,
-                         object_height_n, object_width_n,
-                         Ncameras,
                          Nlidars,
+                         Ncameras,
+                         models,
+                         object_height_n, object_width_n, object_spacing,
                          is_bgr_mask,
 
                          check_gradient__use_distance_to_plane,

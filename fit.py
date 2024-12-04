@@ -1987,12 +1987,23 @@ else:
 
 if True:
     print("Using the C core")
-    result = clc.calibrate(bags          = args.bag,
-                           lidar_topic   = args.lidar_topic,
-                           camera_topic  = args.camera_topic,
-                           object_width_n   = 14,
-                           object_height_n  = 14,
-                           check_gradient = False)
+    if len(args.models) > 0:
+        m = mrcal.cameramodel(args.models[0])
+        o = m.optimization_inputs()
+        H,W = o['observations_board'].shape[-3:-1]
+        calibration_object_kwargs = \
+            dict(object_spacing  = o['calibration_object_spacing'],
+                 object_width_n  = W,
+                 object_height_n = H)
+    else:
+        calibration_object_kwargs = dict()
+
+    result = clc.calibrate(bags            = args.bag,
+                           lidar_topic     = args.lidar_topic,
+                           camera_topic    = args.camera_topic,
+                           models          = args.models,
+                           check_gradient  = False,
+                           **calibration_object_kwargs)
     sys.exit()
 
 

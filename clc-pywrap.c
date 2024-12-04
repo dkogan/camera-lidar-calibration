@@ -398,13 +398,16 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                               PyObject* args,
                               PyObject* kwargs)
 {
-    SET_SIGINT();
-
     PyObject* result = NULL;
 
     PyTupleObject* py_sensor_snapshots = NULL;
+    PyObject*      py_models           = NULL;
     PyArrayObject* rt_ref_lidar        = NULL;
     PyArrayObject* rt_ref_camera       = NULL;
+
+    PyObject* py_model = NULL;
+
+    SET_SIGINT();
 
     // uninitialized
     unsigned int lidar_packet_stride = 0;
@@ -412,8 +415,11 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     int          Nlidars             = -1;
     int          Nsensor_snapshots   = -1;
 
-    int object_height_n = -1;
-    int object_width_n  = -1;
+    mrcal_cameramodel_t* models[clc_Ncameras_max] = {};
+
+    int    object_height_n = -1;
+    int    object_width_n  = -1;
+    double object_spacing  = -1.;
 
     int check_gradient__use_distance_to_plane = 0;
     int check_gradient                        = 0;
@@ -435,19 +441,23 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE(    type,name,default,pyparse,...) pyparse
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse,...) &ctx.name,
     char* keywords[] = { "sensor_snapshots",
+                         "models",
                          "object_height_n",
                          "object_width_n",
+                         "object_spacing",
                          "check_gradient__use_distance_to_plane",
                          "check_gradient",
                          CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" "iipp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
+                                     "O" "|$" "Oiidpp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
                                      ,
                                      keywords,
                                      (PyTupleObject*)&py_sensor_snapshots,
+                                     &py_models,
                                      &object_height_n,
                                      &object_width_n,
+                                     &object_spacing,
                                      &check_gradient__use_distance_to_plane,
                                      &check_gradient,
                                      CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX)
@@ -466,12 +476,6 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     if(0 > (Nsensor_snapshots = PyTuple_Size((PyObject*)py_sensor_snapshots)))
     {
         BARF("Couldn't get len(sensor_snapshots)");
-        goto done;
-    }
-
-    if(0 >= object_height_n || 0 >= object_width_n)
-    {
-        BARF("object_height_n and object_width_n must both be given and both be >0");
         goto done;
     }
 
@@ -503,6 +507,53 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                 goto done;
         }
 
+        if(Ncameras > 0)
+        {
+            if(0 >= object_height_n || 0 >= object_width_n || 0. >= object_spacing)
+            {
+                BARF("We have Ncameras=%d, so object_height_n and object_width_n and object_spacing must all be given and be >0",
+                     Ncameras);
+                goto done;
+            }
+
+            if(!PySequence_Check(py_models))
+            {
+                BARF("We have Ncameras=%d, so models must be an iterable of corresponding models",
+                     Ncameras);
+                goto done;
+            }
+            if(Ncameras != PySequence_Size(py_models))
+            {
+                BARF("We have Ncameras=%d, so models must be an iterable of the same length containing corresponding models",
+                     Ncameras);
+                goto done;
+            }
+
+            for(int i=0; i<Ncameras; i++)
+            {
+                py_model = PySequence_GetItem(py_models, i);
+                if(py_model == NULL)
+                {
+                    BARF("Couldn't get the %d-th model", i);
+                    goto done;
+                }
+                const char* filename = PyUnicode_AsUTF8(py_model);
+                if(filename == NULL)
+                {
+                    BARF("Couldn't get filename from models argument");
+                    goto done;
+                }
+                models[i] = mrcal_read_cameramodel_file(filename);
+                if(models[i] == NULL)
+                {
+                    BARF("Couldn't read mrcal_cameramodel_t from '%s'", filename);
+                    goto done;
+                }
+                Py_DECREF(py_model);
+                py_model = NULL;
+            }
+        }
+
 
         rt_ref_lidar = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Nlidars,6}), NPY_FLOAT64);
         if(rt_ref_lidar == NULL) goto done;
@@ -521,10 +572,12 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          sensor_snapshots,
                          Nsensor_snapshots,
                          lidar_packet_stride,
+                         Nlidars,
+                         Ncameras,
+                         (const mrcal_cameramodel_t*const*)models,
                          object_height_n,
                          object_width_n,
-                         Ncameras,
-                         Nlidars,
+                         object_spacing,
                          (clc_is_bgr_mask_t)0,
                          check_gradient__use_distance_to_plane,
                          check_gradient))
@@ -541,8 +594,9 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
  done:
     Py_XDECREF(rt_ref_lidar);
     Py_XDECREF(rt_ref_camera);
-    Py_XDECREF(py_sensor_snapshots);
-
+    Py_XDECREF(py_model);
+    for(int i=0; i<Ncameras; i++)
+        mrcal_free_cameramodel(&models[i]);
     RESET_SIGINT();
 
     return result;
