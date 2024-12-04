@@ -257,8 +257,8 @@ bool clc_unsorted(// out
          // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
          // The dimensions of the chessboard grid being detected in the images
-         const int gridn_height,
-         const int gridn_width,
+         const int object_height_n,
+         const int object_width_n,
 
          // These apply to ALL the sensor_snapshots[]
          const unsigned int Ncameras,
@@ -280,8 +280,8 @@ bool clc_sorted(// out
          const clc_sensor_snapshot_sorted_t* sensor_snapshots,
          const unsigned int                  Nsensor_snapshots,
          // The dimensions of the chessboard grid being detected in the images
-         const int gridn_height,
-         const int gridn_width,
+         const int object_height_n,
+         const int object_width_n,
 
          // These apply to ALL the sensor_snapshots[]
          const unsigned int Ncameras,
@@ -303,8 +303,8 @@ bool clc_lidar_segmented(// out
          const clc_sensor_snapshot_segmented_t* sensor_snapshots,
          const unsigned int                     Nsensor_snapshots,
          // The dimensions of the chessboard grid being detected in the images
-         const int gridn_height,
-         const int gridn_width,
+         const int object_height_n,
+         const int object_width_n,
 
          // These apply to ALL the sensor_snapshots[]
          const unsigned int Ncameras,

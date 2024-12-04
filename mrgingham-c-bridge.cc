@@ -52,12 +52,12 @@ chessboard_detection_mrgingham(// out
                                mrcal_point2_t* chessboard_corners,
                                // int
                                const mrcal_image_uint8_t* image,
-                               const int gridn_height,
-                               const int gridn_width)
+                               const int object_height_n,
+                               const int object_width_n)
 {
-    if(gridn_height != gridn_width)
+    if(object_height_n != object_width_n)
     {
-        MSG("mrgingham requires that gridn_width == gridn_height");
+        MSG("mrgingham requires that object_width_n == object_height_n");
         return false;
     }
 
@@ -67,7 +67,7 @@ chessboard_detection_mrgingham(// out
     // type
     //
     //   std::vector<mrgingham::PointDouble, StaticAllocator<mrgingham::PointDouble> > points_out(0,
-    //                                                                                            StaticAllocator<mrgingham::PointDouble>((mrgingham::PointDouble*)chessboard_corners, gridn_height*gridn_width));
+    //                                                                                            StaticAllocator<mrgingham::PointDouble>((mrgingham::PointDouble*)chessboard_corners, object_height_n*object_width_n));
     //
     // So I allocate a new thing, copy and deallocate each time
     std::vector<mrgingham::PointDouble> points_out;
@@ -77,13 +77,13 @@ chessboard_detection_mrgingham(// out
                 image->data, image->stride );
     if(0 > mrgingham::find_chessboard_from_image_array( points_out,
                                                         NULL,
-                                                        gridn_width,
+                                                        object_width_n,
                                                         mat ) )
         return false;
 
     static_assert(sizeof(chessboard_corners[0]) == sizeof(mrgingham::PointDouble));
     memcpy((char*)chessboard_corners,
            (char*)&points_out[0],
-           gridn_height*gridn_width*sizeof(chessboard_corners[0]));
+           object_height_n*object_width_n*sizeof(chessboard_corners[0]));
     return true;
 }

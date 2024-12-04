@@ -1990,8 +1990,8 @@ if True:
     result = clc.calibrate(bags          = args.bag,
                            lidar_topic   = args.lidar_topic,
                            camera_topic  = args.camera_topic,
-                           gridn_width   = 14,
-                           gridn_height  = 14,
+                           object_width_n   = 14,
+                           object_height_n  = 14,
                            check_gradient = False)
     sys.exit()
 
