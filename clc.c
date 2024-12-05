@@ -481,9 +481,9 @@ bool pcenter_normal_camera(// out
 
     mrcal_transform_point_Rt(p_center_board__cam_coords->xyz, NULL, NULL,
                              Rt_camera_board, p_center_board);
-    normal_board__cam_coords->x = Rt_camera_board[3*0 + 0];
-    normal_board__cam_coords->y = Rt_camera_board[3*1 + 0];
-    normal_board__cam_coords->z = Rt_camera_board[3*2 + 0];
+    normal_board__cam_coords->x = Rt_camera_board[3*0 + 2];
+    normal_board__cam_coords->y = Rt_camera_board[3*1 + 2];
+    normal_board__cam_coords->z = Rt_camera_board[3*2 + 2];
 
     // I make sure that the normal points towards the sensor; for consistency
     if(mrcal_point3_inner(*normal_board__cam_coords,
