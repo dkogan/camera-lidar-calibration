@@ -408,6 +408,61 @@ _estimate_camera_pose_from_fixed_point_observations(// out
 }
 
 
+// These two macros MUST appear consecutively. One opens a block, the other
+// closes it. This is required because of the local _filename variable
+#define PLOT_MAKE_FILENAME(fmt, ...)                                    \
+    {                                                                   \
+        char _filename[1024];                                           \
+        if( (int)sizeof(_filename) <= snprintf(_filename, sizeof(_filename), \
+                                               fmt, ##__VA_ARGS__) )    \
+        {                                                               \
+            MSG("sizeof(filename) exceeded. Giving up making the plot"); \
+            return false;                                               \
+        }
+
+#define PLOT(block, fmt, ...) {                                         \
+        char cmd[2048];                                                 \
+        FILE* fp;                                                       \
+                                                                        \
+        if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),              \
+                                         "feedgnuplot --hardcopy '%s' " fmt, \
+                                         _filename,                     \
+                                         ##__VA_ARGS__) )               \
+        {                                                               \
+            MSG("sizeof(cmd) exceeded. Giving up making the plot");     \
+            return false;                                               \
+        }                                                               \
+                                                                        \
+        fp = popen(cmd, "w");                                           \
+        if(fp == NULL)                                                  \
+        {                                                               \
+            MSG("popen(feedgnuplot ...) failed");                       \
+            return false;                                               \
+        }                                                               \
+                                                                        \
+        block;                                                          \
+                                                                        \
+        int _result = pclose(fp);                                       \
+        if(_result < 0)                                                 \
+        {                                                               \
+            MSG("pclose() failed. Giving up making the plot");          \
+            return false;                                               \
+        }                                                               \
+        if(_result > 0)                                                 \
+        {                                                               \
+            MSG("feedgnuplot failed. Giving up making the plot");       \
+            return false;                                               \
+        }                                                               \
+        MSG("Wrote '%s'", _filename);                                   \
+    }                                                                   \
+}
+
+
+
+
+
+
+
 static
 bool boardcenter_normal__camera(// out
                            mrcal_point3_t*            pboardcenter_camera,
@@ -463,86 +518,49 @@ bool boardcenter_normal__camera(// out
     // diagnostics
     if(false)
     {
-        char filename[1024];
-        char cmd[2048];
-        FILE* fp;
-
         static int plot_seq = 0;
-        if( (int)sizeof(filename) <= snprintf(filename, sizeof(filename),
-                                              "/tmp/%s-%03d.gp",
-                                              __func__, plot_seq) )
-        {
-            MSG("sizeof(filename) exceeded. Giving up making the plot");
-            return false;
-        }
 
-        if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),
-                                         "feedgnuplot "
-                                         "--domain --dataid "
-                                         "--with 'linespoints pt 2 ps 2 lw 2' "
-                                         "--autolegend "
-                                         "--title 'Validation of the %d-th %s() call' "
-                                         "--hardcopy '%s' ",
-                                         plot_seq, __func__,
-                                         filename) )
-        {
-            MSG("sizeof(cmd) exceeded. Giving up making the plot");
-            return false;
-        }
+        PLOT_MAKE_FILENAME("/tmp/%s-%03d.gp",
+                           __func__, plot_seq);
 
-        fp = popen(cmd, "w");
-        if(fp == NULL)
-        {
-            MSG("popen(feedgnuplot ...) failed");
-            return false;
-        }
+        PLOT( ({ double rms_error = 0.;
+                 for(int i=0; i<object_height_n; i++)
+                     for(int j=0; j<object_width_n; j++)
+                     {
+                         mrcal_point3_t p = {.x = (double)j*object_spacing,
+                                             .y = (double)i*object_spacing,
+                                             .z = 0.};
 
+                         mrcal_transform_point_Rt(p.xyz, NULL,NULL,
+                                                  Rt_camera_board, p.xyz);
 
+                         mrcal_point2_t q;
+                         mrcal_project(&q,NULL,NULL,
+                                       &p, 1,
+                                       &model->lensmodel,
+                                       model->intrinsics);
 
-        double rms_error = 0.;
-        for(int i=0; i<object_height_n; i++)
-            for(int j=0; j<object_width_n; j++)
-            {
-                mrcal_point3_t p = {.x = (double)j*object_spacing,
-                                    .y = (double)i*object_spacing,
-                                    .z = 0.};
+                         const mrcal_point2_t* q_observation =
+                             &observations[i*object_width_n + j];
+                         fprintf(fp,
+                                 "%f observation %f\n"
+                                 "%f fitted %f\n",
+                                 q_observation->x, q_observation->y,
+                                 q.x, q.y);
 
-                mrcal_transform_point_Rt(p.xyz, NULL,NULL,
-                                         Rt_camera_board, p.xyz);
+                         rms_error += mrcal_point2_norm2(mrcal_point2_sub(q,
+                                                                          *q_observation));
+                     }
 
-                mrcal_point2_t q;
-                mrcal_project(&q,NULL,NULL,
-                              &p, 1,
-                              &model->lensmodel,
-                              model->intrinsics);
+                 rms_error = sqrt(rms_error / (double)(object_width_n*object_height_n));
+                 MSG("RMS error: %.2f pixels", rms_error);
+                }),
 
-                const mrcal_point2_t* q_observation =
-                    &observations[i*object_width_n + j];
-                fprintf(fp,
-                        "%f observation %f\n"
-                        "%f fitted %f\n",
-                        q_observation->x, q_observation->y,
-                        q.x, q.y);
-
-                rms_error += mrcal_point2_norm2(mrcal_point2_sub(q,
-                                                                 *q_observation));
-            }
-
-        rms_error = sqrt(rms_error / (double)(object_width_n*object_height_n));
-        MSG("RMS error: %.2f pixels", rms_error);
-
-        int result = pclose(fp);
-        if(result < 0)
-        {
-            MSG("pclose() failed. Giving up making the plot");
-            return false;
-        }
-        if(result > 0)
-        {
-            MSG("feedgnuplot failed. Giving up making the plot");
-            return false;
-        }
-        MSG("Wrote '%s'", filename);
+            "--domain --dataid "
+            "--with 'linespoints pt 2 ps 2 lw 2' "
+            "--autolegend "
+            "--title 'Validation of the %d-th %s() call' ",
+            plot_seq, __func__);
 
         plot_seq++;
     }
@@ -1916,24 +1934,12 @@ plot_residuals(const char* filename_base,
                const double* x,
                const callback_context_t* ctx)
 {
-    char filename[1024];
-    char cmd[2048];
-    FILE* fp;
-    int result;
-
     const int imeas_lidar_0                = measurement_index_lidar(0,0, ctx);
     const int Nmeas_lidar_observation_all  = num_measurements_lidars(ctx);
     const int imeas_camera_0               = measurement_index_camera(0,0, ctx);
     const int Nmeas_camera_observation_all = num_measurements_cameras(ctx);
     const int imeas_regularization_0       = measurement_index_regularization(ctx);
     const int Nmeas_regularization         = num_measurements_regularization(ctx);
-
-    if( (int)sizeof(filename) <= snprintf(filename, sizeof(filename),
-                                          "%s.gp", filename_base) )
-    {
-        MSG("sizeof(filename) exceeded. Giving up making the plot");
-        return false;
-    }
 
 #warning "plot the measurement boundaries"
     // imeas_all = list(measurement_indices());
@@ -1946,160 +1952,67 @@ plot_residuals(const char* filename_base,
     //        f'label "{what}" at {imeas},graph 0 left front offset 0,character 2 boxed') ];
     //_set  = measurement_boundaries +
 
-    if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),
-                                     "feedgnuplot "
-                                     "--domain --dataid "
-                                     "--legend lidar 'LIDAR residuals' "
-                                     "--legend camera 'Camera residuals' "
-                                     "--legend regularization 'Regularization residuals; plotted in pixels on the left y axis' "
-                                     "--y2 camera "
-                                     "--with points "
-                                     "--set 'link y2 via y*%f inverse y*%f' "
-                                     "--ylabel  'LIDAR fit residual (m)' "
-                                     "--y2label 'Camera fit residual (pixels)' "
-                                     "--hardcopy '%s' ",
-                                     SCALE_MEASUREMENT_PX/SCALE_MEASUREMENT_M,
-                                     SCALE_MEASUREMENT_M/SCALE_MEASUREMENT_PX,
-                                     filename) )
-    {
-        MSG("sizeof(cmd) exceeded. Giving up making the plot");
-        return false;
-    }
+    PLOT_MAKE_FILENAME("%s.gp", filename_base);
+    PLOT( ({ // All measurements plotted using the nominal SCALE_MEASUREMENT_M. The
+             // camera residuals in pixels are shown on the y2 axis for convenience
+            for(int i=0; i<Nmeas_lidar_observation_all; i++)
+                fprintf(fp, "%d lidar %f\n",
+                        imeas_lidar_0 + i,
+                        x[imeas_lidar_0 + i] * SCALE_MEASUREMENT_M);
+            for(int i=0; i<Nmeas_camera_observation_all; i++)
+                fprintf(fp, "%d camera %f\n",
+                        imeas_camera_0 + i,
+                        x[imeas_camera_0 + i] * SCALE_MEASUREMENT_M);
+            for(int i=0; i<Nmeas_regularization; i++)
+                fprintf(fp, "%d regularization %f\n",
+                        imeas_regularization_0 + i,
+                        x[imeas_regularization_0 + i] * SCALE_MEASUREMENT_M);
+            }),
 
-    fp = popen(cmd, "w");
-    if(fp == NULL)
-    {
-        MSG("popen(feedgnuplot ...) failed");
-        return false;
-    }
+        "--domain --dataid "
+        "--legend lidar 'LIDAR residuals' "
+        "--legend camera 'Camera residuals' "
+        "--legend regularization 'Regularization residuals; plotted in pixels on the left y axis' "
+        "--y2 camera "
+        "--with points "
+        "--set 'link y2 via y*%f inverse y*%f' "
+        "--ylabel  'LIDAR fit residual (m)' "
+        "--y2label 'Camera fit residual (pixels)' ",
+        SCALE_MEASUREMENT_PX/SCALE_MEASUREMENT_M,
+        SCALE_MEASUREMENT_M/SCALE_MEASUREMENT_PX);
 
-    // All measurements plotted using the nominal SCALE_MEASUREMENT_M. The
-    // camera residuals in pixels are shown on the y2 axis for convenience
-    for(int i=0; i<Nmeas_lidar_observation_all; i++)
-        fprintf(fp, "%d lidar %f\n",
-                imeas_lidar_0 + i,
-                x[imeas_lidar_0 + i] * SCALE_MEASUREMENT_M);
-    for(int i=0; i<Nmeas_camera_observation_all; i++)
-        fprintf(fp, "%d camera %f\n",
-                imeas_camera_0 + i,
-                x[imeas_camera_0 + i] * SCALE_MEASUREMENT_M);
-    for(int i=0; i<Nmeas_regularization; i++)
-        fprintf(fp, "%d regularization %f\n",
-                imeas_regularization_0 + i,
-                x[imeas_regularization_0 + i] * SCALE_MEASUREMENT_M);
+    PLOT_MAKE_FILENAME("%s-histogram-lidar.gp", filename_base);
+    PLOT( ({ for(int i=0; i<Nmeas_lidar_observation_all; i++)
+                 fprintf(fp, "%f\n",
+                         x[imeas_lidar_0 + i] * SCALE_MEASUREMENT_M);
+          }),
 
-    result = pclose(fp);
-    if(result < 0)
-    {
-        MSG("pclose() failed. Giving up making the plot");
-        return false;
-    }
-    if(result > 0)
-    {
-        MSG("feedgnuplot failed. Giving up making the plot");
-        return false;
-    }
-    MSG("Wrote '%s'", filename);
-
-
-
-    if( (int)sizeof(filename) <= snprintf(filename, sizeof(filename),
-                                          "%s-histogram-lidar.gp", filename_base) )
-    {
-        MSG("sizeof(filename) exceeded. Giving up making the plot");
-        return false;
-    }
-
-    if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),
-                                     "feedgnuplot "
-                                     "--histogram 0 "
-                                     "--binwidth %f "
-                                     "--xmin %f --xmax %f "
-                                     "--xlabel 'LIDAR residual (m)' "
-                                     "--ylabel 'frequency' "
-                                     "--hardcopy '%s' ",
-                                     SCALE_MEASUREMENT_M/10.,
-                                     -3.*SCALE_MEASUREMENT_M,
-                                     3.*SCALE_MEASUREMENT_M,
-                                     filename) )
-
-    {
-        MSG("sizeof(cmd) exceeded. Giving up making the plot");
-        return false;
-    }
-
-    fp = popen(cmd, "w");
-    if(fp == NULL)
-    {
-        MSG("popen(feedgnuplot ...) failed");
-        return false;
-    }
-    for(int i=0; i<Nmeas_lidar_observation_all; i++)
-        fprintf(fp, "%f\n",
-                x[imeas_lidar_0 + i] * SCALE_MEASUREMENT_M);
-    result = pclose(fp);
-    if(result < 0)
-    {
-        MSG("pclose() failed. Giving up making the plot");
-        return false;
-    }
-    if(result > 0)
-    {
-        MSG("feedgnuplot failed. Giving up making the plot");
-        return false;
-    }
-    MSG("Wrote '%s'", filename);
+        "--histogram 0 "
+        "--binwidth %f "
+        "--xmin %f --xmax %f "
+        "--xlabel 'LIDAR residual (m)' "
+        "--ylabel 'frequency' ",
+        SCALE_MEASUREMENT_M/10.,
+        -3.*SCALE_MEASUREMENT_M,
+        3.*SCALE_MEASUREMENT_M);
 
 
     if(Nmeas_camera_observation_all)
     {
-        if( (int)sizeof(filename) <= snprintf(filename, sizeof(filename),
-                                              "%s-histogram-camera.gp", filename_base) )
-        {
-            MSG("sizeof(filename) exceeded. Giving up making the plot");
-            return false;
-        }
+        PLOT_MAKE_FILENAME("%s-histogram-camera.gp", filename_base);
+        PLOT( ({ for(int i=0; i<Nmeas_camera_observation_all; i++)
+                     fprintf(fp, "%f\n",
+                             x[imeas_camera_0 + i] * SCALE_MEASUREMENT_M);
+                }),
 
-        if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),
-                                         "feedgnuplot "
-                                         "--histogram 0 "
-                                         "--binwidth %f "
-                                         "--xmin %f --xmax %f "
-                                         "--xlabel 'CAMERA residual (px)' "
-                                         "--ylabel 'frequency' "
-                                         "--hardcopy '%s' ",
-                                         SCALE_MEASUREMENT_PX/10.,
-                                         -3.*SCALE_MEASUREMENT_PX,
-                                         3.*SCALE_MEASUREMENT_PX,
-                                         filename) )
-
-        {
-            MSG("sizeof(cmd) exceeded. Giving up making the plot");
-            return false;
-        }
-
-        fp = popen(cmd, "w");
-            if(fp == NULL)
-            {
-                MSG("popen(feedgnuplot ...) failed");
-                return false;
-            }
-        for(int i=0; i<Nmeas_camera_observation_all; i++)
-            fprintf(fp, "%f\n",
-                    x[imeas_camera_0 + i] * SCALE_MEASUREMENT_M);
-
-        result = pclose(fp);
-        if(result < 0)
-        {
-            MSG("pclose() failed. Giving up making the plot");
-            return false;
-        }
-        if(result > 0)
-        {
-            MSG("feedgnuplot failed. Giving up making the plot");
-            return false;
-        }
-        MSG("Wrote '%s'", filename);
+            "--histogram 0 "
+            "--binwidth %f "
+            "--xmin %f --xmax %f "
+            "--xlabel 'CAMERA residual (px)' "
+            "--ylabel 'frequency' ",
+            SCALE_MEASUREMENT_PX/10.,
+            -3.*SCALE_MEASUREMENT_PX,
+            3.*SCALE_MEASUREMENT_PX);
     }
 
     return true;
@@ -2201,7 +2114,7 @@ write_axes(FILE* fp,
 }
 
 static bool
-plot_geometry(const char* filename,
+_plot_geometry(FILE* fp,
 
               const double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
               const double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
@@ -2215,39 +2128,6 @@ plot_geometry(const char* filename,
               const unsigned int Nlidars,
               bool only_axes)
 {
-    char cmd[2048];
-    FILE* fp;
-    int result;
-    bool failed = true;
-
-
-
-    if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),
-                                     "feedgnuplot "
-                                     "--domain --dataid --3d "
-                                     "--square "
-                                     "--xlabel x " \
-                                     "--ylabel y " \
-                                     "--zlabel z " \
-                                     "--title \"Camera geometry\" "
-                                     "--autolegend "
-                                     "--style axes \"with vectors\"  --tuplesize axes   6 "
-                                     "--style labels \"with labels\" --tuplesize labels 4 "
-                                     "--with points --tuplesizeall 3 "
-                                     "--hardcopy '%s' ",
-                                     filename) )
-    {
-        MSG("sizeof(cmd) exceeded. Giving up making the plot");
-        return false;
-    }
-
-    fp = popen(cmd, "w");
-    if(fp == NULL)
-    {
-        MSG("popen(feedgnuplot ...) failed");
-        return false;
-    }
-
     const double axis_scale = 1.0;
 
 
@@ -2265,7 +2145,7 @@ plot_geometry(const char* filename,
                                                  i) )
             {
                 MSG("sizeof(curveid) exceeded. Giving up making the plot");
-                goto done;
+                return false;
             }
 
             write_axes(fp, curveid, Rt_ref_sensor, axis_scale);
@@ -2283,7 +2163,7 @@ plot_geometry(const char* filename,
                                              i) )
         {
             MSG("sizeof(curveid) exceeded. Giving up making the plot");
-            goto done;
+            return false;
         }
 
         write_axes(fp, curveid, Rt_ref_sensor, axis_scale);
@@ -2319,7 +2199,7 @@ plot_geometry(const char* filename,
                                                         isnapshot,ilidar) )
                 {
                     MSG("sizeof(curveidxs]) exceeded. Giving up making the plot");
-                    goto done;
+                    return false;
                 }
             }
 
@@ -2357,27 +2237,50 @@ plot_geometry(const char* filename,
         }
     }
 
-    failed = false;
-
- done:
-    result = pclose(fp);
-    if(result < 0)
-    {
-        MSG("pclose() failed. Giving up making the plot");
-        return false;
-    }
-    if(result > 0)
-    {
-        MSG("feedgnuplot failed. Giving up making the plot");
-        return false;
-    }
-
-    if(failed)
-        return false;
-
-    MSG("Wrote '%s'", filename);
-
     return true;
+}
+
+static bool
+plot_geometry(const char* filename,
+
+              const double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+              const double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
+              const double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+
+              const sensor_snapshot_segmented_t* snapshots,
+              const unsigned int                 Nsnapshots,
+
+              // These apply to ALL the sensor_snapshots[]
+              const unsigned int Ncameras,
+              const unsigned int Nlidars,
+              bool only_axes)
+{
+    bool result = false;
+
+    PLOT_MAKE_FILENAME("%s", filename);
+    PLOT( ({ result = _plot_geometry(fp,
+                                     Rt_lidar0_board,
+                                     Rt_lidar0_lidar,
+                                     Rt_lidar0_camera,
+                                     snapshots,
+                                     Nsnapshots,
+                                     Ncameras,
+                                     Nlidars,
+                                     only_axes);
+          }),
+
+        "--domain --dataid --3d "
+        "--square "
+        "--xlabel x "
+        "--ylabel y "
+        "--zlabel z "
+        "--title \"Camera geometry\" "
+        "--autolegend "
+        "--style axes \"with vectors\"  --tuplesize axes   6 "
+        "--style labels \"with labels\" --tuplesize labels 4 "
+        "--with points --tuplesizeall 3 ");
+
+    return result;
 }
 
 // Align the LIDAR and camera geometry
