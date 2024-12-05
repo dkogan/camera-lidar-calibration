@@ -725,67 +725,72 @@ bool align_point_clouds(// out
                                            NULL))
         return false;
 
-    char sensor0_name[32];
-    char sensor1_name[32];
-    if(isensor0 < Nlidars) snprintf(sensor0_name,sizeof(sensor0_name), "lidar-%03d",isensor0);
-    else                   snprintf(sensor0_name,sizeof(sensor0_name), "camera-%03d",isensor0-Nlidars);
-    if(isensor1 < Nlidars) snprintf(sensor1_name,sizeof(sensor1_name), "lidar-%03d",isensor1);
-    else                   snprintf(sensor1_name,sizeof(sensor1_name), "camera-%03d",isensor1-Nlidars);
+    // diagnostics
+    if(false)
+    {
+        char sensor0_name[32];
+        char sensor1_name[32];
+        if(isensor0 < Nlidars) snprintf(sensor0_name,sizeof(sensor0_name), "lidar-%03d",isensor0);
+        else                   snprintf(sensor0_name,sizeof(sensor0_name), "camera-%03d",isensor0-Nlidars);
+        if(isensor1 < Nlidars) snprintf(sensor1_name,sizeof(sensor1_name), "lidar-%03d",isensor1);
+        else                   snprintf(sensor1_name,sizeof(sensor1_name), "camera-%03d",isensor1-Nlidars);
 
-    PLOT_MAKE_FILENAME("/tmp/%s-rotated.gp", __func__);
-    PLOT( ({ for(int i=0; i<Nfit_snapshot; i++)
-             {
-                 const int isnapshot = isnapshot_fit[i];
+        PLOT_MAKE_FILENAME("/tmp/%s-rotated.gp", __func__);
+        PLOT( ({ for(int i=0; i<Nfit_snapshot; i++)
+                    {
+                        const int isnapshot = isnapshot_fit[i];
 
-                 char id[32];
-                 sprintf(id, "isnapshot=%03d", isnapshot);
+                        char id[32];
+                        sprintf(id, "isnapshot=%03d", isnapshot);
 
-                 mrcal_point3_t n1_sensor0;
-                 mrcal_rotate_point_R(n1_sensor0.xyz, NULL,NULL,
-                                      Rt01, normals1[i].xyz);
+                        mrcal_point3_t n1_sensor0;
+                        mrcal_rotate_point_R(n1_sensor0.xyz, NULL,NULL,
+                                             Rt01, normals1[i].xyz);
 
-                 fprintf(fp,
-                         "0 0 %s 0 %f %f %f\n"
-                         "0 0 %s 0 %f %f %f\n",
-                         id, normals0  [i].x,     normals0  [i].y,     normals0  [i].z,
-                         id, n1_sensor0   .x*1.5, n1_sensor0   .y*1.5, n1_sensor0   .z*1.5);
-             }
-          }),
+                        fprintf(fp,
+                                "0 0 %s 0 %f %f %f\n"
+                                "0 0 %s 0 %f %f %f\n",
+                                id, normals0  [i].x,     normals0  [i].y,     normals0  [i].z,
+                                id, n1_sensor0   .x*1.5, n1_sensor0   .y*1.5, n1_sensor0   .z*1.5);
+                    }
+                }),
 
-        "--3d --domain --dataid "
-        "--square "
-        "--autolegend "
-        "--with vectors --tuplesizeall 6 "
-        "--title 'Aligned board normals in the sensor0 coordinate system; sensors: (%s,%s)' "
-        "--xlabel x --ylabel y --zlabel z ",
-        sensor0_name,sensor1_name);
+            "--3d --domain --dataid "
+            "--square "
+            "--autolegend "
+            "--with vectors --tuplesizeall 6 "
+            "--title 'Aligned board normals in the sensor0 coordinate system; sensors: (%s,%s)' "
+            "--xlabel x --ylabel y --zlabel z ",
+            sensor0_name,sensor1_name);
 
-    PLOT_MAKE_FILENAME("/tmp/%s-unrotated.gp", __func__);
-    PLOT( ({ for(int i=0; i<Nfit_snapshot; i++)
-             {
-                 const int isnapshot = isnapshot_fit[i];
+        PLOT_MAKE_FILENAME("/tmp/%s-unrotated.gp", __func__);
+        PLOT( ({ for(int i=0; i<Nfit_snapshot; i++)
+                    {
+                        const int isnapshot = isnapshot_fit[i];
 
-                 fprintf(fp,
-                         "0 0 sensor0 0 %f %f %f\n"
-                         "%f %f label %f %d\n"
-                         "0 0 sensor1 0 %f %f %f\n"
-                         "%f %f label %f %d\n",
-                         normals0[i].x,         normals0[i].y,         normals0[i].z,
-                         normals0[i].x*1.1,     normals0[i].y*1.1,     normals0[i].z*1.1,     isnapshot,
-                         normals1[i].x*1.5,     normals1[i].y*1.5,     normals1[i].z*1.5,
-                         normals1[i].x*1.5*1.1, normals1[i].y*1.5*1.1, normals1[i].z*1.5*1.1, isnapshot);
-             }
-          }),
+                        fprintf(fp,
+                                "0 0 sensor0 0 %f %f %f\n"
+                                "%f %f label %f %d\n"
+                                "0 0 sensor1 0 %f %f %f\n"
+                                "%f %f label %f %d\n",
+                                normals0[i].x,         normals0[i].y,         normals0[i].z,
+                                normals0[i].x*1.1,     normals0[i].y*1.1,     normals0[i].z*1.1,     isnapshot,
+                                normals1[i].x*1.5,     normals1[i].y*1.5,     normals1[i].z*1.5,
+                                normals1[i].x*1.5*1.1, normals1[i].y*1.5*1.1, normals1[i].z*1.5*1.1, isnapshot);
+                    }
+                }),
 
-        "--3d --domain --dataid "
-        "--square "
-        "--autolegend "
-        "--with vectors --tuplesizeall 6 "
-        "--style label 'with labels' "
-        "--tuplesize label 4 "
-        "--title 'Aligned board normals in their local coordinate system: sensors: (%s,%s)' "
-        "--xlabel x --ylabel y --zlabel z ",
-        sensor0_name,sensor1_name);
+            "--3d --domain --dataid "
+            "--square "
+            "--autolegend "
+            "--with vectors --tuplesizeall 6 "
+            "--style label 'with labels' "
+            "--tuplesize label 4 "
+            "--title 'Aligned board normals in their local coordinate system: sensors: (%s,%s)' "
+            "--xlabel x --ylabel y --zlabel z ",
+            sensor0_name,sensor1_name);
+    }
+
 
     // We computed a rotation. It should fit the data decently well. If it
     // doesn't, something is broken, and we should complain
