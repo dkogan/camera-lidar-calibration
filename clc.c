@@ -229,21 +229,21 @@ compute_board_poses(// out
             double Rt_board_lidar[4*3];
             mrcal_R_aligned_to_vector(Rt_board_lidar,
                                       n.xyz);
-            // I want p_center_board to map to p: R_board_lidar
-            // p + t_board_lidar = p_center_board
+            // I want pboardcenter_board to map to p: R_board_lidar
+            // p + t_board_lidar = pboardcenter_board
             for(int i=0; i<3; i++)
             {
 
 
 
                 // TEMPORARY
-                mrcal_point3_t p_center_board = {};
+                mrcal_point3_t pboardcenter_board = {};
 
 
 
 
 
-                Rt_board_lidar[9+i] = p_center_board.xyz[i];
+                Rt_board_lidar[9+i] = pboardcenter_board.xyz[i];
                 for(int j=0; j<3; j++)
                     Rt_board_lidar[9+i] -=
                         Rt_board_lidar[i*3 + j] * plidar_mean.xyz[j];
@@ -409,9 +409,9 @@ _estimate_camera_pose_from_fixed_point_observations(// out
 
 
 static
-bool pcenter_normal_camera(// out
-                           mrcal_point3_t*            p_center_board__cam_coords,
-                           mrcal_point3_t*            normal_board__cam_coords,
+bool boardcenter_normal__camera(// out
+                           mrcal_point3_t*            pboardcenter_camera,
+                           mrcal_point3_t*            boardnormal_camera,
                            // in
                            const mrcal_cameramodel_t* model,
                            const mrcal_point2_t*      observations,
@@ -429,7 +429,7 @@ bool pcenter_normal_camera(// out
     //-> x_center = (object_width_n-1)/2*object_spacing
     //
     // I'm also assuming no board warp, so z=0
-    const double p_center_board[] =
+    const double pboardcenter_board[] =
         { (object_width_n -1)/2*object_spacing,
           (object_height_n-1)/2*object_spacing,
           0. };
@@ -549,27 +549,27 @@ bool pcenter_normal_camera(// out
 
     // Rt_camera_board_cache[iboard,icamera] = Rt_camera_board;
 
-    mrcal_transform_point_Rt(p_center_board__cam_coords->xyz, NULL, NULL,
-                             Rt_camera_board, p_center_board);
-    normal_board__cam_coords->x = Rt_camera_board[3*0 + 2];
-    normal_board__cam_coords->y = Rt_camera_board[3*1 + 2];
-    normal_board__cam_coords->z = Rt_camera_board[3*2 + 2];
+    mrcal_transform_point_Rt(pboardcenter_camera->xyz, NULL, NULL,
+                             Rt_camera_board, pboardcenter_board);
+    boardnormal_camera->x = Rt_camera_board[3*0 + 2];
+    boardnormal_camera->y = Rt_camera_board[3*1 + 2];
+    boardnormal_camera->z = Rt_camera_board[3*2 + 2];
 
     // I make sure that the normal points towards the sensor; for consistency
-    if(mrcal_point3_inner(*normal_board__cam_coords,
-                          *p_center_board__cam_coords) > 0)
+    if(mrcal_point3_inner(*boardnormal_camera,
+                          *pboardcenter_camera) > 0)
     {
-        *normal_board__cam_coords =
-            mrcal_point3_scale(*normal_board__cam_coords, -1.);
+        *boardnormal_camera =
+            mrcal_point3_scale(*boardnormal_camera, -1.);
     }
     return true;
 }
 
 
 static
-bool ingest_pcenter_normal(// out
-                           mrcal_point3_t* point,
-                           mrcal_point3_t* normal,
+bool boardcenter_normal__sensor(// out
+                           mrcal_point3_t* pboardcenter_sensor,
+                           mrcal_point3_t* boardnormal_sensor,
                            // in
                            const uint16_t                     isensor,
                            const sensor_snapshot_segmented_t* sensor_snapshot,
@@ -589,8 +589,8 @@ bool ingest_pcenter_normal(// out
         if(lidar_scan->points == NULL)
             return false;
 
-        mrcal_point3_from_clc_point3f(point, &lidar_scan->points_and_plane->plane.p_mean);
-        mrcal_point3_from_clc_point3f(normal, &lidar_scan->points_and_plane->plane.n);
+        mrcal_point3_from_clc_point3f(pboardcenter_sensor, &lidar_scan->points_and_plane->plane.p_mean);
+        mrcal_point3_from_clc_point3f(boardnormal_sensor, &lidar_scan->points_and_plane->plane.n);
     }
     else
     {
@@ -601,9 +601,9 @@ bool ingest_pcenter_normal(// out
         if(chessboard_corners == NULL)
             return false;
 
-        if(!pcenter_normal_camera(// out
-                                  point,
-                                  normal,
+        if(!boardcenter_normal__camera(// out
+                                  pboardcenter_sensor,
+                                  boardnormal_sensor,
                                   // in
                                   models[icamera],
                                   chessboard_corners,
@@ -639,7 +639,7 @@ bool align_point_clouds(// out
     mrcal_point3_t points1 [Nsensor_snapshots_filtered];
     mrcal_point3_t normals0[Nsensor_snapshots_filtered];
     mrcal_point3_t normals1[Nsensor_snapshots_filtered];
-    int Nbuffer = 0;
+    int Nfit_snapshot = 0;
 
     // to pacify the compiler
     normals0[0].x = 0;
@@ -648,9 +648,9 @@ bool align_point_clouds(// out
     // Loop through all the observations
     for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
     {
-        if(!ingest_pcenter_normal(// out
-                                  &points0[Nbuffer],
-                                  &normals0[Nbuffer],
+        if(!boardcenter_normal__sensor(// out
+                                  &points0[Nfit_snapshot],
+                                  &normals0[Nfit_snapshot],
                                   // in
                                   isensor0,
                                   &sensor_snapshots_filtered[isnapshot],
@@ -660,9 +660,9 @@ bool align_point_clouds(// out
                                   object_height_n,
                                   object_width_n,
                                   object_spacing) ||
-           !ingest_pcenter_normal(// out
-                                  &points1[Nbuffer],
-                                  &normals1[Nbuffer],
+           !boardcenter_normal__sensor(// out
+                                  &points1[Nfit_snapshot],
+                                  &normals1[Nfit_snapshot],
                                   // in
                                   isensor1,
                                   &sensor_snapshots_filtered[isnapshot],
@@ -675,7 +675,7 @@ bool align_point_clouds(// out
         {
             continue;
         }
-        Nbuffer++;
+        Nfit_snapshot++;
     }
 
     // If I had lots of points, I'd do a procrustes fit, and I'd be done. But
@@ -685,15 +685,15 @@ bool align_point_clouds(// out
     if(!mrcal_align_procrustes_vectors_R01(// out
                                            Rt01,
                                            // in
-                                           Nbuffer,
-                                           &normals0[0].x,
-                                           &normals1[0].x,
+                                           Nfit_snapshot,
+                                           normals0[0].xyz,
+                                           normals1[0].xyz,
                                            NULL))
         return false;
 
     // We computed a rotation. It should fit the data decently well. If it
     // doesn't, something is broken, and we should complain
-    for(int i=0; i<Nbuffer; i++)
+    for(int i=0; i<Nfit_snapshot; i++)
     {
         mrcal_point3_t normals0_validation;
         mrcal_rotate_point_R(normals0_validation.xyz, NULL, NULL,
@@ -724,7 +724,7 @@ bool align_point_clouds(// out
     // be self-consistent, so I compute the mean:
     // -> t01 = mean(x0 - R01 x1)
     *(mrcal_point3_t*)(&Rt01[9]) = (mrcal_point3_t){};
-    for(int i=0; i<Nbuffer; i++)
+    for(int i=0; i<Nfit_snapshot; i++)
     {
         mrcal_point3_t R01_x1;
         mrcal_rotate_point_R(R01_x1.xyz, NULL, NULL,
@@ -735,12 +735,12 @@ bool align_point_clouds(// out
             Rt01[9 + j] += t01.xyz[j];
     }
     for(int j=0; j<3; j++)
-        Rt01[9 + j] /= (double)Nbuffer;
+        Rt01[9 + j] /= (double)Nfit_snapshot;
 
     // We computed a seed translation as a mean of candidate translations. They
     // should have been self-consistent, and each one should be close to the
     // mean. If not, something is broken, and we should complain
-    for(int i=0; i<Nbuffer; i++)
+    for(int i=0; i<Nfit_snapshot; i++)
     {
         mrcal_point3_t R01_x1;
         mrcal_rotate_point_R(R01_x1.xyz, NULL, NULL,
