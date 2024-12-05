@@ -583,9 +583,10 @@ bool boardcenter_normal__camera(// out
     boardnormal_camera->y = Rt_camera_board[3*1 + 2];
     boardnormal_camera->z = Rt_camera_board[3*2 + 2];
 
-    // I make sure that the normal points towards the sensor; for consistency
+    // I make sure that the normal points away from the sensor; for consistency
+    // with the lidar code
     if(mrcal_point3_inner(*boardnormal_camera,
-                          *pboardcenter_camera) > 0)
+                          *pboardcenter_camera) < 0)
     {
         *boardnormal_camera =
             mrcal_point3_scale(*boardnormal_camera, -1.);
