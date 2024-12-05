@@ -461,21 +461,91 @@ bool pcenter_normal_camera(// out
 
 
     // diagnostics
-#if 0
-    q_perfect = mrcal.project(mrcal.transform_point_Rt(Rt_camera_board,
-                                                       nps.clump(p_board_local,n=2)),
-                              *models[icamera].intrinsics());
+    if(false)
+    {
+        char filename[1024];
+        char cmd[2048];
+        FILE* fp;
 
-    rms_error = np.sqrt(np.mean(nps.norm2(q_perfect - q_observed)));
-    print(f"RMS error: {rms_error}");
-    gp.plot(q_perfect,
-            tuplesize = -2,
-            _with = 'linespoints pt 2 ps 2 lw 2',
-            rgbimage = image_filename,
-            square = True,
-            yinv = True,
-            wait = True);
-#endif
+        static int plot_seq = 0;
+        if( (int)sizeof(filename) <= snprintf(filename, sizeof(filename),
+                                              "/tmp/%s-%03d.gp",
+                                              __func__, plot_seq) )
+        {
+            MSG("sizeof(filename) exceeded. Giving up making the plot");
+            return false;
+        }
+
+        if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),
+                                         "feedgnuplot "
+                                         "--domain --dataid "
+                                         "--with 'linespoints pt 2 ps 2 lw 2' "
+                                         "--autolegend "
+                                         "--title 'Validation of the %d-th %s() call' "
+                                         "--hardcopy '%s' ",
+                                         plot_seq, __func__,
+                                         filename) )
+        {
+            MSG("sizeof(cmd) exceeded. Giving up making the plot");
+            return false;
+        }
+
+        fp = popen(cmd, "w");
+        if(fp == NULL)
+        {
+            MSG("popen(feedgnuplot ...) failed");
+            return false;
+        }
+
+
+
+        double rms_error = 0.;
+        for(int i=0; i<object_height_n; i++)
+            for(int j=0; j<object_width_n; j++)
+            {
+                mrcal_point3_t p = {.x = (double)j*object_spacing,
+                                    .y = (double)i*object_spacing,
+                                    .z = 0.};
+
+                mrcal_transform_point_Rt(p.xyz, NULL,NULL,
+                                         Rt_camera_board, p.xyz);
+
+                mrcal_point2_t q;
+                mrcal_project(&q,NULL,NULL,
+                              &p, 1,
+                              &model->lensmodel,
+                              model->intrinsics);
+
+                const mrcal_point2_t* q_observation =
+                    &observations[i*object_width_n + j];
+                fprintf(fp,
+                        "%f observation %f\n"
+                        "%f fitted %f\n",
+                        q_observation->x, q_observation->y,
+                        q.x, q.y);
+
+                rms_error += mrcal_point2_norm2(mrcal_point2_sub(q,
+                                                                 *q_observation));
+            }
+
+        rms_error = sqrt(rms_error / (double)(object_width_n*object_height_n));
+        MSG("RMS error: %.2f pixels", rms_error);
+
+        int result = pclose(fp);
+        if(result < 0)
+        {
+            MSG("pclose() failed. Giving up making the plot");
+            return false;
+        }
+        if(result > 0)
+        {
+            MSG("feedgnuplot failed. Giving up making the plot");
+            return false;
+        }
+        MSG("Wrote '%s'", filename);
+
+        plot_seq++;
+    }
 
     // Rt_camera_board_cache[iboard,icamera] = Rt_camera_board;
 
