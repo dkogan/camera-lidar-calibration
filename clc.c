@@ -634,10 +634,11 @@ bool boardcenter_normal__sensor(// out
 
         double* Rt_camera_board = &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
         for(int i=0; i<3*3; i++)
-            if(Rt_camera_board_cache[i] != 0.)
+            if(Rt_camera_board[i] != 0.)
             {
-                MSG("Rt_camera_board_cache[isnapshot=%d, icamera=%d] has already been computed. This is a bug",
+                MSG("THIS IS A BUG: Rt_camera_board_cache[isnapshot=%d, icamera=%d] has already been computed",
                     isnapshot, icamera);
+                return false;
             }
         if(!boardcenter_normal__camera(// out
                                   pboardcenter_sensor,
