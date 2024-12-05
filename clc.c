@@ -463,6 +463,34 @@ _estimate_camera_pose_from_fixed_point_observations(// out
 
 
 
+static void
+ref_calibration_object(// out
+                       mrcal_point3_t*            points_ref,
+                       // in
+                       const int                  object_height_n,
+                       const int                  object_width_n,
+                       const double               object_spacing)
+
+{
+    // The board geometry is usually computed by mrcal.ref_calibration_object():
+    // the coordinates move as
+    //
+    //   x = linspace(0,object_width_n-1,object_width_n)*object_spacing
+    //-> x = i*object_spacing
+    // In the center i = (object_width_n-1)/2
+    //-> x_center = (object_width_n-1)/2*object_spacing
+    //
+    // I'm also assuming no board warp, so z=0
+
+    for(int i=0; i<object_height_n; i++)
+        for(int j=0; j<object_width_n; j++)
+        {
+            points_ref[i*object_width_n + j].x = (double)j*object_spacing;
+            points_ref[i*object_width_n + j].y = (double)i*object_spacing;
+            points_ref[i*object_width_n + j].z = 0.;
+        }
+}
+
 static
 bool boardcenter_normal__camera(// out
                            mrcal_point3_t*            pboardcenter_camera,
@@ -474,30 +502,10 @@ bool boardcenter_normal__camera(// out
                            const int                  object_width_n,
                            const double               object_spacing)
 {
-    // The estimate of the center of the board, in board coords. The board
-    // geometry is usually computed by mrcal.ref_calibration_object(): the
-    // coordinates move as
-    //
-    //   x = linspace(0,object_width_n-1,object_width_n)*object_spacing
-    //-> x = i*object_spacing
-    // In the center i = (object_width_n-1)/2
-    //-> x_center = (object_width_n-1)/2*object_spacing
-    //
-    // I'm also assuming no board warp, so z=0
-    const double pboardcenter_board[] =
-        { (object_width_n -1)/2*object_spacing,
-          (object_height_n-1)/2*object_spacing,
-          0. };
-
     const int N = object_height_n*object_width_n;
     mrcal_point3_t points_ref[N];
-    for(int i=0; i<object_height_n; i++)
-        for(int j=0; j<object_width_n; j++)
-        {
-            points_ref[i*object_width_n + j].x = (double)j*object_spacing;
-            points_ref[i*object_width_n + j].y = (double)i*object_spacing;
-            points_ref[i*object_width_n + j].z = 0.;
-        }
+    ref_calibration_object(points_ref, object_height_n, object_width_n, object_spacing);
+
 
     double Rt_camera_board[4*3];
     if(!_estimate_camera_pose_from_fixed_point_observations( Rt_camera_board,
@@ -567,6 +575,11 @@ bool boardcenter_normal__camera(// out
 
     // Rt_camera_board_cache[iboard,icamera] = Rt_camera_board;
 
+    // The estimate of the center of the board, in board coords
+    const double pboardcenter_board[] =
+        { (object_width_n -1)/2*object_spacing,
+          (object_height_n-1)/2*object_spacing,
+          0. };
     mrcal_transform_point_Rt(pboardcenter_camera->xyz, NULL, NULL,
                              Rt_camera_board, pboardcenter_board);
     boardnormal_camera->x = Rt_camera_board[3*0 + 2];
