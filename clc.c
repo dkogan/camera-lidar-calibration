@@ -639,6 +639,7 @@ bool align_point_clouds(// out
     mrcal_point3_t points1 [Nsensor_snapshots_filtered];
     mrcal_point3_t normals0[Nsensor_snapshots_filtered];
     mrcal_point3_t normals1[Nsensor_snapshots_filtered];
+    int isnapshot_fit[Nsensor_snapshots_filtered]; // for diagnostics
     int Nfit_snapshot = 0;
 
     // to pacify the compiler
@@ -675,6 +676,8 @@ bool align_point_clouds(// out
         {
             continue;
         }
+
+        isnapshot_fit[Nfit_snapshot] = isnapshot;
         Nfit_snapshot++;
     }
 
@@ -695,6 +698,36 @@ bool align_point_clouds(// out
     // doesn't, something is broken, and we should complain
     for(int i=0; i<Nfit_snapshot; i++)
     {
+        const int isnapshot = isnapshot_fit[i];
+
+#if 0
+        // Print the first segmentation point. Used to make sure that the
+        // segmentation for this specific snapshot was done properly. We have
+        // this isnapshot (it is filtered); the preceding console output tells
+        // us which input (unfiltered) snapshot this corresponsds to. This is a
+        // rosbag. We can then segment this bag ourselves, and get a
+        // visualization of the segmentation, and we can look at the first
+        // point, which should match what we get here. For instance:
+        //
+        //     $ ./lidar-segmentation-test.py \
+        //         /vl_points_0 \
+        //         lidar-34.bag
+        //
+        //     In [1]: segmentation['points'][0][0]
+        //     Out[1]: array([ 3.4646409 , -0.1949154 , -0.20211124], dtype=float32)
+        if(isnapshot == 12)
+        {
+            int ilidar;
+            if(isensor0 < Nlidars) ilidar = isensor0;
+            else if(isensor1 < Nlidars) ilidar = isensor1;
+            else assert(0);
+
+            int i0 = sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].points_and_plane->ipoint_set.ipoint[0];
+            const clc_point3f_t* p = &sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].points[i0];
+            MSG("p0 = %f %f %f", p->x, p->y, p->z);
+        }
+#endif
+
         mrcal_point3_t normals0_validation;
         mrcal_rotate_point_R(normals0_validation.xyz, NULL, NULL,
                              Rt01,
@@ -706,13 +739,15 @@ bool align_point_clouds(// out
         const double cos_threshold = cos(5.*M_PI/180.);
         if(cos_err < cos_threshold)
         {
-            MSG("Inconsistent seed rotation: th=%.1f deg. Giving up",
+            MSG("Inconsistent seed rotation for isnapshot=%d: th=%.1f deg. Giving up",
+                isnapshot,
                 acos(cos_err) * 180./M_PI);
             return false;
         }
         else
         {
-            MSG("Seed Rotation: th=%.1f deg",
+            MSG("Seed rotation for isnapshot=%d: th=%.1f deg",
+                isnapshot,
                 acos(cos_err) * 180./M_PI);
         }
     }
@@ -742,6 +777,8 @@ bool align_point_clouds(// out
     // mean. If not, something is broken, and we should complain
     for(int i=0; i<Nfit_snapshot; i++)
     {
+        const int isnapshot = isnapshot_fit[i];
+
         mrcal_point3_t R01_x1;
         mrcal_rotate_point_R(R01_x1.xyz, NULL, NULL,
                              Rt01,
@@ -755,13 +792,15 @@ bool align_point_clouds(// out
 #warning unhardcode
         if(norm2_t01_err > 0.5*0.5)
         {
-            MSG("Inconsistent seed translation: mag(t01_err)=%.1f. Giving up",
+            MSG("Inconsistent seed translation for isnapshot=%d: mag(t01_err)=%.1f. Giving up",
+                isnapshot,
                 sqrt(norm2_t01_err));
             return false;
         }
         else
         {
-            MSG("Seed translation: mag(t01_err)=%.1f",
+            MSG("Seed translation for isnapshot=%d: mag(t01_err)=%.1f",
+                isnapshot,
                 sqrt(norm2_t01_err));
         }
     }
