@@ -655,6 +655,65 @@ bool boardcenter_normal__sensor(// out
 }
 
 static
+bool print_sensor_points(// out
+                         FILE* fp,
+                         // in
+                         const int                          isnapshot,
+                         const char*                        id_pair,
+                         const uint16_t                     isensor,
+                         const sensor_snapshot_segmented_t* sensor_snapshot,
+                         const double*                      Rt_camera_board_cache,
+                         const int                          Nlidars,
+                         const int                          Ncameras,
+                         const mrcal_point3_t*              chessboard_points_ref,
+                         const int                          object_height_n,
+                         const int                          object_width_n)
+{
+    char id[32];
+    snprintf(id, sizeof(id), "isnapshot=%03d-%s", isnapshot, id_pair);
+
+    if(isensor < Nlidars)
+    {
+        // this is a lidar
+        const int ilidar = isensor;
+
+        const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+        if(lidar_scan->points == NULL)
+            return false;
+
+        for(int i=0; i<lidar_scan->points_and_plane->ipoint_set.n; i++)
+        {
+            const clc_point3f_t* p = &lidar_scan->points[ lidar_scan->points_and_plane->ipoint_set.ipoint[i] ];
+            fprintf(fp,
+                    "%f %f %s %f\n",
+                    p->x, p->y, id, p->z);
+        }
+    }
+    else
+    {
+        // this is a camera
+        const int icamera = isensor - Nlidars;
+
+        const double *Rt_camera_board =
+            &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
+
+        int N = object_height_n*object_width_n;
+
+        for(int i=0; i<object_height_n*object_width_n; i++)
+        {
+            mrcal_point3_t p;
+            mrcal_transform_point_Rt(p.xyz, NULL,NULL,
+                                     Rt_camera_board, chessboard_points_ref[i].xyz);
+            fprintf(fp,
+                    "%f %f %s %f\n",
+                    p.x, p.y, id, p.z);
+        }
+    }
+
+    return true;
+}
+
+static
 bool align_point_clouds(// out
                         double* Rt01,
                         double* Rt_camera_board_cache,
@@ -776,28 +835,62 @@ bool align_point_clouds(// out
             sensor0_name,sensor1_name);
 
         PLOT_MAKE_FILENAME("/tmp/%s-unrotated.gp", __func__);
-        PLOT( ({ for(int i=0; i<Nfit_snapshot; i++)
-                    {
-                        const int isnapshot = isnapshot_fit[i];
+        PLOT( ({
 
-                        fprintf(fp,
-                                "0 0 sensor0 0 %f %f %f\n"
-                                "%f %f label %f %d\n"
-                                "0 0 sensor1 0 %f %f %f\n"
-                                "%f %f label %f %d\n",
-                                normals0[i].x,         normals0[i].y,         normals0[i].z,
-                                normals0[i].x*1.1,     normals0[i].y*1.1,     normals0[i].z*1.1,     isnapshot,
-                                normals1[i].x*1.5,     normals1[i].y*1.5,     normals1[i].z*1.5,
-                                normals1[i].x*1.5*1.1, normals1[i].y*1.5*1.1, normals1[i].z*1.5*1.1, isnapshot);
-                    }
+                 int N = 0;
+                 if(Ncameras > 0)
+                     N = object_height_n*object_width_n;
+                 mrcal_point3_t chessboard_points_ref[N];
+                 if(Ncameras > 0)
+                     ref_calibration_object(chessboard_points_ref, object_height_n, object_width_n, object_spacing);
+
+                 for(int i=0; i<Nfit_snapshot; i++)
+                 {
+                     const int isnapshot = isnapshot_fit[i];
+
+                     // plot the normals
+                     fprintf(fp,
+                             "0 0 sensor0 0 %f %f %f\n"
+                             "%f %f label %f %d\n"
+                             "0 0 sensor1 0 %f %f %f\n"
+                             "%f %f label %f %d\n",
+                             normals0[i].x,         normals0[i].y,         normals0[i].z,
+                             normals0[i].x*1.1,     normals0[i].y*1.1,     normals0[i].z*1.1,     isnapshot,
+                             normals1[i].x*1.5,     normals1[i].y*1.5,     normals1[i].z*1.5,
+                             normals1[i].x*1.5*1.1, normals1[i].y*1.5*1.1, normals1[i].z*1.5*1.1, isnapshot);
+
+                     print_sensor_points(fp,
+                                         isnapshot,
+                                         "sensor0",
+                                         isensor0,
+                                         &sensor_snapshots_filtered[isnapshot],
+                                         Rt_camera_board_cache,
+                                         Nlidars,
+                                         Ncameras,
+                                         chessboard_points_ref,
+                                         object_height_n,
+                                         object_width_n);
+                     print_sensor_points(fp,
+                                         isnapshot,
+                                         "sensor1",
+                                         isensor1,
+                                         &sensor_snapshots_filtered[isnapshot],
+                                         Rt_camera_board_cache,
+                                         Nlidars,
+                                         Ncameras,
+                                         chessboard_points_ref,
+                                         object_height_n,
+                                         object_width_n);
+                 }
                 }),
 
             "--3d --domain --dataid "
             "--square "
             "--autolegend "
-            "--with vectors --tuplesizeall 6 "
-            "--style label 'with labels' "
-            "--tuplesize label 4 "
+            "--with points --tuplesizeall 3 "
+            "--style sensor0 'with vectors' --tuplesize sensor0 6 "
+            "--style sensor1 'with vectors' --tuplesize sensor1 6 "
+            "--style label   'with labels'  --tuplesize label   4 "
             "--title 'Aligned board normals in their local coordinate system: sensors: (%s,%s)' "
             "--xlabel x --ylabel y --zlabel z ",
             sensor0_name,sensor1_name);
