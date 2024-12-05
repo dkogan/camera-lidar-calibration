@@ -495,6 +495,7 @@ static
 bool boardcenter_normal__camera(// out
                            mrcal_point3_t*            pboardcenter_camera,
                            mrcal_point3_t*            boardnormal_camera,
+                           double*                    Rt_camera_board,
                            // in
                            const mrcal_cameramodel_t* model,
                            const mrcal_point2_t*      observations,
@@ -506,8 +507,6 @@ bool boardcenter_normal__camera(// out
     mrcal_point3_t points_ref[N];
     ref_calibration_object(points_ref, object_height_n, object_width_n, object_spacing);
 
-
-    double Rt_camera_board[4*3];
     if(!_estimate_camera_pose_from_fixed_point_observations( Rt_camera_board,
                                                              &model->lensmodel,
                                                              model->intrinsics,
@@ -573,8 +572,6 @@ bool boardcenter_normal__camera(// out
         plot_seq++;
     }
 
-    // Rt_camera_board_cache[iboard,icamera] = Rt_camera_board;
-
     // The estimate of the center of the board, in board coords
     const double pboardcenter_board[] =
         { (object_width_n -1)/2*object_spacing,
@@ -601,8 +598,10 @@ static
 bool boardcenter_normal__sensor(// out
                            mrcal_point3_t* pboardcenter_sensor,
                            mrcal_point3_t* boardnormal_sensor,
+                           double*         Rt_camera_board_cache,
                            // in
                            const uint16_t                     isensor,
+                           const int                          isnapshot,
                            const sensor_snapshot_segmented_t* sensor_snapshot,
                            const int                          Nlidars,
                            const int                          Ncameras,
@@ -632,9 +631,17 @@ bool boardcenter_normal__sensor(// out
         if(chessboard_corners == NULL)
             return false;
 
+        double* Rt_camera_board = &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
+        for(int i=0; i<3*3; i++)
+            if(Rt_camera_board_cache[i] != 0.)
+            {
+                MSG("Rt_camera_board_cache[isnapshot=%d, icamera=%d] has already been computed. This is a bug",
+                    isnapshot, icamera);
+            }
         if(!boardcenter_normal__camera(// out
                                   pboardcenter_sensor,
                                   boardnormal_sensor,
+                                  Rt_camera_board,
                                   // in
                                   models[icamera],
                                   chessboard_corners,
@@ -650,6 +657,7 @@ bool boardcenter_normal__sensor(// out
 static
 bool align_point_clouds(// out
                         double* Rt01,
+                        double* Rt_camera_board_cache,
                         // in
                         const uint16_t isensor1,
                         const uint16_t isensor0,
@@ -683,8 +691,10 @@ bool align_point_clouds(// out
         if(!boardcenter_normal__sensor(// out
                                   &points0[Nfit_snapshot],
                                   &normals0[Nfit_snapshot],
+                                  Rt_camera_board_cache,
                                   // in
                                   isensor0,
+                                  isnapshot,
                                   &sensor_snapshots_filtered[isnapshot],
                                   Nlidars,
                                   Ncameras,
@@ -695,8 +705,10 @@ bool align_point_clouds(// out
            !boardcenter_normal__sensor(// out
                                   &points1[Nfit_snapshot],
                                   &normals1[Nfit_snapshot],
+                                  Rt_camera_board_cache,
                                   // in
                                   isensor1,
+                                  isnapshot,
                                   &sensor_snapshots_filtered[isnapshot],
                                   Nlidars,
                                   Ncameras,
@@ -918,6 +930,7 @@ typedef struct
     const int                          object_width_n;
     const double                       object_spacing;
     double*                            Rt_lidar0_lidar;
+    double*                            Rt_camera_board_cache;
 } cb_sensor_link_cookie_t;
 
 static
@@ -940,12 +953,14 @@ bool cb_sensor_link(const uint16_t isensor1,
     const int                          object_width_n             = cookie->object_width_n;
     const double                       object_spacing             = cookie->object_spacing;
     double*                            Rt_lidar0_lidar            = cookie->Rt_lidar0_lidar;
+    double*                            Rt_camera_board_cache      = cookie->Rt_camera_board_cache;
 
 
 
     double Rt01[4*3];
     if(!align_point_clouds(// out
                            Rt01,
+                           Rt_camera_board_cache,
                            // in
                            isensor1,
                            isensor0,
@@ -1082,6 +1097,11 @@ fit_seed(// out
     print_full_symmetric_matrix_from_upper_triangle(shared_observation_counts,
                                                     Nsensors);
 
+    double Rt_camera_board_cache[Nsensor_snapshots_filtered*Ncameras * 4*3];
+    memset(Rt_camera_board_cache,
+           0,
+           Nsensor_snapshots_filtered*Ncameras * 4*3*sizeof(Rt_camera_board_cache[0]));
+
     cb_sensor_link_cookie_t cookie =
         {
             .sensor_snapshots_filtered  = sensor_snapshots_filtered,
@@ -1092,7 +1112,8 @@ fit_seed(// out
             .object_height_n            = object_height_n,
             .object_width_n             = object_width_n,
             .object_spacing             = object_spacing,
-            .Rt_lidar0_lidar            = Rt_lidar0_lidar
+            .Rt_lidar0_lidar            = Rt_lidar0_lidar,
+            .Rt_camera_board_cache      = Rt_camera_board_cache
         };
 
 
