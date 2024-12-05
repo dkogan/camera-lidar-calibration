@@ -640,6 +640,11 @@ bool align_point_clouds(// out
                 acos(cos_err) * 180./M_PI);
             return false;
         }
+        else
+        {
+            MSG("Seed Rotation: th=%.1f deg",
+                acos(cos_err) * 180./M_PI);
+        }
     }
 
     // Now the translation. R01 x1 + t01 ~ x0
@@ -680,8 +685,14 @@ bool align_point_clouds(// out
 #warning unhardcode
         if(norm2_t01_err > 0.5*0.5)
         {
-            MSG("Inconsistent seed translation. Giving up");
+            MSG("Inconsistent seed translation: mag(t01_err)=%.1f. Giving up",
+                sqrt(norm2_t01_err));
             return false;
+        }
+        else
+        {
+            MSG("Seed translation: mag(t01_err)=%.1f",
+                sqrt(norm2_t01_err));
         }
     }
 
