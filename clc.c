@@ -251,12 +251,12 @@ compute_board_poses(// out
                 if(Ncameras > 0)
                 {
                     // We have cameras; we know where the center of the board is
-                    const double pboardcenter_board[] =
-                        { (object_width_n -1)/2*object_spacing,
-                          (object_height_n-1)/2*object_spacing,
-                          0. };
+                    const mrcal_point3_t pboardcenter_board =
+                        { .x = (object_width_n -1)/2*object_spacing,
+                          .y = (object_height_n-1)/2*object_spacing,
+                          .z = 0. };
 
-                    Rt_board_lidar[9+i] = pboardcenter_board[i];
+                    Rt_board_lidar[9+i] = pboardcenter_board.xyz[i];
                 }
                 else
                 {
@@ -592,12 +592,12 @@ bool boardcenter_normal__camera(// out
     }
 
     // The estimate of the center of the board, in board coords
-    const double pboardcenter_board[] =
-        { (object_width_n -1)/2*object_spacing,
-          (object_height_n-1)/2*object_spacing,
-          0. };
+    const mrcal_point3_t pboardcenter_board =
+        { .x = (object_width_n -1)/2*object_spacing,
+          .y = (object_height_n-1)/2*object_spacing,
+          .z = 0. };
     mrcal_transform_point_Rt(pboardcenter_camera->xyz, NULL, NULL,
-                             Rt_camera_board, pboardcenter_board);
+                             Rt_camera_board, pboardcenter_board.xyz);
     boardnormal_camera->x = Rt_camera_board[3*0 + 2];
     boardnormal_camera->y = Rt_camera_board[3*1 + 2];
     boardnormal_camera->z = Rt_camera_board[3*2 + 2];
