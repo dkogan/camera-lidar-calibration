@@ -1301,14 +1301,6 @@ fit_seed(// out
     {
         const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
 
-        // camera
-#if 0
-        q_observed_all = joint_observations[isnapshot][0];
-        if(any(q is not None for q in q_observed_all))
-            raise Exception("Camera observations not supported here at this time; LIDAR only");
-        // Looking at LIDAR only
-#endif
-
         const mrcal_point3_t n_lidar0_should = {.x = Rt_lidar0_board[isnapshot*4*3 + 0*3 + 2],
                                                 .y = Rt_lidar0_board[isnapshot*4*3 + 1*3 + 2],
                                                 .z = Rt_lidar0_board[isnapshot*4*3 + 2*3 + 2]};
@@ -1371,6 +1363,49 @@ fit_seed(// out
             MSG("%sisnapshot=%d ilidar=%d p0_err_mag=%.2f th_err_deg=%.2f",
                 validation_failed_here ? "FAILED: " : "",
                 isnapshot, ilidar, p0_err_mag, th_err_deg);
+        }
+
+        for(unsigned int icamera=0; icamera<Ncameras; icamera++)
+        {
+            if(sensor_snapshot->chessboard_corners[icamera] == NULL)
+                continue;
+
+            for(int i=0; i<object_height_n; i++)
+                for(int j=0; j<object_width_n; j++)
+                {
+                    mrcal_point3_t p = {.x = (double)j*object_spacing,
+                                        .y = (double)i*object_spacing,
+                                        .z = 0.};
+
+                    mrcal_transform_point_Rt(p.xyz, NULL, NULL,
+                                             &Rt_lidar0_board[isnapshot*4*3],
+                                             p.xyz);
+                    mrcal_transform_point_Rt_inverted(p.xyz, NULL, NULL,
+                                                      &Rt_lidar0_camera[icamera*4*3],
+                                                      p.xyz);
+                    mrcal_point2_t q;
+                    mrcal_project(&q, NULL, NULL,
+                                  &p, 1,
+                                  &models[icamera]->lensmodel,
+                                  models[icamera]->intrinsics);
+
+                    double errsq =
+                        mrcal_point2_norm2( mrcal_point2_sub(q,
+                                                             sensor_snapshot->chessboard_corners[icamera][i*object_width_n + j]));
+#warning "unhardcode"
+                    bool validation_failed_here = errsq > 10.*10.;
+
+                    if(validation_failed_here)
+                    {
+                        validation_failed = true;
+                        MSG("FAILED: isnapshot=%d icamera=%d i=%d j=%d reprojection error too high: %.1f pixels",
+                            isnapshot, icamera, i,j, sqrt(errsq));
+
+                        // move on to the next camera
+                        i = INT_MAX-1;
+                        j = INT_MAX-1;
+                    }
+                }
         }
     }
 
