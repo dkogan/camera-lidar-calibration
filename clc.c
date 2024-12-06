@@ -161,6 +161,14 @@ mrcal_point3_from_clc_point3f( mrcal_point3_t* pout,
         pout->xyz[i] = (double)pin->xyz[i];
 }
 
+static bool Rt_uninitialized(const double* Rt)
+{
+    for(int i=0; i<3*3; i++)
+        if(Rt[i] != 0.)
+            return false;
+    return true;
+}
+
 static bool
 compute_board_poses(// out
                     double*                            Rt_lidar0_board,
@@ -169,42 +177,49 @@ compute_board_poses(// out
                     const int                          Nsensor_snapshots_filtered,
                     const int                          Ncameras,
                     const int                          Nlidars,
-                    const double*                      Rt_lidar0_lidar)
+                    const double*                      Rt_lidar0_lidar,
+                    const double*                      Rt_lidar0_camera,
+                    const double*                      Rt_camera_board_cache,
+                    const int                          object_height_n,
+                    const int                          object_width_n,
+                    const double                       object_spacing)
 {
-
-
-
-
-
     for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
     {
+        const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
 
         // cameras
-#if 0
-        q_observed_all = joint_observations[iboard][0];
-        icamera_first =
-            next((i for i in range(len(q_observed_all)) if q_observed_all[i] is not None),
-                 None);
-        if(icamera_first is not None)
-        {
-            // We have some camera observation. I arbitrarily use the first one
 
-            if not np.any(Rt_camera_board_cache[iboard,icamera_first]):
-            raise Exception(f"Rt_camera_board_cache[{iboard=},{icamera_first=}] uninitialized");
-            Rt_lidar0_board[iboard] =
-                mrcal.compose_Rt(Rt_lidar0_camera[icamera_first],
-                                 Rt_camera_board_cache[iboard,icamera_first]);
+        // I arbitrarily use the first camera observation, if there is one. I
+        // prefer cameras, so I only use the lidar for this, if no cameras are
+        // available
+        int icamera_first=0;
+        for(; icamera_first<Ncameras; icamera_first++)
+            if(sensor_snapshot->chessboard_corners[icamera_first] != NULL)
+                break;
+
+        if(icamera_first < Ncameras)
+        {
+            const double* Rt_camera_board =
+                &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera_first) *4*3];
+            if(Rt_uninitialized(Rt_camera_board))
+            {
+                MSG("Rt_camera_board_cache[isnapshot=%d icamera_first=%d] uninitialized",
+                    isnapshot, icamera_first);
+                return false;
+            }
+            mrcal_compose_Rt(// out
+                             &Rt_lidar0_board[isnapshot*4*3],
+                             // in
+                             &Rt_lidar0_camera[icamera_first*4*3],
+                             Rt_camera_board);
         }
         else
-#endif
         {
             // This board is observed only by LIDARs
 
-
-            const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
-
-            int ilidar_first;
-            for(ilidar_first=0; ilidar_first<Nlidars; ilidar_first++)
+            int ilidar_first=0;
+            for(; ilidar_first<Nlidars; ilidar_first++)
                 if(sensor_snapshot->lidar_scans[ilidar_first].points != NULL)
                     break;
 
@@ -226,24 +241,28 @@ compute_board_poses(// out
             // I have the normal to the board, in lidar coordinates. Compute an
             // arbitrary rotation that matches this normal. This is unique only
             // up to yaw
-            double Rt_board_lidar[4*3];
+            double Rt_board_lidar[4*3] = {};
             mrcal_R_aligned_to_vector(Rt_board_lidar,
                                       n.xyz);
             // I want pboardcenter_board to map to p: R_board_lidar
             // p + t_board_lidar = pboardcenter_board
             for(int i=0; i<3; i++)
             {
+                if(Ncameras > 0)
+                {
+                    // We have cameras; we know where the center of the board is
+                    const double pboardcenter_board[] =
+                        { (object_width_n -1)/2*object_spacing,
+                          (object_height_n-1)/2*object_spacing,
+                          0. };
 
-
-
-                // TEMPORARY
-                mrcal_point3_t pboardcenter_board = {};
-
-
-
-
-
-                Rt_board_lidar[9+i] = pboardcenter_board.xyz[i];
+                    Rt_board_lidar[9+i] = pboardcenter_board[i];
+                }
+                else
+                {
+                    // No cameras; we don't know where the center of the board
+                    // is. We leave it at 0
+                }
                 for(int j=0; j<3; j++)
                     Rt_board_lidar[9+i] -=
                         Rt_board_lidar[i*3 + j] * plidar_mean.xyz[j];
@@ -633,13 +652,12 @@ bool boardcenter_normal__sensor(// out
             return false;
 
         double* Rt_camera_board = &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
-        for(int i=0; i<3*3; i++)
-            if(Rt_camera_board[i] != 0.)
-            {
-                MSG("THIS IS A BUG: Rt_camera_board_cache[isnapshot=%d, icamera=%d] has already been computed",
-                    isnapshot, icamera);
-                return false;
-            }
+        if(!Rt_uninitialized(Rt_camera_board))
+        {
+            MSG("THIS IS A BUG: Rt_camera_board_cache[isnapshot=%d, icamera=%d] has already been computed",
+                isnapshot, icamera);
+            return false;
+        }
         if(!boardcenter_normal__camera(// out
                                   pboardcenter_sensor,
                                   boardnormal_sensor,
@@ -696,7 +714,7 @@ bool print_sensor_points(// out
         // this is a camera
         const int icamera = isensor - Nlidars;
 
-        const double *Rt_camera_board =
+        const double* Rt_camera_board =
             &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
 
         int N = object_height_n*object_width_n;
@@ -1025,6 +1043,7 @@ typedef struct
     const int                          object_width_n;
     const double                       object_spacing;
     double*                            Rt_lidar0_lidar;
+    double*                            Rt_lidar0_camera;
     double*                            Rt_camera_board_cache;
 } cb_sensor_link_cookie_t;
 
@@ -1048,9 +1067,8 @@ bool cb_sensor_link(const uint16_t isensor1,
     const int                          object_width_n             = cookie->object_width_n;
     const double                       object_spacing             = cookie->object_spacing;
     double*                            Rt_lidar0_lidar            = cookie->Rt_lidar0_lidar;
+    double*                            Rt_lidar0_camera           = cookie->Rt_lidar0_camera;
     double*                            Rt_camera_board_cache      = cookie->Rt_camera_board_cache;
-
-
 
     double Rt01[4*3];
     if(!align_point_clouds(// out
@@ -1071,83 +1089,93 @@ bool cb_sensor_link(const uint16_t isensor1,
 
     if(isensor1 >= Nlidars)
     {
-        assert(0);
-#if 0
-        icamera1 = idx_to - Nlidars;
+        const int icamera1 = isensor1 - Nlidars;
 
-        if(idx_from >= Nlidars)
+        if(isensor0 >= Nlidars)
         {
-            icamera0 = idx_from - Nlidars;
+            const int icamera0 = isensor0 - Nlidars;
 
-            print(f"Estimating pose of camera {icamera1} from camera {icamera0}");
-            if(not np.any(Rt_lidar0_camera[icamera0]))
-                raise Exception(f"Computing pose of camera {icamera1} from camera {icamera0}, but the pose of camera {icamera0} is not initialized");
-            Rt_lidar0_camera[icamera1] = mrcal.compose_Rt(Rt_lidar0_camera[icamera0],
-                                                          Rt01);
+            if(Rt_uninitialized(&Rt_lidar0_camera[icamera0*4*3]))
+            {
+                MSG("Computing pose of camera %d from camera %d, but it is not initialized",
+                    icamera1, icamera0);
+                return false;
+            }
+            mrcal_compose_Rt(// out
+                             &Rt_lidar0_camera[icamera1*4*3],
+                             // in
+                             &Rt_lidar0_camera[icamera0*4*3],
+                             Rt01);
         }
         else
         {
-            ilidar0 = idx_from;
+            const int ilidar0 = isensor0;
 
-            print(f"Estimating pose of camera {icamera1} from lidar {ilidar0}");
             if(ilidar0 == 0)
                 // from the reference
-                Rt_lidar0_camera[icamera1] = Rt01;
+                memcpy(&Rt_lidar0_camera[icamera1*4*3],
+                       Rt01,
+                       4*3*sizeof(double));
             else
             {
-                if(not np.any(Rt_lidar0_lidar[ilidar0-1])):
-                    raise Exception(f"Computing pose of camera {icamera1} from lidar {ilidar0}, but the pose of lidar {ilidar0} is not initialized");
-                Rt_lidar0_camera[icamera1] = mrcal.compose_Rt(Rt_lidar0_lidar[ilidar0-1],
-                                                              Rt01);
+                if(Rt_uninitialized(&Rt_lidar0_lidar[(ilidar0-1)*4*3]))
+                {
+                    MSG("Computing pose of camera %d from lidar %d, but it is not initialized",
+                        icamera1, ilidar0);
+                    return false;
+                }
+                mrcal_compose_Rt(// out
+                                 &Rt_lidar0_camera[icamera1*4*3],
+                                 // in
+                                 &Rt_lidar0_lidar[ (ilidar0-1)*4*3 ],
+                                 Rt01);
             }
         }
-#endif
     }
     else
     {
-        int ilidar1 = isensor1;
+        const int ilidar1 = isensor1;
 
-        // ASSUMING SENSOR0 IS A LIDAR; THE CHECK IS IMMEDIATELY BELOW
-        int ilidar0 = isensor0;
-
-        // ilidar1 == 0 will not happen; checked above
         if(isensor0 >= Nlidars)
         {
-            assert(0);
-#if 0
-            icamera0 = isensor0 - Nlidars;
+            const int icamera0 = isensor0 - Nlidars;
 
-            print(f"Estimating pose of lidar {ilidar1} from camera {icamera0}");
-            if(not np.any(Rt_lidar0_camera[icamera0]))
-                raise Exception(f"Computing pose of lidar {ilidar1} from camera {icamera0}, but the pose of camera {icamera0} is not initialized");
-            Rt_lidar0_lidar[ilidar1-1] = mrcal.compose_Rt(Rt_lidar0_camera[icamera0],
-                                                          Rt01);
-#endif
-        }
-
-        MSG("Estimating pose of lidar %d from lidar %d",
-            ilidar1,
-            ilidar0);
-        if(ilidar0 == 0)
-            // from the reference
-            memcpy(&Rt_lidar0_lidar[ (ilidar1-1)*4*3 ],
-                   Rt01,
-                   4*3*sizeof(double));
-        else
+            if(Rt_uninitialized(&Rt_lidar0_camera[icamera0*4*3]))
+            {
+                MSG("Computing pose of lidar %d from camera %d, but it is not initialized",
+                    ilidar1, icamera0);
+                return false;
+            }
             mrcal_compose_Rt(// out
                              &Rt_lidar0_lidar[ (ilidar1-1)*4*3 ],
                              // in
-                             &Rt_lidar0_lidar[ (ilidar0-1)*4*3 ],
+                             &Rt_lidar0_camera[icamera0*4*3],
                              Rt01);
+        }
+        else
+        {
+            const int ilidar0 = isensor0;
+            if(ilidar0 == 0)
+                // from the reference
+                memcpy(&Rt_lidar0_lidar[ (ilidar1-1)*4*3 ],
+                       Rt01,
+                       4*3*sizeof(double));
+            else
+            {
+                if(Rt_uninitialized(&Rt_lidar0_lidar[(ilidar0-1)*4*3]))
+                {
+                    MSG("Computing pose of lidar %d from lidar %d, but it is not initialized",
+                        ilidar1, ilidar0);
+                    return false;
+                }
+                mrcal_compose_Rt(// out
+                                 &Rt_lidar0_lidar[ (ilidar1-1)*4*3 ],
+                                 // in
+                                 &Rt_lidar0_lidar[ (ilidar0-1)*4*3 ],
+                                 Rt01);
+            }
+        }
     }
-    return true;
-}
-
-static bool Rt_is_all_zero(const double* Rt)
-{
-    for(int i=0; i<4*3; i++)
-        if(Rt[i] != 0.0)
-            return false;
     return true;
 }
 
@@ -1208,6 +1236,7 @@ fit_seed(// out
             .object_width_n             = object_width_n,
             .object_spacing             = object_spacing,
             .Rt_lidar0_lidar            = Rt_lidar0_lidar,
+            .Rt_lidar0_camera           = Rt_lidar0_camera,
             .Rt_camera_board_cache      = Rt_camera_board_cache
         };
 
@@ -1226,14 +1255,14 @@ fit_seed(// out
     // this by seeing an uninitialized Rt_lidar0_camera or Rt_lidar0_lidar.
     bool any_connections_missing = false;
     for(unsigned int i=0; i<Ncameras; i++)
-        if( Rt_is_all_zero(&Rt_lidar0_camera[i*4*3]))
+        if( Rt_uninitialized(&Rt_lidar0_camera[i*4*3]))
         {
             MSG("ERROR: Don't have complete observations overlap: camera %d not connected",
                 i);
             any_connections_missing = true;
         }
     for(unsigned int i=0; i<Nlidars-1; i++)
-        if( Rt_is_all_zero(&Rt_lidar0_lidar[i*4*3]))
+        if( Rt_uninitialized(&Rt_lidar0_lidar[i*4*3]))
         {
             MSG("ERROR: Don't have complete observations overlap: lidar %d not connected",
                 i+1);
@@ -1241,7 +1270,6 @@ fit_seed(// out
         }
     if(any_connections_missing)
         return false;
-
 
     // All the sensor-sensor transforms computed. I compute the pose of the
     // boards
@@ -1252,7 +1280,12 @@ fit_seed(// out
                             Nsensor_snapshots_filtered,
                             Ncameras,
                             Nlidars,
-                            Rt_lidar0_lidar))
+                            Rt_lidar0_lidar,
+                            Rt_lidar0_camera,
+                            Rt_camera_board_cache,
+                            object_height_n,
+                            object_width_n,
+                            object_spacing))
     {
         MSG("compute_board_poses() failed");
         return false;
