@@ -2336,14 +2336,14 @@ write_axes(FILE* fp,
         fprintf(fp, "%f %f labels %f x\n",
                 Rt_ref_sensor[3*3 + 0] + Rt_ref_sensor[0*3 + 0] * scale      * 1.01,
                 Rt_ref_sensor[3*3 + 1] + Rt_ref_sensor[1*3 + 0] * scale      * 1.01,
-                Rt_ref_sensor[3*3 + 2] + Rt_ref_sensor[2*3 + 0] * scale * 2. * 1.01);
+                Rt_ref_sensor[3*3 + 2] + Rt_ref_sensor[2*3 + 0] * scale      * 1.01);
         fprintf(fp, "%f %f labels %f y\n",
                 Rt_ref_sensor[3*3 + 0] + Rt_ref_sensor[0*3 + 1] * scale      * 1.01,
                 Rt_ref_sensor[3*3 + 1] + Rt_ref_sensor[1*3 + 1] * scale      * 1.01,
-                Rt_ref_sensor[3*3 + 2] + Rt_ref_sensor[2*3 + 1] * scale * 2. * 1.01);
+                Rt_ref_sensor[3*3 + 2] + Rt_ref_sensor[2*3 + 1] * scale      * 1.01);
         fprintf(fp, "%f %f labels %f z\n",
-                Rt_ref_sensor[3*3 + 0] + Rt_ref_sensor[0*3 + 2] * scale      * 1.01,
-                Rt_ref_sensor[3*3 + 1] + Rt_ref_sensor[1*3 + 2] * scale      * 1.01,
+                Rt_ref_sensor[3*3 + 0] + Rt_ref_sensor[0*3 + 2] * scale * 2. * 1.01,
+                Rt_ref_sensor[3*3 + 1] + Rt_ref_sensor[1*3 + 2] * scale * 2. * 1.01,
                 Rt_ref_sensor[3*3 + 2] + Rt_ref_sensor[2*3 + 2] * scale * 2. * 1.01);
 
         fprintf(fp, "%f %f labels %f %s\n",
