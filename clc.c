@@ -1313,7 +1313,24 @@ fit_seed(// out
                                                 .y = Rt_lidar0_board[isnapshot*4*3 + 1*3 + 2],
                                                 .z = Rt_lidar0_board[isnapshot*4*3 + 2*3 + 2]};
 
-        const mrcal_point3_t* p0_lidar0_should = (mrcal_point3_t*)&Rt_lidar0_board[isnapshot*4*3 + 3*3 + 0];
+        mrcal_point3_t p0_lidar0_should;
+        if(Ncameras > 0)
+        {
+            // We have cameras; we know where the center of the board is
+            const mrcal_point3_t pboardcenter_board =
+                { .x = (object_width_n -1)/2*object_spacing,
+                  .y = (object_height_n-1)/2*object_spacing,
+                  .z = 0. };
+
+            mrcal_transform_point_Rt(p0_lidar0_should.xyz, NULL, NULL,
+                                     &Rt_lidar0_board[isnapshot*4*3], pboardcenter_board.xyz);
+        }
+        else
+        {
+            // No cameras; we don't know where the center of the board
+            // is. We leave it at 0
+            p0_lidar0_should = *(mrcal_point3_t*)(&Rt_lidar0_board[isnapshot*4*3 + 3*3]);
+        }
 
 
         for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
@@ -1343,7 +1360,7 @@ fit_seed(// out
             if(cos_err >  1.0) cos_err =  1.0;
 
             const double th_err_deg = acos(cos_err) * 180. / M_PI;
-            const mrcal_point3_t p0_err = mrcal_point3_sub(*p0_lidar0_should, p0_lidar0_observed);
+            const mrcal_point3_t p0_err = mrcal_point3_sub(p0_lidar0_should, p0_lidar0_observed);
             const double p0_err_mag = mrcal_point3_mag(p0_err);
 
 #warning "unhardcode"
