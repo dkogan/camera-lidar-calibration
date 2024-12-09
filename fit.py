@@ -1986,7 +1986,8 @@ else:
 
 
 if True:
-    print("Using the C core")
+    print("Using the C core",
+          file=sys.stderr)
     if len(args.models) > 0:
         m = mrcal.cameramodel(args.models[0])
         o = m.optimization_inputs()
