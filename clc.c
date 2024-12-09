@@ -701,7 +701,7 @@ bool print_sensor_points(// out
         if(lidar_scan->points == NULL)
             return false;
 
-        for(int i=0; i<lidar_scan->points_and_plane->ipoint_set.n; i++)
+        for(int i=0; i<(int)lidar_scan->points_and_plane->ipoint_set.n; i++)
         {
             const clc_point3f_t* p = &lidar_scan->points[ lidar_scan->points_and_plane->ipoint_set.ipoint[i] ];
             fprintf(fp,
@@ -1421,6 +1421,13 @@ typedef struct
     const sensor_snapshot_segmented_t* snapshots;
     unsigned int Nsnapshots;
 
+    const mrcal_cameramodel_t*const* models; // Ncameras of these
+    // The dimensions of the chessboard grid being detected in the images
+    const int object_height_n;
+    const int object_width_n;
+    const double object_spacing;
+
+
     // simplified computation for seeding
     bool use_distance_to_plane : 1;
 
@@ -1473,28 +1480,22 @@ static int num_states(const callback_context_t* ctx)
         num_states_boards(ctx);
 }
 
-static int measurement_index_camera(const unsigned int isnapshot,
-                                    const unsigned int icamera,
-                                    const callback_context_t* ctx)
-{
-    return -1;
-}
 
-static int measurement_index_lidar(const unsigned int isnapshot,
-                                   const unsigned int ilidar,
+static int measurement_index_lidar(const unsigned int _isnapshot,
+                                   const unsigned int _ilidar,
                                    const callback_context_t* ctx)
 {
     int imeas = 0;
 
-    for(unsigned int _isnapshot=0; _isnapshot < ctx->Nsnapshots; _isnapshot++)
+    for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[_isnapshot];
-        for(unsigned int _ilidar=0; _ilidar<ctx->Nlidars; _ilidar++)
+        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+        for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
         {
-            if(isnapshot == _isnapshot && ilidar == _ilidar)
+            if(_isnapshot == isnapshot && _ilidar == ilidar)
                 return imeas;
 
-            const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[_ilidar];
+            const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[ilidar];
 
             if(points_and_plane_full->points == NULL)
                 continue;
@@ -1528,9 +1529,55 @@ static int num_measurements_lidars(const callback_context_t* ctx)
     }
     return Nmeasurements;
 }
+static int measurement_index_camera(const unsigned int isnapshot,
+                                    const unsigned int icamera,
+                                    const callback_context_t* ctx)
+{
+    int imeasurement = 0;
+
+    for(unsigned int _isnapshot=0; _isnapshot < ctx->Nsnapshots; _isnapshot++)
+    {
+        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[_isnapshot];
+        for(int _icamera=0; _icamera<(int)ctx->Ncameras; _icamera++)
+        {
+            const mrcal_point2_t* chessboard_corners =
+                sensor_snapshot->chessboard_corners[_icamera];
+            if(chessboard_corners == NULL) continue;
+
+            if(isnapshot == _isnapshot && (int)icamera == _icamera)
+                return
+                    num_measurements_lidars(ctx) +
+                    imeasurement;
+
+            imeasurement +=
+                ctx->object_width_n *
+                ctx->object_height_n *
+                2;
+        }
+    }
+
+    return -1;
+}
 static int num_measurements_cameras(const callback_context_t* ctx)
 {
-    return 0;
+    int Nobservations_camera = 0;
+
+    for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
+    {
+        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+        for(int icamera=0; icamera<(int)ctx->Ncameras; icamera++)
+        {
+            const mrcal_point2_t* chessboard_corners =
+                sensor_snapshot->chessboard_corners[icamera];
+            if(chessboard_corners != NULL) Nobservations_camera++;
+        }
+    }
+
+    return
+        Nobservations_camera *
+        ctx->object_width_n *
+        ctx->object_height_n *
+        2;
 }
 static int measurement_index_regularization(const callback_context_t* ctx)
 {
@@ -1554,6 +1601,7 @@ static int num_j_nonzero(const callback_context_t* ctx)
 {
     int nnz = 0;
 
+    // lidar
     for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
     {
         const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
@@ -1572,6 +1620,9 @@ static int num_j_nonzero(const callback_context_t* ctx)
             else            nnz += 2*6*set->n;
         }
     }
+
+    // camera
+    nnz += num_measurements_cameras(ctx) * 6 * 2;
 
     // regularization
     nnz += ctx->Nsnapshots * 6;
@@ -1615,13 +1666,11 @@ pack_solver_state(// out
         for(int j=0; j<3; j++) b[istate++] = rt_lidar0_lidar[i*6 + j] / SCALE_ROTATION_LIDAR;
         for(int j=3; j<6; j++) b[istate++] = rt_lidar0_lidar[i*6 + j] / SCALE_TRANSLATION_LIDAR;
     }
-#if 0
     for(unsigned int i=0; i<ctx->Ncameras; i++)
     {
         for(int j=0; j<3; j++) b[istate++] = rt_lidar0_camera[i*6 + j] / SCALE_ROTATION_CAMERA;
         for(int j=3; j<6; j++) b[istate++] = rt_lidar0_camera[i*6 + j] / SCALE_TRANSLATION_CAMERA;
     }
-#endif
     for(unsigned int i=0; i<ctx->Nsnapshots; i++)
     {
         for(int j=0; j<3; j++) b[istate++] = rt_lidar0_board[i*6 + j] / SCALE_ROTATION_FRAME;
@@ -1648,13 +1697,11 @@ unpack_solver_state(// out
         for(int j=0; j<3; j++) rt_lidar0_lidar[i*6 + j] = b[istate++] * SCALE_ROTATION_LIDAR;
         for(int j=3; j<6; j++) rt_lidar0_lidar[i*6 + j] = b[istate++] * SCALE_TRANSLATION_LIDAR;
     }
-#if 0
     for(unsigned int i=0; i<ctx->Ncameras; i++)
     {
         for(int j=0; j<3; j++) rt_lidar0_camera[i*6 + j] = b[istate++] * SCALE_ROTATION_CAMERA;
         for(int j=3; j<6; j++) rt_lidar0_camera[i*6 + j] = b[istate++] * SCALE_TRANSLATION_CAMERA;
     }
-#endif
     for(unsigned int i=0; i<ctx->Nsnapshots; i++)
     {
         for(int j=0; j<3; j++) rt_lidar0_board[i*6 + j] = b[istate++] * SCALE_ROTATION_FRAME;
@@ -1707,6 +1754,19 @@ static void cost(const double*   b,
             Jval   [ iJacobian ] = g;           \
         }                                       \
         iJacobian++;                            \
+    } while(0)
+#define STORE_JACOBIAN3(col, g, scale)          \
+    do                                          \
+    {                                           \
+        if(Jt) {                                \
+            for(int _i=0; _i<3; _i++) {         \
+                Jcolidx[ iJacobian ] = (col) + _i;      \
+                Jval   [ iJacobian ] = (g)[_i] * (scale);       \
+                iJacobian++;                    \
+            }                                   \
+        }                                       \
+        else                                    \
+            iJacobian+=3;                       \
     } while(0)
 
 
@@ -2123,39 +2183,126 @@ static void cost(const double*   b,
     }
 
     // camera stuff
-#if 0
-    for(iboard in range(len(joint_observations)))
+    int istate_board = state_index_board(0, ctx);
+    for(unsigned int isnapshot=0;
+        isnapshot < ctx->Nsnapshots;
+        isnapshot++, istate_board += 6)
     {
-        q_observed_all = joint_observations[iboard][0];
-        for(icamera in range(len(q_observed_all)))
+        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+
+        int istate_camera = state_index_camera(0, ctx);
+
+        for(int icamera=0;
+            icamera<(int)ctx->Ncameras;
+            icamera++, istate_camera += 6)
         {
-            q_observed = q_observed_all[icamera];
+            const mrcal_point2_t* chessboard_corners =
+                sensor_snapshot->chessboard_corners[icamera];
+            if(chessboard_corners == NULL)
+                continue;
 
-            if(q_observed is None)
-                     continue;
+            if(ctx->report_imeas)
+                MSG("isnapshot=%d icamera=%d iMeasurement=%d",
+                    isnapshot, icamera, iMeasurement);
 
-            if(report_imeas)
-                     print(f"{iboard=} {icamera=} {iMeasurement=}");
+            double rt_camera_board[6];
+            double drcb_drl0c[3*3];
+            double drcb_drl0b[3*3];
+            double dtcb_drl0c[3*3];
+            double dtcb_drl0b[3*3];
+            double dtcb_dtl0c[3*3];
+            double dtcb_dtl0b[3*3];
+            mrcal_compose_rt_inverted0( rt_camera_board,
+                                        drcb_drl0c,drcb_drl0b,dtcb_drl0c,dtcb_drl0b,dtcb_dtl0c,dtcb_dtl0b,
+                                        &rt_lidar0_camera_all[icamera*6],
+                                        &rt_lidar0_board_all[isnapshot*6] );
 
-            rt_ref_board  = state['rt_ref_board'] [iboard];
-            rt_camera_ref = state['rt_camera_ref'][icamera];
+            for(int i=0; i<ctx->object_height_n; i++)
+                for(int j=0; j<ctx->object_width_n; j++)
+                {
+                    mrcal_point2_t q;
+                    mrcal_point3_t pref = {.x = (double)j*ctx->object_spacing,
+                                           .y = (double)i*ctx->object_spacing,
+                                           .z = 0.};
+                    mrcal_point3_t pcam;
+                    double dpcam_drtcb[3*6];
+                    mrcal_point3_t dq_dpcam[2];
+                    mrcal_transform_point_rt(pcam.xyz, dpcam_drtcb, NULL,
+                                             rt_camera_board, pref.xyz);
+                    mrcal_project(&q, dq_dpcam, NULL,
+                                  &pcam,1,
+                                  &ctx->models[icamera]->lensmodel,
+                                  ctx->models[icamera]->intrinsics);
 
-            Rt_ref_board  = mrcal.Rt_from_rt(rt_ref_board);
-            Rt_camera_ref = mrcal.Rt_from_rt(rt_camera_ref);
+                    for(int k=0; k<2; k++)
+                    {
+                        const mrcal_point3_t* dqi_dpcam = &dq_dpcam[k];
+                        double dqi_drtcb[6];
+                        for(int l=0; l<6; l++)
+                        {
+                            dqi_drtcb[l] = 0.;
+                            for(int m=0;m<3;m++)
+                                dqi_drtcb[l] +=
+                                    dqi_dpcam->xyz[m] *
+                                    dpcam_drtcb[6*m + l];
+                        }
 
-            Rt_camera_board = mrcal.compose_Rt( Rt_camera_ref,
-                                                Rt_ref_board );
-            q = mrcal.project( mrcal.transform_point_Rt(Rt_camera_board,
-                                                        p_board_local),
-                               *models[icamera].intrinsics() );
-            q = nps.clump(q,n=2);
-            x[iMeasurement:iMeasurement+Nmeas_camera_observation] =
-                (q - q_observed).ravel() / SCALE_MEASUREMENT_PX;
+                        if(Jt) Jrowptr[iMeasurement] = iJacobian;
+                        x[iMeasurement] = (q.xy[k] - chessboard_corners[i*ctx->object_width_n+j].xy[k]) / SCALE_MEASUREMENT_PX;
 
-            iMeasurement += Nmeas_camera_observation;
+                        double dqi[3];
+
+                        mul_vec3_gen33_vout(// in
+                                            &dqi_drtcb[0],
+                                            drcb_drl0c,
+                                            // out
+                                            dqi);
+                        mul_vec3_gen33_vaccum(// in
+                                            &dqi_drtcb[3],
+                                            dtcb_drl0c,
+                                            // out
+                                            dqi);
+                        STORE_JACOBIAN3(istate_camera,
+                                        dqi,
+                                        SCALE_ROTATION_CAMERA/SCALE_MEASUREMENT_PX);
+
+                        mul_vec3_gen33_vout(// in
+                                            &dqi_drtcb[3],
+                                            dtcb_dtl0c,
+                                            // out
+                                            dqi);
+                        STORE_JACOBIAN3(istate_camera+3,
+                                        dqi,
+                                        SCALE_TRANSLATION_CAMERA/SCALE_MEASUREMENT_PX);
+
+                        mul_vec3_gen33_vout(// in
+                                            &dqi_drtcb[0],
+                                            drcb_drl0b,
+                                            // out
+                                            dqi);
+                        mul_vec3_gen33_vaccum(// in
+                                            &dqi_drtcb[3],
+                                            dtcb_drl0b,
+                                            // out
+                                            dqi);
+                        STORE_JACOBIAN3(istate_board,
+                                        dqi,
+                                        SCALE_ROTATION_FRAME/SCALE_MEASUREMENT_PX);
+
+                        mul_vec3_gen33_vout(// in
+                                            &dqi_drtcb[3],
+                                            dtcb_dtl0b,
+                                            // out
+                                            dqi);
+                        STORE_JACOBIAN3(istate_board+3,
+                                        dqi,
+                                        SCALE_TRANSLATION_FRAME/SCALE_MEASUREMENT_PX);
+
+                        iMeasurement++;
+                    }
+                }
         }
     }
-#endif
 
 
     /////// Regularization
@@ -2175,6 +2322,7 @@ static void cost(const double*   b,
             if(Jt) Jrowptr[iMeasurement] = iJacobian;
             x[iMeasurement] = rt_lidar0_board[i] / SCALE_MEASUREMENT_REGULARIZATION_r;
             STORE_JACOBIAN(ivar,
+                           1.0 *
                            SCALE_ROTATION_FRAME/SCALE_MEASUREMENT_REGULARIZATION_r);
             ivar++;
             iMeasurement++;
@@ -2184,6 +2332,7 @@ static void cost(const double*   b,
             if(Jt) Jrowptr[iMeasurement] = iJacobian;
             x[iMeasurement] = rt_lidar0_board[i+3] / SCALE_MEASUREMENT_REGULARIZATION_t;
             STORE_JACOBIAN(ivar,
+                           1.0 *
                            SCALE_TRANSLATION_FRAME/SCALE_MEASUREMENT_REGULARIZATION_t);
             ivar++;
             iMeasurement++;
@@ -2397,17 +2546,20 @@ write_axes(FILE* fp,
 static bool
 _plot_geometry(FILE* fp,
 
-              const double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
-              const double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
-              const double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+               const double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+               const double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
+               const double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
 
-              const sensor_snapshot_segmented_t* snapshots,
-              const unsigned int                 Nsnapshots,
+               const sensor_snapshot_segmented_t* snapshots,
+               const unsigned int                 Nsnapshots,
 
-              // These apply to ALL the sensor_snapshots[]
-              const unsigned int Ncameras,
-              const unsigned int Nlidars,
-              bool only_axes)
+               // These apply to ALL the sensor_snapshots[]
+               const unsigned int Nlidars,
+               const unsigned int Ncameras,
+               const int object_height_n,
+               const int object_width_n,
+               const double object_spacing,
+               bool only_axes)
 {
     const double axis_scale = 1.0;
 
@@ -2452,24 +2604,6 @@ _plot_geometry(FILE* fp,
 
     if(!only_axes)
     {
-        // camera stuff
-
-#if 0
-        points_camera_observations =
-            [ mrcal.transform_point_rt(rt_ref_board[iboard],
-                                       nps.clump(p_board_local,n=2) );
-              for (q_observed,iboard,icamera) in observations_camera(joint_observations) ];
-        legend_camera_observations =
-            [ f"{iboard=} {icamera=}"
-              for (q_observed,iboard,icamera) in observations_camera(joint_observations) ];
-        data_tuples = (*data_tuples,
-                       *[ (points_camera_observations[i],
-                           dict(_with     = 'lines',
-                                legend    = legend_camera_observations[i],
-                                tuplesize = -3))
-                          for i in range(len(points_camera_observations)) ],
-                       );
-#endif
         for(unsigned int isnapshot=0; isnapshot < Nsnapshots; isnapshot++)
         {
             char curveid[Nlidars][32];
@@ -2515,6 +2649,26 @@ _plot_geometry(FILE* fp,
                             p.x, p.y, curveid[ilidar], p.z);
                 }
             }
+
+
+            // reference board poses
+            if(Ncameras > 0)
+            {
+                for(int i=0; i<object_height_n; i++)
+                    for(int j=0; j<object_width_n; j++)
+                    {
+                        mrcal_point3_t pref = {.x = (double)j*object_spacing,
+                                               .y = (double)i*object_spacing,
+                                               .z = 0.};
+                        mrcal_point3_t p;
+                        mrcal_transform_point_Rt(p.xyz, NULL, NULL,
+                                                 &Rt_lidar0_board[4*3*isnapshot], pref.xyz);
+                        fprintf(fp, "%f %f boards-ref %f\n",
+                                p.x, p.y, p.z);
+                    }
+                // break the line
+                fprintf(fp, "nan nan boards-ref nan\n");
+            }
         }
     }
 
@@ -2532,8 +2686,11 @@ plot_geometry(const char* filename,
               const unsigned int                 Nsnapshots,
 
               // These apply to ALL the sensor_snapshots[]
-              const unsigned int Ncameras,
               const unsigned int Nlidars,
+              const unsigned int Ncameras,
+              const int object_height_n,
+              const int object_width_n,
+              const double object_spacing,
               bool only_axes)
 {
     bool result = false;
@@ -2545,8 +2702,11 @@ plot_geometry(const char* filename,
                                      Rt_lidar0_camera,
                                      snapshots,
                                      Nsnapshots,
-                                     Ncameras,
                                      Nlidars,
+                                     Ncameras,
+                                     object_height_n,
+                                     object_width_n,
+                                     object_spacing,
                                      only_axes);
           }),
 
@@ -2559,6 +2719,7 @@ plot_geometry(const char* filename,
         "--autolegend "
         "--style axes \"with vectors\"  --tuplesize axes   6 "
         "--style labels \"with labels\" --tuplesize labels 4 "
+        "--style boards-ref \"with lines\"  --tuplesize boards 3 "
         "--with points --tuplesizeall 3 ");
 
     return result;
@@ -2624,7 +2785,11 @@ fit(// out
                               .Nsnapshots            = Nsensor_snapshots_filtered,
                               .snapshots             = sensor_snapshots_filtered,
                               .use_distance_to_plane = false,
-                              .report_imeas          = false};
+                              .report_imeas          = false,
+                              .models                = models,
+                              .object_height_n       = object_height_n,
+                              .object_width_n        = object_width_n,
+                              .object_spacing        = object_spacing};
     dogleg_parameters2_t dogleg_parameters;
     dogleg_getDefaultParameters(&dogleg_parameters);
     if(!(check_gradient__use_distance_to_plane || check_gradient))
@@ -3405,8 +3570,11 @@ bool _clc_internal(// out
                       Rt_lidar0_camera,
                       sensor_snapshots_filtered,
                       Nsensor_snapshots_filtered,
-                      Ncameras,
                       Nlidars,
+                      Ncameras,
+                      object_height_n,
+                      object_width_n,
+                      object_spacing,
                       false);
         plot_geometry("/tmp/geometry-seed-onlyaxes.gp",
                       Rt_lidar0_board,
@@ -3414,8 +3582,11 @@ bool _clc_internal(// out
                       Rt_lidar0_camera,
                       sensor_snapshots_filtered,
                       Nsensor_snapshots_filtered,
-                      Ncameras,
                       Nlidars,
+                      Ncameras,
+                      object_height_n,
+                      object_width_n,
+                      object_spacing,
                       true);
 
         const int Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6;
@@ -3446,7 +3617,7 @@ bool _clc_internal(// out
                 check_gradient__use_distance_to_plane,
                 check_gradient))
         {
-            MSG("fit_seed() failed");
+            MSG("fit() failed");
             goto done;
         }
 
@@ -3462,8 +3633,11 @@ bool _clc_internal(// out
                       Rt_lidar0_camera,
                       sensor_snapshots_filtered,
                       Nsensor_snapshots_filtered,
-                      Ncameras,
                       Nlidars,
+                      Ncameras,
+                      object_height_n,
+                      object_width_n,
+                      object_spacing,
                       false);
         plot_geometry("/tmp/geometry-onlyaxes.gp",
                       Rt_lidar0_board,
@@ -3471,8 +3645,11 @@ bool _clc_internal(// out
                       Rt_lidar0_camera,
                       sensor_snapshots_filtered,
                       Nsensor_snapshots_filtered,
-                      Ncameras,
                       Nlidars,
+                      Ncameras,
+                      object_height_n,
+                      object_width_n,
+                      object_spacing,
                       true);
 
 /*
