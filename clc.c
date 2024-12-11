@@ -1672,7 +1672,7 @@ static int num_j_nonzero(const callback_context_t* ctx)
 #define SCALE_TRANSLATION_LIDAR SCALE_TRANSLATION_CAMERA
 
 #define SCALE_MEASUREMENT_PX               0.15   /* expected noise levels */
-#define SCALE_MEASUREMENT_M                0.015  /* expected noise levels */
+#define SCALE_MEASUREMENT_M                0.03   /* expected noise levels */
 #define SCALE_MEASUREMENT_REGULARIZATION_r 100.   /* rad */
 #define SCALE_MEASUREMENT_REGULARIZATION_t 10000. /* meters */
 
