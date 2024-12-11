@@ -2004,6 +2004,8 @@ if True:
                            camera_topic    = args.camera_topic,
                            models          = args.models,
                            check_gradient  = False,
+                           Npoints_per_segment                = 15,
+                           threshold_min_Nsegments_in_cluster = 4,
                            **calibration_object_kwargs)
     sys.exit()
 
