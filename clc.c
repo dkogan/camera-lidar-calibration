@@ -3195,7 +3195,8 @@ bool lidar_segmentation(// out
                         const int ilidar,
                         const int Nrings,
                         const unsigned int lidar_packet_stride,
-                        const int Nplanes_max)
+                        const int Nplanes_max,
+                        const clc_lidar_segmentation_context_t* ctx)
 {
     const clc_lidar_scan_unsorted_t* scan_unsorted =
         (sensor_snapshot_unsorted != NULL) ?
@@ -3253,10 +3254,6 @@ bool lidar_segmentation(// out
             &points_and_plane_pool[*points_and_plane_pool_index];
         (*points_and_plane_pool_index)++;
 
-
-        clc_lidar_segmentation_context_t ctx;
-        clc_lidar_segmentation_default_context(&ctx);
-
         int8_t Nplanes_found =
             clc_lidar_segmentation_sorted(// out
                                           points_and_plane_here,
@@ -3264,7 +3261,7 @@ bool lidar_segmentation(// out
                                           Nplanes_max,
                                           &(clc_lidar_scan_sorted_t){.points  = points_here,
                                                                      .Npoints = Npoints},
-                                          &ctx);
+                                          ctx);
 
         // MSG("Sensor snapshot %d lidar %d found %d planes",
         //     isnapshot, ilidar, Nplanes_found);
@@ -3335,6 +3332,8 @@ bool _clc_internal(// out
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
          const clc_is_bgr_mask_t is_bgr_mask,
+
+         const clc_lidar_segmentation_context_t* ctx,
 
          bool check_gradient__use_distance_to_plane,
          bool check_gradient )
@@ -3437,7 +3436,8 @@ bool _clc_internal(// out
                                    ilidar,
                                    Nrings,
                                    lidar_packet_stride,
-                                   Nplanes_max))
+                                   Nplanes_max,
+                                   ctx))
                 continue;
             Nsensors_observing++;
         }
@@ -3811,6 +3811,8 @@ bool clc_unsorted(// out
          // sensor_snapshots.images[] is color or not
          const clc_is_bgr_mask_t is_bgr_mask,
 
+         const clc_lidar_segmentation_context_t* ctx,
+
          bool check_gradient__use_distance_to_plane,
          bool check_gradient)
 {
@@ -3827,7 +3829,7 @@ bool clc_unsorted(// out
                          models,
                          object_height_n, object_width_n, object_spacing,
                          is_bgr_mask,
-
+                         ctx,
                          check_gradient__use_distance_to_plane,
                          check_gradient);
 }
@@ -3853,6 +3855,8 @@ bool clc_sorted(// out
          // sensor_snapshots.images[] is color or not
          const clc_is_bgr_mask_t is_bgr_mask,
 
+         const clc_lidar_segmentation_context_t* ctx,
+
          bool check_gradient__use_distance_to_plane,
          bool check_gradient)
 {
@@ -3869,7 +3873,7 @@ bool clc_sorted(// out
                          models,
                          object_height_n, object_width_n, object_spacing,
                          is_bgr_mask,
-
+                         ctx,
                          check_gradient__use_distance_to_plane,
                          check_gradient);
 }
@@ -3911,7 +3915,7 @@ bool clc_lidar_segmented(// out
                          models,
                          object_height_n, object_width_n, object_spacing,
                          is_bgr_mask,
-
+                         NULL,
                          check_gradient__use_distance_to_plane,
                          check_gradient);
 }

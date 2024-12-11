@@ -269,6 +269,8 @@ bool clc_unsorted(// out
          // sensor_snapshots.images[] is color or not
          const clc_is_bgr_mask_t is_bgr_mask,
 
+         const clc_lidar_segmentation_context_t* ctx,
+
          bool check_gradient__use_distance_to_plane,
          bool check_gradient);
 
@@ -293,6 +295,8 @@ bool clc_sorted(// out
          // bits indicating whether a camera in
          // sensor_snapshots.images[] is color or not
          const clc_is_bgr_mask_t is_bgr_mask,
+
+         const clc_lidar_segmentation_context_t* ctx,
 
          bool check_gradient__use_distance_to_plane,
          bool check_gradient);

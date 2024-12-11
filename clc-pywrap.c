@@ -579,6 +579,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          object_width_n,
                          object_spacing,
                          (clc_is_bgr_mask_t)0,
+                         &ctx,
                          check_gradient__use_distance_to_plane,
                          check_gradient))
         {
