@@ -169,131 +169,6 @@ static bool Rt_uninitialized(const double* Rt)
     return true;
 }
 
-static bool
-compute_board_poses(// out
-                    double*                            Rt_lidar0_board,
-                    // in
-                    const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
-                    const int                          Nsensor_snapshots_filtered,
-                    const int                          Ncameras,
-                    const int                          Nlidars,
-                    const double*                      Rt_lidar0_lidar,
-                    const double*                      Rt_lidar0_camera,
-                    const double*                      Rt_camera_board_cache,
-                    const int                          object_height_n,
-                    const int                          object_width_n,
-                    const double                       object_spacing)
-{
-    for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
-    {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
-
-        // cameras
-
-        // I arbitrarily use the first camera observation, if there is one. I
-        // prefer cameras, so I only use the lidar for this, if no cameras are
-        // available
-        int icamera_first=0;
-        for(; icamera_first<Ncameras; icamera_first++)
-            if(sensor_snapshot->chessboard_corners[icamera_first] != NULL)
-                break;
-
-        if(icamera_first < Ncameras)
-        {
-            const double* Rt_camera_board =
-                &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera_first) *4*3];
-            if(Rt_uninitialized(Rt_camera_board))
-            {
-                MSG("Rt_camera_board_cache[isnapshot=%d icamera_first=%d] uninitialized",
-                    isnapshot, icamera_first);
-                return false;
-            }
-            mrcal_compose_Rt(// out
-                             &Rt_lidar0_board[isnapshot*4*3],
-                             // in
-                             &Rt_lidar0_camera[icamera_first*4*3],
-                             Rt_camera_board);
-        }
-        else
-        {
-            // This board is observed only by LIDARs
-
-            int ilidar_first=0;
-            for(; ilidar_first<Nlidars; ilidar_first++)
-                if(sensor_snapshot->lidar_scans[ilidar_first].points != NULL)
-                    break;
-
-            if(ilidar_first == Nlidars)
-            {
-                MSG("Getting here is a bug: no camera or lidar observations for isnapshot=%d",
-                    isnapshot);
-                return false;
-            }
-
-            // I'm looking at the first LIDAR in the list. This is arbitrary. Any
-            // LIDAR will do
-            mrcal_point3_t n,plidar_mean;
-            mrcal_point3_from_clc_point3f(&n,
-                                          &sensor_snapshot->lidar_scans[ilidar_first].points_and_plane->plane.n);
-            mrcal_point3_from_clc_point3f(&plidar_mean,
-                                          &sensor_snapshot->lidar_scans[ilidar_first].points_and_plane->plane.p_mean);
-
-            // I have the normal to the board, in lidar coordinates. Compute an
-            // arbitrary rotation that matches this normal. This is unique only
-            // up to yaw
-            double Rt_board_lidar[4*3] = {};
-            mrcal_R_aligned_to_vector(Rt_board_lidar,
-                                      n.xyz);
-            // I want pboardcenter_board to map to p: R_board_lidar
-            // p + t_board_lidar = pboardcenter_board
-            for(int i=0; i<3; i++)
-            {
-                if(Ncameras > 0)
-                {
-                    // We have cameras; we know where the center of the board is
-                    const mrcal_point3_t pboardcenter_board =
-                        { .x = (object_width_n -1)/2*object_spacing,
-                          .y = (object_height_n-1)/2*object_spacing,
-                          .z = 0. };
-
-                    Rt_board_lidar[9+i] = pboardcenter_board.xyz[i];
-                }
-                else
-                {
-                    // No cameras; we don't know where the center of the board
-                    // is. We leave it at 0
-                }
-                for(int j=0; j<3; j++)
-                    Rt_board_lidar[9+i] -=
-                        Rt_board_lidar[i*3 + j] * plidar_mean.xyz[j];
-            }
-
-            double* Rt_lidar0_board__here = &Rt_lidar0_board[isnapshot*4*3];
-            if(ilidar_first == 0)
-                mrcal_invert_Rt(Rt_lidar0_board__here,
-                                Rt_board_lidar);
-            else
-            {
-                double Rt_lidar_board[4*3];
-                mrcal_invert_Rt(Rt_lidar_board,
-                                Rt_board_lidar);
-
-                mrcal_compose_Rt(Rt_lidar0_board__here,
-                                 &Rt_lidar0_lidar[(ilidar_first - 1)*4*3],
-                                 Rt_lidar_board);
-            }
-        }
-    }
-
-    return true;
-}
-
-
-
-
-
-
-
 // Exact C port of
 // mrcal.calibration._estimate_camera_pose_from_fixed_point_observations(). Not
 // pushed to mrcal itself because it calls OpenCV, but mrcal does not link to it
@@ -426,6 +301,198 @@ _estimate_camera_pose_from_fixed_point_observations(// out
     return false;
 }
 
+static void
+ref_calibration_object(// out
+                       mrcal_point3_t*            points_ref,
+                       // in
+                       const int                  object_height_n,
+                       const int                  object_width_n,
+                       const double               object_spacing)
+
+{
+    // The board geometry is usually computed by mrcal.ref_calibration_object():
+    // the coordinates move as
+    //
+    //   x = linspace(0,object_width_n-1,object_width_n)*object_spacing
+    //-> x = i*object_spacing
+    // In the center i = (object_width_n-1)/2
+    //-> x_center = (object_width_n-1)/2*object_spacing
+    //
+    // I'm also assuming no board warp, so z=0
+
+    for(int i=0; i<object_height_n; i++)
+        for(int j=0; j<object_width_n; j++)
+        {
+            points_ref[i*object_width_n + j].x = (double)j*object_spacing;
+            points_ref[i*object_width_n + j].y = (double)i*object_spacing;
+            points_ref[i*object_width_n + j].z = 0.;
+        }
+}
+
+static bool fit_Rt_camera_board(// out
+                 double*                    Rt_camera_board,
+                 // in
+                 const mrcal_cameramodel_t* model,
+                 const mrcal_point2_t*      observations,
+                 const int                  object_height_n,
+                 const int                  object_width_n,
+                 const double               object_spacing)
+{
+    const int N = object_height_n*object_width_n;
+    mrcal_point3_t points_ref[N];
+    ref_calibration_object(points_ref, object_height_n, object_width_n, object_spacing);
+
+    if(!_estimate_camera_pose_from_fixed_point_observations( Rt_camera_board,
+                                                             &model->lensmodel,
+                                                             model->intrinsics,
+                                                             observations,
+                                                             points_ref,
+                                                             N,
+                                                             "fit_seed" ))
+        return false;
+    if(Rt_camera_board[3*3 + 2] <= 0)
+    {
+        MSG("Chessboard is behind the camera");
+        return false;
+    }
+    return true;
+}
+
+static bool
+compute_board_poses(// out
+                    double*                            Rt_lidar0_board,
+                    // in,out
+                    double*                            Rt_camera_board_cache,
+                    // in
+                    const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
+                    const int                          Nsensor_snapshots_filtered,
+                    const int                          Ncameras,
+                    const int                          Nlidars,
+                    const double*                      Rt_lidar0_lidar,
+                    const double*                      Rt_lidar0_camera,
+                    const mrcal_cameramodel_t*const*   models, // Ncameras of these
+                    const int                          object_height_n,
+                    const int                          object_width_n,
+                    const double                       object_spacing)
+{
+    for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
+    {
+        const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
+
+        // cameras
+
+        // I arbitrarily use the first camera observation, if there is one. I
+        // prefer cameras. If camera observations are available, I use them
+        bool done = false;
+        for(int icamera=0; icamera<Ncameras; icamera++)
+        {
+            if(sensor_snapshot->chessboard_corners[icamera] == NULL)
+                continue;
+
+            double* Rt_camera_board = &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
+            if(Rt_uninitialized(Rt_camera_board))
+            {
+                if(!fit_Rt_camera_board(// out
+                                        Rt_camera_board,
+                                        // in
+                                        models[icamera],
+                                        sensor_snapshot->chessboard_corners[icamera],
+                                        object_height_n,
+                                        object_width_n,
+                                        object_spacing))
+                    return false;
+            }
+
+            mrcal_compose_Rt(// out
+                             &Rt_lidar0_board[isnapshot*4*3],
+                             // in
+                             &Rt_lidar0_camera[icamera*4*3],
+                             Rt_camera_board);
+            done = true;
+            break;
+        }
+        if(done)
+            continue;
+
+
+
+
+        // This board is observed only by LIDARs
+
+        int ilidar_first=0;
+        for(; ilidar_first<Nlidars; ilidar_first++)
+            if(sensor_snapshot->lidar_scans[ilidar_first].points != NULL)
+                break;
+
+        if(ilidar_first == Nlidars)
+        {
+            MSG("Getting here is a bug: no camera or lidar observations for isnapshot=%d",
+                isnapshot);
+            return false;
+        }
+
+        // I'm looking at the first LIDAR in the list. This is arbitrary. Any
+        // LIDAR will do
+        mrcal_point3_t n,plidar_mean;
+        mrcal_point3_from_clc_point3f(&n,
+                                      &sensor_snapshot->lidar_scans[ilidar_first].points_and_plane->plane.n);
+        mrcal_point3_from_clc_point3f(&plidar_mean,
+                                      &sensor_snapshot->lidar_scans[ilidar_first].points_and_plane->plane.p_mean);
+
+        // I have the normal to the board, in lidar coordinates. Compute an
+        // arbitrary rotation that matches this normal. This is unique only
+        // up to yaw
+        double Rt_board_lidar[4*3] = {};
+        mrcal_R_aligned_to_vector(Rt_board_lidar,
+                                  n.xyz);
+        // I want pboardcenter_board to map to p: R_board_lidar
+        // p + t_board_lidar = pboardcenter_board
+        for(int i=0; i<3; i++)
+        {
+            if(Ncameras > 0)
+            {
+                // We have cameras; we know where the center of the board is
+                const mrcal_point3_t pboardcenter_board =
+                    { .x = (object_width_n -1)/2*object_spacing,
+                      .y = (object_height_n-1)/2*object_spacing,
+                      .z = 0. };
+
+                Rt_board_lidar[9+i] = pboardcenter_board.xyz[i];
+            }
+            else
+            {
+                // No cameras; we don't know where the center of the board
+                // is. We leave it at 0
+            }
+            for(int j=0; j<3; j++)
+                Rt_board_lidar[9+i] -=
+                    Rt_board_lidar[i*3 + j] * plidar_mean.xyz[j];
+        }
+
+        double* Rt_lidar0_board__here = &Rt_lidar0_board[isnapshot*4*3];
+        if(ilidar_first == 0)
+            mrcal_invert_Rt(Rt_lidar0_board__here,
+                            Rt_board_lidar);
+        else
+        {
+            double Rt_lidar_board[4*3];
+            mrcal_invert_Rt(Rt_lidar_board,
+                            Rt_board_lidar);
+
+            mrcal_compose_Rt(Rt_lidar0_board__here,
+                             &Rt_lidar0_lidar[(ilidar_first - 1)*4*3],
+                             Rt_lidar_board);
+        }
+    }
+
+    return true;
+}
+
+
+
+
+
+
 
 // These two macros MUST appear consecutively. One opens a block, the other
 // closes it. This is required because of the local _filename variable
@@ -482,34 +549,6 @@ _estimate_camera_pose_from_fixed_point_observations(// out
 
 
 
-static void
-ref_calibration_object(// out
-                       mrcal_point3_t*            points_ref,
-                       // in
-                       const int                  object_height_n,
-                       const int                  object_width_n,
-                       const double               object_spacing)
-
-{
-    // The board geometry is usually computed by mrcal.ref_calibration_object():
-    // the coordinates move as
-    //
-    //   x = linspace(0,object_width_n-1,object_width_n)*object_spacing
-    //-> x = i*object_spacing
-    // In the center i = (object_width_n-1)/2
-    //-> x_center = (object_width_n-1)/2*object_spacing
-    //
-    // I'm also assuming no board warp, so z=0
-
-    for(int i=0; i<object_height_n; i++)
-        for(int j=0; j<object_width_n; j++)
-        {
-            points_ref[i*object_width_n + j].x = (double)j*object_spacing;
-            points_ref[i*object_width_n + j].y = (double)i*object_spacing;
-            points_ref[i*object_width_n + j].z = 0.;
-        }
-}
-
 static
 bool boardcenter_normal__camera(// out
                            mrcal_point3_t*            pboardcenter_camera,
@@ -522,24 +561,15 @@ bool boardcenter_normal__camera(// out
                            const int                  object_width_n,
                            const double               object_spacing)
 {
-    const int N = object_height_n*object_width_n;
-    mrcal_point3_t points_ref[N];
-    ref_calibration_object(points_ref, object_height_n, object_width_n, object_spacing);
-
-    if(!_estimate_camera_pose_from_fixed_point_observations( Rt_camera_board,
-                                                             &model->lensmodel,
-                                                             model->intrinsics,
-                                                             observations,
-                                                             points_ref,
-                                                             N,
-                                                             "fit_seed" ))
+    if(!fit_Rt_camera_board(// out
+                            Rt_camera_board,
+                            // in
+                            model,
+                            observations,
+                            object_height_n,
+                            object_width_n,
+                            object_spacing))
         return false;
-    if(Rt_camera_board[3*3 + 2] <= 0)
-    {
-        MSG("Chessboard is behind the camera");
-        return false;
-    }
-
 
     // diagnostics
     if(false)
@@ -1275,6 +1305,7 @@ fit_seed(// out
     // boards
     if(!compute_board_poses(// out
                             Rt_lidar0_board,
+                            Rt_camera_board_cache,
                             // in
                             sensor_snapshots_filtered,
                             Nsensor_snapshots_filtered,
@@ -1282,7 +1313,7 @@ fit_seed(// out
                             Nlidars,
                             Rt_lidar0_lidar,
                             Rt_lidar0_camera,
-                            Rt_camera_board_cache,
+                            models,
                             object_height_n,
                             object_width_n,
                             object_spacing))
