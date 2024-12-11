@@ -3439,6 +3439,8 @@ bool _clc_internal(// out
                                    Nplanes_max,
                                    ctx))
                 continue;
+            MSG("Sensor snapshot %d observed by sensor %d (lidar%d)",
+                isnapshot, ilidar, ilidar);
             Nsensors_observing++;
         }
 
@@ -3470,6 +3472,8 @@ bool _clc_internal(// out
                 sensor_snapshots_filtered[Nsensor_snapshots_filtered].chessboard_corners[icamera] = NULL;
                 continue;
             }
+            MSG("Sensor snapshot %d observed by sensor %d (camera%d)",
+                isnapshot, Nlidars+icamera, icamera);
             Nsensors_observing++;
         }
 
