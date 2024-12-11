@@ -2682,9 +2682,13 @@ _plot_geometry(FILE* fp,
             }
 
 
-            // reference board poses
-            if(Ncameras > 0)
+            // Reference board poses; plot only for those snapshots that have
+            // any camera observations
+            for(int icamera=0; icamera<Ncameras; icamera++)
             {
+                if(sensor_snapshot->chessboard_corners[icamera] == NULL)
+                    continue;
+
                 for(int i=0; i<object_height_n; i++)
                     for(int j=0; j<object_width_n; j++)
                     {
@@ -2699,6 +2703,8 @@ _plot_geometry(FILE* fp,
                     }
                 // break the line
                 fprintf(fp, "nan nan boards-ref nan\n");
+
+                break;
             }
         }
     }
