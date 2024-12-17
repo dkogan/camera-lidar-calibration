@@ -507,7 +507,7 @@ compute_board_poses(// out
         }
 
 #define PLOT(block, fmt, ...) {                                         \
-        char cmd[2048];                                                 \
+        char cmd[16384];                                                \
         FILE* fp;                                                       \
                                                                         \
         if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),              \
@@ -2398,16 +2398,68 @@ plot_residuals(const char* filename_base,
     const int imeas_regularization_0       = measurement_index_regularization(ctx);
     const int Nmeas_regularization         = num_measurements_regularization(ctx);
 
-#warning "plot the measurement boundaries"
-    // imeas_all = list(measurement_indices());
 
-    // measurement_boundaries =
-    //     [ x
-    //       for imeas,what in imeas_all
-    //       for x in
-    //       (f'arrow from {imeas}, graph 0 to {imeas}, graph 1 nohead',
-    //        f'label "{what}" at {imeas},graph 0 left front offset 0,character 2 boxed') ];
-    //_set  = measurement_boundaries +
+
+    char*  str_measurement_indices  = NULL;
+    size_t size_measurement_indices = 0;
+    FILE* fp_measurement_indices = open_memstream(&str_measurement_indices,
+                                                  &size_measurement_indices);
+
+    if(fp_measurement_indices == NULL)
+    {
+        MSG("Couldn't open_memstream() for the measurement indices");
+        return false;
+    }
+    const char* fmt_measurement_indices_lidar =
+        "--set 'arrow from %1$d, graph 0 to %1$d, graph 1 nohead' "
+        "--set 'label \"isnapshot=%2$d\\nilidar=%3$d\" at %1$d,graph 0 left front offset 0,character 2 boxed' ";
+    const char* fmt_measurement_indices_camera =
+        "--set 'arrow from %1$d, graph 0 to %1$d, graph 1 nohead' "
+        "--set 'label \"isnapshot=%2$d\\nicamera=%3$d\" at %1$d,graph 0 left front offset 0,character 2 boxed' ";
+    const char* fmt_measurement_indices_regularization =
+        "--set 'arrow from %1$d, graph 0 to %1$d, graph 1 nohead' "
+        "--set 'label \"regularization\" at %1$d,graph 0 left front offset 0,character 2 boxed' ";
+    int iMeasurement = 0;
+    for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
+    {
+        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+        for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
+        {
+            const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[ilidar];
+            if(points_and_plane_full->points == NULL)
+                continue;
+            fprintf(fp_measurement_indices,
+                    fmt_measurement_indices_lidar,
+                    iMeasurement, isnapshot, ilidar);
+            const clc_ipoint_set_t* set =
+                &points_and_plane_full->points_and_plane->ipoint_set;
+            iMeasurement += set->n;
+        }
+    }
+    for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
+    {
+        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+        for(int icamera=0;
+            icamera<(int)ctx->Ncameras;
+            icamera++)
+        {
+            const mrcal_point2_t* chessboard_corners =
+                sensor_snapshot->chessboard_corners[icamera];
+            if(chessboard_corners == NULL)
+                continue;
+            fprintf(fp_measurement_indices,
+                    fmt_measurement_indices_camera,
+                    iMeasurement, isnapshot, icamera);
+            iMeasurement +=
+                ctx->object_height_n *
+                ctx->object_width_n *
+                2;
+        }
+    }
+    fprintf(fp_measurement_indices,
+            fmt_measurement_indices_regularization,
+            iMeasurement);
+    fclose(fp_measurement_indices);
 
     PLOT_MAKE_FILENAME("%s.gp", filename_base);
     PLOT( ({ // All measurements plotted using the nominal SCALE_MEASUREMENT_M. The
@@ -2434,9 +2486,12 @@ plot_residuals(const char* filename_base,
         "--with points "
         "--set 'link y2 via y*%f inverse y*%f' "
         "--ylabel  'LIDAR fit residual (m)' "
-        "--y2label 'Camera fit residual (pixels)' ",
+        "--y2label 'Camera fit residual (pixels)' "
+        "%s",
         SCALE_MEASUREMENT_PX/SCALE_MEASUREMENT_M,
-        SCALE_MEASUREMENT_M/SCALE_MEASUREMENT_PX);
+        SCALE_MEASUREMENT_M/SCALE_MEASUREMENT_PX,
+        str_measurement_indices);
+    free(str_measurement_indices);
 
     PLOT_MAKE_FILENAME("%s-histogram-lidar.gp", filename_base);
     PLOT( ({ for(int i=0; i<Nmeas_lidar_observation_all; i++)
