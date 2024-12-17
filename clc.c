@@ -989,7 +989,7 @@ bool align_point_clouds(// out
         const double cos_err = mrcal_point3_inner(normals0_validation, normals0[i]);
 
 #warning unhardcode
-        const double cos_threshold = cos(5.*M_PI/180.);
+        const double cos_threshold = cos(7.*M_PI/180.);
         if(cos_err < cos_threshold)
         {
             MSG("Inconsistent seed rotation for isnapshot=%d: th=%.1f deg. Giving up",
