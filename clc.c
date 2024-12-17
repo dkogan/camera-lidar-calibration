@@ -2680,7 +2680,7 @@ _plot_geometry(FILE* fp,
 
             // Reference board poses; plot only for those snapshots that have
             // any camera observations
-            for(int icamera=0; icamera<Ncameras; icamera++)
+            for(int icamera=0; icamera<(int)Ncameras; icamera++)
             {
                 if(sensor_snapshot->chessboard_corners[icamera] == NULL)
                     continue;
