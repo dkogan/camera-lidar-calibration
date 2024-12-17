@@ -1812,6 +1812,20 @@ static void cost(const double*   b,
     {
         const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
 
+        bool any_lidar_data_here = false;
+        for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
+        {
+            const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[ilidar];
+            if(points_and_plane_full->points != NULL)
+            {
+                any_lidar_data_here = true;
+                break;
+            }
+        }
+        if(!any_lidar_data_here)
+            continue;
+
+
         double* rt_lidar0_board = &rt_lidar0_board_all[isnapshot*6];
 
         mrcal_point3_t z = {.z = 1.};
