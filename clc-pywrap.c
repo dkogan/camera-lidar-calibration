@@ -214,6 +214,7 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
 static bool ingest_camera_snapshot(// out
                                    clc_sensor_snapshot_unsorted_t* snapshot,
                                    int* Ncameras,
+                                   clc_is_bgr_mask_t* is_bgr_mask,
                                    // in
                                    const PyObject* py_snapshot)
 {
@@ -260,27 +261,55 @@ static bool ingest_camera_snapshot(// out
 
     for(int i=0; i<*Ncameras; i++)
     {
-        mrcal_image_uint8_t* image = &snapshot->images[i].uint8;
-
         PyArrayObject* py_image = (PyArrayObject*)PyTuple_GET_ITEM(py_images, i);
         if((PyObject*)py_image == Py_None)
         {
-            *image = (mrcal_image_uint8_t){};
+            // Zero out the image structure to indicate an error. The image data
+            // type doesn't matter here
+            snapshot->images[i].uint8 = (mrcal_image_uint8_t){};
             continue;
         }
 
-        if(! (PyArray_TYPE(py_image) == NPY_UINT8 &&
-              PyArray_NDIM(py_image) == 2 &&
-              PyArray_STRIDES(py_image)[1] == sizeof(uint8_t)) )
+        if(!(PyArray_TYPE(py_image) == NPY_UINT8 &&
+             PyArray_STRIDES(py_image)[PyArray_NDIM(py_image) - 1] == sizeof(uint8_t)))
         {
-            PyErr_SetString(PyExc_RuntimeError, "'py_image' must be an array of shape (width,height) containing 8-bit uint, each pixel stored densely");
+            PyErr_SetString(PyExc_RuntimeError, "'py_image' must be an array containing 8-bit uint, each pixel stored densely");
             return false;
         }
 
-        *image = (mrcal_image_uint8_t){.width  = PyArray_DIM (py_image,1),
-                                       .height = PyArray_DIM (py_image,0),
-                                       .stride = PyArray_DIM (py_image,1),
-                                       .data   = PyArray_DATA(py_image) };
+        if(PyArray_NDIM(py_image) == 2)
+        {
+            // mono8
+            (snapshot->images[i].uint8) =
+                (mrcal_image_uint8_t){.width  = PyArray_DIM   (py_image,1),
+                                      .height = PyArray_DIM   (py_image,0),
+                                      .stride = PyArray_STRIDE(py_image,0),
+                                      .data   = PyArray_DATA  (py_image) };
+
+        }
+        else if(PyArray_NDIM(py_image) == 3)
+        {
+            // bgr8
+            if(!(PyArray_STRIDES(py_image)[PyArray_NDIM(py_image) - 2] == sizeof(uint8_t)*3 &&
+                 PyArray_DIMS   (py_image)[PyArray_NDIM(py_image) - 1] == 3))
+            {
+                PyErr_SetString(PyExc_RuntimeError, "'py_image' looks like a color array, but those MUST have shape (H,W,3) with dense bgr tuples");
+                return false;
+            }
+
+            (snapshot->images[i].bgr) =
+                (mrcal_image_bgr_t){.width  = PyArray_DIM   (py_image,1),
+                                    .height = PyArray_DIM   (py_image,0),
+                                    .stride = PyArray_STRIDE(py_image,0),
+                                    .data   = PyArray_DATA  (py_image) };
+
+            *is_bgr_mask |= (1U << i);
+        }
+        else
+        {
+            PyErr_SetString(PyExc_RuntimeError, "The given 'py_image' is neither a known mono8 or bgr8 format: must have len(shape)==2 or 3");
+            return false;
+        }
     }
     return true;
 }
@@ -479,6 +508,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
         goto done;
     }
 
+    clc_is_bgr_mask_t is_bgr_mask = 0;
+
     {
         clc_sensor_snapshot_unsorted_t sensor_snapshots[Nsensor_snapshots];
 
@@ -502,7 +533,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
             if(!ingest_lidar_snapshot (snapshot, &Nlidars, &lidar_packet_stride,
                                        py_snapshot))
                 goto done;
-            if(!ingest_camera_snapshot(snapshot, &Ncameras,
+            if(!ingest_camera_snapshot(snapshot, &Ncameras, &is_bgr_mask,
                                        py_snapshot))
                 goto done;
         }
@@ -578,7 +609,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          object_height_n,
                          object_width_n,
                          object_spacing,
-                         (clc_is_bgr_mask_t)0,
+                         is_bgr_mask,
                          &ctx,
                          check_gradient__use_distance_to_plane,
                          check_gradient))

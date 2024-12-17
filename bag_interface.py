@@ -155,16 +155,25 @@ def messages(bag, topics):
                     data = data[data['ret'] == 0]
 
             elif re.search(r'\bsensor_msgs__msg__Image\b', str(type(msg))):
-                data = msg.data
+                data  = msg.data
                 shape = data.shape
-                if not ( len(shape) == 1 and \
-                         shape[0] == msg.width*msg.height and \
-                         data.dtype == np.uint8 and \
-                         msg.width == msg.step ):
-                    raise Exception("rosbags.usertypes.sensor_msgs__msg__Image data should contain a flattened, dense byte array")
 
-                data = data.reshape(msg.height,msg.width)
-
+                if msg.encoding == 'mono8':
+                    if not ( len(shape) == 1 and \
+                             shape[0] == msg.width*msg.height and \
+                             data.dtype == np.uint8 and \
+                             msg.width == msg.step ):
+                        raise Exception("rosbags.usertypes.sensor_msgs__msg__Image data should contain a flattened, dense byte array")
+                    data = data.reshape(msg.height,msg.width)
+                elif msg.encoding == 'bgr8':
+                    if not ( len(shape) == 1 and \
+                             shape[0] == msg.width*msg.height*3 and \
+                             data.dtype == np.uint8 and \
+                             msg.width*3 == msg.step ):
+                        raise Exception("rosbags.usertypes.sensor_msgs__msg__Image data should contain a flattened, dense byte array")
+                    data = data.reshape(msg.height,msg.width,3)
+                else:
+                    raise Exception(f"Unknown {msg.encoding=}")
             else:
                 raise Exception(f"Unknown message type {type(msg)=}")
 

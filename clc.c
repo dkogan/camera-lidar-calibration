@@ -1227,11 +1227,7 @@ fit_seed(// out
          // The dimensions of the chessboard grid being detected in the images
          const int object_height_n,
          const int object_width_n,
-         const double object_spacing,
-
-         // bits indicating whether a camera in
-         // sensor_snapshots.images[] is color or not
-         const clc_is_bgr_mask_t is_bgr_mask)
+         const double object_spacing)
 {
     const int Nsensors = Ncameras + Nlidars;
     uint16_t shared_observation_counts[pairwise_N(Nsensors)];
@@ -2792,10 +2788,6 @@ fit(// out
     const int object_width_n,
     const double object_spacing,
 
-    // bits indicating whether a camera in
-    // sensor_snapshots.images[] is color or not
-    const clc_is_bgr_mask_t is_bgr_mask,
-
     bool check_gradient__use_distance_to_plane,
     bool check_gradient )
 {
@@ -3487,6 +3479,8 @@ bool _clc_internal(// out
                 &chessboard_corners_pool[ (isnapshot*Ncameras +
                                            icamera) * object_width_n*object_height_n ];
 
+            // using uint8 type here; the image might be color. This is
+            // specified using the is_bgr_mask below
             const mrcal_image_uint8_t* image;
             if(     sensor_snapshot_unsorted  != NULL) image = &sensor_snapshot_unsorted ->images[icamera].uint8;
             else if(sensor_snapshot_sorted    != NULL) image = &sensor_snapshot_sorted   ->images[icamera].uint8;
@@ -3503,6 +3497,7 @@ bool _clc_internal(// out
             if(!chessboard_detection_mrgingham(sensor_snapshots_filtered[Nsensor_snapshots_filtered].chessboard_corners[icamera],
 
                                                image,
+                                               is_bgr_mask & (1U << icamera),
                                                object_height_n,
                                                object_width_n))
             {
@@ -3595,11 +3590,7 @@ bool _clc_internal(// out
                      models,
                      object_height_n,
                      object_width_n,
-                     object_spacing,
-
-                     // bits indicating whether a camera in
-                     // sensor_snapshots.images[] is color or not
-                     is_bgr_mask))
+                     object_spacing))
         {
             MSG("fit_seed() failed");
             goto done;
@@ -3650,10 +3641,6 @@ bool _clc_internal(// out
                 object_height_n,
                 object_width_n,
                 object_spacing,
-
-                // bits indicating whether a camera in
-                // sensor_snapshots.images[] is color or not
-                is_bgr_mask,
 
                 check_gradient__use_distance_to_plane,
                 check_gradient))

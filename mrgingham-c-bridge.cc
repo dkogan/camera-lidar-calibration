@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <mrgingham/mrgingham.hh>
 #include <assert.h>
+#include <opencv2/imgproc/imgproc.hpp>
 
 #include "util.h"
 #include "mrgingham-c-bridge.hh"
@@ -51,7 +52,8 @@ bool
 chessboard_detection_mrgingham(// out
                                mrcal_point2_t* chessboard_corners,
                                // in
-                               const mrcal_image_uint8_t* image,
+                               const mrcal_image_uint8_t* image, // might be color
+                               const bool is_image_bgr,
                                const int object_height_n,
                                const int object_width_n)
 {
@@ -73,8 +75,42 @@ chessboard_detection_mrgingham(// out
     std::vector<mrgingham::PointDouble> points_out;
 
     cv::Mat mat(image->rows, image->cols,
-                CV_8UC1,
+                is_image_bgr ? CV_8UC3 : CV_8UC1,
                 image->data, image->stride );
+
+    if(is_image_bgr)
+        cv::cvtColor(mat,mat, cv::COLOR_BGR2GRAY);
+
+
+    // cv::Ptr<cv::CLAHE> clahe;
+    // if(doclahe)
+    // {
+    //     clahe = cv::createCLAHE();
+    //     clahe->setClipLimit(8);
+    // }
+
+    // if( doclahe )
+    // {
+    //     // CLAHE doesn't by itself use the full dynamic range all the time,
+    //     // so I explicitly normalize the image and then CLAHE
+    //     cv::normalize(mat, mat, 0, 65535, cv::NORM_MINMAX);
+    //     clahe->apply(mat, mat);
+    // }
+    // if( blur_radius > 0 )
+    // {
+    //     cv::blur( mat, mat,
+    //               cv::Size(1 + 2*blur_radius,
+    //                        1 + 2*blur_radius));
+    // }
+
+
+
+
+
+
+
+
+
     if(0 > mrgingham::find_chessboard_from_image_array( points_out,
                                                         NULL,
                                                         object_width_n,
