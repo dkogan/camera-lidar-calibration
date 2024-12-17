@@ -3289,7 +3289,6 @@ bool lidar_segmentation(// out
                         // in
                         const clc_sensor_snapshot_unsorted_t* sensor_snapshot_unsorted,
                         const clc_sensor_snapshot_sorted_t* sensor_snapshot_sorted,
-                        const clc_sensor_snapshot_segmented_t* sensor_snapshot_segmented,
                         const int ilidar,
                         const int Nrings,
                         const unsigned int lidar_packet_stride,
@@ -3304,100 +3303,80 @@ bool lidar_segmentation(// out
         (sensor_snapshot_sorted != NULL) ?
         &sensor_snapshot_sorted->lidar_scans[ilidar] :
         NULL;
-    const clc_lidar_scan_segmented_t* scan_segmented =
-        (sensor_snapshot_segmented != NULL) ?
-        &sensor_snapshot_segmented->lidar_scans[ilidar] :
-        NULL;
 
     clc_point3f_t* points_here = NULL;
     unsigned int   _Npoints[Nrings];
     unsigned int*  Npoints = _Npoints;
 
-    if(scan_unsorted != NULL ||
-       scan_sorted   != NULL)
+    if(scan_unsorted != NULL)
     {
-
-        if(scan_unsorted != NULL)
-        {
-            if(scan_unsorted->Npoints == 0)
-                return false;
-
-            points_here = &points_pool[*points_pool_index];
-            *points_pool_index += scan_unsorted->Npoints;
-
-            uint32_t ipoint_unsorted_in_sorted_order[scan_unsorted->Npoints];
-            clc_lidar_sort(// out
-                           //
-                           // These buffers must be pre-allocated
-                           // length sum(Npoints). Sorted by ring and then by azimuth
-                           points_here,
-                           ipoint_unsorted_in_sorted_order,
-                           // length Nrings
-                           Npoints,
-
-                           // in
-                           Nrings,
-                           // The stride, in bytes, between each successive points or
-                           // rings value in clc_lidar_scan_unsorted_t
-                           lidar_packet_stride,
-                           scan_unsorted);
-        }
-        else
-        {
-            points_here = scan_sorted->points;
-            Npoints     = scan_sorted->Npoints;
-        }
-
-        clc_points_and_plane_t* points_and_plane_here =
-            &points_and_plane_pool[*points_and_plane_pool_index];
-        (*points_and_plane_pool_index)++;
-
-        int8_t Nplanes_found =
-            clc_lidar_segmentation_sorted(// out
-                                          points_and_plane_here,
-                                          // in
-                                          Nplanes_max,
-                                          &(clc_lidar_scan_sorted_t){.points  = points_here,
-                                                                     .Npoints = Npoints},
-                                          ctx);
-
-        // MSG("Sensor snapshot %d lidar %d found %d planes",
-        //     isnapshot, ilidar, Nplanes_found);
-
-        // If we didn't see a clear plane, I keep the previous
-        // ..._pool_bytes_used value, reusing this memory on the next round.
-        // If we see a clear plane, but filter this data out at a later
-        // point, I will not be reusing the memory; instead I'll carry it
-        // around until the whole thing is freed at the end of clc_unsorted()
-        if(Nplanes_found == 0)
-        {
-            // MSG("No planes found for isnapshot=%d ilidar=%d.",
-            //     isnapshot, ilidar);
+        if(scan_unsorted->Npoints == 0)
             return false;
-        }
-        if(Nplanes_found > 1)
-        {
-            // MSG("Too many planes found for isnapshot=%d ilidar=%d.",
-            //     isnapshot, ilidar);
-            return false;
-        }
 
-        // Keep this scan
-        *lidar_scan =
-            (points_and_plane_full_t){ .points           = points_here,
-                                       .points_and_plane = points_and_plane_here };
+        points_here = &points_pool[*points_pool_index];
+        *points_pool_index += scan_unsorted->Npoints;
+
+        uint32_t ipoint_unsorted_in_sorted_order[scan_unsorted->Npoints];
+        clc_lidar_sort(// out
+                       //
+                       // These buffers must be pre-allocated
+                       // length sum(Npoints). Sorted by ring and then by azimuth
+                       points_here,
+                       ipoint_unsorted_in_sorted_order,
+                       // length Nrings
+                       Npoints,
+
+                       // in
+                       Nrings,
+                       // The stride, in bytes, between each successive points or
+                       // rings value in clc_lidar_scan_unsorted_t
+                       lidar_packet_stride,
+                       scan_unsorted);
     }
     else
     {
-        // scan_segmented
-        if(scan_segmented->points_and_plane.ipoint_set.n == 0)
-            return false;
-
-        // Keep this scan
-        *lidar_scan =
-            (points_and_plane_full_t){ .points           = scan_segmented->points,
-                                       .points_and_plane = &scan_segmented->points_and_plane };
+        points_here = scan_sorted->points;
+        Npoints     = scan_sorted->Npoints;
     }
+
+    clc_points_and_plane_t* points_and_plane_here =
+        &points_and_plane_pool[*points_and_plane_pool_index];
+    (*points_and_plane_pool_index)++;
+
+    int8_t Nplanes_found =
+        clc_lidar_segmentation_sorted(// out
+                                      points_and_plane_here,
+                                      // in
+                                      Nplanes_max,
+                                      &(clc_lidar_scan_sorted_t){.points  = points_here,
+                                                                 .Npoints = Npoints},
+                                      ctx);
+
+    // MSG("Sensor snapshot %d lidar %d found %d planes",
+    //     isnapshot, ilidar, Nplanes_found);
+
+    // If we didn't see a clear plane, I keep the previous
+    // ..._pool_bytes_used value, reusing this memory on the next round.
+    // If we see a clear plane, but filter this data out at a later
+    // point, I will not be reusing the memory; instead I'll carry it
+    // around until the whole thing is freed at the end of clc_unsorted()
+    if(Nplanes_found == 0)
+    {
+        // MSG("No planes found for isnapshot=%d ilidar=%d.",
+        //     isnapshot, ilidar);
+        return false;
+    }
+    if(Nplanes_found > 1)
+    {
+        // MSG("Too many planes found for isnapshot=%d ilidar=%d.",
+        //     isnapshot, ilidar);
+        return false;
+    }
+
+    // Keep this scan
+    *lidar_scan =
+        (points_and_plane_full_t){ .points           = points_here,
+                                   .points_and_plane = points_and_plane_here };
     return true;
 }
 
@@ -3520,23 +3499,39 @@ bool _clc_internal(// out
             sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar] =
                 (points_and_plane_full_t){};
 
-            if(!lidar_segmentation(&sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar],
 
-                                   points_pool,
-                                   points_and_plane_pool,
-                                   &points_pool_index,
-                                   &points_and_plane_pool_index,
+            if(sensor_snapshot_segmented == NULL)
+            {
+                if(!lidar_segmentation(&sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar],
+
+                                       points_pool,
+                                       points_and_plane_pool,
+                                       &points_pool_index,
+                                       &points_and_plane_pool_index,
 
 
-                                   sensor_snapshot_unsorted,
-                                   sensor_snapshot_sorted,
-                                   sensor_snapshot_segmented,
-                                   ilidar,
-                                   Nrings,
-                                   lidar_packet_stride,
-                                   Nplanes_max,
-                                   ctx))
-                continue;
+                                       sensor_snapshot_unsorted,
+                                       sensor_snapshot_sorted,
+                                       ilidar,
+                                       Nrings,
+                                       lidar_packet_stride,
+                                       Nplanes_max,
+                                       ctx))
+                    continue;
+            }
+            else
+            {
+                const clc_lidar_scan_segmented_t* scan_segmented = &sensor_snapshot_segmented->lidar_scans[ilidar];
+                if(scan_segmented->points_and_plane.ipoint_set.n == 0)
+                    continue;
+
+                // Keep this scan
+                sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar] =
+                    (points_and_plane_full_t){ .points           = scan_segmented->points,
+                                               .points_and_plane = &scan_segmented->points_and_plane };
+            }
+
+
             MSG("Sensor snapshot %d observed by sensor %d (lidar%d)",
                 isnapshot, ilidar, ilidar);
             Nsensors_observing++;
