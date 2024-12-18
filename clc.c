@@ -3404,6 +3404,95 @@ bool lidar_segmentation(// out
     return true;
 }
 
+static bool make_reprojected_plots( const double* Rt_lidar0_lidar,
+                                    const double* Rt_lidar0_camera,
+                                    const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
+                                    const int                          Nsensor_snapshots_filtered,
+                                    const int                          Nlidars,
+                                    const int                          Ncameras,
+                                    const mrcal_cameramodel_t*const*   models, // Ncameras of these
+                                    const int                          object_height_n,
+                                    const int                          object_width_n )
+{
+    for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
+    {
+        const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
+
+        for(int ilidar=0; ilidar<Nlidars; ilidar++)
+        {
+            const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+            if(lidar_scan->points == NULL)
+                continue;
+
+            const double* Rt_lidar0_lidar_here =
+                ilidar > 0 ?
+                &Rt_lidar0_lidar[(ilidar-1)*4*3] :
+                NULL;
+
+            for(int icamera=0; icamera<Ncameras; icamera++)
+            {
+                const mrcal_point2_t* chessboard_corners = sensor_snapshot->chessboard_corners[icamera];
+                if(chessboard_corners == NULL)
+                    continue;
+
+                PLOT_MAKE_FILENAME("/tmp/reprojected-snapshot%d-camera%d-lidar%d.gp",
+                                   isnapshot, icamera, ilidar);
+                PLOT( {{
+                            const double* Rt_lidar0_camera_here =
+                                &Rt_lidar0_camera[icamera*4*3];
+
+                            double Rt_camera_lidar[4*3];
+                            if(Rt_lidar0_lidar_here != NULL)
+                                mrcal_compose_Rt_inverted0(Rt_camera_lidar,
+                                                           Rt_lidar0_camera_here,
+                                                           Rt_lidar0_lidar_here);
+                            else
+                                mrcal_invert_Rt(Rt_camera_lidar,
+                                                Rt_lidar0_camera_here);
+
+                            for(unsigned int iipoint=0; iipoint<lidar_scan->n; iipoint++)
+                            {
+                                mrcal_point3_t p;
+                                int ipoint = (lidar_scan->ipoint != NULL) ?
+                                    lidar_scan->ipoint[iipoint] :
+                                    iipoint;
+                                mrcal_point3_from_clc_point3f(&p,
+                                                              &lidar_scan->points[ipoint]);
+
+                                mrcal_transform_point_Rt(p.xyz, NULL,NULL,
+                                                         Rt_camera_lidar, p.xyz);
+
+                                mrcal_point2_t q;
+                                mrcal_project(&q, NULL,NULL,
+                                              &p, 1,
+                                              &models[icamera]->lensmodel, models[icamera]->intrinsics);
+
+                                fprintf(fp, "%f lidar %f\n",
+                                        q.x, q.y);
+                            }
+
+                            for(int i=0; i<object_height_n; i++)
+                                for(int j=0; j<object_width_n; j++)
+                                {
+                                    fprintf(fp, "%f camera %f\n",
+                                            chessboard_corners[i*object_width_n+j].x,
+                                            chessboard_corners[i*object_width_n+j].y);
+                                }
+                        }},
+
+                    "--domain --dataid "
+                    "--legend camera 'Chessboard corners from the image' "
+                    "--legend lidar  'Reprojected LIDAR points' "
+                    "--style  camera 'with linespoints' "
+                    "--style  lidar  'with points' "
+                    "--square --set 'yrange [:] reverse' "
+                    );
+            }
+        }
+    }
+    return true;
+}
+
 static
 bool _clc_internal(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
@@ -3793,44 +3882,50 @@ bool _clc_internal(// out
                       object_spacing,
                       true);
 
-/*
-        for(imodel in range(len(args.models)))
-        {
-            models[imodel].extrinsics_rt_fromref(solved_state['rt_camera_ref'][imodel]);
-            root,extension = os.path.splitext(args.models[imodel]);
-            filename = f"{root}-mounted{extension}";
-            models[imodel].write(filename);
-            print(f"Wrote '{filename}'");
-        }
 
-        for(iobservation in range(len(joint_observations)))
-        {
-            (q_observed, p_lidar) = joint_observations[iobservation]
-            for ilidar in range(Nlidars):
-                if p_lidar[ilidar] is None: continue
-                for icamera in range(Ncameras):
-                    if q_observed[icamera] is None: continue
+        for(unsigned int i=0; i<Ncameras; i++)
+            mrcal_rt_from_Rt(rt_ref_camera[i].r.xyz, NULL,
+                             &Rt_lidar0_camera[i*4*3]);
+        memset(rt_ref_lidar, 0, sizeof(*rt_ref_lidar)); // lidar0 has the reference transform
+        for(unsigned int i=0; i<Nlidars-1; i++)
+            mrcal_rt_from_Rt(rt_ref_lidar[i+1].r.xyz, NULL,
+                             &Rt_lidar0_lidar[i*4*3]);
 
-                    rt_camera_lidar = mrcal.compose_rt(solved_state['rt_camera_ref'][icamera],
-                                                       mrcal.invert_rt(solved_state['rt_lidar_ref'][ilidar]));
-                    p = mrcal.transform_point_rt(rt_camera_lidar, p_lidar[ilidar]);
-                    q_from_lidar = mrcal.project(p, *models[icamera].intrinsics());
+        /*
+          // write mounted models to a file. I cannot do that HERE because right
+          // now I do not have the original model filenames
 
-                    filename = f"/tmp/reprojected-observation{iobservation}-camera{icamera}-lidar{ilidar}.gp"
-                    gp.plot( (q_observed[icamera],
-                              dict(tuplesize = -2,
-                                   _with     = 'linespoints',
-                                   legend    = 'Chessboard corners from the image')),
-                             (q_from_lidar,
-                              dict(tuplesize = -2,
-                                   _with     = 'points',
-                                   legend    = 'Reprojected LIDAR points')),
-                             square  = True,
-                             yinv    = True,
-                             hardcopy = filename);
-                    print(f"Wrote '{filename}'");
-        }
+          for(int i=0; i<Ncameras; i++)
+          {
+              const int n = mrcal_lensmodel_num_params(&models[i]->lensmodel);
+              struct
+              {
+                  MRCAL_CAMERAMODEL_ELEMENTS_NO_INTRINSICS;
+                  double intrinsics[n];
+              } model_copy;
+              memcpy(&model_copy, models[i], sizeof(model_copy));
 
+              mrcal_invert_rt(model_copy.rt_cam_ref, NULL, NULL,
+                              rt_ref_camera[i].r.xyz);
+
+              root,extension = os.path.splitext(args.models[imodel]);
+              filename = f"{root}-mounted{extension}";
+              models[imodel].write(filename);
+              print(f"Wrote '{filename}'");
+          }
+        */
+
+        make_reprojected_plots( Rt_lidar0_lidar,
+                                Rt_lidar0_camera,
+                                sensor_snapshots_filtered,
+                                Nsensor_snapshots_filtered,
+                                Nlidars,
+                                Ncameras,
+                                models, // Ncameras of these
+                                object_height_n,
+                                object_width_n );
+
+        /*
         // Write the intra-multisense calibration
         multisense_units_lra = find_multisense_units_lra(args.camera_topic);
         write_multisense_calibration(multisense_units_lra);
@@ -3897,28 +3992,6 @@ bool _clc_internal(// out
         print("other poses:");
         print(str_lidar_poses_other);
 */
-
-        for(unsigned int i=0; i<Ncameras; i++)
-        {
-            mrcal_rt_from_Rt(rt_ref_camera[i].r.xyz, NULL,
-                             &Rt_lidar0_camera[i*4*3]);
-            rt_ref_camera[i].t = *(mrcal_point3_t*)&Rt_lidar0_camera[i*4*3 + 9];
-        }
-        memset(rt_ref_lidar, 0, sizeof(*rt_ref_lidar)); // lidar0 has the reference transform
-        for(unsigned int i=0; i<Nlidars-1; i++)
-        {
-            mrcal_rt_from_Rt(rt_ref_lidar[i+1].r.xyz, NULL,
-                             &Rt_lidar0_lidar[i*4*3]);
-            rt_ref_lidar[i+1].t = *(mrcal_point3_t*)&Rt_lidar0_lidar[i*4*3 + 9];
-        }
-
-        // for(unsigned int i=0; i<Nsensor_snapshots; i++)
-        // {
-        //     mrcal_rt_from_Rt(rt_ref_camera[i].r.xyz, NULL,
-        //                      &Rt_lidar0_camera[i*4*3]);
-        //     rt_ref_camera[i].t = *(mrcal_point3_t*)&Rt_lidar0_camera[i*4*3 + 9];
-        // }
-
     }
 
     result = true;
