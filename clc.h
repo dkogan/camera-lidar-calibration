@@ -29,16 +29,12 @@ typedef struct
 
 typedef struct
 {
+    unsigned int n;
     uint32_t ipoint[8192 - 7]; // -7 to make each clc_points_and_plane_t fit evenly
                                // into a round-sized chunk of memory
-    unsigned int n;
-} clc_ipoint_set_t;
-
-typedef struct
-{
-    clc_ipoint_set_t ipoint_set;
-    clc_plane_t      plane;
+    clc_plane_t plane;
 } clc_points_and_plane_t;
+
 // I can't find a single static assertion invocation that works in both C++ and
 // C. The below is ugly, but works
 #ifdef __cplusplus

@@ -272,26 +272,27 @@ void eig_real_symmetric_3x3( // out
 }
 
 static void pca_preprocess_from_ipoint_set( // out
-                                           double*    M,
-                                           clc_point3f_t* pmean,
-                                           float*     max_norm2_dp, // may be NULL
+                                           double*              M,
+                                           clc_point3f_t*       pmean,
+                                           float*               max_norm2_dp, // may be NULL
                                            // in
                                            const clc_point3f_t* points,
-                                           const clc_ipoint_set_t* ipoint_set)
+                                           unsigned int         n,
+                                           const uint32_t*      ipoint)
 {
     *pmean = (clc_point3f_t){};
-    for(unsigned int i=0; i<ipoint_set->n; i++)
+    for(unsigned int i=0; i<n; i++)
         for(int j=0; j<3; j++)
-            pmean->xyz[j] += points[ipoint_set->ipoint[i]].xyz[j];
+            pmean->xyz[j] += points[ipoint[i]].xyz[j];
     for(int j=0; j<3; j++)
-        pmean->xyz[j] /= (float)(ipoint_set->n);
+        pmean->xyz[j] /= (float)(n);
 
 
     if(max_norm2_dp != NULL) *max_norm2_dp = 0.0f;
 
-    for(unsigned int i=0; i<ipoint_set->n; i++)
+    for(unsigned int i=0; i<n; i++)
     {
-        const clc_point3f_t dp = sub(points[ipoint_set->ipoint[i]], *pmean);
+        const clc_point3f_t dp = sub(points[ipoint[i]], *pmean);
 
         const float norm2_dp = norm2(dp);
         if(max_norm2_dp != NULL &&
@@ -351,7 +352,8 @@ static void pca( // out
                 float*     eigenvalues_ascending, // 3 of these; may be NULL
                 // in
                 const clc_point3f_t* points,
-                const clc_ipoint_set_t* ipoint_set, // if NULL, we use [ipoint0,ipoint1]
+                unsigned int         n,
+                const uint32_t*      ipoint, // if NULL, we use [ipoint0,ipoint1]
                 const int ipoint0, const int ipoint1,
                 const bool normalize_v )
 {
@@ -390,14 +392,13 @@ static void pca( // out
     // packed storage; row-first
     // double-precision because this is potentially inaccurate
     double M[3+2+1] = {};
-    if(ipoint_set != NULL)
+    if(ipoint != NULL)
         pca_preprocess_from_ipoint_set( // out
                                        M,
                                        pmean,
                                        max_norm2_dp,
                                        // in
-                                       points,
-                                       ipoint_set);
+                                       points, n, ipoint);
     else
         pca_preprocess_from_ipoint0_ipoint1( // out
                                             M,
@@ -423,20 +424,21 @@ static void pca( // out
 }
 
 static void fit_plane_into_points__normalized( // out
-                                               clc_plane_t*            plane,
-                                               float*                  max_norm2_dp,
-                                               float*                  eigenvalues_ascending, // 3 of these
+                                               clc_plane_t*         plane,
+                                               float*               max_norm2_dp,
+                                               float*               eigenvalues_ascending, // 3 of these
                                                // in
-                                               const clc_point3f_t*    points,
-                                               const clc_ipoint_set_t* ipoint_set)
+                                               const clc_point3f_t* points,
+                                               unsigned int         n,
+                                               const uint32_t*      ipoint)
+
 {
     pca(&plane->p_mean,
         &plane->n,
         NULL,
         max_norm2_dp,
         eigenvalues_ascending,
-        points,
-        ipoint_set,
+        points, n, ipoint,
         -1,-1,
         true);
 }
@@ -446,16 +448,16 @@ static void fit_plane_into_points__unnormalized( // out
                                                  float*                max_norm2_dp,
                                                  float*                eigenvalues_ascending, // 3 of these
                                                  // in
-                                                 const clc_point3f_t*      points,
-                                                 const clc_ipoint_set_t*   ipoint_set)
+                                                 const clc_point3f_t*  points,
+                                                 unsigned int          n,
+                                                 const uint32_t*       ipoint)
 {
     pca(&plane_unnormalized->p,
         &plane_unnormalized->n_unnormalized,
         NULL,
         max_norm2_dp,
         eigenvalues_ascending,
-        points,
-        ipoint_set,
+        points, n, ipoint,
         -1,-1,
         false);
 }
@@ -736,7 +738,7 @@ void stage1_finish_segment(// out
         NULL,
         NULL,
         p,
-        NULL,
+        0, NULL,
         ipoint0, ipoint1,
         false);
 
@@ -996,19 +998,15 @@ static bool fit_plane_into_cluster(// out
     // Storing the left/right ends of the existing segments (cluster->n of them)
     // and the one candidate new segment
     const int Nsegments = cluster->n + (segment0 != NULL ? 1 : 0);
-    clc_ipoint_set_t ipoint_set = {.n = 2*Nsegments};
 
-    if( 2*Nsegments > (int)(sizeof(ipoint_set.ipoint)/sizeof(ipoint_set.ipoint[0])))
-    {
-        MSG("sizeof(clc_ipoint_set_t.ipoint) exceeded. plane_segment_compatible() is giving up and returning false. Bump up the size");
-        return false;
-    }
 
+    unsigned int n = 2*Nsegments;
+    uint32_t ipoint[n];
     int ipoint0 = 0;
     if(segment0 != NULL)
     {
-        ipoint_set.ipoint[0] = ipoint0_in_ring[iring0] + segment0->ipoint0;
-        ipoint_set.ipoint[1] = ipoint0_in_ring[iring0] + segment0->ipoint1;
+        ipoint[0] = ipoint0_in_ring[iring0] + segment0->ipoint0;
+        ipoint[1] = ipoint0_in_ring[iring0] + segment0->ipoint1;
         ipoint0 = 2;
     }
 
@@ -1019,8 +1017,8 @@ static bool fit_plane_into_cluster(// out
         const segment_t* segment =
             &segments[iring*Nsegments_per_rotation + isegment];
 
-        ipoint_set.ipoint[ipoint0 + 2*i + 0] = ipoint0_in_ring[iring] + segment->ipoint0;
-        ipoint_set.ipoint[ipoint0 + 2*i + 1] = ipoint0_in_ring[iring] + segment->ipoint1;
+        ipoint[ipoint0 + 2*i + 0] = ipoint0_in_ring[iring] + segment->ipoint0;
+        ipoint[ipoint0 + 2*i + 1] = ipoint0_in_ring[iring] + segment->ipoint1;
     }
 
 
@@ -1031,7 +1029,7 @@ static bool fit_plane_into_cluster(// out
                                          &max_norm2_dp,
                                          eigenvalues_ascending, // 3 of these
                                          // in
-                                         points, &ipoint_set);
+                                         points, n,ipoint);
     return true;
 }
 
@@ -1406,7 +1404,9 @@ static void stage2_cluster_segments(// out
 // Returns true if we processed this point (maybe by accumulating it) and we
 // should keep going. Returns false if we should stop the iteration
 static void stage3_accumulate_points(// out
-                                     clc_ipoint_set_t* ipoint_set,
+                                     unsigned int* n, // in,out
+                                     uint32_t* ipoints,
+                                     unsigned int max_num_ipoints,
                                      // in,out
                                      uint64_t* bitarray_visited, // indexed by IN-RING points
                                      // in
@@ -1468,12 +1468,12 @@ static void stage3_accumulate_points(// out
             // make it work in one pass, but that's very likely to produce high
             // floating point round-off errors. So I actually accumulate the full
             // points for now, and might do something more efficient later
-            if(ipoint_set->n == (int)(sizeof(ipoint_set->ipoint)/sizeof(ipoint_set->ipoint[0])))
+            if(*n == max_num_ipoints)
             {
-                MSG("ipoint_set->ipoint overflow. Skipping the reset of the points");
+                MSG("clc_points_and_plane_t->ipoint overflow. Skipping the rest of the points");
                 break;
             }
-            ipoint_set->ipoint[ipoint_set->n++] = ipoint0_in_ring + ipoint;
+            ipoints[(*n)++] = ipoint0_in_ring + ipoint;
 
             bitarray64_set(bitarray_visited, ipoint);
             th_rad_last = th_rad;
@@ -1490,7 +1490,8 @@ static void stage3_accumulate_points(// out
 
 static int
 stage3_cull_bloom_and_count_non_isolated(// out
-                                         clc_ipoint_set_t* ipoint_set,
+                                         unsigned int* n, // in,out
+                                         uint32_t* ipoints,
                                          // in
                                          const int ipoint_increment, const int ipoint_limit, // in-ring
                                          const clc_plane_t* plane,
@@ -1539,12 +1540,12 @@ stage3_cull_bloom_and_count_non_isolated(// out
 
 
 
-    const int ipoint_set_n_before_cull_bloom = ipoint_set->n;
+    const int ipoint_set_n_before_cull_bloom = *n;
 
 
     float err_previous =
         plane_point_error_stage3_normalized(plane,
-                                            &points[ ipoint_set->ipoint[ipoint_set->n-1] ]);
+                                            &points[ ipoints[*n - 1] ]);
     if(fabsf(err_previous) < threshold_bloom)
     {
         // The edge point is very near the plane. There's no blooming I can
@@ -1555,13 +1556,13 @@ stage3_cull_bloom_and_count_non_isolated(// out
         bool err_positive_first = err_previous > 0.0f;
 
 
-        for( int i = ipoint_set->n-2;
+        for( int i = *n - 2;
              i >= ipoint_set_start_this_ring;
              i-- )
         {
             const float err =
                 plane_point_error_stage3_normalized(plane,
-                                                    &points[ ipoint_set->ipoint[i] ]);
+                                                    &points[ ipoints[i] ]);
 
             // I stop the cull when the error turns around at the other side of 0
             bool err_positive_now        = err > 0.0f;
@@ -1574,15 +1575,15 @@ stage3_cull_bloom_and_count_non_isolated(// out
                 // We're at the first "good" point. Cull everything else
                 const int ipoint_set_n_new = i+1;
                 if(final_iteration && ctx->dump)
-                    for(unsigned int j=ipoint_set_n_new; j<ipoint_set->n; j++)
+                    for(unsigned int j=ipoint_set_n_new; j < *n; j++)
                         printf("%f %f stage3-culled-bloom %f\n",
-                               points[ ipoint_set->ipoint[j] ].x,
-                               points[ ipoint_set->ipoint[j] ].y,
-                               points[ ipoint_set->ipoint[j] ].z);
+                               points[ ipoints[j] ].x,
+                               points[ ipoints[j] ].y,
+                               points[ ipoints[j] ].z);
 
 
 
-                ipoint_set->n = ipoint_set_n_new;
+                *n = ipoint_set_n_new;
                 break;
             }
 
@@ -1616,7 +1617,7 @@ stage3_cull_bloom_and_count_non_isolated(// out
     // I'm not looking at a valid board, and I reject the whole thing
 
     // last accepted point
-    const int ipoint0 = ipoint_set->ipoint[ipoint_set_n_before_cull_bloom-1] - ipoint0_in_ring;
+    const int ipoint0 = ipoints[ipoint_set_n_before_cull_bloom-1] - ipoint0_in_ring;
     float th0_rad = th_from_point(&points[ipoint0_in_ring + ipoint0]);
 
     float th0_deadzone_start_rad;
@@ -1800,7 +1801,6 @@ static bool stage3_refine_clusters(// out
     // already.
     clc_plane_t plane_out = segment_cluster->plane;
 
-    clc_ipoint_set_t* ipoint_set = &points_and_plane->ipoint_set;
 
     const bool debug =
         ctx->debug_xmin < segment_cluster->plane.p_mean.x && segment_cluster->plane.p_mean.x < ctx->debug_xmax &&
@@ -1815,7 +1815,7 @@ static bool stage3_refine_clusters(// out
     {
         const bool final_iteration = (iteration == Niterations-1);
 
-        ipoint_set->n = 0;
+        points_and_plane->n = 0;
         int ipoint_set_n_prev = 0;
 
         for(int i=0; i<Nrings_considered; i++)
@@ -1864,9 +1864,11 @@ static bool stage3_refine_clusters(// out
             unsigned int ipoint_set_start_this_ring;
 
 
-            ipoint_set_start_this_ring = ipoint_set->n;
+            ipoint_set_start_this_ring = points_and_plane->n;
             stage3_accumulate_points(// out
-                                     ipoint_set,
+                                     &points_and_plane->n,
+                                     points_and_plane->ipoint,
+                                     (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
                                      bitarray_visited[iring-iring0],
                                      // in
                                      ipoint0, +1, Npoints[iring],
@@ -1876,14 +1878,14 @@ static bool stage3_refine_clusters(// out
                                      segment->ipoint1,
                                      ctx);
 
-            if(enable_bloom_culling && ipoint_set->n > ipoint_set_start_this_ring)
+            if(enable_bloom_culling && points_and_plane->n > ipoint_set_start_this_ring)
             {
                 // some points were added
 
                 // I cull the bloom points at the edges. This will need to
                 // un-accumulate some points. stage3_accumulate_points() does:
                 //
-                //   ipoint_set->ipoint[ipoint_set->n++] = ipoint0_in_ring + ipoint;
+                //   points_and_plane->ipoint[points_and_plane->n++] = ipoint0_in_ring + ipoint;
                 //   bitarray64_set(bitarray_visited, ipoint);
                 //
                 // I can easily update the ipoint_set: I pull some points off the
@@ -1896,7 +1898,8 @@ static bool stage3_refine_clusters(// out
                 // This will be non-zero ONLY if final_iteration
                 int Npoints_non_isolated_here =
                     stage3_cull_bloom_and_count_non_isolated(// out
-                                                             ipoint_set,
+                                                             &points_and_plane->n,
+                                                             points_and_plane->ipoint,
                                                              // in
                                                              +1, Npoints[iring],
                                                              &plane_out,
@@ -1914,9 +1917,11 @@ static bool stage3_refine_clusters(// out
             }
 
 
-            ipoint_set_start_this_ring = ipoint_set->n;
+            ipoint_set_start_this_ring = points_and_plane->n;
             stage3_accumulate_points(// out
-                                     ipoint_set,
+                                     &points_and_plane->n,
+                                     points_and_plane->ipoint,
+                                     (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
                                      bitarray_visited[iring-iring0],
                                      // in
                                      ipoint0-1, -1, -1,
@@ -1925,12 +1930,13 @@ static bool stage3_refine_clusters(// out
                                      ipoint0_in_ring[iring],
                                      segment->ipoint0,
                                      ctx);
-            if(enable_bloom_culling && ipoint_set->n > ipoint_set_start_this_ring)
+            if(enable_bloom_culling && points_and_plane->n > ipoint_set_start_this_ring)
             {
                 // This will be non-zero ONLY if final_iteration
                 int Npoints_non_isolated_here =
                     stage3_cull_bloom_and_count_non_isolated(// out
-                                                             ipoint_set,
+                                                             &points_and_plane->n,
+                                                             points_and_plane->ipoint,
                                                              // in
                                                              -1, -1,
                                                              &plane_out,
@@ -1955,12 +1961,12 @@ static bool stage3_refine_clusters(// out
                 MSG("%d-%d at icluster=%d: refinement gathered %d points",
                     iring, isegment,
                     icluster,
-                    ipoint_set->n - ipoint_set_n_prev);
-                ipoint_set_n_prev = ipoint_set->n;
+                    points_and_plane->n - ipoint_set_n_prev);
+                ipoint_set_n_prev = points_and_plane->n;
             }
         }
 
-        if(DEBUG_ON_TRUE_POINT(ipoint_set->n == 0,
+        if(DEBUG_ON_TRUE_POINT(points_and_plane->n == 0,
                                 &segment_cluster->plane.p_mean,
                                "All points thrown out during refinement"))
             return false;
@@ -1969,8 +1975,7 @@ static bool stage3_refine_clusters(// out
         fit_plane_into_points__normalized(&plane_out,
                                           max_norm2_dp,
                                           eigenvalues_ascending,
-                                          points,
-                                          ipoint_set);
+                                          points, points_and_plane->n, points_and_plane->ipoint);
     }
 
     points_and_plane->plane = plane_out;
@@ -2131,7 +2136,7 @@ int8_t clc_lidar_segmentation_sorted(// out
                                    scan->points, ipoint0_in_ring, scan->Npoints,
                                    ctx);
 
-        const int Npoints_in_plane = points_and_plane[iplane_out].ipoint_set.n;
+        const int Npoints_in_plane = points_and_plane[iplane_out].n;
 
         const bool debug =
             ctx->debug_xmin < points_and_plane[iplane_out].plane.p_mean.x && points_and_plane[iplane_out].plane.p_mean.x < ctx->debug_xmax &&
@@ -2171,13 +2176,13 @@ int8_t clc_lidar_segmentation_sorted(// out
 
         // We're past all the filters. I accept this plane
         if(ctx->dump)
-            for(unsigned int i=0; i<points_and_plane[iplane_out].ipoint_set.n; i++)
+            for(unsigned int i=0; i<points_and_plane[iplane_out].n; i++)
                 printf("%f %f stage3-refined-points-%d%s %f\n",
-                       scan->points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].x,
-                       scan->points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].y,
+                       scan->points[points_and_plane[iplane_out].ipoint[i]].x,
+                       scan->points[points_and_plane[iplane_out].ipoint[i]].y,
                        icluster,
                        annotation,
-                       scan->points[points_and_plane[iplane_out].ipoint_set.ipoint[i]].z);
+                       scan->points[points_and_plane[iplane_out].ipoint[i]].z);
 
         if(rejected)
             continue;
@@ -2234,9 +2239,9 @@ int8_t clc_lidar_segmentation_unsorted(// out
 
     // Update ipoints to point to the unsorted points
     for(int i=0; i<Nplanes; i++)
-        for(unsigned int j=0; j<points_and_plane[i].ipoint_set.n; j++)
-            points_and_plane[i].ipoint_set.ipoint[j] =
-                ipoint_unsorted_in_sorted_order[ points_and_plane[i].ipoint_set.ipoint[j] ];
+        for(unsigned int j=0; j<points_and_plane[i].n; j++)
+            points_and_plane[i].ipoint[j] =
+                ipoint_unsorted_in_sorted_order[ points_and_plane[i].ipoint[j] ];
 
     return Nplanes;
 }

@@ -171,11 +171,11 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
     // Success. Allocate the output and copy
     for(int i=0; i<Nplanes; i++)
     {
-        ipoint[i] = (PyArrayObject*)PyArray_SimpleNew(1, ((npy_intp[]){points_and_plane[i].ipoint_set.n}), NPY_UINT32);
+        ipoint[i] = (PyArrayObject*)PyArray_SimpleNew(1, ((npy_intp[]){points_and_plane[i].n}), NPY_UINT32);
         if(ipoint[i] == NULL)
             goto done;
 
-        memcpy(PyArray_DATA(ipoint[i]), points_and_plane[i].ipoint_set.ipoint, sizeof(points_and_plane[i].ipoint_set.ipoint[0])*points_and_plane[i].ipoint_set.n);
+        memcpy(PyArray_DATA(ipoint[i]), points_and_plane[i].ipoint, sizeof(points_and_plane[i].ipoint[0])*points_and_plane[i].n);
     }
 
     plane_pn = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Nplanes,6}), NPY_FLOAT32);
