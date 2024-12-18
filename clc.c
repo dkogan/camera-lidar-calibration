@@ -3376,9 +3376,6 @@ bool lidar_segmentation(// out
                                                                  .Npoints = Npoints},
                                       ctx);
 
-    // MSG("Sensor snapshot %d lidar %d found %d planes",
-    //     isnapshot, ilidar, Nplanes_found);
-
     // If we didn't see a clear plane, I keep the previous
     // ..._pool_bytes_used value, reusing this memory on the next round.
     // If we see a clear plane, but filter this data out at a later
