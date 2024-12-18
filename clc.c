@@ -3891,30 +3891,6 @@ bool _clc_internal(// out
             mrcal_rt_from_Rt(rt_ref_lidar[i+1].r.xyz, NULL,
                              &Rt_lidar0_lidar[i*4*3]);
 
-        /*
-          // write mounted models to a file. I cannot do that HERE because right
-          // now I do not have the original model filenames
-
-          for(int i=0; i<Ncameras; i++)
-          {
-              const int n = mrcal_lensmodel_num_params(&models[i]->lensmodel);
-              struct
-              {
-                  MRCAL_CAMERAMODEL_ELEMENTS_NO_INTRINSICS;
-                  double intrinsics[n];
-              } model_copy;
-              memcpy(&model_copy, models[i], sizeof(model_copy));
-
-              mrcal_invert_rt(model_copy.rt_cam_ref, NULL, NULL,
-                              rt_ref_camera[i].r.xyz);
-
-              root,extension = os.path.splitext(args.models[imodel]);
-              filename = f"{root}-mounted{extension}";
-              models[imodel].write(filename);
-              print(f"Wrote '{filename}'");
-          }
-        */
-
         make_reprojected_plots( Rt_lidar0_lidar,
                                 Rt_lidar0_camera,
                                 sensor_snapshots_filtered,
@@ -3925,73 +3901,6 @@ bool _clc_internal(// out
                                 object_height_n,
                                 object_width_n );
 
-        /*
-        // Write the intra-multisense calibration
-        multisense_units_lra = find_multisense_units_lra(args.camera_topic);
-        write_multisense_calibration(multisense_units_lra);
-*/
-/*
-
-
-        print("The poses follow. The reference is defined to sit at lidar0\n");
-        print("To visualize an aligned bag, run:\n\n./show-aligned-lidar-pointclouds.py \\");
-
-        if(Ncameras > 0)
-        {
-            // Write the inter-multisense extrinsics
-            multisense_topics          = []
-            str_multisense_poses       = ''
-            str_multisense_poses_other = ''
-            for unit in multisense_units_lra.keys():
-                lra = multisense_units_lra[unit]
-                l = lra[0]
-                if l < 0:
-                    continue
-
-                topic = args.camera_topic[l]
-                multisense_topics.append(topic);
-
-                rt_multisenseleft_lidar0 = models[l].extrinsics_rt_fromref();
-                str_multisense_poses +=
-                    f"  --rt-multisenseleft-ref \" {','.join(list(str(x) for x in rt_multisenseleft_lidar0))}\" \\\n"
-
-                rpy = rpy_from_r(rt_multisenseleft_lidar0[:3]);
-                xyz = rt_multisenseleft_lidar0[3:]
-                str_multisense_poses_other +=
-                    f"  {rpy=} {xyz=}\n"
-            print(f"  --multisense-topic {','.join(multisense_topics)} \\");
-            print(str_multisense_poses);
-            print("other poses:");
-            print(str_multisense_poses_other);
-            print('\n');
-        }
-
-        // Write the inter-multisense lidar
-        lidar_topic          = [];
-        str_lidar_poses       = '';
-        str_lidar_poses_other = '';
-        for(ilidar in range(Nlidars))
-        {
-            topic = args.lidar_topic[ilidar];
-            lidar_topic.append(topic);
-
-            rt_lidar_lidar0 = solved_state['rt_lidar_ref'][ilidar];
-            str_lidar_poses +=
-                f"  --rt-lidar-ref \" {','.join(list(str(x) for x in rt_lidar_lidar0))}\" \\\n";
-
-            rpy = rpy_from_r(rt_lidar_lidar0[:3]);
-            xyz = rt_lidar_lidar0[3:];
-            str_lidar_poses_other += f"  {rpy=} {xyz=}\n";
-        }
-
-        print(f"  --lidar-topic {','.join(lidar_topic)} \\");
-        print(str_lidar_poses, end='');
-        print('  ' + args.bag[0]);
-        print('\nOr pass in any of the other bags\n');
-
-        print("other poses:");
-        print(str_lidar_poses_other);
-*/
     }
 
     result = true;
