@@ -15,11 +15,14 @@
 
 typedef struct
 {
-    // The points_and_plane contains indices into the points[] array here
+    clc_point3f_t* points;
 
-    // pointers to the pools declared above
-    clc_point3f_t*                points;
-    const clc_points_and_plane_t* points_and_plane;
+    unsigned int   n;
+    // If non-NULL, indices into points[]. Otherwise the points[] are used
+    // densely
+    const uint32_t*ipoint;
+
+    clc_plane_t    plane;
 } points_and_plane_full_t;
 
 typedef struct
@@ -435,9 +438,9 @@ compute_board_poses(// out
         // LIDAR will do
         mrcal_point3_t n,plidar_mean;
         mrcal_point3_from_clc_point3f(&n,
-                                      &sensor_snapshot->lidar_scans[ilidar_first].points_and_plane->plane.n);
+                                      &sensor_snapshot->lidar_scans[ilidar_first].plane.n);
         mrcal_point3_from_clc_point3f(&plidar_mean,
-                                      &sensor_snapshot->lidar_scans[ilidar_first].points_and_plane->plane.p_mean);
+                                      &sensor_snapshot->lidar_scans[ilidar_first].plane.p_mean);
 
         // I have the normal to the board, in lidar coordinates. Compute an
         // arbitrary rotation that matches this normal. This is unique only
@@ -669,8 +672,8 @@ bool boardcenter_normal__sensor(// out
         if(lidar_scan->points == NULL)
             return false;
 
-        mrcal_point3_from_clc_point3f(pboardcenter_sensor, &lidar_scan->points_and_plane->plane.p_mean);
-        mrcal_point3_from_clc_point3f(boardnormal_sensor, &lidar_scan->points_and_plane->plane.n);
+        mrcal_point3_from_clc_point3f(pboardcenter_sensor, &lidar_scan->plane.p_mean);
+        mrcal_point3_from_clc_point3f(boardnormal_sensor, &lidar_scan->plane.n);
     }
     else
     {
@@ -731,9 +734,9 @@ bool print_sensor_points(// out
         if(lidar_scan->points == NULL)
             return false;
 
-        for(int i=0; i<(int)lidar_scan->points_and_plane->n; i++)
+        for(int i=0; i<(int)lidar_scan->n; i++)
         {
-            const clc_point3f_t* p = &lidar_scan->points[ lidar_scan->points_and_plane->ipoint[i] ];
+            const clc_point3f_t* p = &lidar_scan->points[ lidar_scan->ipoint[i] ];
             fprintf(fp,
                     "%f %f %s %f\n",
                     p->x, p->y, id, p->z);
@@ -975,7 +978,7 @@ bool align_point_clouds(// out
             else if(isensor1 < Nlidars) ilidar = isensor1;
             else assert(0);
 
-            int i0 = sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].points_and_plane->ipoint[0];
+            int i0 = sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].ipoint[0];
             const clc_point3f_t* p = &sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].points[i0];
             MSG("p0 = %f %f %f", p->x, p->y, p->z);
         }
@@ -1361,9 +1364,9 @@ fit_seed(// out
             mrcal_point3_t p0_lidar0_observed;
 
             mrcal_point3_from_clc_point3f(&n_lidar0_observed,
-                                          &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.n);
+                                          &sensor_snapshot->lidar_scans[ilidar].plane.n);
             mrcal_point3_from_clc_point3f(&p0_lidar0_observed,
-                                          &sensor_snapshot->lidar_scans[ilidar].points_and_plane->plane.p_mean);
+                                          &sensor_snapshot->lidar_scans[ilidar].plane.p_mean);
             if(ilidar != 0)
             {
                 mrcal_rotate_point_R(n_lidar0_observed.xyz, NULL, NULL,
@@ -1527,7 +1530,7 @@ static int measurement_index_lidar(const unsigned int _isnapshot,
             if(points_and_plane_full->points == NULL)
                 continue;
 
-            imeas += points_and_plane_full->points_and_plane->n;
+            imeas += points_and_plane_full->n;
         }
     }
     return -1;
@@ -1547,7 +1550,7 @@ static int num_measurements_lidars(const callback_context_t* ctx)
             if(points_and_plane_full->points == NULL)
                 continue;
 
-            Nmeasurements += points_and_plane_full->points_and_plane->n;
+            Nmeasurements += points_and_plane_full->n;
         }
     }
     return Nmeasurements;
@@ -1636,8 +1639,8 @@ static int num_j_nonzero(const callback_context_t* ctx)
             if(points_and_plane_full->points == NULL)
                 continue;
 
-            if(ilidar == 0) nnz +=   6*points_and_plane_full->points_and_plane->n;
-            else            nnz += 2*6*points_and_plane_full->points_and_plane->n;
+            if(ilidar == 0) nnz +=   6*points_and_plane_full->n;
+            else            nnz += 2*6*points_and_plane_full->n;
         }
     }
 
@@ -1878,10 +1881,10 @@ static void cost(const double*   b,
                 {
                     // this is lidar0; it sits at the reference, and doesn't
                     // have an explicit pose or a rt_lidar0_lidar gradient
-                    for(unsigned int iipoint=0; iipoint<points_and_plane_full->points_and_plane->n; iipoint++)
+                    for(unsigned int iipoint=0; iipoint<points_and_plane_full->n; iipoint++)
                     {
                         mrcal_point3_t p;
-                        int ipoint = points_and_plane_full->points_and_plane->ipoint[iipoint];
+                        int ipoint = points_and_plane_full->ipoint[iipoint];
                         mrcal_point3_from_clc_point3f(&p,
                                                       &points_and_plane_full->points[ipoint]);
 
@@ -1917,10 +1920,10 @@ static void cost(const double*   b,
                 {
                     double* rt_lidar0_lidar = &rt_lidar0_lidar_all[6*(ilidar-1)];
 
-                    for(unsigned int iipoint=0; iipoint<points_and_plane_full->points_and_plane->n; iipoint++)
+                    for(unsigned int iipoint=0; iipoint<points_and_plane_full->n; iipoint++)
                     {
                         mrcal_point3_t p;
-                        int ipoint = points_and_plane_full->points_and_plane->ipoint[iipoint];
+                        int ipoint = points_and_plane_full->ipoint[iipoint];
                         mrcal_point3_from_clc_point3f(&p,
                                                       &points_and_plane_full->points[ipoint]);
 
@@ -2032,10 +2035,10 @@ static void cost(const double*   b,
                 {
                     // this is lidar0; it sits at the reference, and doesn't
                     // have an explicit pose or a rt_lidar0_lidar gradient
-                    for(unsigned int iipoint=0; iipoint<points_and_plane_full->points_and_plane->n; iipoint++)
+                    for(unsigned int iipoint=0; iipoint<points_and_plane_full->n; iipoint++)
                     {
                         mrcal_point3_t p;
-                        int ipoint = points_and_plane_full->points_and_plane->ipoint[iipoint];
+                        int ipoint = points_and_plane_full->ipoint[iipoint];
                         mrcal_point3_from_clc_point3f(&p,
                                                       &points_and_plane_full->points[ipoint]);
 
@@ -2103,10 +2106,10 @@ static void cost(const double*   b,
                 {
                     double* rt_lidar0_lidar = &rt_lidar0_lidar_all[6*(ilidar-1)];
 
-                    for(unsigned int iipoint=0; iipoint<points_and_plane_full->points_and_plane->n; iipoint++)
+                    for(unsigned int iipoint=0; iipoint<points_and_plane_full->n; iipoint++)
                     {
                         mrcal_point3_t p;
-                        int ipoint = points_and_plane_full->points_and_plane->ipoint[iipoint];
+                        int ipoint = points_and_plane_full->ipoint[iipoint];
                         mrcal_point3_from_clc_point3f(&p,
                                                       &points_and_plane_full->points[ipoint]);
 
@@ -2434,7 +2437,7 @@ plot_residuals(const char* filename_base,
             fprintf(fp_measurement_indices,
                     fmt_measurement_indices_lidar,
                     iMeasurement, isnapshot, ilidar);
-            iMeasurement += points_and_plane_full->points_and_plane->n;
+            iMeasurement += points_and_plane_full->n;
         }
     }
     for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
@@ -2714,10 +2717,10 @@ _plot_geometry(FILE* fp,
                 if(ilidar > 0)
                     Rt_ref_sensor = &Rt_lidar0_lidar[4*3*(ilidar-1)];
 
-                for(unsigned int iipoint=0; iipoint<points_and_plane_full->points_and_plane->n; iipoint++)
+                for(unsigned int iipoint=0; iipoint<points_and_plane_full->n; iipoint++)
                 {
                     mrcal_point3_t p;
-                    int ipoint = points_and_plane_full->points_and_plane->ipoint[iipoint];
+                    int ipoint = points_and_plane_full->ipoint[iipoint];
                     mrcal_point3_from_clc_point3f(&p,
                                                   &points_and_plane_full->points[ipoint]);
 
@@ -3359,8 +3362,11 @@ bool lidar_segmentation(// out
 
     // Keep this scan
     *lidar_scan =
-        (points_and_plane_full_t){ .points           = points_here,
-                                   .points_and_plane = points_and_plane_here };
+        (points_and_plane_full_t){ .points = points_here,
+                                   .n      = points_and_plane_here->n,
+                                   .ipoint = points_and_plane_here->ipoint,
+                                   .plane  = points_and_plane_here->plane};
+
     return true;
 }
 
@@ -3509,10 +3515,11 @@ bool _clc_internal(// out
                 if(scan_segmented->points_and_plane.n == 0)
                     continue;
 
-                // Keep this scan
                 sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar] =
-                    (points_and_plane_full_t){ .points           = scan_segmented->points,
-                                               .points_and_plane = &scan_segmented->points_and_plane };
+                    (points_and_plane_full_t){ .points = scan_segmented->points,
+                                               .n      = scan_segmented->points_and_plane.n,
+                                               .ipoint = scan_segmented->points_and_plane.ipoint,
+                                               .plane  = scan_segmented->points_and_plane.plane};
             }
 
 
