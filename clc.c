@@ -1525,12 +1525,12 @@ static int measurement_index_lidar(const unsigned int _isnapshot,
             if(_isnapshot == isnapshot && _ilidar == ilidar)
                 return imeas;
 
-            const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[ilidar];
+            const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
 
-            if(points_and_plane_full->points == NULL)
+            if(lidar_scan->points == NULL)
                 continue;
 
-            imeas += points_and_plane_full->n;
+            imeas += lidar_scan->n;
         }
     }
     return -1;
@@ -1545,12 +1545,12 @@ static int num_measurements_lidars(const callback_context_t* ctx)
         const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
         for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
         {
-            const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[ilidar];
+            const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
 
-            if(points_and_plane_full->points == NULL)
+            if(lidar_scan->points == NULL)
                 continue;
 
-            Nmeasurements += points_and_plane_full->n;
+            Nmeasurements += lidar_scan->n;
         }
     }
     return Nmeasurements;
@@ -1634,13 +1634,13 @@ static int num_j_nonzero(const callback_context_t* ctx)
 
         for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
         {
-            const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[ilidar];
+            const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
 
-            if(points_and_plane_full->points == NULL)
+            if(lidar_scan->points == NULL)
                 continue;
 
-            if(ilidar == 0) nnz +=   6*points_and_plane_full->n;
-            else            nnz += 2*6*points_and_plane_full->n;
+            if(ilidar == 0) nnz +=   6*lidar_scan->n;
+            else            nnz += 2*6*lidar_scan->n;
         }
     }
 
@@ -1811,8 +1811,8 @@ static void cost(const double*   b,
         bool any_lidar_data_here = false;
         for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
         {
-            const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[ilidar];
-            if(points_and_plane_full->points != NULL)
+            const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+            if(lidar_scan->points != NULL)
             {
                 any_lidar_data_here = true;
                 break;
@@ -1868,9 +1868,9 @@ static void cost(const double*   b,
             //       = inner(nlidar0, t_lidar0_board - v)
             for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
             {
-                const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[ilidar];
+                const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
 
-                if(points_and_plane_full->points == NULL)
+                if(lidar_scan->points == NULL)
                     continue;
 
                 if(ctx->report_imeas)
@@ -1881,12 +1881,12 @@ static void cost(const double*   b,
                 {
                     // this is lidar0; it sits at the reference, and doesn't
                     // have an explicit pose or a rt_lidar0_lidar gradient
-                    for(unsigned int iipoint=0; iipoint<points_and_plane_full->n; iipoint++)
+                    for(unsigned int iipoint=0; iipoint<lidar_scan->n; iipoint++)
                     {
                         mrcal_point3_t p;
-                        int ipoint = points_and_plane_full->ipoint[iipoint];
+                        int ipoint = lidar_scan->ipoint[iipoint];
                         mrcal_point3_from_clc_point3f(&p,
-                                                      &points_and_plane_full->points[ipoint]);
+                                                      &lidar_scan->points[ipoint]);
 
 
                         #warning "mrcal_transform_point_rt() for the same rt in a loop will be faster if I compute Rt first"
@@ -1920,12 +1920,12 @@ static void cost(const double*   b,
                 {
                     double* rt_lidar0_lidar = &rt_lidar0_lidar_all[6*(ilidar-1)];
 
-                    for(unsigned int iipoint=0; iipoint<points_and_plane_full->n; iipoint++)
+                    for(unsigned int iipoint=0; iipoint<lidar_scan->n; iipoint++)
                     {
                         mrcal_point3_t p;
-                        int ipoint = points_and_plane_full->ipoint[iipoint];
+                        int ipoint = lidar_scan->ipoint[iipoint];
                         mrcal_point3_from_clc_point3f(&p,
-                                                      &points_and_plane_full->points[ipoint]);
+                                                      &lidar_scan->points[ipoint]);
 
 
                         #warning "mrcal_transform_point_rt() for the same rt in a loop will be faster if I compute Rt first"
@@ -2022,9 +2022,9 @@ static void cost(const double*   b,
             //                      = -d1 (the same d1 as in the crude solve above)
             for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
             {
-                const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[ilidar];
+                const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
 
-                if(points_and_plane_full->points == NULL)
+                if(lidar_scan->points == NULL)
                     continue;
 
                 if(ctx->report_imeas)
@@ -2035,12 +2035,12 @@ static void cost(const double*   b,
                 {
                     // this is lidar0; it sits at the reference, and doesn't
                     // have an explicit pose or a rt_lidar0_lidar gradient
-                    for(unsigned int iipoint=0; iipoint<points_and_plane_full->n; iipoint++)
+                    for(unsigned int iipoint=0; iipoint<lidar_scan->n; iipoint++)
                     {
                         mrcal_point3_t p;
-                        int ipoint = points_and_plane_full->ipoint[iipoint];
+                        int ipoint = lidar_scan->ipoint[iipoint];
                         mrcal_point3_from_clc_point3f(&p,
-                                                      &points_and_plane_full->points[ipoint]);
+                                                      &lidar_scan->points[ipoint]);
 
                         double magp = mrcal_point3_mag(p);
 
@@ -2106,12 +2106,12 @@ static void cost(const double*   b,
                 {
                     double* rt_lidar0_lidar = &rt_lidar0_lidar_all[6*(ilidar-1)];
 
-                    for(unsigned int iipoint=0; iipoint<points_and_plane_full->n; iipoint++)
+                    for(unsigned int iipoint=0; iipoint<lidar_scan->n; iipoint++)
                     {
                         mrcal_point3_t p;
-                        int ipoint = points_and_plane_full->ipoint[iipoint];
+                        int ipoint = lidar_scan->ipoint[iipoint];
                         mrcal_point3_from_clc_point3f(&p,
-                                                      &points_and_plane_full->points[ipoint]);
+                                                      &lidar_scan->points[ipoint]);
 
                         double magp = mrcal_point3_mag(p);
 
@@ -2431,13 +2431,13 @@ plot_residuals(const char* filename_base,
         const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
         for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
         {
-            const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[ilidar];
-            if(points_and_plane_full->points == NULL)
+            const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+            if(lidar_scan->points == NULL)
                 continue;
             fprintf(fp_measurement_indices,
                     fmt_measurement_indices_lidar,
                     iMeasurement, isnapshot, ilidar);
-            iMeasurement += points_and_plane_full->n;
+            iMeasurement += lidar_scan->n;
         }
     }
     for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
@@ -2708,21 +2708,21 @@ _plot_geometry(FILE* fp,
 
             for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
             {
-                const points_and_plane_full_t* points_and_plane_full = &sensor_snapshot->lidar_scans[ilidar];
+                const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
 
-                if(points_and_plane_full->points == NULL)
+                if(lidar_scan->points == NULL)
                     continue;
 
                 const double* Rt_ref_sensor = NULL;
                 if(ilidar > 0)
                     Rt_ref_sensor = &Rt_lidar0_lidar[4*3*(ilidar-1)];
 
-                for(unsigned int iipoint=0; iipoint<points_and_plane_full->n; iipoint++)
+                for(unsigned int iipoint=0; iipoint<lidar_scan->n; iipoint++)
                 {
                     mrcal_point3_t p;
-                    int ipoint = points_and_plane_full->ipoint[iipoint];
+                    int ipoint = lidar_scan->ipoint[iipoint];
                     mrcal_point3_from_clc_point3f(&p,
-                                                  &points_and_plane_full->points[ipoint]);
+                                                  &lidar_scan->points[ipoint]);
 
                     if(Rt_ref_sensor != NULL)
                         mrcal_transform_point_Rt(p.xyz, NULL, NULL,
