@@ -3020,17 +3020,33 @@ fit(// out
                          &rt_lidar0_camera[i*6]);
 
     cost(b, x, NULL, &ctx);
-
     MSG("RMS fit error: %.2f normalized units",
         sqrt(norm2x / (double)Nmeasurements));
 
-    // if(Ncameras > 0)
-    //     MSG("RMS fit error (camera): %.3f pixels",
-    //         sqrt(np.mean(x_camera*x_camera))*SCALE_MEASUREMENT_PX);
-    // MSG("RMS fit error (lidar): %.3f m",
-    //     sqrt(np.mean(x_lidar *x_lidar ))*SCALE_MEASUREMENT_M);
-    // MSG("norm2(error_regularization)/norm2(error): %.3f m",
-    //     norm2(x_regularization)/norm2(x));
+    const int imeas_lidar_0                = measurement_index_lidar(0,0, &ctx);
+    const int Nmeas_lidar_observation_all  = num_measurements_lidars(&ctx);
+    const int imeas_camera_0               = measurement_index_camera(0,0, &ctx);
+    const int Nmeas_camera_observation_all = num_measurements_cameras(&ctx);
+    const int imeas_regularization_0       = measurement_index_regularization(&ctx);
+    const int Nmeas_regularization         = num_measurements_regularization(&ctx);
+    if(Ncameras > 0)
+    {
+        double norm2x_camera = 0;
+        for(int i=imeas_camera_0; i<imeas_camera_0+Nmeas_camera_observation_all; i++)
+            norm2x_camera += x[i]*x[i];
+        MSG("RMS fit error (camera): %.2f pixels",
+            sqrt(norm2x_camera / (Nmeas_camera_observation_all/2) )*SCALE_MEASUREMENT_PX);
+    }
+    double norm2x_lidar = 0;
+    for(int i=imeas_lidar_0; i<imeas_lidar_0+Nmeas_lidar_observation_all; i++)
+        norm2x_lidar += x[i]*x[i];
+    MSG("RMS fit error (lidar): %.3f m",
+        sqrt(norm2x_lidar / Nmeas_lidar_observation_all )*SCALE_MEASUREMENT_M);
+    double norm2x_regularization = 0;
+    for(int i=imeas_regularization_0; i<imeas_regularization_0+Nmeas_regularization; i++)
+        norm2x_regularization += x[i]*x[i];
+    MSG("norm2(error_regularization)/norm2(error): %.2f",
+        norm2x_regularization/norm2x);
 
     plot_residuals("/tmp/residuals", x, &ctx);
 
