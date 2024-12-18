@@ -3399,9 +3399,10 @@ bool _clc_internal(// out
          // in
 
          // Exactly one of these should be non-NULL
-         const clc_sensor_snapshot_unsorted_t* sensor_snapshots_unsorted,
-         const clc_sensor_snapshot_sorted_t*   sensor_snapshots_sorted,
-         const clc_sensor_snapshot_segmented_t*sensor_snapshots_segmented,
+         const clc_sensor_snapshot_unsorted_t*        sensor_snapshots_unsorted,
+         const clc_sensor_snapshot_sorted_t*          sensor_snapshots_sorted,
+         const clc_sensor_snapshot_segmented_t*       sensor_snapshots_segmented,
+         const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots_segmented_dense,
 
          const unsigned int                    Nsensor_snapshots,
          // The stride, in bytes, between each successive points or rings value
@@ -3427,11 +3428,12 @@ bool _clc_internal(// out
          bool check_gradient )
 {
     if(1 !=
-       (sensor_snapshots_unsorted != NULL) +
-       (sensor_snapshots_sorted   != NULL) +
-       (sensor_snapshots_segmented!= NULL))
+       (sensor_snapshots_unsorted        != NULL) +
+       (sensor_snapshots_sorted          != NULL) +
+       (sensor_snapshots_segmented       != NULL) +
+       (sensor_snapshots_segmented_dense != NULL))
     {
-        MSG("Exactly one of (sensor_snapshots_sorted,sensor_snapshots_unsorted,sensor_snapshots_segmented) should be non-NULL");
+        MSG("Exactly one of (sensor_snapshots_sorted,sensor_snapshots_unsorted,sensor_snapshots_segmented,sensor_snapshots_segmented_dense) should be non-NULL");
         return false;
     }
 
@@ -3504,6 +3506,10 @@ bool _clc_internal(// out
             (sensor_snapshots_segmented != NULL ) ?
             &sensor_snapshots_segmented[isnapshot] :
             NULL;
+        const clc_sensor_snapshot_segmented_dense_t* sensor_snapshot_segmented_dense =
+            (sensor_snapshots_segmented_dense != NULL ) ?
+            &sensor_snapshots_segmented_dense[isnapshot] :
+            NULL;
 
         for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
         {
@@ -3511,7 +3517,8 @@ bool _clc_internal(// out
                 (points_and_plane_full_t){};
 
 
-            if(sensor_snapshot_segmented == NULL)
+            if(sensor_snapshot_unsorted != NULL ||
+               sensor_snapshot_sorted   != NULL)
             {
                 if(!lidar_segmentation(&sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar],
 
@@ -3530,7 +3537,7 @@ bool _clc_internal(// out
                                        ctx))
                     continue;
             }
-            else
+            else if(sensor_snapshot_segmented != NULL)
             {
                 const clc_lidar_scan_segmented_t* scan_segmented = &sensor_snapshot_segmented->lidar_scans[ilidar];
                 if(scan_segmented->points_and_plane.n == 0)
@@ -3541,6 +3548,23 @@ bool _clc_internal(// out
                                                .n      = scan_segmented->points_and_plane.n,
                                                .ipoint = scan_segmented->points_and_plane.ipoint,
                                                .plane  = scan_segmented->points_and_plane.plane};
+            }
+            else if(sensor_snapshot_segmented_dense != NULL)
+            {
+                const clc_lidar_scan_segmented_dense_t* scan_segmented = &sensor_snapshot_segmented_dense->lidar_scans[ilidar];
+                if(scan_segmented->points_and_plane.n == 0)
+                    continue;
+
+                sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar] =
+                    (points_and_plane_full_t){ .points = scan_segmented->points,
+                                               .n      = scan_segmented->points_and_plane.n,
+                                               .ipoint = NULL,
+                                               .plane  = scan_segmented->points_and_plane.plane};
+            }
+            else
+            {
+                MSG("Getting here is a bug");
+                return false;
             }
 
 
@@ -3925,7 +3949,7 @@ bool clc_unsorted(// out
                          rt_ref_camera,
 
                          // in
-                         sensor_snapshots, NULL, NULL,
+                         sensor_snapshots, NULL, NULL, NULL,
                          Nsensor_snapshots,
                          lidar_packet_stride,
                          Nlidars,
@@ -3969,7 +3993,7 @@ bool clc_sorted(// out
                          rt_ref_camera,
 
                          // in
-                         NULL, sensor_snapshots, NULL,
+                         NULL, sensor_snapshots, NULL, NULL,
                          Nsensor_snapshots,
                          0,
                          Nlidars,
@@ -4011,7 +4035,49 @@ bool clc_lidar_segmented(// out
                          rt_ref_camera,
 
                          // in
-                         NULL, NULL, sensor_snapshots,
+                         NULL, NULL, sensor_snapshots, NULL,
+                         Nsensor_snapshots,
+                         0,
+                         Nlidars,
+                         Ncameras,
+                         models,
+                         object_height_n, object_width_n, object_spacing,
+                         is_bgr_mask,
+                         NULL,
+                         check_gradient__use_distance_to_plane,
+                         check_gradient);
+}
+
+bool clc_lidar_segmented_dense(// out
+         mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
+         mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+
+         // in
+         const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots,
+         const unsigned int                           Nsensor_snapshots,
+
+         // These apply to ALL the sensor_snapshots[]
+         const unsigned int Nlidars,
+         const unsigned int Ncameras,
+         const mrcal_cameramodel_t*const* models, // Ncameras of these
+         // The dimensions of the chessboard grid being detected in the images
+         const int object_height_n,
+         const int object_width_n,
+         const double object_spacing,
+
+         // bits indicating whether a camera in
+         // sensor_snapshots.images[] is color or not
+         const clc_is_bgr_mask_t is_bgr_mask,
+
+         bool check_gradient__use_distance_to_plane,
+         bool check_gradient)
+{
+    return _clc_internal(// out
+                         rt_ref_lidar,
+                         rt_ref_camera,
+
+                         // in
+                         NULL, NULL, NULL, sensor_snapshots,
                          Nsensor_snapshots,
                          0,
                          Nlidars,
