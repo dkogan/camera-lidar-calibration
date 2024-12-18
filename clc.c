@@ -736,7 +736,10 @@ bool print_sensor_points(// out
 
         for(int i=0; i<(int)lidar_scan->n; i++)
         {
-            const clc_point3f_t* p = &lidar_scan->points[ lidar_scan->ipoint[i] ];
+            const clc_point3f_t* p =
+                (lidar_scan->ipoint != NULL) ?
+                &lidar_scan->points[ lidar_scan->ipoint[i] ] :
+                &lidar_scan->points[i];
             fprintf(fp,
                     "%f %f %s %f\n",
                     p->x, p->y, id, p->z);
@@ -978,9 +981,17 @@ bool align_point_clouds(// out
             else if(isensor1 < Nlidars) ilidar = isensor1;
             else assert(0);
 
-            int i0 = sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].ipoint[0];
-            const clc_point3f_t* p = &sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].points[i0];
-            MSG("p0 = %f %f %f", p->x, p->y, p->z);
+            if(sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].ipoint != NULL)
+            {
+                int i0 = sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].ipoint[0];
+                const clc_point3f_t* p = &sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].points[i0];
+                MSG("p0 = %f %f %f", p->x, p->y, p->z);
+            }
+            else
+            {
+                const clc_point3f_t* p = &sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].points[0];
+                MSG("p0 = %f %f %f", p->x, p->y, p->z);
+            }
         }
 #endif
 
@@ -1884,7 +1895,9 @@ static void cost(const double*   b,
                     for(unsigned int iipoint=0; iipoint<lidar_scan->n; iipoint++)
                     {
                         mrcal_point3_t p;
-                        int ipoint = lidar_scan->ipoint[iipoint];
+                        int ipoint = (lidar_scan->ipoint != NULL) ?
+                            lidar_scan->ipoint[iipoint] :
+                            iipoint;
                         mrcal_point3_from_clc_point3f(&p,
                                                       &lidar_scan->points[ipoint]);
 
@@ -1923,7 +1936,9 @@ static void cost(const double*   b,
                     for(unsigned int iipoint=0; iipoint<lidar_scan->n; iipoint++)
                     {
                         mrcal_point3_t p;
-                        int ipoint = lidar_scan->ipoint[iipoint];
+                        int ipoint = (lidar_scan->ipoint != NULL) ?
+                            lidar_scan->ipoint[iipoint] :
+                            iipoint;
                         mrcal_point3_from_clc_point3f(&p,
                                                       &lidar_scan->points[ipoint]);
 
@@ -2038,7 +2053,9 @@ static void cost(const double*   b,
                     for(unsigned int iipoint=0; iipoint<lidar_scan->n; iipoint++)
                     {
                         mrcal_point3_t p;
-                        int ipoint = lidar_scan->ipoint[iipoint];
+                        int ipoint = (lidar_scan->ipoint != NULL) ?
+                            lidar_scan->ipoint[iipoint] :
+                            iipoint;
                         mrcal_point3_from_clc_point3f(&p,
                                                       &lidar_scan->points[ipoint]);
 
@@ -2109,7 +2126,9 @@ static void cost(const double*   b,
                     for(unsigned int iipoint=0; iipoint<lidar_scan->n; iipoint++)
                     {
                         mrcal_point3_t p;
-                        int ipoint = lidar_scan->ipoint[iipoint];
+                        int ipoint = (lidar_scan->ipoint != NULL) ?
+                            lidar_scan->ipoint[iipoint] :
+                            iipoint;
                         mrcal_point3_from_clc_point3f(&p,
                                                       &lidar_scan->points[ipoint]);
 
@@ -2720,7 +2739,9 @@ _plot_geometry(FILE* fp,
                 for(unsigned int iipoint=0; iipoint<lidar_scan->n; iipoint++)
                 {
                     mrcal_point3_t p;
-                    int ipoint = lidar_scan->ipoint[iipoint];
+                    int ipoint = (lidar_scan->ipoint != NULL) ?
+                        lidar_scan->ipoint[iipoint] :
+                        iipoint;
                     mrcal_point3_from_clc_point3f(&p,
                                                   &lidar_scan->points[ipoint]);
 
