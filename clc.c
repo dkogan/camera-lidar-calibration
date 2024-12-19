@@ -3087,10 +3087,13 @@ Nstate = 96
 Nmeas = len(J) // Nstate
 
 J = J.reshape((Nmeas,Nstate),)
-
-JtJ = nps.inner(J.T, nps.dummy(J.T,-2)) # much faster that matmult for some reason
+JtJ = np.dot(J.T,J)
 
 inv_JtJ = np.linalg.inv(JtJ)
+
+gp.plotimage(J       != 0, square=1, wait=1)
+gp.plotimage(JtJ     != 0, square=1, wait=1)
+gp.plotimage(inv_JtJ != 0, square=1, wait=1)
 
 Var = inv_JtJ[:6,:6]
 Var[:3,:] *= SCALE_ROTATION_LIDAR
