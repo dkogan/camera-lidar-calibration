@@ -433,6 +433,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     PyObject*      py_models           = NULL;
     PyArrayObject* rt_ref_lidar        = NULL;
     PyArrayObject* rt_ref_camera       = NULL;
+    PyArrayObject* Var_rt_lidar0_sensor= NULL;
 
     PyObject* py_model = NULL;
 
@@ -592,6 +593,13 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
         rt_ref_camera = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Ncameras,6}), NPY_FLOAT64);
         if(rt_ref_camera == NULL) goto done;
 
+        const int Nsensors_optimized = Nlidars-1 + Ncameras;
+        Var_rt_lidar0_sensor = (PyArrayObject*)PyArray_SimpleNew(4,
+                                                                 ((npy_intp[]){Nsensors_optimized, 6,
+                                                                               Nsensors_optimized, 6,}),
+                                                                 NPY_FLOAT64);
+        if(Var_rt_lidar0_sensor == NULL) goto done;
+
         static_assert(offsetof(mrcal_pose_t,r) == 0 && offsetof(mrcal_pose_t,t) == sizeof(double)*3,
                       "mrcal_pose_t should be a dense rt transform");
 
@@ -599,6 +607,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
         if(!clc_unsorted(// out
                          (mrcal_pose_t*)PyArray_DATA(rt_ref_lidar),
                          (mrcal_pose_t*)PyArray_DATA(rt_ref_camera),
+                         (double      *)PyArray_DATA(Var_rt_lidar0_sensor),
                          // in
                          sensor_snapshots,
                          Nsensor_snapshots,
@@ -619,13 +628,15 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
         }
     }
 
-    result = Py_BuildValue("{sOsO}",
+    result = Py_BuildValue("{sOsOsO}",
                            "rt_ref_lidar",  rt_ref_lidar,
-                           "rt_ref_camera", rt_ref_camera);
+                           "rt_ref_camera", rt_ref_camera,
+                           "Var",           Var_rt_lidar0_sensor);
 
  done:
     Py_XDECREF(rt_ref_lidar);
     Py_XDECREF(rt_ref_camera);
+    Py_XDECREF(Var_rt_lidar0_sensor);
     Py_XDECREF(py_model);
     for(int i=0; i<Ncameras; i++)
         mrcal_free_cameramodel(&models[i]);

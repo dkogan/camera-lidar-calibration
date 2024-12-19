@@ -3498,6 +3498,12 @@ bool _clc_internal(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
 
+         // Covariance of the output. Symmetric matrix of shape
+         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
+         // output. May be NULL to not compute this. Nstate_sensor_poses =
+         // (Nlidars-1 + Ncameras)*6
+         double*       Var_rt_lidar0_sensor,
+
          // in
 
          // Exactly one of these should be non-NULL
@@ -3823,8 +3829,6 @@ bool _clc_internal(// out
                       object_spacing,
                       true);
 
-        const int Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6;
-        double Var_rt_lidar0_sensor[Nstate_sensor_poses*Nstate_sensor_poses];
         if(!fit(Var_rt_lidar0_sensor,
                 // in,out
                 // seed state on input
@@ -3914,6 +3918,11 @@ bool clc_unsorted(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
 
+         // Covariance of the output. Symmetric matrix of shape
+         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
+         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
+         double*       Var_rt_lidar0_sensor,
+
          // in
          const clc_sensor_snapshot_unsorted_t* sensor_snapshots,
          const unsigned int                    Nsensor_snapshots,
@@ -3942,6 +3951,7 @@ bool clc_unsorted(// out
     return _clc_internal(// out
                          rt_ref_lidar,
                          rt_ref_camera,
+                         Var_rt_lidar0_sensor,
 
                          // in
                          sensor_snapshots, NULL, NULL, NULL,
@@ -3960,6 +3970,11 @@ bool clc_unsorted(// out
 bool clc_sorted(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+
+         // Covariance of the output. Symmetric matrix of shape
+         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
+         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
+         double*       Var_rt_lidar0_sensor,
 
          // in
          const clc_sensor_snapshot_sorted_t* sensor_snapshots,
@@ -3986,6 +4001,7 @@ bool clc_sorted(// out
     return _clc_internal(// out
                          rt_ref_lidar,
                          rt_ref_camera,
+                         Var_rt_lidar0_sensor,
 
                          // in
                          NULL, sensor_snapshots, NULL, NULL,
@@ -4004,6 +4020,11 @@ bool clc_sorted(// out
 bool clc_lidar_segmented(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+
+         // Covariance of the output. Symmetric matrix of shape
+         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
+         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
+         double*       Var_rt_lidar0_sensor,
 
          // in
          const clc_sensor_snapshot_segmented_t* sensor_snapshots,
@@ -4028,6 +4049,7 @@ bool clc_lidar_segmented(// out
     return _clc_internal(// out
                          rt_ref_lidar,
                          rt_ref_camera,
+                         Var_rt_lidar0_sensor,
 
                          // in
                          NULL, NULL, sensor_snapshots, NULL,
@@ -4046,6 +4068,11 @@ bool clc_lidar_segmented(// out
 bool clc_lidar_segmented_dense(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+
+         // Covariance of the output. Symmetric matrix of shape
+         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
+         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
+         double*       Var_rt_lidar0_sensor,
 
          // in
          const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots,
@@ -4070,6 +4097,7 @@ bool clc_lidar_segmented_dense(// out
     return _clc_internal(// out
                          rt_ref_lidar,
                          rt_ref_camera,
+                         Var_rt_lidar0_sensor,
 
                          // in
                          NULL, NULL, NULL, sensor_snapshots,

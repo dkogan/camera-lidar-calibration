@@ -273,6 +273,11 @@ bool clc_unsorted(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
 
+         // Covariance of the output. Symmetric matrix of shape
+         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
+         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
+         double*       Var_rt_lidar0_sensor,
+
          // in
          const clc_sensor_snapshot_unsorted_t* sensor_snapshots,
          const unsigned int                    Nsensor_snapshots,
@@ -303,6 +308,11 @@ bool clc_sorted(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
 
+         // Covariance of the output. Symmetric matrix of shape
+         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
+         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
+         double*       Var_rt_lidar0_sensor,
+
          // in
          const clc_sensor_snapshot_sorted_t* sensor_snapshots,
          const unsigned int                  Nsensor_snapshots,
@@ -330,6 +340,11 @@ bool clc_lidar_segmented(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
 
+         // Covariance of the output. Symmetric matrix of shape
+         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
+         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
+         double*       Var_rt_lidar0_sensor,
+
          // in
          const clc_sensor_snapshot_segmented_t* sensor_snapshots,
          const unsigned int                     Nsensor_snapshots,
@@ -353,6 +368,11 @@ bool clc_lidar_segmented(// out
 bool clc_lidar_segmented_dense(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+
+         // Covariance of the output. Symmetric matrix of shape
+         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
+         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
+         double*       Var_rt_lidar0_sensor,
 
          // in
          const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots,
