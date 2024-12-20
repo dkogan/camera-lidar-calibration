@@ -67,6 +67,11 @@ def parse_args():
                         action='store_true',
                         help = '''Applies to LIDAR data. If given, I make a 2D
                         plot, ignoring the z axis''')
+    parser.add_argument('--extract',
+                        help = '''Applies to camera data. If given, I write the
+                        image to the filename given in this argument. Exactly
+                        one bag is expected: I exit after writing the first
+                        image''')
     parser.add_argument('--period',
                         type=float,
                         default = 0,
@@ -233,6 +238,11 @@ for bag in bags():
         show_lidar(bag, p)
     elif p.dtype == np.uint8 and \
          (p.ndim == 2 or (p.ndim==3 and p.shape[-1] == 3)):
+        if args.extract is not None:
+            import mrcal
+            mrcal.save_image(args.extract, p)
+            print(f"Wrote '{args.extract}'")
+            sys.exit()
         show_image(bag, p)
     else:
         print(f"Cannot interpret message from {args.topic}",
