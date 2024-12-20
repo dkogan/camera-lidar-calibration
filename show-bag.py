@@ -4,7 +4,7 @@ r'''Display the LIDAR scans from a rosbag
 
 SYNOPSIS
 
-  $ ./show_lidar_scans.py     \
+  $ ./show-bag.py             \
       --period 2              \
       --set "view 60,30,2"    \
       --set "xrange [-20:20]" \
