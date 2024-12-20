@@ -57,9 +57,10 @@ def parse_args():
                         action='append',
                         help='''Extra 'unset' directives to gnuplotlib. Can be given multiple times''')
 
-    parser.add_argument('topic',
+    parser.add_argument('--topic',
                         type=str,
-                        help = '''The LIDAR topic we're looking at''')
+                        help = '''The topic we're visualizing. If omitted, we
+                        report the topics present in the bag, and we exit''')
 
     parser.add_argument('bags',
                         type=str,
@@ -74,57 +75,74 @@ def parse_args():
 
 args = parse_args()
 
+
+
+def bags():
+    import glob
+    for bag_glob in args.bags:
+        bags = sorted(glob.glob(bag_glob))
+        if len(bags) == 0:
+            print(f"No files matched the glob '{bag_glob}'", file=sys.stderr)
+            sys.exit(1)
+
+        for bag in bags:
+            yield(bag)
+
+
 import bag_interface
-import glob
+
+if args.topic is None:
+    for bag in bags():
+        print(f"Bag '{bag}':")
+        for topic in bag_interface.topics(bag):
+            print(f"  {topic}")
+    sys.exit()
+
+
+
 import numpy as np
 import numpysane as nps
 import gnuplotlib as gp
 import time
 
 
-for bag_glob in args.bags:
-    bags = sorted(glob.glob(bag_glob))
-    if len(bags) == 0:
-        print(f"No files matched the glob '{bag_glob}'", file=sys.stderr)
-        sys.exit(1)
+for bag in bags():
+    try:
+        p = next(bag_interface.messages(bag, (topic,) ))['array']
+    except StopIteration:
+        print(f"No messages with {topic=} in {bag=}. Continuing to next bag, if any",
+              file = sys.stderr)
+        continue
 
-    for bag in bags:
-        try:
-            p = next(bag_interface.messages(bag, (topic,) ))['array']
-        except StopIteration:
-            print(f"No messages with {topic=} in {bag=}. Continuing to next bag, if any",
-                  file = sys.stderr)
-            continue
+    xyz       = p['xyz']
+    intensity = p['intensity']
 
-        xyz       = p['xyz']
-        intensity = p['intensity']
+    if args.ring is not None:
+        i = p['ring'] == args.ring
+        xyz       = xyz[i]
+        intensity = intensity[i]
 
-        if args.ring is not None:
-            i = p['ring'] == args.ring
-            xyz       = xyz[i]
-            intensity = intensity[i]
+    if args.maxrange is not None:
+        i = nps.norm2(xyz) <= args.maxrange * args.maxrange
+        xyz       = xyz[i]
+        intensity = intensity[i]
 
-        if args.maxrange is not None:
-            i = nps.norm2(xyz) <= args.maxrange * args.maxrange
-            xyz       = xyz[i]
-            intensity = intensity[i]
+    if not args.xy:
+        data_tuple = (xyz[:,0], xyz[:,1], xyz[:,2])
+    else:
+        data_tuple = (xyz[:,0], xyz[:,1])
+    gp.plot(*data_tuple,
+            intensity,
+            tuplesize = len(data_tuple)+1,
+            _with  = 'dots palette',
+            square = True,
+            _3d    = not args.xy,
+            _set   = args.set,
+            _unset = args.unset,
+            title  = f"{bag=} {topic=}",
+            xlabel = 'x',
+            ylabel = 'y',
+            wait   = args.period <= 0)
 
-        if not args.xy:
-            data_tuple = (xyz[:,0], xyz[:,1], xyz[:,2])
-        else:
-            data_tuple = (xyz[:,0], xyz[:,1])
-        gp.plot(*data_tuple,
-                intensity,
-                tuplesize = len(data_tuple)+1,
-                _with  = 'dots palette',
-                square = True,
-                _3d    = not args.xy,
-                _set   = args.set,
-                _unset = args.unset,
-                title  = f"{bag=} {topic=}",
-                xlabel = 'x',
-                ylabel = 'y',
-                wait   = args.period <= 0)
-
-        if args.period > 0:
-            time.sleep(args.period)
+    if args.period > 0:
+        time.sleep(args.period)
