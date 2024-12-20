@@ -131,6 +131,8 @@ def messages(bag, topics):
                         for topic in topics ]
         connections = [ c for c in connections if c is not None ]
 
+        if len(connections) == 0: return
+
         for connection, time_ns, rawdata in \
                 reader.messages( connections = connections ):
 
