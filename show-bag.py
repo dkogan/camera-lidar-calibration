@@ -57,7 +57,7 @@ def parse_args():
                         action='append',
                         help='''Extra 'unset' directives to gnuplotlib. Can be given multiple times''')
 
-    parser.add_argument('lidar-topic',
+    parser.add_argument('topic',
                         type=str,
                         help = '''The LIDAR topic we're looking at''')
 
@@ -82,8 +82,6 @@ import gnuplotlib as gp
 import time
 
 
-lidar_topic = getattr(args, 'lidar-topic')
-
 for bag_glob in args.bags:
     bags = sorted(glob.glob(bag_glob))
     if len(bags) == 0:
@@ -92,9 +90,9 @@ for bag_glob in args.bags:
 
     for bag in bags:
         try:
-            p = next(bag_interface.messages(bag, (lidar_topic,) ))['array']
+            p = next(bag_interface.messages(bag, (topic,) ))['array']
         except StopIteration:
-            print(f"No messages with {lidar_topic=} in {bag=}. Continuing to next bag, if any",
+            print(f"No messages with {topic=} in {bag=}. Continuing to next bag, if any",
                   file = sys.stderr)
             continue
 
@@ -123,7 +121,7 @@ for bag_glob in args.bags:
                 _3d    = not args.xy,
                 _set   = args.set,
                 _unset = args.unset,
-                title  = f"{bag=} {lidar_topic=}",
+                title  = f"{bag=} {topic=}",
                 xlabel = 'x',
                 ylabel = 'y',
                 wait   = args.period <= 0)
