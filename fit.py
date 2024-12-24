@@ -663,6 +663,18 @@ for imodel in range(len(args.models)):
     models[imodel].write(filename)
     print(f"Wrote '{filename}'")
 
+for ilidar,rt_ref_lidar in enumerate(result['rt_ref_lidar']):
+    # dummy lidar "cameramodel". The intrinsics are made-up, but the extrinsics
+    # are true, and can be visualized with the usual tools
+    filename = f"/tmp/lidar{ilidar}-mounted.cameramodel"
+    model = mrcal.cameramodel( intrinsics = ('LENSMODEL_PINHOLE',
+                                             np.array((1.,1.,0.,0.))),
+                               imagersize = (1,1),
+                               extrinsics_rt_toref = rt_ref_lidar )
+    model.write(filename,
+                note = "Intrinsics are made-up and nonsensical")
+    print(f"Wrote '{filename}'")
+
 sys.exit()
 
 
