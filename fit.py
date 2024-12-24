@@ -654,6 +654,15 @@ result = clc.calibrate(bags            = args.bag,
                        Npoints_per_segment                = 15,
                        threshold_min_Nsegments_in_cluster = 4,
                        **calibration_object_kwargs)
+
+
+for imodel in range(len(args.models)):
+    models[imodel].extrinsics_rt_toref(result['rt_ref_camera'][imodel])
+    root,extension = os.path.splitext(args.models[imodel])
+    filename = f"{root}-mounted{extension}"
+    models[imodel].write(filename)
+    print(f"Wrote '{filename}'")
+
 sys.exit()
 
 
@@ -669,13 +678,6 @@ sys.exit()
 
 
 
-
-for imodel in range(len(args.models)):
-    models[imodel].extrinsics_rt_fromref(solved_state['rt_camera_ref'][imodel])
-    root,extension = os.path.splitext(args.models[imodel])
-    filename = f"{root}-mounted{extension}"
-    models[imodel].write(filename)
-    print(f"Wrote '{filename}'")
 
 for iobservation in range(len(joint_observations)):
     (q_observed, p_lidar) = joint_observations[iobservation]
