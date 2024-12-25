@@ -1,14 +1,13 @@
 #!/usr/bin/python3
-r'''Display a set of LIDAR point clouds in an aligned coordinate system
+r'''Display a set of LIDAR point clouds in the aligned coordinate system
 
 SYNOPSIS
 
   $ ./show-aligned-lidar-pointclouds.py                   \
-      --rt-lidar-ref 0,0,0,0,0,0                          \
-      --rt-lidar-ref 0.1,0,0.2,1,2,3                      \
       --bag camera-lidar.bag                              \
-      --lidar-topic /lidar/vl_points_0,/lidar/vl_points_1
-    [plot pops up to show the aligned results]
+      --lidar-topic /lidar/vl_points_0,/lidar/vl_points_1 \
+      /tmp/lidar[01]-mounted.cameramodel
+    [plot pops up to show the aligned points]
 
 Displays aligned point clouds. Useful for debugging
 
@@ -28,93 +27,75 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
+    parser.add_argument('--lidar-topic',
+                        type=str,
+                        required = True,
+                        help = '''The LIDAR topics to visualize. This is a
+                        comma-separated list of topics''')
+    parser.add_argument('--bag',
+                        help = '''The one bag we're visualizing''')
+    parser.add_argument('--var',
+                        help = '''Covariance .pickle file from fit.py''')
     parser.add_argument('--threshold',
                         type=float,
                         default = 20.,
                         help = '''Max distance where we cut the plot''')
-
-    parser.add_argument('--rt-lidar-ref',
-                        type = str,
-                        action = 'append',
-                        help = '''Transforms for each LIDAR. Each transform is
-                        given as r,r,r,t,t,t. Exactly as many --rt-lidar-ref
-                        arguments must be given as LIDAR topics. This is
-                        exclusive with --rt-ref-lidar''')
-    parser.add_argument('--rt-ref-lidar',
-                        type = str,
-                        action = 'append',
-                        help = '''Transforms for each LIDAR. Each transform is
-                        given as r,r,r,t,t,t. Exactly as many --rt-ref-lidar
-                        arguments must be given as LIDAR topics. This is
-                        exclusive with --rt-lidar-ref''')
-
-    parser.add_argument('--lidar-topic',
-                        type=str,
-                        required = True,
-                        help = '''The LIDAR topic to visualize. This is a
-                        comma-separated list of topics''')
-
-    parser.add_argument('bag',
-                        help = '''The one bag we're visualizing''')
+    parser.add_argument('lidar-models',
+                        nargs   = '*',
+                        help    = '''The .cameramodel for the lidars in question.
+                        Must correspond to the set in --lidar-topic''')
 
 
     args = parser.parse_args()
 
     args.lidar_topic = args.lidar_topic.split(',')
+    args.lidar_models = getattr(args, 'lidar-models')
 
-    if args.rt_lidar_ref is None and \
-       args.rt_ref_lidar is None:
-        print("Exactly one of --rt-lidar-ref or --rt-ref-lidar must be given; got neither",
+    Nlidars = len(args.lidar_topic)
+
+    if len(args.lidar_models) != Nlidars:
+        print(f"MUST have been given a matching number of lidar models and topics. Got {len(args.lidar_models)} and {Nlidars} respectively instead",
               file=sys.stderr)
         sys.exit(1)
-    if args.rt_lidar_ref is not None and \
-       args.rt_ref_lidar is not None:
-        print("Exactly one of --rt-lidar-ref or --rt-ref-lidar must be given; got both",
-              file=sys.stderr)
-        sys.exit(1)
-
-    def parse_rt(rt):
-        s = rt.split(',')
-        if len(s) != 6:
-            print(f"Each --rt-... MUST be a comma-separated list of exactly 6 values: '{rt}' has the wrong number of values",
-                  file=sys.stderr)
-            sys.exit(1)
-        try:
-            s = [float(x) for x in s]
-        except:
-            print(f"Each --rt-... MUST be a comma-separated list of exactly 6 values: '{rt}' not parseable as a list of floats",
-                  file=sys.stderr)
-            sys.exit(1)
-        return s
-
-    Nlidar = len(args.lidar_topic)
-    if args.rt_lidar_ref is not None:
-        if len(args.rt_lidar_ref) != Nlidar:
-            print(f"MUST have been given a matching number of --rt-lidar-ref and topics. Got {len(args.rt_lidar_ref)} and {Nlidar} respectively instead",
-                  file=sys.stderr)
-            sys.exit(1)
-
-        args.rt_lidar_ref = np.array([parse_rt(rt) for rt in args.rt_lidar_ref])
-
-
-    else:
-        if len(args.rt_ref_lidar) != Nlidar:
-            print(f"MUST have been given a matching number of --rt-ref-lidar and topics. Got {len(args.rt_ref_lidar)} and {Nlidar} respectively instead",
-                  file=sys.stderr)
-            sys.exit(1)
-
-        args.rt_ref_lidar = np.array([parse_rt(rt) for rt in args.rt_ref_lidar])
 
     return args
 
 
 args = parse_args()
 
-import sys
+import bag_interface
+import pickle
 import numpysane as nps
 import mrcal
 import gnuplotlib as gp
 
+args.lidar_models = [mrcal.cameramodel(f) for f in args.lidar_models]
+
+
+
+
+
+
+
+def plot(*args,
+         hardcopy = None,
+         **kwargs):
+    r'''Wrapper for gp.plot(), but printing out where the hardcopy went'''
+    gp.plot(*args, **kwargs,
+            hardcopy = hardcopy)
+    if hardcopy is not None:
+        print(f"Wrote '{hardcopy}'")
+
+
+
+Nlidars = len(args.lidar_topic)
+
+try:
+    pointcloud_msgs = \
+        [ next(bag_interface.messages(args.bag, (topic,))) \
+          for topic in args.lidar_topic ]
+except:
+    raise Exception(f"Bag '{args.bag}' doesn't have at least one message for each of {args.lidar_topic}")
 
 # Package into a numpy array
 pointclouds = [ msg['array']['xyz'].astype(float) \
@@ -123,11 +104,9 @@ pointclouds = [ msg['array']['xyz'].astype(float) \
 # Throw out everything that's too far, in the LIDAR's own frame
 pointclouds = [ p[ nps.mag(p) < args.threshold ] for p in pointclouds ]
 
-# Transform
-if args.rt_lidar_ref is not None:
-    args.rt_ref_lidar = mrcal.invert_rt(args.rt_lidar_ref)
-pointclouds = [ mrcal.transform_point_rt(args.rt_ref_lidar[i],p) for i,p in enumerate(pointclouds) ]
-
+# Transform to ref coords
+pointclouds = [ mrcal.transform_point_Rt(args.lidar_models[i].extrinsics_Rt_toref(),
+                                         p) for i,p in enumerate(pointclouds) ]
 
 # from "gnuplot -e 'show linetype'"
 color_sequence_rgb = (
@@ -147,19 +126,31 @@ data_tuples = [ ( p, dict( tuplesize = -3,
                 for i,p in enumerate(pointclouds) ]
 
 
+if args.var is None:
+    plot(*data_tuples,
+         _3d = True,
+         square = True,
+         xlabel = 'x',
+         ylabel = 'y',
+         zlabel = 'z',
+         wait = True)
+    sys.exit()
 
 
-Ncameras = 0
-Nlidars  = 3
-istate_camera_pose_0 = 0
-Nstate_camera_pose   = 6 * Ncameras
-istate_lidar_pose_0  = istate_camera_pose_0 + Nstate_camera_pose
-Nstate_lidar_pose    = 6 * (Nlidars-1) # lidar0 is the reference coord system
 
-import pickle
-with open("/tmp/Var_state_poses.pickle", "rb") as f:
-    Var_state_poses = pickle.load(f)
+with open(args.var, "rb") as f:
+    var_context = pickle.load(f)
 
+ilidar_invar_from_ilidar = [None] * Nlidars
+for ilidar in range(Nlidars):
+    lidar_topic_requested = args.lidar_topic[ilidar]
+    try:
+        ilidar_invar_from_ilidar[ilidar] = \
+            var_context['lidar_topic'].index(lidar_topic_requested)
+    except:
+        print(f"Requested topic '{lidar_topic_requested}' not present in the covariance file '{args.var}'",
+              file=sys.stderr)
+        sys.exit(1)
 
 x_sample = np.linspace(-20,20,25)
 y_sample = np.linspace(-20,20,25)
@@ -174,15 +165,9 @@ pz0 = z_sample * np.ones(px0.shape, dtype=float)
 # shape (Nysample, Nxsample,3)
 p0 = nps.mv(nps.cat(px0,py0,pz0),
             0,-1)
-if Ncameras:
-    raise Exception(f"Hard-coded {Ncameras=} is wrong: I'm assuming ilidar = isensor below")
-if len(args.rt_ref_lidar) != Nlidars:
-    raise Exception(f"Hard-coded {Nlidars=} is wrong")
-if nps.norm2(args.rt_ref_lidar[0]):
-    raise Exception("The first rt_ref_lidar must be 0")
 
-az = np.linspace(-np.pi, np.pi,20, endpoint = False)
-el = nps.mv(np.linspace(-np.pi/2., np.pi/2., 10), -1,-2)
+az = np.linspace(-np.pi, np.pi,40, endpoint = False)
+el = nps.mv(np.linspace(-np.pi/2., np.pi/2., 20), -1,-2)
 caz = np.cos(az)
 saz = np.sin(az)
 cel = np.cos(el)
@@ -204,20 +189,8 @@ if do_plot_ellipsoids:
 
 
 
-
-def plot(*args,
-         hardcopy = None,
-         **kwargs):
-    r'''Wrapper for gp.plot(), but printing out where the hardcopy went'''
-    gp.plot(*args, **kwargs,
-            hardcopy = hardcopy)
-    if hardcopy is not None:
-        print(f"Wrote '{hardcopy}'")
-
-
-
 print("WARNING: the uncertainty propagation should be cameras AND lidars")
-rt_lidar0_lidar = np.array(args.rt_ref_lidar, dtype=float)
+rt_lidar0_lidar = np.array([m.extrinsics_rt_toref() for m in args.lidar_models], dtype=float)
 
 lidars_origin  = rt_lidar0_lidar[:,3:]
 lidars_forward = mrcal.rotate_point_r(rt_lidar0_lidar[:,:3], np.array((1.,0,0)))
@@ -252,23 +225,29 @@ data_tuples_lidar_forward_vectors = \
 
 
 
-for ilidar,rt_ref_lidar in enumerate(args.rt_ref_lidar):
+
+
+
+######## What ellipses am I plotting? Which lidars?
+
+for ilidar in range(len(args.lidar_models)):
     if ilidar == 0: continue
+
+    model       = args.lidar_models[ilidar]
+    lidar_topic = args.lidar_topic [ilidar]
 
     # shape (Nysample,Nxsample,3)
     p1 = \
-        mrcal.transform_point_rt(rt_ref_lidar, p0,
-                                 inverted = True)
-
-    rt_lidar_ref = mrcal.invert_rt(rt_ref_lidar)
+        mrcal.transform_point_Rt(model.extrinsics_Rt_fromref(), p0)
 
     # shape (Nysample,Nxsample,3,6)
     _,dp0__drt_lidar_ref,_ = \
-        mrcal.transform_point_rt(rt_lidar_ref, p1,
-                                 inverted      = True,
+        mrcal.transform_point_rt(model.extrinsics_rt_toref(), p1,
                                  get_gradients = True)
+
     # shape (6,6)
-    Var_rt_lidar_ref = Var_state_poses[ilidar-1,:,ilidar-1,:]
+    Var_rt_lidar_ref = var_context['Var'][ilidar_invar_from_ilidar[ilidar]-1,:,
+                                          ilidar_invar_from_ilidar[ilidar]-1,:]
 
     # shape (Nysample,Nxsample,3,3)
     Var_p0 = nps.matmult(dp0__drt_lidar_ref,
@@ -292,6 +271,7 @@ for ilidar,rt_ref_lidar in enumerate(args.rt_ref_lidar):
                               dict( tuplesize = -3,
                                     _with     = f'dots lc rgb "{color_sequence_rgb[ilidar%len(color_sequence_rgb)]}"',
                                     legend = f'1-sigma uncertainty for lidar {ilidar}')), )
+
 
     if do_plot_worst_eigenvalue_heatmap:
         # shape (Nysample,Nxsample)
@@ -338,12 +318,13 @@ for ilidar,rt_ref_lidar in enumerate(args.rt_ref_lidar):
              _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
              hardcopy=f'/tmp/uncertainty-direction-1sigma-{ilidar=}.gp')
 
+
 if do_plot_ellipsoids:
     plot(*data_tuples,
          _3d = True,
          square = True,
-         wait = True,
          xlabel = 'x',
          ylabel = 'y',
          zlabel = 'z',
-         hardcopy='/tmp/ellipsoids.gp')
+         wait = True)
+    sys.exit()
