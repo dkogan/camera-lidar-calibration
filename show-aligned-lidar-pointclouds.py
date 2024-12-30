@@ -228,8 +228,6 @@ data_tuples_lidar_forward_vectors = \
 
 
 
-######## What ellipses am I plotting? Which lidars?
-
 for ilidar in range(len(args.lidar_models)):
     if ilidar == 0: continue
 
