@@ -2980,15 +2980,7 @@ fit(// out
     MSG("Finished pre-solve; started full solve;");
 
     ctx.use_distance_to_plane = false;
-    if(!check_gradient)
-    {
-        norm2x = dogleg_optimize2(b,
-                                  Nstate, Nmeasurements, Njnnz,
-                                  (dogleg_callback_t*)&cost, &ctx,
-                                  &dogleg_parameters,
-                                  &solver_context);
-    }
-    else
+    if(check_gradient)
     {
         for(int ivar=0; ivar<Nstate; ivar++)
             dogleg_testGradient(ivar, b,
@@ -2997,6 +2989,13 @@ fit(// out
         result = true;
         goto done;
     }
+
+
+    norm2x = dogleg_optimize2(b,
+                              Nstate, Nmeasurements, Njnnz,
+                              (dogleg_callback_t*)&cost, &ctx,
+                              &dogleg_parameters,
+                              &solver_context);
 
     MSG("Finished full solve");
 
