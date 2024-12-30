@@ -3194,9 +3194,9 @@ print(Var - Var_c)
             if( (i%4) == 3 || i == Nstate_sensor_poses-1 )
             {
                 // The last column is filled-in. Solve.
-                if(i == Nstate_sensor_poses-1)
+                if(i == Nstate_sensor_poses-1 && (i%4) != 3)
                 {
-                    // Last solve; might be < 4 columns
+                    // Last solve of  < 4 columns
                     B.ncol = Nstate_sensor_poses % 4;
                     V.ncol = Nstate_sensor_poses % 4;
                 }
