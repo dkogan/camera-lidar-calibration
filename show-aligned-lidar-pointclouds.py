@@ -34,8 +34,8 @@ def parse_args():
                         comma-separated list of topics''')
     parser.add_argument('--bag',
                         help = '''The one bag we're visualizing''')
-    parser.add_argument('--var',
-                        help = '''Covariance .pickle file from fit.py''')
+    parser.add_argument('--context',
+                        help = '''.pickle file from fit.py''')
     parser.add_argument('--threshold',
                         type=float,
                         default = 20.,
@@ -126,7 +126,7 @@ data_tuples = [ ( p, dict( tuplesize = -3,
                 for i,p in enumerate(pointclouds) ]
 
 
-if args.var is None:
+if args.context is None:
     plot(*data_tuples,
          _3d = True,
          square = True,
@@ -138,17 +138,17 @@ if args.var is None:
 
 
 
-with open(args.var, "rb") as f:
-    var_context = pickle.load(f)
+with open(args.context, "rb") as f:
+    context = pickle.load(f)
 
 ilidar_invar_from_ilidar = [None] * Nlidars
 for ilidar in range(Nlidars):
     lidar_topic_requested = args.lidar_topic[ilidar]
     try:
         ilidar_invar_from_ilidar[ilidar] = \
-            var_context['lidar_topic'].index(lidar_topic_requested)
+            context['lidar_topic'].index(lidar_topic_requested)
     except:
-        print(f"Requested topic '{lidar_topic_requested}' not present in the covariance file '{args.var}'",
+        print(f"Requested topic '{lidar_topic_requested}' not present in the covariance file '{args.context}'",
               file=sys.stderr)
         sys.exit(1)
 
@@ -246,8 +246,8 @@ for ilidar in range(len(args.lidar_models)):
                                  get_gradients = True)
 
     # shape (6,6)
-    Var_rt_lidar_ref = var_context['Var'][ilidar_invar_from_ilidar[ilidar]-1,:,
-                                          ilidar_invar_from_ilidar[ilidar]-1,:]
+    Var_rt_lidar_ref = context['Var'][ilidar_invar_from_ilidar[ilidar]-1,:,
+                                      ilidar_invar_from_ilidar[ilidar]-1,:]
 
     # shape (Nysample,Nxsample,3,3)
     Var_p0 = nps.matmult(dp0__drt_lidar_ref,
