@@ -112,6 +112,7 @@ import numpy as np
 import numpysane as nps
 import gnuplotlib as gp
 import io
+import pickle
 import mrcal
 import clc
 
@@ -646,14 +647,15 @@ if len(args.models) > 0:
 else:
     calibration_object_kwargs = dict()
 
-result = clc.calibrate(bags            = args.bag,
-                       lidar_topic     = args.lidar_topic,
-                       camera_topic    = args.camera_topic,
-                       models          = args.models,
-                       check_gradient  = False,
-                       Npoints_per_segment                = 15,
-                       threshold_min_Nsegments_in_cluster = 4,
-                       **calibration_object_kwargs)
+kwargs_calibrate = dict(bags            = args.bag,
+                        lidar_topic     = args.lidar_topic,
+                        camera_topic    = args.camera_topic,
+                        models          = args.models,
+                        check_gradient  = False,
+                        Npoints_per_segment                = 15,
+                        threshold_min_Nsegments_in_cluster = 4,
+                        **calibration_object_kwargs)
+result = clc.calibrate(**kwargs_calibrate)
 
 
 for imodel in range(len(args.models)):
@@ -674,6 +676,17 @@ for ilidar,rt_ref_lidar in enumerate(result['rt_ref_lidar']):
     model.write(filename,
                 note = "Intrinsics are made-up and nonsensical")
     print(f"Wrote '{filename}'")
+
+filename = '/tmp/clc-context.pickle'
+with open(filename, 'wb') as f:
+    pickle.dump( dict(Var              = result['Var'],
+                      lidar_topic      = args.lidar_topic,
+                      camera_topic     = args.camera_topic,
+                      rt_ref_lidar     = result['rt_ref_lidar'],
+                      rt_ref_camera    = result['rt_ref_camera'],
+                      kwargs_calibrate = kwargs_calibrate),
+                 f )
+
 
 sys.exit()
 

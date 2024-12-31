@@ -93,7 +93,7 @@ else:
             ilidar_in_solve_from_ilidar[ilidar] = \
                 context['lidar_topic'].index(lidar_topic_requested)
         except:
-            print(f"Requested topic '{lidar_topic_requested}' not present in the covariance file '{args.context}'",
+            print(f"Requested topic '{lidar_topic_requested}' not present in the context file '{args.context}'; topics: {context['lidar_topic']}",
                   file=sys.stderr)
             sys.exit(1)
 
