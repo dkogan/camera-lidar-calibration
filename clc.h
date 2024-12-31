@@ -88,7 +88,7 @@ typedef struct
 {
     // The segmented point cloud, as indices into points[]
     clc_points_and_plane_t points_and_plane;
-    // assumed stored densely
+    // assumed stored densely (no lidar_packet_stride)
     clc_point3f_t* points;
 } clc_lidar_scan_segmented_t;
 
