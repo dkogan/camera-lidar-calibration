@@ -42,21 +42,28 @@ def parse_args():
                         help = '''Max distance where we cut the plot''')
     parser.add_argument('lidar-models',
                         nargs   = '*',
-                        help    = '''The .cameramodel for the lidars in question.
-                        Must correspond to the set in --lidar-topic''')
+                        help = '''The .cameramodel for the lidars in question.
+                        Must correspond to the set in --lidar-topic. Exclusive
+                        with --context. Exactly one of (lidar-models,--context)
+                        must be given''')
 
 
     args = parser.parse_args()
 
     args.lidar_topic = args.lidar_topic.split(',')
     args.lidar_models = getattr(args, 'lidar-models')
+    if len(args.lidar_models) == 0: args.lidar_models = None
 
-    Nlidars = len(args.lidar_topic)
-
-    if len(args.lidar_models) != Nlidars:
-        print(f"MUST have been given a matching number of lidar models and topics. Got {len(args.lidar_models)} and {Nlidars} respectively instead",
-              file=sys.stderr)
+    if (args.context is not None and args.lidar_models is not None) or \
+       (args.context is     None and args.lidar_models is     None):
+        print("Exactly one of (lidar-models,--context) must be given", file=sys.stderr)
         sys.exit(1)
+
+    if args.lidar_models is not None:
+        if len(args.lidar_models) != len(args.lidar_topic):
+            print(f"MUST have been given a matching number of lidar models and topics. Got {len(args.lidar_models)=} and {len(args.lidar_topic)=} instead",
+                  file=sys.stderr)
+            sys.exit(1)
 
     return args
 
@@ -69,7 +76,36 @@ import numpysane as nps
 import mrcal
 import gnuplotlib as gp
 
-args.lidar_models = [mrcal.cameramodel(f) for f in args.lidar_models]
+
+
+if args.context is None:
+    ilidar_in_solve_from_ilidar = None
+    context                     = None
+else:
+    with open(args.context, "rb") as f:
+        context = pickle.load(f)
+
+
+    ilidar_in_solve_from_ilidar = [None] * len(args.lidar_topic)
+    for ilidar in range(len(args.lidar_topic)):
+        lidar_topic_requested = args.lidar_topic[ilidar]
+        try:
+            ilidar_in_solve_from_ilidar[ilidar] = \
+                context['lidar_topic'].index(lidar_topic_requested)
+        except:
+            print(f"Requested topic '{lidar_topic_requested}' not present in the covariance file '{args.context}'",
+                  file=sys.stderr)
+            sys.exit(1)
+
+
+
+if args.lidar_models is None:
+    # one transform for each lidar in the solve
+    rt_lidar0_lidar = context['rt_ref_lidar']
+else:
+    # one transform for each --lidar-topic
+    lidar_models = [mrcal.cameramodel(f) for f in args.lidar_models]
+    rt_lidar0_lidar = [m.extrinsics_rt_toref() for m in lidar_models]
 
 
 
@@ -88,8 +124,6 @@ def plot(*args,
 
 
 
-Nlidars = len(args.lidar_topic)
-
 try:
     pointcloud_msgs = \
         [ next(bag_interface.messages(args.bag, (topic,))) \
@@ -105,8 +139,12 @@ pointclouds = [ msg['array']['xyz'].astype(float) \
 pointclouds = [ p[ nps.mag(p) < args.threshold ] for p in pointclouds ]
 
 # Transform to ref coords
-pointclouds = [ mrcal.transform_point_Rt(args.lidar_models[i].extrinsics_Rt_toref(),
-                                         p) for i,p in enumerate(pointclouds) ]
+if context is None:
+    pointclouds = [ mrcal.transform_point_rt(rt_lidar0_lidar[i],
+                                             p) for i,p in enumerate(pointclouds) ]
+else:
+    pointclouds = [ mrcal.transform_point_rt(rt_lidar0_lidar[ ilidar_in_solve_from_ilidar[i] ],
+                                             p) for i,p in enumerate(pointclouds) ]
 
 # from "gnuplot -e 'show linetype'"
 color_sequence_rgb = (
@@ -126,7 +164,7 @@ data_tuples = [ ( p, dict( tuplesize = -3,
                 for i,p in enumerate(pointclouds) ]
 
 
-if args.context is None:
+if context is None:
     plot(*data_tuples,
          _3d = True,
          square = True,
@@ -137,21 +175,6 @@ if args.context is None:
     sys.exit()
 
 
-
-with open(args.context, "rb") as f:
-    context = pickle.load(f)
-
-ilidar_invar_from_ilidar = [None] * Nlidars
-for ilidar in range(Nlidars):
-    lidar_topic_requested = args.lidar_topic[ilidar]
-    try:
-        ilidar_invar_from_ilidar[ilidar] = \
-            context['lidar_topic'].index(lidar_topic_requested)
-    except:
-        print(f"Requested topic '{lidar_topic_requested}' not present in the covariance file '{args.context}'",
-              file=sys.stderr)
-        sys.exit(1)
-
 x_sample = np.linspace(-20,20,25)
 y_sample = np.linspace(-20,20,25)
 z_sample = 1
@@ -159,6 +182,8 @@ z_sample = 1
 Nxsample = len(x_sample)
 Nysample = len(y_sample)
 
+### point coordinates in the lidar0 frame. This is the solve reference:
+### ilidar_in_solve_from_ilidar[ilidar]==0
 # Each has shape (Ny_sample,Nx_sample)
 px0, py0 = np.meshgrid(x_sample,y_sample)
 pz0 = z_sample * np.ones(px0.shape, dtype=float)
@@ -190,7 +215,6 @@ if do_plot_ellipsoids:
 
 
 print("WARNING: the uncertainty propagation should be cameras AND lidars")
-rt_lidar0_lidar = np.array([m.extrinsics_rt_toref() for m in args.lidar_models], dtype=float)
 
 lidars_origin  = rt_lidar0_lidar[:,3:]
 lidars_forward = mrcal.rotate_point_r(rt_lidar0_lidar[:,:3], np.array((1.,0,0)))
@@ -202,55 +226,53 @@ i = mag_lidars_forward_xy>0
 lidars_forward_xy[i,:] /= nps.dummy(mag_lidars_forward_xy[i], axis=-1)
 lidars_forward_xy[~i,:] = 0
 lidar_forward_arrow_length = 4.
+i = np.array([ilidar_in_solve_from_ilidar[i] for i in range(len(args.lidar_topic))],
+             dtype=np.int32)
 data_tuples_lidar_forward_vectors = \
     (
       # LIDAR positions AND their forward vectors
-      (nps.glue( lidars_origin [...,:2],
-                 lidars_forward_xy * lidar_forward_arrow_length,
+      (nps.glue( lidars_origin [i,:2],
+                 lidars_forward_xy[i] * lidar_forward_arrow_length,
                  axis = -1 ),
        dict(_with = 'vectors lw 2 lc "black"',
             tuplesize = -4) ),
 
       # # JUST the LIDAR positions
-      # ( lidars_origin [...,:2],
+      # ( lidars_origin [i,:2],
       #   dict(_with = 'points pt 2 lc "black"',
       #        tuplesize = -2) ),
 
-      ( lidars_origin[...,0],
-        lidars_origin[...,1],
-        np.array([f"Lidar {i}" for i in range(Nlidars)]),
+      ( lidars_origin[i,0],
+        lidars_origin[i,1],
+        np.array(args.lidar_topic),
         dict(_with = 'labels textcolor "red"',
              tuplesize = 3))
      )
 
+for ilidar in range(len(args.lidar_topic)):
 
+    topic = args.lidar_topic[ilidar]
+    ilidar = ilidar_in_solve_from_ilidar[ilidar]
 
-
-
-
-for ilidar in range(len(args.lidar_models)):
-    if ilidar == 0: continue
-
-    model       = args.lidar_models[ilidar]
-    lidar_topic = args.lidar_topic [ilidar]
+    if ilidar == 0: continue # reference coord system
 
     # shape (Nysample,Nxsample,3)
     p1 = \
-        mrcal.transform_point_Rt(model.extrinsics_Rt_fromref(), p0)
+        mrcal.transform_point_rt(rt_lidar0_lidar[ilidar], p0, inverted=True)
 
     # shape (Nysample,Nxsample,3,6)
-    _,dp0__drt_lidar_ref,_ = \
-        mrcal.transform_point_rt(model.extrinsics_rt_toref(), p1,
+    _,dp0__drt_lidar01,_ = \
+        mrcal.transform_point_rt(rt_lidar0_lidar[ilidar], p1,
                                  get_gradients = True)
 
     # shape (6,6)
-    Var_rt_lidar_ref = context['Var'][ilidar_invar_from_ilidar[ilidar]-1,:,
-                                      ilidar_invar_from_ilidar[ilidar]-1,:]
+    Var_rt_lidar01 = context['Var'][ilidar-1,:,
+                                    ilidar-1,:]
 
     # shape (Nysample,Nxsample,3,3)
-    Var_p0 = nps.matmult(dp0__drt_lidar_ref,
-                         Var_rt_lidar_ref,
-                         nps.transpose(dp0__drt_lidar_ref))
+    Var_p0 = nps.matmult(dp0__drt_lidar01,
+                         Var_rt_lidar01,
+                         nps.transpose(dp0__drt_lidar01))
 
     # shape (Nysample,Nxsample,3) and (Nysample,Nxsample,3,3)
     l,v = np.linalg.eig(Var_p0)
@@ -268,7 +290,7 @@ for ilidar in range(len(args.lidar_models)):
         data_tuples.append( ( nps.clump(pellipsoid, n=3),
                               dict( tuplesize = -3,
                                     _with     = f'dots lc rgb "{color_sequence_rgb[ilidar%len(color_sequence_rgb)]}"',
-                                    legend = f'1-sigma uncertainty for lidar {ilidar}')), )
+                                    legend = f'1-sigma uncertainty for {topic}')), )
 
 
     if do_plot_worst_eigenvalue_heatmap:
@@ -294,10 +316,10 @@ for ilidar in range(len(args.lidar_models)):
              wait = True,
              xlabel = 'x',
              ylabel = 'y',
-             title = f'Worst-case 1-sigma transform uncertainty for lidar {ilidar} (top-down view)',
+             title = f'Worst-case 1-sigma transform uncertainty for {topic} (top-down view)',
              ascii = 1, # needed for the "using" scale
              _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
-             hardcopy=f'/tmp/uncertainty-1sigma-{ilidar=}.gp')
+             hardcopy=f'/tmp/uncertainty-1sigma-ilidar={ilidar}.gp')
 
         plot((thdeg_vertical,
               dict(tuplesize = 3,
@@ -311,10 +333,10 @@ for ilidar in range(len(args.lidar_models)):
              wait = True,
              xlabel = 'x',
              ylabel = 'y',
-             title = f'Worst-case transform uncertainty for lidar {ilidar} (top-down view): angle off vertical (deg)',
+             title = f'Worst-case transform uncertainty for {topic} (top-down view): angle off vertical (deg)',
              ascii = 1, # needed for the "using" scale
              _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
-             hardcopy=f'/tmp/uncertainty-direction-1sigma-{ilidar=}.gp')
+             hardcopy=f'/tmp/uncertainty-direction-1sigma-ilidar={ilidar}.gp')
 
 
 if do_plot_ellipsoids:
