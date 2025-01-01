@@ -82,3 +82,4 @@ def calibrate(*,
                            **kwargs)
 
 lidar_segmentation_default_context = _clc.lidar_segmentation_default_context
+fit_from_optimization_inputs       = _clc.fit_from_optimization_inputs

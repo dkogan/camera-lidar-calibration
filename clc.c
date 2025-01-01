@@ -1767,6 +1767,29 @@ static double x_dot_nlidar0(// out
     return mrcal_point3_inner(*nlidar0, *x);
 }
 
+// https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
+static double randn(void)
+{
+    static bool have_precomputed_value;
+    static double precomputed_value;
+    if(have_precomputed_value)
+    {
+        have_precomputed_value = false;
+        return precomputed_value;
+    }
+
+    double u1, u2;
+    do {
+        u1 = drand48();
+    } while (u1 == 0.);
+    u2 = drand48();
+
+    const double mag = sqrt(-2.0 * log(u1));
+    have_precomputed_value = true;
+    precomputed_value = mag * cos(2.0 * M_PI * u2);
+    return mag * sin(2.0 * M_PI * u2);
+}
+
 static void cost(const double*   b,
                  double*         x,
                  cholmod_sparse* Jt,
@@ -2835,6 +2858,118 @@ plot_geometry(const char* filename,
     return result;
 }
 
+// same inputs as fit()
+static bool dump_optimization_inputs(
+    const char* filename,
+
+    // in
+    const double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+    const double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
+    const double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+
+    const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
+    const unsigned int                 Nsensor_snapshots_filtered,
+
+    // These apply to ALL the sensor_snapshots[]
+    const unsigned int Nlidars,
+    const unsigned int Ncameras,
+    const mrcal_cameramodel_t*const* models, // Ncameras of these
+
+    // The dimensions of the chessboard grid being detected in the images
+    const int object_height_n,
+    const int object_width_n,
+    const double object_spacing)
+{
+    FILE* fp = fopen(filename, "wb");
+    if(fp == NULL)
+    {
+        MSG("Couldn't open '%s' for writing", filename);
+        return false;
+    }
+
+    fprintf(fp, "Nsensor_snapshots_filtered = %d\n", Nsensor_snapshots_filtered);
+    fprintf(fp, "Nlidars                    = %d\n", Nlidars);
+    fprintf(fp, "Ncameras                   = %d\n", Ncameras);
+    fprintf(fp, "object_height_n            = %d\n", object_height_n);
+    fprintf(fp, "object_width_n             = %d\n", object_width_n);
+    fprintf(fp, "object_spacing             = %f\n", object_spacing);
+
+    fwrite(Rt_lidar0_board,  sizeof(double), Nsensor_snapshots_filtered *4*3, fp);
+    fwrite(Rt_lidar0_lidar,  sizeof(double), (Nlidars-1)                *4*3, fp);
+    fwrite(Rt_lidar0_camera, sizeof(double), Ncameras                   *4*3, fp);
+
+
+    for(int isnapshot=0; isnapshot<Nsensor_snapshots_filtered; isnapshot++)
+    {
+        const sensor_snapshot_segmented_t* snapshot = &sensor_snapshots_filtered[isnapshot];
+
+        for(int icamera=0; icamera<Ncameras; icamera++)
+        {
+            if(snapshot->chessboard_corners[icamera] == NULL)
+            {
+                // indicate that this camera does NOT have observations
+                fwrite(&(uint8_t){0}, 1,1, fp);
+                continue;
+            }
+
+            // indicate that this camera DOES have observations
+            fwrite(&(uint8_t){1}, 1,1, fp);
+            fwrite(snapshot->chessboard_corners[icamera], sizeof(mrcal_point2_t), object_width_n*object_height_n, fp);
+        }
+
+        for(int ilidar=0; ilidar<Nlidars; ilidar++)
+        {
+            const points_and_plane_full_t* points_and_plane_full = &snapshot->lidar_scans[ilidar];
+
+            fwrite(&points_and_plane_full->n, sizeof(points_and_plane_full->n),1, fp);
+            if(points_and_plane_full->n == 0)
+                continue;
+
+            if(points_and_plane_full->ipoint == NULL)
+            {
+                // No ipoints[]: points[] are used densely. Indicate this with a
+                // 0 here: Npoints = n
+                fwrite(&(int){0}, sizeof(int),1, fp);
+                fwrite(points_and_plane_full->points, sizeof(points_and_plane_full->points[0]), points_and_plane_full->n, fp);
+            }
+            else
+            {
+                // Have ipoints[]: points[] are indexed by ipoints[]. Here I can
+                // have Npoints != n: some of the points[] may not be used. I
+                // write the minumum I need
+                int ipoint_max = 0;
+                for(int i=0; i<points_and_plane_full->n; i++)
+                    if(ipoint_max < points_and_plane_full->ipoint[i])
+                        ipoint_max = points_and_plane_full->ipoint[i];
+                const int Npoints = ipoint_max+1;
+                fwrite(&Npoints, sizeof(int),1, fp);
+
+                fwrite(points_and_plane_full->points, sizeof(points_and_plane_full->points[0]), Npoints, fp);
+                fwrite(points_and_plane_full->ipoint, sizeof(points_and_plane_full->ipoint[0]), points_and_plane_full->n, fp);
+            }
+
+            fwrite(&points_and_plane_full->plane, sizeof(points_and_plane_full->plane), 1, fp);
+        }
+    }
+
+    for(int icamera=0; icamera<Ncameras; icamera++)
+    {
+        const mrcal_cameramodel_t* model = models[icamera];
+        const int Nbytes_here =
+            sizeof(mrcal_cameramodel_t) +
+            mrcal_lensmodel_num_params(&model->lensmodel) * sizeof(double);
+
+        fwrite(&Nbytes_here, sizeof(int), 1, fp);
+        fwrite((uint8_t*)model,
+               Nbytes_here,
+               1,
+               fp);
+    }
+    fclose(fp);
+
+    return true;
+}
+
 // Align the LIDAR and camera geometry
 static bool
 fit(// out
@@ -3302,6 +3437,236 @@ print(Var - Var_c)
 
     return result;
 }
+
+
+bool clc_fit_from_optimization_inputs(// out
+                                      int* Nlidars,
+                                      int* Ncameras,
+                                      // Allocated by the function on success.
+                                      // It's the caller's responsibility to
+                                      // free() these
+                                      mrcal_pose_t** rt_ref_lidar,
+                                      mrcal_pose_t** rt_ref_camera,
+                                      // in
+                                      const char* filename,
+                                      bool inject_noise)
+{
+    bool result = false;
+
+    *rt_ref_lidar  = NULL;
+    *rt_ref_camera = NULL;
+
+    FILE* fp = fopen(filename, "rb");
+    if(fp == NULL)
+    {
+        MSG("Couldn't open '%s' for reading", filename);
+        return false;
+    }
+
+    char*  lineptr = NULL;
+    size_t nline   = 0;
+
+    unsigned int Nsensor_snapshots_filtered;
+    int          object_height_n;
+    int          object_width_n;
+    double       object_spacing;
+
+    if(0 >= getline(&lineptr, &nline, fp)) goto done;
+    if(1 != sscanf(lineptr, "Nsensor_snapshots_filtered = %d\n",  &Nsensor_snapshots_filtered)) goto done;
+    if(0 >= getline(&lineptr, &nline, fp)) goto done;
+    if(1 != sscanf(lineptr, "Nlidars                    = %d\n",  Nlidars)) goto done;
+    if(0 >= getline(&lineptr, &nline, fp)) goto done;
+    if(1 != sscanf(lineptr, "Ncameras                   = %d\n",  Ncameras)) goto done;
+    if(0 >= getline(&lineptr, &nline, fp)) goto done;
+    if(1 != sscanf(lineptr, "object_height_n            = %d\n",  &object_height_n)) goto done;
+    if(0 >= getline(&lineptr, &nline, fp)) goto done;
+    if(1 != sscanf(lineptr, "object_width_n             = %d\n",  &object_width_n)) goto done;
+    if(0 >= getline(&lineptr, &nline, fp)) goto done;
+    if(1 != sscanf(lineptr, "object_spacing             = %lf\n", &object_spacing)) goto done;
+
+    *rt_ref_lidar  = malloc(*Nlidars  * sizeof(mrcal_pose_t));
+    if(*rt_ref_lidar == NULL)
+        goto done;
+    *rt_ref_camera = malloc(*Ncameras * sizeof(mrcal_pose_t));
+    if(*rt_ref_camera == NULL)
+        goto done;
+
+
+    {
+        double Rt_lidar0_board [Nsensor_snapshots_filtered *4*3];
+        double Rt_lidar0_lidar [(*Nlidars-1)               *4*3];
+        double Rt_lidar0_camera[*Ncameras                  *4*3];
+
+        sensor_snapshot_segmented_t sensor_snapshots_filtered[Nsensor_snapshots_filtered];
+        memset(sensor_snapshots_filtered, 0, Nsensor_snapshots_filtered*sizeof(sensor_snapshots_filtered[0]));
+
+        mrcal_cameramodel_t* models[*Ncameras];
+
+        if(Nsensor_snapshots_filtered *4*3 != fread(Rt_lidar0_board,  sizeof(double), Nsensor_snapshots_filtered *4*3, fp))
+            goto done_inner;
+        if((*Nlidars-1)               *4*3 != fread(Rt_lidar0_lidar,  sizeof(double), (*Nlidars-1)               *4*3, fp))
+            goto done_inner;
+        if(*Ncameras                  *4*3 != fread(Rt_lidar0_camera, sizeof(double), *Ncameras                  *4*3, fp))
+            goto done_inner;
+
+
+        int Ncamera_observations = 0;
+
+        for(int isnapshot=0; isnapshot<Nsensor_snapshots_filtered; isnapshot++)
+        {
+            sensor_snapshot_segmented_t* snapshot = &sensor_snapshots_filtered[isnapshot];
+
+            for(int icamera=0; icamera<*Ncameras; icamera++)
+            {
+                uint8_t camera_has_observations;
+                if(1 != fread(&camera_has_observations, 1,1, fp))
+                    goto done_inner;
+                if(!camera_has_observations)
+                {
+                    snapshot->chessboard_corners[icamera] = NULL;
+                    continue;
+                }
+
+                snapshot->chessboard_corners[icamera] = malloc(sizeof(mrcal_point2_t)*object_width_n*object_height_n);
+                if(NULL == snapshot->chessboard_corners[icamera])
+                    goto done_inner;
+                if(object_width_n*object_height_n !=
+                   fread(snapshot->chessboard_corners[icamera], sizeof(mrcal_point2_t), object_width_n*object_height_n, fp))
+                    goto done_inner;
+            }
+
+            for(int ilidar=0; ilidar<*Nlidars; ilidar++)
+            {
+                points_and_plane_full_t* points_and_plane_full = &snapshot->lidar_scans[ilidar];
+
+                if(1 != fread(&points_and_plane_full->n, sizeof(points_and_plane_full->n),1, fp))
+                    goto done_inner;
+                if(points_and_plane_full->n == 0)
+                    continue;
+
+                int Npoints;
+                if(1 != fread(&Npoints, sizeof(int),1, fp))
+                    goto done_inner;
+
+                if(Npoints == 0)
+                {
+                    // No ipoints[]: points[] are used densely. Indicated here
+                    // with a 0: Npoints = n
+                    points_and_plane_full->ipoint = NULL;
+
+                    points_and_plane_full->points = malloc(sizeof(points_and_plane_full->points[0])*points_and_plane_full->n);
+                    if(NULL == points_and_plane_full->points)
+                        goto done_inner;
+                    if(points_and_plane_full->n !=
+                       fread(points_and_plane_full->points, sizeof(points_and_plane_full->points[0]), points_and_plane_full->n, fp))
+                        goto done_inner;
+                }
+                else
+                {
+                    // Have ipoints[]: points[] are indexed by ipoints[]. Here I can
+                    // have Npoints != n: some of the points[] may not be used. I
+                    // have the Npoints I need
+                    points_and_plane_full->points = malloc(sizeof(points_and_plane_full->points[0])*Npoints);
+                    if(NULL == points_and_plane_full->points)
+                        goto done_inner;
+                    points_and_plane_full->ipoint = malloc(sizeof(points_and_plane_full->ipoint[0])*points_and_plane_full->n);
+                    if(NULL == points_and_plane_full->ipoint)
+                        goto done_inner;
+                    if(Npoints != fread(points_and_plane_full->points, sizeof(points_and_plane_full->points[0]), Npoints, fp))
+                        goto done_inner;
+                    if(points_and_plane_full->n != fread((uint32_t*)points_and_plane_full->ipoint, sizeof(points_and_plane_full->ipoint[0]), points_and_plane_full->n, fp))
+                        goto done_inner;
+                }
+
+                if(1 != fread(&points_and_plane_full->plane, sizeof(points_and_plane_full->plane), 1, fp))
+                    goto done_inner;
+            }
+        }
+
+        for(int icamera=0; icamera<*Ncameras; icamera++)
+        {
+            int Nbytes_here;
+            if(1 != fread(&Nbytes_here, sizeof(Nbytes_here), 1, fp))
+                goto done_inner;
+            models[icamera] = malloc(Nbytes_here);
+            if(models[icamera] == NULL)
+                goto done_inner;
+            if(Nbytes_here != fread((uint8_t*)models[icamera],
+                                    1,
+                                    Nbytes_here,
+                                    fp))
+                goto done_inner;
+        }
+
+        result =
+            fit(NULL,
+
+                // in,out
+                // seed state on input
+                Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+                Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
+                Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+
+                // in
+                sensor_snapshots_filtered,
+                Nsensor_snapshots_filtered,
+
+                // These apply to ALL the sensor_snapshots[]
+                *Nlidars,
+                *Ncameras,
+                (const mrcal_cameramodel_t * const*)models, // Ncameras of these
+
+                // The dimensions of the chessboard grid being detected in the images
+                object_height_n,
+                object_width_n,
+                object_spacing,
+
+                false,false);
+
+        if(result)
+        {
+            (*rt_ref_lidar)[0] = (mrcal_pose_t){};
+            for(int i=1; i<*Nlidars; i++)
+                mrcal_rt_from_Rt( (double*)&(*rt_ref_lidar)[i], NULL,
+                                  &Rt_lidar0_lidar[(i-1)*4*3] );
+            for(int i=0; i<*Ncameras; i++)
+                mrcal_rt_from_Rt( (double*)&(*rt_ref_camera)[i], NULL,
+                                  &Rt_lidar0_camera[i*4*3] );
+        }
+    done_inner:
+        for(int isnapshot=0; isnapshot<Nsensor_snapshots_filtered; isnapshot++)
+        {
+            sensor_snapshot_segmented_t* snapshot = &sensor_snapshots_filtered[isnapshot];
+
+            for(int icamera=0; icamera<*Ncameras; icamera++)
+                free(snapshot->chessboard_corners[icamera]);
+
+            for(int ilidar=0; ilidar<*Nlidars; ilidar++)
+            {
+                points_and_plane_full_t* points_and_plane_full = &snapshot->lidar_scans[ilidar];
+                free(points_and_plane_full->points);
+                free((uint32_t*)points_and_plane_full->ipoint);
+            }
+        }
+
+        for(int icamera=0; icamera<*Ncameras; icamera++)
+            free(models[icamera]);
+    }
+
+ done:
+    free(lineptr);
+    fclose(fp);
+
+    if(!result)
+    {
+        free(*rt_ref_lidar);
+        *rt_ref_lidar = NULL;
+        free(*rt_ref_camera);
+        *rt_ref_camera = NULL;
+    }
+    return result;
+}
+
 
 static
 bool lidar_segmentation(// out

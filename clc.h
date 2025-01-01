@@ -394,6 +394,20 @@ bool clc_lidar_segmented_dense(// out
          bool check_gradient__use_distance_to_plane,
          bool check_gradient);
 
+
+bool clc_fit_from_optimization_inputs(// out
+                                      int* Nlidars,
+                                      int* Ncameras,
+                                      // Allocated by the function on success.
+                                      // It's the caller's responsibility to
+                                      // free() these
+                                      mrcal_pose_t** rt_ref_lidar,
+                                      mrcal_pose_t** rt_ref_camera,
+                                      // in
+                                      const char* filename,
+                                      bool inject_noise);
+
+
 bool
 clc_overlapping_regions(// out
                         clc_yaw_sector_t* yaw_sectors,

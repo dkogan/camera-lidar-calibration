@@ -645,6 +645,72 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     return result;
 }
 
+static PyObject* py_fit_from_optimization_inputs(PyObject* NPY_UNUSED(self),
+                                                 PyObject* args,
+                                                 PyObject* kwargs)
+{
+    PyObject* result   = NULL;
+    char*     filename = NULL;
+
+    int            Nlidars          = 0;
+    int            Ncameras         = 0;
+    mrcal_pose_t*  rt_ref_lidar     = NULL;
+    mrcal_pose_t*  rt_ref_camera    = NULL;
+    PyArrayObject* py_rt_ref_lidar  = NULL;
+    PyArrayObject* py_rt_ref_camera = NULL;
+    int            inject_noise     = 0;
+
+    SET_SIGINT();
+
+    char* keywords[] = { "filename",
+                         "inject_noise",
+                         NULL };
+    if(!PyArg_ParseTupleAndKeywords( args, kwargs,
+                                     "s" "|$" "p",
+                                     keywords,
+                                     &filename,
+                                     &inject_noise,
+                                     NULL))
+        goto done;
+
+    if(!clc_fit_from_optimization_inputs(// out
+                                         &Nlidars,
+                                         &Ncameras,
+                                         &rt_ref_lidar,
+                                         &rt_ref_camera,
+                                         // in
+                                         filename,
+                                         inject_noise))
+    {
+        BARF("clc_fit_from_optimization_inputs() failed");
+        goto done;
+    }
+
+    py_rt_ref_lidar = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Nlidars,6}), NPY_FLOAT64);
+    if(py_rt_ref_lidar == NULL) goto done;
+
+    py_rt_ref_camera = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Ncameras,6}), NPY_FLOAT64);
+    if(py_rt_ref_camera == NULL) goto done;
+
+    memcpy( PyArray_DATA(py_rt_ref_lidar),
+            rt_ref_lidar,
+            Nlidars*6*sizeof(double));
+    memcpy( PyArray_DATA(py_rt_ref_camera),
+            rt_ref_camera,
+            Ncameras*6*sizeof(double));
+
+    result = Py_BuildValue("{sOsO}",
+                           "rt_ref_lidar",  py_rt_ref_lidar,
+                           "rt_ref_camera", py_rt_ref_camera);
+ done:
+    free(rt_ref_lidar);
+    free(rt_ref_camera);
+    Py_XDECREF(py_rt_ref_lidar);
+    Py_XDECREF(py_rt_ref_camera);
+    RESET_SIGINT();
+
+    return result;
+}
 
 static PyObject* py_lidar_segmentation_default_context(PyObject* NPY_UNUSED(self),
                                     PyObject* NPY_UNUSED(args))
@@ -672,15 +738,19 @@ static const char lidar_segmentation_docstring[] =
 static const char calibrate_docstring[] =
 #include "calibrate.docstring.h"
     ;
+static const char fit_from_optimization_inputs_docstring[] =
+#include "fit_from_optimization_inputs.docstring.h"
+    ;
 static const char lidar_segmentation_default_context_docstring[] =
 #include "lidar_segmentation_default_context.docstring.h"
     ;
 
 static PyMethodDef methods[] =
     {
-     PYMETHODDEF_ENTRY(calibrate,               py_calibrate,               METH_VARARGS | METH_KEYWORDS),
-     PYMETHODDEF_ENTRY(lidar_segmentation,      py_lidar_segmentation,      METH_VARARGS | METH_KEYWORDS),
-     PYMETHODDEF_ENTRY(lidar_segmentation_default_context,         py_lidar_segmentation_default_context,         METH_NOARGS),
+     PYMETHODDEF_ENTRY(calibrate,                   py_calibrate,                    METH_VARARGS | METH_KEYWORDS),
+     PYMETHODDEF_ENTRY(fit_from_optimization_inputs,py_fit_from_optimization_inputs, METH_VARARGS | METH_KEYWORDS),
+     PYMETHODDEF_ENTRY(lidar_segmentation,          py_lidar_segmentation,           METH_VARARGS | METH_KEYWORDS),
+     PYMETHODDEF_ENTRY(lidar_segmentation_default_context, py_lidar_segmentation_default_context, METH_NOARGS),
      {}
     };
 
