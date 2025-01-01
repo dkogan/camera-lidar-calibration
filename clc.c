@@ -3001,7 +3001,11 @@ fit(// out
     const double object_spacing,
 
     bool check_gradient__use_distance_to_plane,
-    bool check_gradient )
+    bool check_gradient,
+    bool skip_presolve,
+    bool skip_plots,
+    bool skip_prints)
+
 {
     bool result = false;
 
@@ -3033,7 +3037,8 @@ fit(// out
                               .object_spacing        = object_spacing};
     dogleg_parameters2_t dogleg_parameters;
     dogleg_getDefaultParameters(&dogleg_parameters);
-    if(!(check_gradient__use_distance_to_plane || check_gradient))
+    if(!skip_prints &&
+       !(check_gradient__use_distance_to_plane || check_gradient))
         dogleg_parameters.dogleg_debug = DOGLEG_DEBUG_VNLOG;
 
     dogleg_solverContext_t* solver_context = NULL;
@@ -3051,17 +3056,20 @@ fit(// out
     const int istate_board0  = state_index_board (0, &ctx);
     const int Nstate_board   = num_states_boards (&ctx);
 
-    printf("## Nstate=%d Nmeasurements=%d Nlidars=%d Ncameras=%d Nsnapshots=%d\n",
-           Nstate,Nmeasurements,Nlidars,Ncameras,Nsensor_snapshots_filtered);
-    if(Ncameras > 0)
-        printf("## States rt_lidar0_lidar in [%d,%d], rt_lidar0_camera in [%d,%d], rt_lidar0_board in [%d,%d]\n",
-               istate_lidar1,  istate_lidar1  + Nstate_lidar -1,
-               istate_camera0, istate_camera0 + Nstate_camera-1,
-               istate_board0,  istate_board0  + Nstate_board -1);
-    else
-        printf("## States rt_lidar0_lidar in [%d,%d], rt_lidar0_board in [%d,%d]\n",
-               istate_lidar1, istate_lidar1 + Nstate_lidar-1,
-               istate_board0, istate_board0 + Nstate_board-1);
+    if(!skip_prints)
+    {
+        printf("## Nstate=%d Nmeasurements=%d Nlidars=%d Ncameras=%d Nsnapshots=%d\n",
+               Nstate,Nmeasurements,Nlidars,Ncameras,Nsensor_snapshots_filtered);
+        if(Ncameras > 0)
+            printf("## States rt_lidar0_lidar in [%d,%d], rt_lidar0_camera in [%d,%d], rt_lidar0_board in [%d,%d]\n",
+                   istate_lidar1,  istate_lidar1  + Nstate_lidar -1,
+                   istate_camera0, istate_camera0 + Nstate_camera-1,
+                   istate_board0,  istate_board0  + Nstate_board -1);
+        else
+            printf("## States rt_lidar0_lidar in [%d,%d], rt_lidar0_board in [%d,%d]\n",
+                   istate_lidar1, istate_lidar1 + Nstate_lidar-1,
+                   istate_board0, istate_board0 + Nstate_board-1);
+    }
 
     double b[Nstate];
     double x[Nmeasurements];
@@ -3082,7 +3090,8 @@ fit(// out
                       &ctx);
 
     cost(b, x, NULL, &ctx);
-    plot_residuals("/tmp/residuals-seed", x, &ctx);
+    if(!skip_plots)
+        plot_residuals("/tmp/residuals-seed", x, &ctx);
 
     for(int i=0; i<Nmeasurements; i++)
         if( fabs(x[i])*SCALE_MEASUREMENT_PX > 1000 ||
@@ -3092,27 +3101,31 @@ fit(// out
             goto done;
         }
 
-    MSG("Starting pre-solve");
-    ctx.use_distance_to_plane = true;
-    if(!check_gradient__use_distance_to_plane)
+    if(!skip_presolve)
     {
-        norm2x = dogleg_optimize2(b,
-                                  Nstate, Nmeasurements, Njnnz,
-                                  (dogleg_callback_t*)&cost, &ctx,
-                                  &dogleg_parameters,
-                                  &solver_context);
+        if(!skip_prints)
+            MSG("Starting pre-solve");
+        ctx.use_distance_to_plane = true;
+        if(!check_gradient__use_distance_to_plane)
+        {
+            norm2x = dogleg_optimize2(b,
+                                      Nstate, Nmeasurements, Njnnz,
+                                      (dogleg_callback_t*)&cost, &ctx,
+                                      &dogleg_parameters,
+                                      &solver_context);
+        }
+        else
+        {
+            for(int ivar=0; ivar<Nstate; ivar++)
+                dogleg_testGradient(ivar, b,
+                                    Nstate, Nmeasurements, Njnnz,
+                                    (dogleg_callback_t*)&cost, &ctx);
+            result = true;
+            goto done;
+        }
+        if(!skip_prints)
+            MSG("Finished pre-solve; started full solve;");
     }
-    else
-    {
-        for(int ivar=0; ivar<Nstate; ivar++)
-            dogleg_testGradient(ivar, b,
-                                Nstate, Nmeasurements, Njnnz,
-                                (dogleg_callback_t*)&cost, &ctx);
-        result = true;
-        goto done;
-    }
-
-    MSG("Finished pre-solve; started full solve;");
 
     ctx.use_distance_to_plane = false;
     if(check_gradient)
@@ -3132,7 +3145,8 @@ fit(// out
                               &dogleg_parameters,
                               &solver_context);
 
-    MSG("Finished full solve");
+    if(!skip_prints)
+        MSG("Finished full solve");
 
 
 
@@ -3154,8 +3168,9 @@ fit(// out
                          &rt_lidar0_camera[i*6]);
 
     cost(b, x, NULL, &ctx);
-    MSG("RMS fit error: %.2f normalized units",
-        sqrt(norm2x / (double)Nmeasurements));
+    if(!skip_prints)
+        MSG("RMS fit error: %.2f normalized units",
+            sqrt(norm2x / (double)Nmeasurements));
 
     const int imeas_lidar_0                = measurement_index_lidar(0,0, &ctx);
     const int Nmeas_lidar_observation_all  = num_measurements_lidars(&ctx);
@@ -3163,26 +3178,30 @@ fit(// out
     const int Nmeas_camera_observation_all = num_measurements_cameras(&ctx);
     const int imeas_regularization_0       = measurement_index_regularization(&ctx);
     const int Nmeas_regularization         = num_measurements_regularization(&ctx);
-    if(Ncameras > 0)
-    {
-        double norm2x_camera = 0;
-        for(int i=imeas_camera_0; i<imeas_camera_0+Nmeas_camera_observation_all; i++)
-            norm2x_camera += x[i]*x[i];
-        MSG("RMS fit error (camera): %.2f pixels",
-            sqrt(norm2x_camera / (Nmeas_camera_observation_all/2) )*SCALE_MEASUREMENT_PX);
-    }
-    double norm2x_lidar = 0;
-    for(int i=imeas_lidar_0; i<imeas_lidar_0+Nmeas_lidar_observation_all; i++)
-        norm2x_lidar += x[i]*x[i];
-    MSG("RMS fit error (lidar): %.3f m",
-        sqrt(norm2x_lidar / Nmeas_lidar_observation_all )*SCALE_MEASUREMENT_M);
-    double norm2x_regularization = 0;
-    for(int i=imeas_regularization_0; i<imeas_regularization_0+Nmeas_regularization; i++)
-        norm2x_regularization += x[i]*x[i];
-    MSG("norm2(error_regularization)/norm2(error): %.2f",
-        norm2x_regularization/norm2x);
 
-    plot_residuals("/tmp/residuals", x, &ctx);
+    if(!skip_prints)
+    {
+        if(Ncameras > 0)
+        {
+            double norm2x_camera = 0;
+            for(int i=imeas_camera_0; i<imeas_camera_0+Nmeas_camera_observation_all; i++)
+                norm2x_camera += x[i]*x[i];
+            MSG("RMS fit error (camera): %.2f pixels",
+                sqrt(norm2x_camera / (Nmeas_camera_observation_all/2) )*SCALE_MEASUREMENT_PX);
+        }
+        double norm2x_lidar = 0;
+        for(int i=imeas_lidar_0; i<imeas_lidar_0+Nmeas_lidar_observation_all; i++)
+            norm2x_lidar += x[i]*x[i];
+        MSG("RMS fit error (lidar): %.3f m",
+            sqrt(norm2x_lidar / Nmeas_lidar_observation_all )*SCALE_MEASUREMENT_M);
+        double norm2x_regularization = 0;
+        for(int i=imeas_regularization_0; i<imeas_regularization_0+Nmeas_regularization; i++)
+            norm2x_regularization += x[i]*x[i];
+        MSG("norm2(error_regularization)/norm2(error): %.2f",
+            norm2x_regularization/norm2x);
+    }
+    if(!skip_plots)
+        plot_residuals("/tmp/residuals", x, &ctx);
 
 
     //////////////////// uncertainty
@@ -3621,7 +3640,9 @@ bool clc_fit_from_optimization_inputs(// out
                 object_width_n,
                 object_spacing,
 
-                false,false);
+                false,false,
+                // skip everything
+                true, true, true);
 
         if(result)
         {
@@ -4216,7 +4237,9 @@ bool _clc_internal(// out
                 object_spacing,
 
                 check_gradient__use_distance_to_plane,
-                check_gradient))
+                check_gradient,
+                // skip nothing
+                false, false, false))
         {
             MSG("fit() failed");
             goto done;

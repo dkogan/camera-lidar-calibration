@@ -686,6 +686,7 @@ with open(filename, 'wb') as f:
                       rt_ref_camera    = result['rt_ref_camera'],
                       kwargs_calibrate = kwargs_calibrate),
                  f )
+print(f"Wrote '{filename}'")
 
 
 sys.exit()
