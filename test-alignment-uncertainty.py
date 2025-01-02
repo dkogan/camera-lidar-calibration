@@ -49,6 +49,7 @@ import numpysane as nps
 import mrcal
 import clc
 
+import testutils
 
 
 
@@ -108,13 +109,12 @@ p0_sampled_mean = np.mean(p0_sampled, axis=-2)
 Var_observed = nps.matmult((p0_sampled - p0_sampled_mean).T,
                            (p0_sampled - p0_sampled_mean)) / args.Nsamples
 
-l_observed, v_observed  = mrcal.sorted_eig(Var_observed)
-l_predicted,v_predicted = mrcal.sorted_eig(Var_predicted)
+testutils.confirm_covariances_equal(Var_predicted,
+                                    Var_observed ,
+                                    what = f"reprojection to reference lidar {context['lidar_topic'][0]} of {lidar_topic_requested}",
+                                    eps_eigenvalues       = 0.2, # relative
+                                    eps_eigenvectors_deg  = 5.,
+                                    check_sqrt_eigenvalue = True)
 
-print(nps.cat(l_observed, l_predicted))
-print(np.arccos( nps.inner(v_observed.T, v_predicted.T) ) * 180./np.pi)
 
-
-import IPython
-IPython.embed()
-sys.exit()
+testutils.finish()
