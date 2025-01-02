@@ -65,7 +65,10 @@ def parse_args():
                         action = 'append',
                         help = '''Bags to exclude from the processing. These are
                         a regex match against the bag paths''')
-
+    parser.add_argument('--dump',
+                        type=str,
+                        help = '''Write solver diagnostics into the given
+                        .pickle file''')
     parser.add_argument('models',
                         type = str,
                         nargs='*',
@@ -655,7 +658,7 @@ kwargs_calibrate = dict(bags            = args.bag,
                         Npoints_per_segment                = 15,
                         threshold_min_Nsegments_in_cluster = 4,
                         **calibration_object_kwargs)
-result = clc.calibrate(dump_optimization_inputs = True,
+result = clc.calibrate(dump_optimization_inputs = args.dump is not None,
                        **kwargs_calibrate)
 
 
@@ -678,14 +681,15 @@ for ilidar,rt_ref_lidar in enumerate(result['rt_ref_lidar']):
                 note = "Intrinsics are made-up and nonsensical")
     print(f"Wrote '{filename}'")
 
-filename = '/tmp/clc-context.pickle'
-with open(filename, 'wb') as f:
-    pickle.dump( dict(result           = result,
-                      lidar_topic      = args.lidar_topic,
-                      camera_topic     = args.camera_topic,
-                      kwargs_calibrate = kwargs_calibrate),
-                 f )
-print(f"Wrote '{filename}'")
+if args.dump is not None:
+    with open(args.dump, 'wb') as f:
+        pickle.dump( dict(result           = result,
+                          lidar_topic      = args.lidar_topic,
+                          camera_topic     = args.camera_topic,
+                          kwargs_calibrate = kwargs_calibrate),
+                     f )
+    print(f"Wrote '{args.dump}'")
+
 
 
 sys.exit()
