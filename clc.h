@@ -278,6 +278,11 @@ bool clc_unsorted(// out
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
+         // Pass non-NULL to get the fit-inputs dump. On success, these encode
+         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         char**  buf_inputs_dump,
+         size_t* size_inputs_dump,
+
          // in
          const clc_sensor_snapshot_unsorted_t* sensor_snapshots,
          const unsigned int                    Nsensor_snapshots,
@@ -313,6 +318,11 @@ bool clc_sorted(// out
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
+         // Pass non-NULL to get the fit-inputs dump. On success, these encode
+         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         char**  buf_inputs_dump,
+         size_t* size_inputs_dump,
+
          // in
          const clc_sensor_snapshot_sorted_t* sensor_snapshots,
          const unsigned int                  Nsensor_snapshots,
@@ -345,6 +355,11 @@ bool clc_lidar_segmented(// out
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
+         // Pass non-NULL to get the fit-inputs dump. On success, these encode
+         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         char**  buf_inputs_dump,
+         size_t* size_inputs_dump,
+
          // in
          const clc_sensor_snapshot_segmented_t* sensor_snapshots,
          const unsigned int                     Nsensor_snapshots,
@@ -373,6 +388,11 @@ bool clc_lidar_segmented_dense(// out
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
+
+         // Pass non-NULL to get the fit-inputs dump. On success, these encode
+         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         char**  buf_inputs_dump,
+         size_t* size_inputs_dump,
 
          // in
          const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots,
@@ -404,7 +424,8 @@ bool clc_fit_from_optimization_inputs(// out
                                       mrcal_pose_t** rt_ref_lidar,
                                       mrcal_pose_t** rt_ref_camera,
                                       // in
-                                      const char* filename,
+                                      const char* buf_inputs_dump,
+                                      size_t      size_inputs_dump,
                                       bool inject_noise);
 
 

@@ -655,7 +655,8 @@ kwargs_calibrate = dict(bags            = args.bag,
                         Npoints_per_segment                = 15,
                         threshold_min_Nsegments_in_cluster = 4,
                         **calibration_object_kwargs)
-result = clc.calibrate(**kwargs_calibrate)
+result = clc.calibrate(dump_optimization_inputs = True,
+                       **kwargs_calibrate)
 
 
 for imodel in range(len(args.models)):
@@ -679,11 +680,9 @@ for ilidar,rt_ref_lidar in enumerate(result['rt_ref_lidar']):
 
 filename = '/tmp/clc-context.pickle'
 with open(filename, 'wb') as f:
-    pickle.dump( dict(Var              = result['Var'],
+    pickle.dump( dict(result           = result,
                       lidar_topic      = args.lidar_topic,
                       camera_topic     = args.camera_topic,
-                      rt_ref_lidar     = result['rt_ref_lidar'],
-                      rt_ref_camera    = result['rt_ref_camera'],
                       kwargs_calibrate = kwargs_calibrate),
                  f )
 print(f"Wrote '{filename}'")

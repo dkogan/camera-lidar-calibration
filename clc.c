@@ -2860,7 +2860,10 @@ plot_geometry(const char* filename,
 
 // same inputs as fit()
 static bool dump_optimization_inputs(
-    const char* filename,
+    // on success, these encode the data buffer. The caller must
+    // free(*buf_inputs_dump) when done
+    char**  buf_inputs_dump,
+    size_t* size_inputs_dump,
 
     // in
     const double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
@@ -2880,11 +2883,15 @@ static bool dump_optimization_inputs(
     const int object_width_n,
     const double object_spacing)
 {
-    FILE* fp = fopen(filename, "wb");
+    bool result = false;
+
+    *buf_inputs_dump  = NULL;
+    *size_inputs_dump = 0;
+    FILE* fp = open_memstream(buf_inputs_dump, size_inputs_dump);
     if(fp == NULL)
     {
-        MSG("Couldn't open '%s' for writing", filename);
-        return false;
+        MSG("open_memstream( optimization-inputs-dump ) failed");
+        goto done;
     }
 
     fprintf(fp, "Nsensor_snapshots_filtered = %d\n", Nsensor_snapshots_filtered);
@@ -2965,9 +2972,19 @@ static bool dump_optimization_inputs(
                1,
                fp);
     }
-    fclose(fp);
 
-    return true;
+    result = true;
+
+ done:
+    if(fp != NULL)
+        fclose(fp);
+    if(!result)
+    {
+        free(*buf_inputs_dump);
+        *buf_inputs_dump  = NULL;
+        *size_inputs_dump = 0;
+    }
+    return result;
 }
 
 // Align the LIDAR and camera geometry
@@ -3467,7 +3484,8 @@ bool clc_fit_from_optimization_inputs(// out
                                       mrcal_pose_t** rt_ref_lidar,
                                       mrcal_pose_t** rt_ref_camera,
                                       // in
-                                      const char* filename,
+                                      const char* buf_inputs_dump,
+                                      size_t      size_inputs_dump,
                                       bool inject_noise)
 {
     bool result = false;
@@ -3475,10 +3493,10 @@ bool clc_fit_from_optimization_inputs(// out
     *rt_ref_lidar  = NULL;
     *rt_ref_camera = NULL;
 
-    FILE* fp = fopen(filename, "rb");
+    FILE* fp = fmemopen((char*)buf_inputs_dump, size_inputs_dump, "r");
     if(fp == NULL)
     {
-        MSG("Couldn't open '%s' for reading", filename);
+        MSG("Couldn't open buffer for reading");
         return false;
     }
 
@@ -3908,6 +3926,11 @@ bool _clc_internal(// out
          // (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
+         // Pass non-NULL to get the fit-inputs dump. On success, these encode
+         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         char**  buf_inputs_dump,
+         size_t* size_inputs_dump,
+
          // in
 
          // Exactly one of these should be non-NULL
@@ -4261,6 +4284,30 @@ bool _clc_internal(// out
             goto done;
         }
 
+        if(buf_inputs_dump != NULL)
+        {
+            if(!dump_optimization_inputs(
+                                         buf_inputs_dump,
+                                         size_inputs_dump,
+                                         Rt_lidar0_board,
+                                         Rt_lidar0_lidar,
+                                         Rt_lidar0_camera,
+
+                                         sensor_snapshots_filtered,
+                                         Nsensor_snapshots_filtered,
+
+                                         Nlidars,
+                                         Ncameras,
+                                         models,
+                                         object_height_n,
+                                         object_width_n,
+                                         object_spacing))
+            {
+                MSG("dump_optimization_inputs() failed");
+            }
+        }
+
+
         if(check_gradient__use_distance_to_plane || check_gradient)
         {
             result = true;
@@ -4317,6 +4364,15 @@ bool _clc_internal(// out
 
  done:
     free(pool);
+    if(buf_inputs_dump != NULL)
+    {
+        if(!result)
+        {
+            free(*buf_inputs_dump);
+            *buf_inputs_dump  = NULL;
+            *size_inputs_dump = 0;
+        }
+    }
     return result;
 }
 
@@ -4328,6 +4384,11 @@ bool clc_unsorted(// out
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
+
+         // Pass non-NULL to get the fit-inputs dump. On success, these encode
+         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         char**  buf_inputs_dump,
+         size_t* size_inputs_dump,
 
          // in
          const clc_sensor_snapshot_unsorted_t* sensor_snapshots,
@@ -4358,6 +4419,8 @@ bool clc_unsorted(// out
                          rt_ref_lidar,
                          rt_ref_camera,
                          Var_rt_lidar0_sensor,
+                         buf_inputs_dump,
+                         size_inputs_dump,
 
                          // in
                          sensor_snapshots, NULL, NULL, NULL,
@@ -4381,6 +4444,11 @@ bool clc_sorted(// out
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
+
+         // Pass non-NULL to get the fit-inputs dump. On success, these encode
+         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         char**  buf_inputs_dump,
+         size_t* size_inputs_dump,
 
          // in
          const clc_sensor_snapshot_sorted_t* sensor_snapshots,
@@ -4408,6 +4476,8 @@ bool clc_sorted(// out
                          rt_ref_lidar,
                          rt_ref_camera,
                          Var_rt_lidar0_sensor,
+                         buf_inputs_dump,
+                         size_inputs_dump,
 
                          // in
                          NULL, sensor_snapshots, NULL, NULL,
@@ -4431,6 +4501,11 @@ bool clc_lidar_segmented(// out
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
+
+         // Pass non-NULL to get the fit-inputs dump. On success, these encode
+         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         char**  buf_inputs_dump,
+         size_t* size_inputs_dump,
 
          // in
          const clc_sensor_snapshot_segmented_t* sensor_snapshots,
@@ -4456,6 +4531,8 @@ bool clc_lidar_segmented(// out
                          rt_ref_lidar,
                          rt_ref_camera,
                          Var_rt_lidar0_sensor,
+                         buf_inputs_dump,
+                         size_inputs_dump,
 
                          // in
                          NULL, NULL, sensor_snapshots, NULL,
@@ -4479,6 +4556,11 @@ bool clc_lidar_segmented_dense(// out
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
+
+         // Pass non-NULL to get the fit-inputs dump. On success, these encode
+         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         char**  buf_inputs_dump,
+         size_t* size_inputs_dump,
 
          // in
          const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots,
@@ -4504,6 +4586,8 @@ bool clc_lidar_segmented_dense(// out
                          rt_ref_lidar,
                          rt_ref_camera,
                          Var_rt_lidar0_sensor,
+                         buf_inputs_dump,
+                         size_inputs_dump,
 
                          // in
                          NULL, NULL, NULL, sensor_snapshots,

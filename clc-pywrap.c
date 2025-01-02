@@ -429,11 +429,15 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
 {
     PyObject* result = NULL;
 
-    PyTupleObject* py_sensor_snapshots = NULL;
-    PyObject*      py_models           = NULL;
-    PyArrayObject* rt_ref_lidar        = NULL;
-    PyArrayObject* rt_ref_camera       = NULL;
-    PyArrayObject* Var_rt_lidar0_sensor= NULL;
+    PyTupleObject* py_sensor_snapshots  = NULL;
+    PyObject*      py_models            = NULL;
+    PyArrayObject* rt_ref_lidar         = NULL;
+    PyArrayObject* rt_ref_camera        = NULL;
+    PyArrayObject* Var_rt_lidar0_sensor = NULL;
+    PyObject*      inputs_dump          = NULL;
+    // used if(dump_optimization_inputs)
+    char*  buf_inputs_dump  = NULL;
+    size_t size_inputs_dump = NULL;
 
     PyObject* py_model = NULL;
 
@@ -453,6 +457,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
 
     int check_gradient__use_distance_to_plane = 0;
     int check_gradient                        = 0;
+    int dump_optimization_inputs              = 0;
+
     // sensor_snapshots is a tuple. Each slice corresponds to
     // clc_sensor_snapshot_unsorted_t; it is a tuple:
     //
@@ -477,6 +483,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          "object_spacing",
                          "check_gradient__use_distance_to_plane",
                          "check_gradient",
+                         "dump_optimization_inputs",
                          CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
@@ -490,6 +497,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                                      &object_spacing,
                                      &check_gradient__use_distance_to_plane,
                                      &check_gradient,
+                                     &dump_optimization_inputs,
                                      CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX)
                                      NULL))
         goto done;
@@ -608,6 +616,9 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          (mrcal_pose_t*)PyArray_DATA(rt_ref_lidar),
                          (mrcal_pose_t*)PyArray_DATA(rt_ref_camera),
                          (double      *)PyArray_DATA(Var_rt_lidar0_sensor),
+                         dump_optimization_inputs ? &buf_inputs_dump  : NULL,
+                         dump_optimization_inputs ? &size_inputs_dump : NULL,
+
                          // in
                          sensor_snapshots,
                          Nsensor_snapshots,
@@ -628,10 +639,26 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
         }
     }
 
-    result = Py_BuildValue("{sOsOsO}",
-                           "rt_ref_lidar",  rt_ref_lidar,
-                           "rt_ref_camera", rt_ref_camera,
-                           "Var",           Var_rt_lidar0_sensor);
+    if(buf_inputs_dump == NULL)
+        result = Py_BuildValue("{sOsOsO}",
+                               "rt_ref_lidar",  rt_ref_lidar,
+                               "rt_ref_camera", rt_ref_camera,
+                               "Var",           Var_rt_lidar0_sensor);
+    else
+    {
+        inputs_dump =
+            PyBytes_FromStringAndSize(buf_inputs_dump, size_inputs_dump);
+        if(inputs_dump == NULL)
+        {
+            BARF("PyBytes_FromStringAndSize(buf_inputs_dump) failed");
+            goto done;
+        }
+        result = Py_BuildValue("{sOsOsOsO}",
+                               "rt_ref_lidar",  rt_ref_lidar,
+                               "rt_ref_camera", rt_ref_camera,
+                               "Var",           Var_rt_lidar0_sensor,
+                               "inputs-dump",   inputs_dump);
+    }
 
  done:
     Py_XDECREF(rt_ref_lidar);
@@ -640,6 +667,9 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     Py_XDECREF(py_model);
     for(int i=0; i<Ncameras; i++)
         mrcal_free_cameramodel(&models[i]);
+    if(buf_inputs_dump != NULL)
+        free(buf_inputs_dump);
+    Py_XDECREF(inputs_dump);
     RESET_SIGINT();
 
     return result;
@@ -649,8 +679,8 @@ static PyObject* py_fit_from_optimization_inputs(PyObject* NPY_UNUSED(self),
                                                  PyObject* args,
                                                  PyObject* kwargs)
 {
-    PyObject* result   = NULL;
-    char*     filename = NULL;
+    PyObject* result      = NULL;
+    PyObject* inputs_dump = NULL;
 
     int            Nlidars          = 0;
     int            Ncameras         = 0;
@@ -662,24 +692,30 @@ static PyObject* py_fit_from_optimization_inputs(PyObject* NPY_UNUSED(self),
 
     SET_SIGINT();
 
-    char* keywords[] = { "filename",
+    char* keywords[] = { "inputs-dump",
                          "inject_noise",
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "s" "|$" "p",
+                                     "O" "|$" "p",
                                      keywords,
-                                     &filename,
+                                     &inputs_dump,
                                      &inject_noise,
                                      NULL))
         goto done;
 
+    if(!PyBytes_Check(inputs_dump))
+    {
+        BARF("inputs-dump should be a 'bytes' object");
+        goto done;
+    }
     if(!clc_fit_from_optimization_inputs(// out
                                          &Nlidars,
                                          &Ncameras,
                                          &rt_ref_lidar,
                                          &rt_ref_camera,
                                          // in
-                                         filename,
+                                         PyBytes_AS_STRING(inputs_dump),
+                                         PyBytes_GET_SIZE( inputs_dump),
                                          inject_noise))
     {
         BARF("clc_fit_from_optimization_inputs() failed");
