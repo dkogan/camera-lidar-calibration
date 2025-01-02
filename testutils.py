@@ -7,7 +7,7 @@ import numpysane as nps
 import os
 import re
 from inspect import currentframe
-
+import mrcal
 
 Nchecks = 0
 NchecksFailed = 0
@@ -283,6 +283,79 @@ def confirm_does_not_raise(f, msg=''):
         print_red("FAILED{}".format((': ' + msg) if msg else ''))
         NchecksFailed = NchecksFailed + 1
         return False
+
+
+def confirm_covariances_equal(var, var_ref,
+                              *,
+                              what,
+                              # scalar float to use for all the eigenvalues, of
+                              # a list of length 3, to use in order from largest
+                              # to smallest. None to skip that axis
+                              eps_eigenvalues,
+                              eps_eigenvectors_deg,
+                              check_biggest_eigenvalue_only = False,
+
+                              # In real units, the ellipse radii are of size
+                              # sqrt(eigenvalue), so this SHOULD be true. But I
+                              # default to False to make the old tests work. New
+                              # tests should set this to True
+                              check_sqrt_eigenvalue         = False):
+
+    # First, the thing is symmetric, right?
+    confirm_equal(nps.transpose(var),
+                  var,
+                  worstcase = True,
+                  msg = f"Var(dq) is symmetric for {what}")
+
+
+    l_predicted,v_predicted = mrcal.sorted_eig(var)
+    l_observed, v_observed  = mrcal.sorted_eig(var_ref)
+
+    eccentricity_threshold = 2.
+
+    if check_sqrt_eigenvalue:
+        l_predicted = np.sqrt(l_predicted)
+        l_observed  = np.sqrt(l_observed)
+        eccentricity_threshold = np.sqrt(eccentricity_threshold)
+
+    # This look at JUST the most dominant modes
+    eccentricity_predicted = l_predicted[-1] / l_predicted[-2]
+
+    for i in range(var.shape[-1]):
+        # check all the eigenvalues, in order from largest to smallest
+        if isinstance(eps_eigenvalues, float):
+            eps = eps_eigenvalues
+        else:
+            eps = eps_eigenvalues[i]
+            if eps is None:
+                continue
+
+        confirm_equal(l_observed[-1-i],
+                      l_predicted[-1-i],
+                      eps = eps,
+                      worstcase = True,
+                      relative  = True,
+                      msg = f"Var(dq) largest[{i}] eigenvalue match for {what}")
+        if check_biggest_eigenvalue_only:
+            break
+
+    # I only check the eigenvector directions if the ellipse is sufficiently
+    # non-circular. A circular ellipse has poorly-defined eigenvector directions
+    if eccentricity_predicted > eccentricity_threshold:
+
+        # I look at the direction of the largest ellipse axis only
+        v0_predicted = v_predicted[:,-1]
+        v0_observed  = v_observed [:,-1]
+
+        confirm_equal(np.arccos(np.abs(nps.inner(v0_observed,v0_predicted))) * 180./np.pi,
+                      0,
+                      eps = eps_eigenvectors_deg,
+                      worstcase = True,
+                      msg = f"Var(dq) eigenvectors match for {what}")
+
+    # I don't bother checking v1. I already made sure the matrix is
+    # symmetric. Thus the eigenvectors are orthogonal, so any angle offset
+    # in v0 will be exactly the same in v1
 
 
 
