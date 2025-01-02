@@ -24,7 +24,17 @@ def parse_args():
                         help = '''The one LIDAR topic to validate''')
     parser.add_argument('--context',
                         required = True,
-                        help = '''.pickle file from fit.py''')
+                        help = '''.pickle file from fit.py --dump''')
+    parser.add_argument('--Nsamples',
+                        type=int,
+                        default=100,
+                        help='''How many random samples to evaluate''')
+    parser.add_argument('--p0',
+                        type  = float,
+                        nargs = 3,
+                        default=(8., 2., 1.),
+                        help='''Operating point, in the reference lidar coord
+                        system. By default an arbitrary reasonable point is used''')
 
     args = parser.parse_args()
 
@@ -63,7 +73,7 @@ if ilidar == 0:
 
 # arbitrary sample point, in the reference lidar's coord system
 # shape (..., 3)
-p0 = np.array((8., 2., 1.),)
+p0 = np.array(args.p0)
 
 p1 = mrcal.transform_point_rt(rt_lidar0_lidar[ilidar], p0, inverted=True)
 
@@ -84,9 +94,8 @@ Var_predicted = \
 
 
 
-Nsamples = 100
-p0_sampled = np.zeros((Nsamples,3), dtype=float)
-for i in range(Nsamples):
+p0_sampled = np.zeros((args.Nsamples,3), dtype=float)
+for i in range(args.Nsamples):
 
     result = clc.fit_from_optimization_inputs(context['result']['inputs-dump'],
                                               inject_noise = True)
@@ -97,7 +106,7 @@ for i in range(Nsamples):
 p0_sampled_mean = np.mean(p0_sampled, axis=-2)
 
 Var_observed = nps.matmult((p0_sampled - p0_sampled_mean).T,
-                           (p0_sampled - p0_sampled_mean)) / Nsamples
+                           (p0_sampled - p0_sampled_mean)) / args.Nsamples
 
 l_observed, v_observed  = mrcal.sorted_eig(Var_observed)
 l_predicted,v_predicted = mrcal.sorted_eig(Var_predicted)
