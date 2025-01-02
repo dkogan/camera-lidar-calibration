@@ -216,9 +216,9 @@ if do_plot_ellipsoids:
 
 print("WARNING: the uncertainty propagation should be cameras AND lidars")
 
-lidars_origin  = rt_lidar0_lidar[:,3:]
-lidars_forward = mrcal.rotate_point_r(rt_lidar0_lidar[:,:3], np.array((1.,0,0)))
-
+# These apply to ALL the sensors, not just the ones being requested
+lidars_origin  = context['result']['rt_ref_lidar'][:,3:]
+lidars_forward = mrcal.rotate_point_r(context['result']['rt_ref_lidar'][:,:3], np.array((1.,0,0)))
 lidars_forward_xy = np.array(lidars_forward[...,:2])
 # to avoid /0 for straight-up vectors
 mag_lidars_forward_xy = nps.mag(lidars_forward_xy)
@@ -226,25 +226,29 @@ i = mag_lidars_forward_xy>0
 lidars_forward_xy[i,:] /= nps.dummy(mag_lidars_forward_xy[i], axis=-1)
 lidars_forward_xy[~i,:] = 0
 lidar_forward_arrow_length = 4.
-i = np.array([ilidar_in_solve_from_ilidar[i] for i in range(len(args.lidar_topic))],
-             dtype=np.int32)
-data_tuples_lidar_forward_vectors = \
+def data_tuples_lidar_forward_vectors(ilidar_solve):
+    return \
     (
       # LIDAR positions AND their forward vectors
-      (nps.glue( lidars_origin [i,:2],
-                 lidars_forward_xy[i] * lidar_forward_arrow_length,
+      (nps.glue( lidars_origin [...,:2],
+                 lidars_forward_xy * lidar_forward_arrow_length,
                  axis = -1 ),
        dict(_with = 'vectors lw 2 lc "black"',
             tuplesize = -4) ),
 
       # # JUST the LIDAR positions
-      # ( lidars_origin [i,:2],
+      # ( lidars_origin [...,:2],
       #   dict(_with = 'points pt 2 lc "black"',
       #        tuplesize = -2) ),
 
-      ( lidars_origin[i,0],
-        lidars_origin[i,1],
-        np.array(args.lidar_topic),
+      ( lidars_origin[np.arange(len(context['lidar_topic'])) != ilidar_solve,0],
+        lidars_origin[np.arange(len(context['lidar_topic'])) != ilidar_solve,1],
+        np.array(context['lidar_topic'])[np.arange(len(context['lidar_topic'])) != ilidar_solve],
+        dict(_with = 'labels textcolor "black"',
+             tuplesize = 3)),
+      ( lidars_origin[np.array((ilidar_solve,),),0],
+        lidars_origin[np.array((ilidar_solve,),),1],
+        np.array(context['lidar_topic'])[np.array((ilidar_solve,),)],
         dict(_with = 'labels textcolor "red"',
              tuplesize = 3))
      )
@@ -310,7 +314,7 @@ for ilidar in range(len(args.lidar_topic)):
                    _with = 'image',
                    using = using),
               ),
-             *data_tuples_lidar_forward_vectors,
+             *data_tuples_lidar_forward_vectors(ilidar_solve),
              cbmin = 0,
              square = True,
              wait = True,
@@ -326,7 +330,7 @@ for ilidar in range(len(args.lidar_topic)):
                    _with = 'image',
                    using = using),
               ),
-             *data_tuples_lidar_forward_vectors,
+             *data_tuples_lidar_forward_vectors(ilidar_solve),
              cbmin = 0,
              cbmax = 30,
              square = True,
