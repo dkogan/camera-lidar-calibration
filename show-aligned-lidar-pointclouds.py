@@ -101,7 +101,7 @@ else:
 
 if args.lidar_models is None:
     # one transform for each lidar in the solve
-    rt_lidar0_lidar = context['rt_ref_lidar']
+    rt_lidar0_lidar = context['result']['rt_ref_lidar']
 else:
     # one transform for each --lidar-topic
     lidar_models = [mrcal.cameramodel(f) for f in args.lidar_models]
@@ -266,8 +266,8 @@ for ilidar in range(len(args.lidar_topic)):
                                  get_gradients = True)
 
     # shape (6,6)
-    Var_rt_lidar01 = context['Var'][ilidar-1,:,
-                                    ilidar-1,:]
+    Var_rt_lidar01 = context['result']['Var'][ilidar-1,:,
+                                              ilidar-1,:]
 
     # shape (Nysample,Nxsample,3,3)
     Var_p0 = nps.matmult(dp0__drt_lidar01,
