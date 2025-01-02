@@ -96,11 +96,13 @@ Var_predicted = \
 
 
 p0_sampled = np.zeros((args.Nsamples,3), dtype=float)
-for i in range(args.Nsamples):
+for isample in range(args.Nsamples):
+    if (isample+1) % 20 == 0:
+        print(f"Sampling {isample+1}/{args.Nsamples}")
 
     result = clc.fit_from_optimization_inputs(context['result']['inputs-dump'],
                                               inject_noise = True)
-    p0_sampled[i] = mrcal.transform_point_rt(result['rt_ref_lidar'][ilidar], p1)
+    p0_sampled[isample] = mrcal.transform_point_rt(result['rt_ref_lidar'][ilidar], p1)
 
 
 
