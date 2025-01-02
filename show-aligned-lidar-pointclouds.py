@@ -252,22 +252,22 @@ data_tuples_lidar_forward_vectors = \
 for ilidar in range(len(args.lidar_topic)):
 
     topic = args.lidar_topic[ilidar]
-    ilidar = ilidar_in_solve_from_ilidar[ilidar]
+    ilidar_solve = ilidar_in_solve_from_ilidar[ilidar]
 
-    if ilidar == 0: continue # reference coord system
+    if ilidar_solve == 0: continue # reference coord system
 
     # shape (Nysample,Nxsample,3)
     p1 = \
-        mrcal.transform_point_rt(rt_lidar0_lidar[ilidar], p0, inverted=True)
+        mrcal.transform_point_rt(rt_lidar0_lidar[ilidar_solve], p0, inverted=True)
 
     # shape (Nysample,Nxsample,3,6)
     _,dp0__drt_lidar01,_ = \
-        mrcal.transform_point_rt(rt_lidar0_lidar[ilidar], p1,
+        mrcal.transform_point_rt(rt_lidar0_lidar[ilidar_solve], p1,
                                  get_gradients = True)
 
     # shape (6,6)
-    Var_rt_lidar01 = context['result']['Var'][ilidar-1,:,
-                                              ilidar-1,:]
+    Var_rt_lidar01 = context['result']['Var'][ilidar_solve-1,:,
+                                              ilidar_solve-1,:]
 
     # shape (Nysample,Nxsample,3,3)
     Var_p0 = nps.matmult(dp0__drt_lidar01,
@@ -289,7 +289,7 @@ for ilidar in range(len(args.lidar_topic)):
 
         data_tuples.append( ( nps.clump(pellipsoid, n=3),
                               dict( tuplesize = -3,
-                                    _with     = f'dots lc rgb "{color_sequence_rgb[ilidar%len(color_sequence_rgb)]}"',
+                                    _with     = f'dots lc rgb "{color_sequence_rgb[ilidar_solve%len(color_sequence_rgb)]}"',
                                     legend = f'1-sigma uncertainty for {topic}')), )
 
 
@@ -319,7 +319,7 @@ for ilidar in range(len(args.lidar_topic)):
              title = f'Worst-case 1-sigma transform uncertainty for {topic} (top-down view)',
              ascii = 1, # needed for the "using" scale
              _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
-             hardcopy=f'/tmp/uncertainty-1sigma-ilidar={ilidar}.gp')
+             hardcopy=f'/tmp/uncertainty-1sigma-ilidar={ilidar_solve}.gp')
 
         plot((thdeg_vertical,
               dict(tuplesize = 3,
@@ -336,7 +336,7 @@ for ilidar in range(len(args.lidar_topic)):
              title = f'Worst-case transform uncertainty for {topic} (top-down view): angle off vertical (deg)',
              ascii = 1, # needed for the "using" scale
              _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
-             hardcopy=f'/tmp/uncertainty-direction-1sigma-ilidar={ilidar}.gp')
+             hardcopy=f'/tmp/uncertainty-direction-1sigma-ilidar={ilidar_solve}.gp')
 
 
 if do_plot_ellipsoids:
