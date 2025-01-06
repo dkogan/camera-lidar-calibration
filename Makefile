@@ -10,6 +10,16 @@ LDLIBS += -lm -lmrcal -ldogleg -lopencv_core -lmrgingham -lopencv_calib3d -lopen
 CFLAGS    += --std=gnu99 -ggdb3
 CCXXFLAGS += -Wno-missing-field-initializers -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
 
+# The code currently has some "unsigned" things that will become signed in the
+# near future. Making these not unsigned will make the warnings go away. In the
+# mean time, I simply silence them
+CCXXFLAGS += -Wno-sign-compare
+
+# There're a few commented-out chunks of code that throw benign warnings that I
+# silence here
+CCXXFLAGS += -Wno-comment
+
+
 # I need the bleeding-edge mrcal
 MRCAL     ?= /home/dima/projects/mrcal
 CCXXFLAGS += -I$(MRCAL)/..
