@@ -2991,11 +2991,11 @@ static bool dump_optimization_inputs(
 static bool
 fit(// out
 
-    // If non-NULL, the covariance of the solution is stored here. Symmetric
-    // matrix with dimensions (6*(Nsensors-1), 6*(Nsensors-1)). Lidar0 defines
-    // the coordinate system reference, so its transform is not included in the
-    // solution
-    double* Var_rt_lidar0_sensor,
+    // if non-NULL, the solver context is returned in *solver_context, and it's
+    // the caller's responsibility to dogleg_freeContext(solver_context). It is
+    // assumed that no existing context is passed in *solver_context, and we
+    // always create a new one
+    dogleg_solverContext_t** solver_context,
 
     // in,out
     // seed state on input
@@ -3058,23 +3058,28 @@ fit(// out
        !(check_gradient__use_distance_to_plane || check_gradient))
         dogleg_parameters.dogleg_debug = DOGLEG_DEBUG_VNLOG;
 
-    dogleg_solverContext_t* solver_context = NULL;
+    dogleg_solverContext_t* _solver_context = NULL;
+    dogleg_solverContext_t** pp_solver_context;
+    if(solver_context != NULL)
+        pp_solver_context = solver_context;
+    else
+        pp_solver_context = &_solver_context;
 
     const int Nstate        = num_states(&ctx);
     const int Nmeasurements = num_measurements(&ctx);
     const int Njnnz         = num_j_nonzero(&ctx);
 
-    // lidar1 is the first optimized state: lidar0 defines the coordinate system
-    // reference
-    const int istate_lidar1  = state_index_lidar (1, &ctx);
-    const int Nstate_lidar   = num_states_lidars (&ctx);
-    const int istate_camera0 = state_index_camera(0, &ctx);
-    const int Nstate_camera  = num_states_cameras(&ctx);
-    const int istate_board0  = state_index_board (0, &ctx);
-    const int Nstate_board   = num_states_boards (&ctx);
-
-    if(!skip_prints)
+    if(check_gradient__use_distance_to_plane || check_gradient)
     {
+        // lidar1 is the first optimized state: lidar0 defines the coordinate system
+        // reference
+        const int istate_lidar1  = state_index_lidar (1, &ctx);
+        const int Nstate_lidar   = num_states_lidars (&ctx);
+        const int istate_camera0 = state_index_camera(0, &ctx);
+        const int Nstate_camera  = num_states_cameras(&ctx);
+        const int istate_board0  = state_index_board (0, &ctx);
+        const int Nstate_board   = num_states_boards (&ctx);
+
         printf("## Nstate=%d Nmeasurements=%d Nlidars=%d Ncameras=%d Nsnapshots=%d\n",
                Nstate,Nmeasurements,Nlidars,Ncameras,Nsensor_snapshots_filtered);
         if(Ncameras > 0)
@@ -3091,12 +3096,6 @@ fit(// out
     double b[Nstate];
     double x[Nmeasurements];
     double norm2x;
-
-
-    // Used in the uncertainty computation
-    cholmod_dense*  Y    = NULL;
-    cholmod_dense*  E    = NULL;
-    cholmod_sparse* Xset = NULL;
 
     pack_solver_state(// out
                       b,
@@ -3129,7 +3128,7 @@ fit(// out
                                       Nstate, Nmeasurements, Njnnz,
                                       (dogleg_callback_t*)&cost, &ctx,
                                       &dogleg_parameters,
-                                      &solver_context);
+                                      pp_solver_context);
         }
         else
         {
@@ -3160,7 +3159,7 @@ fit(// out
                               Nstate, Nmeasurements, Njnnz,
                               (dogleg_callback_t*)&cost, &ctx,
                               &dogleg_parameters,
-                              &solver_context);
+                              pp_solver_context);
 
     if(!skip_prints)
         MSG("Finished full solve");
@@ -3220,256 +3219,11 @@ fit(// out
     if(!skip_plots)
         plot_residuals("/tmp/residuals", x, &ctx);
 
-
-    //////////////////// uncertainty
-
-    if(Var_rt_lidar0_sensor != NULL)
-    {
-        // To validate the result
-#if 0
-        cholmod_dense* Jt_dense =
-            cholmod_sparse_to_dense(solver_context->beforeStep->Jt,
-                                    &solver_context->common);
-        const char* filename = "/tmp/J.dat";
-        MSG("Dumping Jt of nrow=%d ncol=%d to disk at '%s'",
-            Jt_dense->nrow, Jt_dense->ncol, filename);
-        FILE* fp = fopen(filename, "wb");
-        fwrite(Jt_dense->x, sizeof(double), Jt_dense->nrow*Jt_dense->ncol,
-               fp);
-        fclose(fp);
-
-        /* This Python program compares the direct Python results and the C
-           results. They should match 100%, up to numerical precision
-
-#!/usr/bin/python3
-
-import numpy as np
-import numpysane as nps
-
-SCALE_ROTATION_CAMERA    = (0.1 * np.pi/180.0)
-SCALE_TRANSLATION_CAMERA = 1.0
-SCALE_ROTATION_LIDAR     = SCALE_ROTATION_CAMERA
-SCALE_TRANSLATION_LIDAR  = SCALE_TRANSLATION_CAMERA
-
-
-J = np.fromfile("/tmp/J.dat")
-Nstate = 96
-Nmeas = len(J) // Nstate
-
-J = J.reshape((Nmeas,Nstate),)
-JtJ = np.dot(J.T,J)
-
-inv_JtJ = np.linalg.inv(JtJ)
-
-gp.plotimage(J       != 0, square=1, wait=1)
-gp.plotimage(JtJ     != 0, square=1, wait=1)
-gp.plotimage(inv_JtJ != 0, square=1, wait=1)
-
-Var = inv_JtJ[:6,:6]
-Var[:3,:] *= SCALE_ROTATION_LIDAR
-Var[3:,:] *= SCALE_TRANSLATION_LIDAR
-Var[:,:3] *= SCALE_ROTATION_LIDAR
-Var[:,3:] *= SCALE_TRANSLATION_LIDAR
-
-print(Var)
-
-Var_c = np.array(([ 1.47171e-07, 2.38701e-07, -1.19087e-08, 3.48535e-08, 7.14979e-08, 9.08954e-07,  ],
-                  [ 2.38701e-07, 8.38225e-07, 1.45342e-08, -1.29072e-07, 2.48447e-07, 2.8084e-06,  ],
-                  [ -1.19087e-08, 1.45342e-08, 4.47514e-08, -6.84524e-08, -1.43358e-08, -2.84269e-08,  ],
-                  [ 3.48535e-08, -1.29072e-07, -6.84524e-08, 6.34311e-07, -1.40987e-07, 7.4675e-08,  ],
-                  [ 7.14979e-08, 2.48447e-07, -1.43358e-08, -1.40987e-07, 3.01596e-07, 6.34809e-07,  ],
-                  [ 9.08954e-07, 2.8084e-06, -2.84269e-08, 7.4675e-08, 6.34809e-07, 1.05999e-05,  ],),)
-print(Var - Var_c)
-         */
-#endif
-
-
-
-        // This is similar to what I do in mrcal, but much simpler. In mrcal, every
-        // camera is described by its intrinsics and extrinsics, and much effort
-        // goes into disentangling the two. Here we have only the poses.
-        //
-        // The blueprint of what to do is in https://mrcal.secretsauce.net/uncertainty.html
-        //
-        // I assume SCALE_MEASUREMENT_PX and SCALE_MEASUREMENT_M are the stdev of
-        // the measurements. This is applied in the cost function So Var(x) = I. So
-        //
-        //   Var(b) = inv(JtJ) Jobst Jobs inv(JtJ)
-        //
-        // The regularization is meant to make all the state well-defined even if
-        // the data in the problem does not do that. The intent is that
-        // regularization is very light, and only has an appreciable effect on the
-        // solution if the problem if the input data isn't very good. If I ignore
-        // the regularization here (by assuming that Var(b) = inv(JtJ)) then I will
-        // either
-        //
-        // - end up with a very similar result, if the data is sufficient
-        //
-        // - come up with an over-estimate of confidence for any state that wasn't
-        //   well-defined. But any state that's defined purely by the regularization
-        //   terms will still display a very high uncertainty, so qualitatively,
-        //   this is still fine
-        //
-        // So I make my life easy, and simply compute Var(b) = inv(JtJ)
-        //
-        // Here I only care about the covariance of the sensor poses: I don't care
-        // about the poses of the chessboards. So I retrieve only that block from
-        // inv(JtJ)
-
-        // make sure solver_context->factorization exists
-        dogleg_computeJtJfactorization(solver_context->beforeStep,
-                                       solver_context);
-
-        // I get inv(JtJ) by solving JtJ x = I. I could do this with a sparse rhs,
-        // by specifying Bset, but this is not reliable at this time:
-        // https://github.com/DrTimothyAldenDavis/SuiteSparse/issues/892
-
-        // Internally cholmod likes to do things in chunks of 4 vectors, so I let it
-
-        if(! (istate_lidar1 == 0 &&
-              ( Nstate_camera == 0 ||
-                istate_camera0 == istate_lidar1 + Nstate_lidar )))
-        {
-            MSG("Uncertainty computation assumes the state vector begins with lidar poses followed immediately by camera poses");
-            goto done;
-        }
-
-        double b_x[Nstate*4];
-        cholmod_dense B = {
-            .nrow  = Nstate,
-            .ncol  = 4,
-            .nzmax = Nstate*4,
-            .d     = Nstate,
-            .x     = b_x,
-            .xtype = CHOLMOD_REAL,
-            .dtype = CHOLMOD_DOUBLE };
-        memset(b_x, 0, sizeof(b_x[0]) * Nstate*4);
-
-        double v_x[Nstate*4];
-        cholmod_dense V = {
-            .nrow  = Nstate,
-            .ncol  = 4,
-            .nzmax = Nstate*4,
-            .d     = Nstate,
-            .x     = v_x,
-            .xtype = CHOLMOD_REAL,
-            .dtype = CHOLMOD_DOUBLE };
-        cholmod_dense* pV = &V;
-
-        const int Nstate_sensor_poses = Nstate_lidar + Nstate_camera;
-        for(int i=0; i<Nstate_sensor_poses; i++)
-        {
-            b_x[ (i%4)*Nstate + i ] = 1.0;
-
-            if( (i%4) == 3 || i == Nstate_sensor_poses-1 )
-            {
-                // The last column is filled-in. Solve.
-                if(i == Nstate_sensor_poses-1 && (i%4) != 3)
-                {
-                    // Last solve of  < 4 columns
-                    B.ncol = Nstate_sensor_poses % 4;
-                    V.ncol = Nstate_sensor_poses % 4;
-                }
-
-                if(!cholmod_solve2( CHOLMOD_A, solver_context->factorization,
-                                    &B, NULL,
-                                    &pV, &Xset, &Y, &E,
-                                    &solver_context->common))
-                {
-                    MSG("cholmod_solve2() failed when computing the uncertainty. Giving up\n");
-                    goto done;
-                }
-
-                for(int j=0; j<(int)(V.ncol); j++)
-                    memcpy(&Var_rt_lidar0_sensor[(i-V.ncol+1 + j)*Nstate_sensor_poses],
-                           &v_x[j*Nstate],
-                           Nstate_sensor_poses*sizeof(Var_rt_lidar0_sensor[0]));
-
-
-                // A1 = factorization.solve_xt_JtJ_bt( dF_dbpacked, sys='P' )
-                // del dF_dbpacked
-                // A2 = factorization.solve_xt_JtJ_bt( A1,          sys='L' )
-                // del A1
-                // A3 = factorization.solve_xt_JtJ_bt( A2,          sys='D' )
-                // Var_dF = nps.matmult(A2, nps.transpose(A3))
-
-                // reset b for the next round
-                b_x[ ((i-0)%4)*Nstate + (i-0) ] = 0.0;
-                b_x[ ((i-1)%4)*Nstate + (i-1) ] = 0.0;
-                b_x[ ((i-2)%4)*Nstate + (i-2) ] = 0.0;
-                b_x[ ((i-3)%4)*Nstate + (i-3) ] = 0.0;
-            }
-        }
-
-        // Var_rt_lidar0_sensor[] is now computed, but everything is in respect to
-        // unpacked variables. I repack it
-        //
-        // Scale the rows
-        int k;
-        k = 0;
-        for(int i=0; i<Nstate_sensor_poses; i++)
-        {
-            for(int j=0; j<(Nstate_lidar)/6; j++)
-            {
-                Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_LIDAR;
-                Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_LIDAR;
-                Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_LIDAR;
-                Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_LIDAR;
-                Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_LIDAR;
-                Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_LIDAR;
-            }
-            for(int j=0; j<(Nstate_camera)/6; j++)
-            {
-                Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_CAMERA;
-                Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_CAMERA;
-                Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_CAMERA;
-                Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_CAMERA;
-                Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_CAMERA;
-                Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_CAMERA;
-            }
-        }
-        // And again, but scaling the columns
-        k = 0;
-        for(int j=0; j<(Nstate_lidar)/6; j++)
-        {
-            for(int i=0; i<Nstate_sensor_poses*3; i++)
-                Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_LIDAR;
-            for(int i=0; i<Nstate_sensor_poses*3; i++)
-                Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_LIDAR;
-        }
-        for(int j=0; j<(Nstate_camera)/6; j++)
-        {
-            for(int i=0; i<Nstate_sensor_poses*3; i++)
-                Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_CAMERA;
-            for(int i=0; i<Nstate_sensor_poses*3; i++)
-                Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_CAMERA;
-        }
-
-
-#if 0
-        printf("np.array((");
-        for(int i=0;i<Nstate_sensor_poses; i++)
-        {
-            printf("[ ");
-            for(int j=0;j<Nstate_sensor_poses; j++)
-            {
-                printf("%g, ", Var_rt_lidar0_sensor[i*Nstate_sensor_poses + j]);
-            }
-            printf(" ],\n");
-        }
-        printf("),)");
-#endif
-    }
-
     result = true;
 
  done:
-    if(E    != NULL) cholmod_free_dense (&E,    &solver_context->common);
-    if(Y    != NULL) cholmod_free_dense (&Y,    &solver_context->common);
-    if(Xset != NULL) cholmod_free_sparse(&Xset, &solver_context->common);
-
-    if(solver_context != NULL)
-        dogleg_freeContext(&solver_context);
+    if(solver_context == NULL || !result)
+        dogleg_freeContext(&_solver_context);
 
     return result;
 }
@@ -3915,6 +3669,299 @@ static bool make_reprojected_plots( const double* Rt_lidar0_lidar,
     return true;
 }
 
+static bool compute_covariance(// out
+                               double* Var_rt_lidar0_sensor,
+                               // in
+                               const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
+                               const unsigned int                 Nsensor_snapshots_filtered,
+
+                               // These apply to ALL the sensor_snapshots[]
+                               const unsigned int Nlidars,
+                               const unsigned int Ncameras,
+                               const mrcal_cameramodel_t*const* models, // Ncameras of these
+
+                               // The dimensions of the chessboard grid being detected in the images
+                               const int object_height_n,
+                               const int object_width_n,
+                               const double object_spacing,
+
+                               dogleg_solverContext_t* solver_context)
+{
+    bool result = false;
+
+
+    // To validate the result
+#if 0
+    cholmod_dense* Jt_dense =
+        cholmod_sparse_to_dense(solver_context->beforeStep->Jt,
+                                &solver_context->common);
+    const char* filename = "/tmp/J.dat";
+    MSG("Dumping Jt of nrow=%d ncol=%d to disk at '%s'",
+        Jt_dense->nrow, Jt_dense->ncol, filename);
+    FILE* fp = fopen(filename, "wb");
+    fwrite(Jt_dense->x, sizeof(double), Jt_dense->nrow*Jt_dense->ncol,
+           fp);
+    fclose(fp);
+
+    /* This Python program compares the direct Python results and the C
+       results. They should match 100%, up to numerical precision
+
+#!/usr/bin/python3
+
+import numpy as np
+import numpysane as nps
+
+SCALE_ROTATION_CAMERA    = (0.1 * np.pi/180.0)
+SCALE_TRANSLATION_CAMERA = 1.0
+SCALE_ROTATION_LIDAR     = SCALE_ROTATION_CAMERA
+SCALE_TRANSLATION_LIDAR  = SCALE_TRANSLATION_CAMERA
+
+
+J = np.fromfile("/tmp/J.dat")
+Nstate = 96
+Nmeas = len(J) // Nstate
+
+J = J.reshape((Nmeas,Nstate),)
+JtJ = np.dot(J.T,J)
+
+inv_JtJ = np.linalg.inv(JtJ)
+
+gp.plotimage(J       != 0, square=1, wait=1)
+gp.plotimage(JtJ     != 0, square=1, wait=1)
+gp.plotimage(inv_JtJ != 0, square=1, wait=1)
+
+Var = inv_JtJ[:6,:6]
+Var[:3,:] *= SCALE_ROTATION_LIDAR
+Var[3:,:] *= SCALE_TRANSLATION_LIDAR
+Var[:,:3] *= SCALE_ROTATION_LIDAR
+Var[:,3:] *= SCALE_TRANSLATION_LIDAR
+
+print(Var)
+
+Var_c = np.array(([ 1.47171e-07, 2.38701e-07, -1.19087e-08, 3.48535e-08, 7.14979e-08, 9.08954e-07,  ],
+              [ 2.38701e-07, 8.38225e-07, 1.45342e-08, -1.29072e-07, 2.48447e-07, 2.8084e-06,  ],
+              [ -1.19087e-08, 1.45342e-08, 4.47514e-08, -6.84524e-08, -1.43358e-08, -2.84269e-08,  ],
+              [ 3.48535e-08, -1.29072e-07, -6.84524e-08, 6.34311e-07, -1.40987e-07, 7.4675e-08,  ],
+              [ 7.14979e-08, 2.48447e-07, -1.43358e-08, -1.40987e-07, 3.01596e-07, 6.34809e-07,  ],
+              [ 9.08954e-07, 2.8084e-06, -2.84269e-08, 7.4675e-08, 6.34809e-07, 1.05999e-05,  ],),)
+print(Var - Var_c)
+     */
+#endif
+
+    // This is similar to what I do in mrcal, but much simpler. In mrcal, every
+    // camera is described by its intrinsics and extrinsics, and much effort
+    // goes into disentangling the two. Here we have only the poses.
+    //
+    // The blueprint of what to do is in https://mrcal.secretsauce.net/uncertainty.html
+    //
+    // I assume SCALE_MEASUREMENT_PX and SCALE_MEASUREMENT_M are the stdev of
+    // the measurements. This is applied in the cost function So Var(x) = I. So
+    //
+    //   Var(b) = inv(JtJ) Jobst Jobs inv(JtJ)
+    //
+    // The regularization is meant to make all the state well-defined even if
+    // the data in the problem does not do that. The intent is that
+    // regularization is very light, and only has an appreciable effect on the
+    // solution if the problem if the input data isn't very good. If I ignore
+    // the regularization here (by assuming that Var(b) = inv(JtJ)) then I will
+    // either
+    //
+    // - end up with a very similar result, if the data is sufficient
+    //
+    // - come up with an over-estimate of confidence for any state that wasn't
+    //   well-defined. But any state that's defined purely by the regularization
+    //   terms will still display a very high uncertainty, so qualitatively,
+    //   this is still fine
+    //
+    // So I make my life easy, and simply compute Var(b) = inv(JtJ)
+    //
+    // Here I only care about the covariance of the sensor poses: I don't care
+    // about the poses of the chessboards. So I retrieve only that block from
+    // inv(JtJ)
+
+    // make sure pp_solver_context->factorization exists
+    dogleg_computeJtJfactorization(solver_context->beforeStep,
+                                   solver_context);
+
+    callback_context_t ctx = {.Ncameras              = Ncameras,
+                              .Nlidars               = Nlidars,
+                              .Nsnapshots            = Nsensor_snapshots_filtered,
+                              .snapshots             = sensor_snapshots_filtered,
+                              .models                = models,
+                              .object_height_n       = object_height_n,
+                              .object_width_n        = object_width_n,
+                              .object_spacing        = object_spacing};
+
+    // lidar1 is the first optimized state: lidar0 defines the coordinate system
+    // reference
+    const int istate_lidar1  = state_index_lidar (1, &ctx);
+    const int Nstate_lidar   = num_states_lidars (&ctx);
+    const int istate_camera0 = state_index_camera(0, &ctx);
+    const int Nstate_camera  = num_states_cameras(&ctx);
+    const int istate_board0  = state_index_board (0, &ctx);
+    const int Nstate_board   = num_states_boards (&ctx);
+
+    const int Nstate         = num_states(&ctx);
+
+
+    if(! (istate_lidar1 == 0 &&
+          ( Nstate_camera == 0 ||
+            istate_camera0 == istate_lidar1 + Nstate_lidar )))
+    {
+        MSG("Uncertainty computation assumes the state vector begins with lidar poses followed immediately by camera poses");
+        return false;
+    }
+
+
+    // Used in the uncertainty computation
+    cholmod_dense*  Y    = NULL;
+    cholmod_dense*  E    = NULL;
+    cholmod_sparse* Xset = NULL;
+
+
+    // I get inv(JtJ) by solving JtJ x = I. I could do this with a sparse rhs,
+    // by specifying Bset, but this is not reliable at this time:
+    // https://github.com/DrTimothyAldenDavis/SuiteSparse/issues/892
+
+    // Internally cholmod likes to do things in chunks of 4 vectors, so I let it
+
+    double b_x[Nstate*4];
+    cholmod_dense B = {
+        .nrow  = Nstate,
+        .ncol  = 4,
+        .nzmax = Nstate*4,
+        .d     = Nstate,
+        .x     = b_x,
+        .xtype = CHOLMOD_REAL,
+        .dtype = CHOLMOD_DOUBLE };
+    memset(b_x, 0, sizeof(b_x[0]) * Nstate*4);
+
+    double v_x[Nstate*4];
+    cholmod_dense V = {
+        .nrow  = Nstate,
+        .ncol  = 4,
+        .nzmax = Nstate*4,
+        .d     = Nstate,
+        .x     = v_x,
+        .xtype = CHOLMOD_REAL,
+        .dtype = CHOLMOD_DOUBLE };
+    cholmod_dense* pV = &V;
+
+    const int Nstate_sensor_poses = Nstate_lidar + Nstate_camera;
+    for(int i=0; i<Nstate_sensor_poses; i++)
+    {
+        b_x[ (i%4)*Nstate + i ] = 1.0;
+
+        if( (i%4) == 3 || i == Nstate_sensor_poses-1 )
+        {
+            // The last column is filled-in. Solve.
+            if(i == Nstate_sensor_poses-1 && (i%4) != 3)
+            {
+                // Last solve of  < 4 columns
+                B.ncol = Nstate_sensor_poses % 4;
+                V.ncol = Nstate_sensor_poses % 4;
+            }
+
+            if(!cholmod_solve2( CHOLMOD_A, solver_context->factorization,
+                                &B, NULL,
+                                &pV, &Xset, &Y, &E,
+                                &solver_context->common))
+            {
+                MSG("cholmod_solve2() failed when computing the uncertainty. Giving up\n");
+                goto done;
+            }
+
+            for(int j=0; j<(int)(V.ncol); j++)
+                memcpy(&Var_rt_lidar0_sensor[(i-V.ncol+1 + j)*Nstate_sensor_poses],
+                       &v_x[j*Nstate],
+                       Nstate_sensor_poses*sizeof(Var_rt_lidar0_sensor[0]));
+
+
+            // A1 = factorization.solve_xt_JtJ_bt( dF_dbpacked, sys='P' )
+            // del dF_dbpacked
+            // A2 = factorization.solve_xt_JtJ_bt( A1,          sys='L' )
+            // del A1
+            // A3 = factorization.solve_xt_JtJ_bt( A2,          sys='D' )
+            // Var_dF = nps.matmult(A2, nps.transpose(A3))
+
+            // reset b for the next round
+            b_x[ ((i-0)%4)*Nstate + (i-0) ] = 0.0;
+            b_x[ ((i-1)%4)*Nstate + (i-1) ] = 0.0;
+            b_x[ ((i-2)%4)*Nstate + (i-2) ] = 0.0;
+            b_x[ ((i-3)%4)*Nstate + (i-3) ] = 0.0;
+        }
+    }
+
+    // Var_rt_lidar0_sensor[] is now computed, but everything is in respect to
+    // unpacked variables. I repack it
+    //
+    // Scale the rows
+    int k;
+    k = 0;
+    for(int i=0; i<Nstate_sensor_poses; i++)
+    {
+        for(int j=0; j<(Nstate_lidar)/6; j++)
+        {
+            Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_LIDAR;
+            Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_LIDAR;
+            Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_LIDAR;
+            Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_LIDAR;
+            Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_LIDAR;
+            Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_LIDAR;
+        }
+        for(int j=0; j<(Nstate_camera)/6; j++)
+        {
+            Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_CAMERA;
+            Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_CAMERA;
+            Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_CAMERA;
+            Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_CAMERA;
+            Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_CAMERA;
+            Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_CAMERA;
+        }
+    }
+    // And again, but scaling the columns
+    k = 0;
+    for(int j=0; j<(Nstate_lidar)/6; j++)
+    {
+        for(int i=0; i<Nstate_sensor_poses*3; i++)
+            Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_LIDAR;
+        for(int i=0; i<Nstate_sensor_poses*3; i++)
+            Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_LIDAR;
+    }
+    for(int j=0; j<(Nstate_camera)/6; j++)
+    {
+        for(int i=0; i<Nstate_sensor_poses*3; i++)
+            Var_rt_lidar0_sensor[k++] *= SCALE_ROTATION_CAMERA;
+        for(int i=0; i<Nstate_sensor_poses*3; i++)
+            Var_rt_lidar0_sensor[k++] *= SCALE_TRANSLATION_CAMERA;
+    }
+
+
+#if 0
+    printf("np.array((");
+    for(int i=0;i<Nstate_sensor_poses; i++)
+    {
+        printf("[ ");
+        for(int j=0;j<Nstate_sensor_poses; j++)
+        {
+            printf("%g, ", Var_rt_lidar0_sensor[i*Nstate_sensor_poses + j]);
+        }
+        printf(" ],\n");
+    }
+    printf("),)");
+#endif
+
+    result = true;
+
+ done:
+    if(E    != NULL) cholmod_free_dense (&E,    &solver_context->common);
+    if(Y    != NULL) cholmod_free_dense (&Y,    &solver_context->common);
+    if(Xset != NULL) cholmod_free_sparse(&Xset, &solver_context->common);
+
+    return result;
+}
+
+
 static
 bool _clc_internal(// out
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
@@ -4256,7 +4303,9 @@ bool _clc_internal(// out
                       object_spacing,
                       true);
 
-        if(!fit(Var_rt_lidar0_sensor,
+
+        dogleg_solverContext_t* solver_context;
+        if(!fit(&solver_context,
                 // in,out
                 // seed state on input
                 Rt_lidar0_board,
@@ -4283,6 +4332,24 @@ bool _clc_internal(// out
             MSG("fit() failed");
             goto done;
         }
+
+        if(Var_rt_lidar0_sensor != NULL)
+            if(!compute_covariance(Var_rt_lidar0_sensor,
+                                   sensor_snapshots_filtered,
+                                   Nsensor_snapshots_filtered,
+                                   Nlidars,
+                                   Ncameras,
+                                   models,
+                                   object_height_n,
+                                   object_width_n,
+                                   object_spacing,
+                                   solver_context))
+            {
+                MSG("compute_covariance() failed");
+                goto done;
+            }
+
+        dogleg_freeContext(&solver_context);
 
         if(buf_inputs_dump != NULL)
         {
