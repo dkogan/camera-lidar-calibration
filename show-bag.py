@@ -65,6 +65,12 @@ def parse_args():
                         requested style to plot the lidar points. The default is
                         "dots". If there aren't many points to show, this can be
                         illegible, and "points" works better''')
+    parser.add_argument('--no-intensity',
+                        action = 'store_true',
+                        help = '''Applies to LIDAR data. By default we
+                        color-code each point by intensity. With --no-intensity,
+                        we plot all the points with the same color. Improves
+                        legibility in some cases''')
     parser.add_argument('--ring',
                         type=int,
                         help = '''Applies to LIDAR data. If given, show ONLY
@@ -144,7 +150,8 @@ import time
 
 
 def show_lidar(bag, p,
-               _with = 'dots'):
+               _with = 'dots',
+               no_intensity = False):
     kwargs = dict( _set   = args.set,
                    _unset = args.unset)
 
@@ -169,10 +176,16 @@ def show_lidar(bag, p,
         data_tuple = (xyz[:,0], xyz[:,1], xyz[:,2])
     else:
         data_tuple = (xyz[:,0], xyz[:,1])
+
+    if no_intensity:
+        kwargs['_with']     = _with
+    else:
+        data_tuple = data_tuple + (intensity,)
+        kwargs['_with']     = f'{_with} palette'
+        kwargs['cblabel']   = 'intensity'
+
     gp.plot(*data_tuple,
-            intensity,
-            tuplesize = len(data_tuple)+1,
-            _with  = f'{_with} palette',
+            tuplesize = len(data_tuple),
             square = True,
             _3d    = not args.xy,
             title  = f"{bag=} {args.topic=}",
@@ -242,7 +255,8 @@ for bag in bags():
 
     if has_xyz(p):
         show_lidar(bag, p,
-                   _with = getattr(args, "with"))
+                   _with = getattr(args, "with"),
+                   no_intensity = args.no_intensity)
     elif p.dtype == np.uint8 and \
          (p.ndim == 2 or (p.ndim==3 and p.shape[-1] == 3)):
         if args.extract is not None:
