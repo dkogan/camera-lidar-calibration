@@ -429,12 +429,15 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
 {
     PyObject* result = NULL;
 
-    PyTupleObject* py_sensor_snapshots  = NULL;
-    PyObject*      py_models            = NULL;
-    PyArrayObject* rt_ref_lidar         = NULL;
-    PyArrayObject* rt_ref_camera        = NULL;
-    PyArrayObject* Var_rt_lidar0_sensor = NULL;
-    PyObject*      inputs_dump          = NULL;
+    PyTupleObject* py_sensor_snapshots                = NULL;
+    PyObject*      py_models                          = NULL;
+    PyArrayObject* rt_ref_lidar                       = NULL;
+    PyArrayObject* rt_ref_camera                      = NULL;
+    PyArrayObject* Var_rt_lidar0_sensor               = NULL;
+    PyArrayObject* Nobservations_per_lidar_per_sector = NULL;
+    PyArrayObject* stdev_worst                        = NULL;
+    PyObject*      inputs_dump                        = NULL;
+
     // used if(dump_optimization_inputs)
     char*  buf_inputs_dump  = NULL;
     size_t size_inputs_dump = NULL;
@@ -454,6 +457,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     int    object_height_n = -1;
     int    object_width_n  = -1;
     double object_spacing  = -1.;
+
+    int Nsectors = 36;
 
     int check_gradient__use_distance_to_plane = 0;
     int check_gradient                        = 0;
@@ -481,13 +486,14 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          "object_height_n",
                          "object_width_n",
                          "object_spacing",
+                         "Nsectors",
                          "check_gradient__use_distance_to_plane",
                          "check_gradient",
                          "dump_optimization_inputs",
                          CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" "Oiidppp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
+                                     "O" "|$" "Oiidippp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
                                      ,
                                      keywords,
                                      (PyTupleObject*)&py_sensor_snapshots,
@@ -495,6 +501,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                                      &object_height_n,
                                      &object_width_n,
                                      &object_spacing,
+                                     &Nsectors,
                                      &check_gradient__use_distance_to_plane,
                                      &check_gradient,
                                      &dump_optimization_inputs,
@@ -612,10 +619,23 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                       "mrcal_pose_t should be a dense rt transform");
 
 
+        Nobservations_per_lidar_per_sector = (PyArrayObject*)PyArray_SimpleNew(2,
+                                                                               ((npy_intp[]){Nlidars,Nsectors}),
+                                                                               NPY_INT);
+        if(Nobservations_per_lidar_per_sector == NULL) goto done;
+
+        stdev_worst = (PyArrayObject*)PyArray_SimpleNew(1,
+                                                        ((npy_intp[]){Nsectors}),
+                                                        NPY_FLOAT64);
+        if(stdev_worst == NULL) goto done;
+
         if(!clc_unsorted(// out
                          (mrcal_pose_t*)PyArray_DATA(rt_ref_lidar),
                          (mrcal_pose_t*)PyArray_DATA(rt_ref_camera),
                          (double      *)PyArray_DATA(Var_rt_lidar0_sensor),
+                         (int         *)PyArray_DATA(Nobservations_per_lidar_per_sector),
+                         (double      *)PyArray_DATA(stdev_worst),
+                         Nsectors,
                          dump_optimization_inputs ? &buf_inputs_dump  : NULL,
                          dump_optimization_inputs ? &size_inputs_dump : NULL,
 
@@ -640,10 +660,12 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     }
 
     if(buf_inputs_dump == NULL)
-        result = Py_BuildValue("{sOsOsO}",
+        result = Py_BuildValue("{sOsOsOsOsO}",
                                "rt_ref_lidar",  rt_ref_lidar,
                                "rt_ref_camera", rt_ref_camera,
-                               "Var",           Var_rt_lidar0_sensor);
+                               "Var",           Var_rt_lidar0_sensor,
+                               "Nobservations_per_lidar_per_sector", Nobservations_per_lidar_per_sector,
+                               "stdev_worst",   stdev_worst);
     else
     {
         inputs_dump =
@@ -653,10 +675,12 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
             BARF("PyBytes_FromStringAndSize(buf_inputs_dump) failed");
             goto done;
         }
-        result = Py_BuildValue("{sOsOsOsO}",
+        result = Py_BuildValue("{sOsOsOsOsOsO}",
                                "rt_ref_lidar",  rt_ref_lidar,
                                "rt_ref_camera", rt_ref_camera,
                                "Var",           Var_rt_lidar0_sensor,
+                               "Nobservations_per_lidar_per_sector", Nobservations_per_lidar_per_sector,
+                               "stdev_worst",   stdev_worst,
                                "inputs-dump",   inputs_dump);
     }
 
@@ -664,6 +688,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     Py_XDECREF(rt_ref_lidar);
     Py_XDECREF(rt_ref_camera);
     Py_XDECREF(Var_rt_lidar0_sensor);
+    Py_XDECREF(Nobservations_per_lidar_per_sector);
+    Py_XDECREF(stdev_worst);
     Py_XDECREF(py_model);
     for(int i=0; i<Ncameras; i++)
         mrcal_free_cameramodel(&models[i]);

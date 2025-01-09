@@ -218,7 +218,7 @@ static void eigenvector(// out
     }
 }
 
-static
+__attribute__((visibility("hidden")))
 void eig_real_symmetric_3x3( // out
                              double* vsmallest, // the smallest-eigenvalue eigenvector; may be NULL
                              double* vlargest,  // the largest-eigenvalue  eigenvector; may be NULL

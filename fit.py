@@ -692,6 +692,22 @@ if args.dump is not None:
 
 
 
+
+
+# shape (Nlidars, Nsectors)
+Nobservations_per_lidar_per_sector = result['Nobservations_per_lidar_per_sector']
+Nlidars,Nsectors = Nobservations_per_lidar_per_sector.shape
+dth = np.pi*2./Nsectors
+th = np.arange(Nsectors)*dth + dth/2.
+plotradius = nps.transpose(np.arange(Nlidars) + 10)
+gp.plot( plotradius*np.cos(th), plotradius*np.sin(th), Nobservations_per_lidar_per_sector,
+         legend = np.array([f"Lidar {i}" for i in range(Nlidars)]),
+         tuplesize = 3,
+         _with = 'points pt 7 ps 2 palette',
+         square = True)
+
+
+
 sys.exit()
 
 
