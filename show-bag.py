@@ -59,6 +59,12 @@ def parse_args():
                         type=float,
                         help = '''Applies to LIDAR data. If given, cut off the
                         points at this range''')
+    parser.add_argument('--with',
+                        default = 'dots',
+                        help = '''Applies to LIDAR data. If given, uses the
+                        requested style to plot the lidar points. The default is
+                        "dots". If there aren't many points to show, this can be
+                        illegible, and "points" works better''')
     parser.add_argument('--ring',
                         type=int,
                         help = '''Applies to LIDAR data. If given, show ONLY
@@ -137,7 +143,8 @@ import gnuplotlib as gp
 import time
 
 
-def show_lidar(bag, p):
+def show_lidar(bag, p,
+               _with = 'dots'):
     kwargs = dict( _set   = args.set,
                    _unset = args.unset)
 
@@ -165,7 +172,7 @@ def show_lidar(bag, p):
     gp.plot(*data_tuple,
             intensity,
             tuplesize = len(data_tuple)+1,
-            _with  = 'dots palette',
+            _with  = f'{_with} palette',
             square = True,
             _3d    = not args.xy,
             title  = f"{bag=} {args.topic=}",
@@ -234,7 +241,8 @@ for bag in bags():
             return False
 
     if has_xyz(p):
-        show_lidar(bag, p)
+        show_lidar(bag, p,
+                   _with = getattr(args, "with"))
     elif p.dtype == np.uint8 and \
          (p.ndim == 2 or (p.ndim==3 and p.shape[-1] == 3)):
         if args.extract is not None:
