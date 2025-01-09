@@ -142,7 +142,6 @@ def show_lidar(bag, p):
                    _unset = args.unset)
 
     gp.add_plot_option(kwargs,
-                       title = bag,
                        overwrite = False)
 
 
