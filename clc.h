@@ -156,13 +156,6 @@ typedef struct
 
 } clc_sensor_snapshot_segmented_dense_t;
 
-typedef struct
-{
-    // Wrapping is assumed to make sure that az_rad01[1] > az_rad01[0] and that
-    // az_rad01[1]-az_rad01[0] < 2*pi
-    double az_rad01[2];
-} clc_yaw_sector_t;
-
 
 
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(_)                                                 \
@@ -439,16 +432,3 @@ bool clc_fit_from_optimization_inputs(// out
                                       const char* buf_inputs_dump,
                                       size_t      size_inputs_dump,
                                       bool inject_noise);
-
-
-bool
-clc_overlapping_regions(// out
-                        clc_yaw_sector_t* yaw_sectors,
-                        unsigned int*     Nyaw_sectors,
-
-                        // in
-                        const unsigned int  Nyaw_sectors_max,
-                        const mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these
-                        const mrcal_pose_t* rt_ref_camera, // Ncameras of these
-                        const unsigned int  Nlidars,
-                        const unsigned int  Ncameras);
