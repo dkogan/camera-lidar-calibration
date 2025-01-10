@@ -681,14 +681,60 @@ for ilidar,rt_ref_lidar in enumerate(result['rt_ref_lidar']):
                 note = "Intrinsics are made-up and nonsensical")
     print(f"Wrote '{filename}'")
 
+
+context = \
+    dict(result           = result,
+         lidar_topic      = args.lidar_topic,
+         camera_topic     = args.camera_topic,
+         kwargs_calibrate = kwargs_calibrate)
 if args.dump is not None:
     with open(args.dump, 'wb') as f:
-        pickle.dump( dict(result           = result,
-                          lidar_topic      = args.lidar_topic,
-                          camera_topic     = args.camera_topic,
-                          kwargs_calibrate = kwargs_calibrate),
+        pickle.dump( context,
                      f )
     print(f"Wrote '{args.dump}'")
+
+
+
+
+
+
+
+
+
+
+#### stolen from show-aligned-lidar-pointclouds.py
+####
+# These apply to ALL the sensors, not just the ones being requested
+lidars_origin  = context['result']['rt_ref_lidar'][:,3:]
+lidars_forward = mrcal.rotate_point_r(context['result']['rt_ref_lidar'][:,:3], np.array((1.,0,0)))
+lidars_forward_xy = np.array(lidars_forward[...,:2])
+# to avoid /0 for straight-up vectors
+mag_lidars_forward_xy = nps.mag(lidars_forward_xy)
+i = mag_lidars_forward_xy>0
+lidars_forward_xy[i,:] /= nps.dummy(mag_lidars_forward_xy[i], axis=-1)
+lidars_forward_xy[~i,:] = 0
+lidar_forward_arrow_length = 4.
+def data_tuples_lidar_forward_vectors():
+    return \
+    (
+      # LIDAR positions AND their forward vectors
+      (nps.glue( lidars_origin [...,:2],
+                 lidars_forward_xy * lidar_forward_arrow_length,
+                 axis = -1 ),
+       dict(_with = 'vectors lw 2 lc "black"',
+            tuplesize = -4) ),
+
+      # # JUST the LIDAR positions
+      # ( lidars_origin [...,:2],
+      #   dict(_with = 'points pt 2 lc "black"',
+      #        tuplesize = -2) ),
+
+      ( lidars_origin[...,0],
+        lidars_origin[...,1],
+        np.array(context['lidar_topic']),
+        dict(_with = 'labels textcolor "black"',
+             tuplesize = 3)),
+     )
 
 
 
@@ -700,12 +746,45 @@ Nlidars,Nsectors = Nobservations_per_lidar_per_sector.shape
 dth = np.pi*2./Nsectors
 th = np.arange(Nsectors)*dth + dth/2.
 plotradius = nps.transpose(np.arange(Nlidars) + 10)
-gp.plot( plotradius*np.cos(th), plotradius*np.sin(th), Nobservations_per_lidar_per_sector,
-         legend = np.array([f"Lidar {i}" for i in range(Nlidars)]),
-         tuplesize = 3,
-         _with = 'points pt 7 ps 2 palette',
-         square = True)
+ones = np.ones( (Nsectors,) )
+gp.plot( (th,                 # angle
+          plotradius*ones,    # radius
+          ones*dth*0.9,       # angular width of slice
+          ones*0.9,           # depth of slice
+          Nobservations_per_lidar_per_sector > 100,
+          dict(_with = 'sectors palette fill solid',
+               tuplesize = 5)),
 
+         *data_tuples_lidar_forward_vectors(),
+
+         _xrange = (-10-Nlidars,10+Nlidars),
+         _yrange = (-10-Nlidars,10+Nlidars),
+         square = True,
+         unset = 'colorbox',
+         title = 'Observability map of each LIDAR',
+         hardcopy = '/tmp/observability.pdf',
+        )
+
+stdev_worst = result['stdev_worst']
+i = stdev_worst != 0
+gp.plot( (th[i],                 # angle
+          10.*ones[i],           # radius
+          ones[i]*dth*0.9,       # angular width of slice
+          ones[i]*0.9,           # depth of slice
+          stdev_worst[i],
+          dict(tuplesize = 5,
+               _with = 'sectors palette fill solid')),
+         *data_tuples_lidar_forward_vectors(),
+         _xrange = (-11,11),
+         _yrange = (-11,11),
+         square = True,
+         title = 'Worst-case uncertainty. Put the board in high-uncertainty regions',
+         hardcopy = '/tmp/direction.pdf',
+        )
+
+import IPython
+IPython.embed()
+sys.exit()
 
 
 sys.exit()

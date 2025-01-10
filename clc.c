@@ -54,11 +54,11 @@ static void multiply_matrix_matrix( // out
     for(int i=0; i<N; i++)
         for(int j=0; j<L; j++)
         {
+            if(!accumulate)
+                P[i*P_stride0 + j*P_stride1] = 0.;
             // we're writing P[i,j]
             for(int k=0; k<M; k++)
             {
-                if(!accumulate)
-                    P[i*P_stride0 + j*P_stride1] = 0.;
                 P[i*P_stride0 + j*P_stride1] +=
                     A[i*A_stride0 + k*A_stride1] *
                     B[k*B_stride0 + j*B_stride1];
@@ -3710,6 +3710,10 @@ static bool count_observations_in_sector(// out
                                          const clc_sensor_snapshot_unsorted_t* sensor_snapshots_unsorted,
                                          const clc_sensor_snapshot_sorted_t*   sensor_snapshots_sorted,
                                          const int                          Nsensor_snapshots,
+                                         // The stride, in bytes, between each successive points or rings value
+                                         // in clc_lidar_scan_unsorted_t
+                                         // <=0 means "points stored densely"
+                                         int                                lidar_packet_stride,
                                          const int                          Nlidars,
                                          const int                          Ncameras,
                                          const mrcal_cameramodel_t*const*   models, // Ncameras of these
@@ -3724,6 +3728,10 @@ static bool count_observations_in_sector(// out
         MSG("count_observations_in_sector() works only off clc_sensor_snapshot_unsorted_t or clc_sensor_snapshot_sorted_t data");
         return false;
     }
+
+    if(lidar_packet_stride <= 0)
+        // stored densely
+        lidar_packet_stride = sizeof(clc_point3f_t);
 
     double Rt_vehicle_lidar[4*3*(Nlidars-1)];
     for(int ilidar=0; ilidar<Nlidars-1; ilidar++)
@@ -3813,6 +3821,7 @@ static bool count_observations_in_sector(// out
                 Npoints = 0;
                 for(int iring=0; iring<Nrings; iring++)
                     Npoints += lidar_scan->Npoints[iring];
+                points = lidar_scan->points;
             }
             else
             {
@@ -3825,7 +3834,7 @@ static bool count_observations_in_sector(// out
             {
                 mrcal_point3_t p;
                 mrcal_point3_from_clc_point3f(&p,
-                                              &points[ipoint]);
+                                              (clc_point3f_t*)((uint8_t*)points + lidar_packet_stride*ipoint));
                 if(mrcal_point3_norm2(p) >=
                    threshold_valid_lidar_range*threshold_valid_lidar_range)
                 {
@@ -3838,10 +3847,10 @@ static bool count_observations_in_sector(// out
                                                  &Rt_vehicle_lidar[4*3*(ilidar-1)],
                                                  p.xyz);
 
-                    double yaw = atan2(p.y, p.x);
-                    if(yaw < 0.) yaw += M_PI;
+                    double yaw = atan2(p.y, p.x); // yaw is in [-pi..pi]
+                    if(yaw < 0.) yaw += 2.*M_PI;  // yaw is in [0..2pi]
 
-                    const double sector_width_rad = M_PI/(double)Nsectors;
+                    const double sector_width_rad = 2.*M_PI/(double)Nsectors;
                     int isector = yaw / sector_width_rad;
                     // just in case; for round-off
                     if(     isector < 0        ) isector = 0;
@@ -4329,6 +4338,9 @@ static void accumulate_covariance_pairwise(// out
                               dp1__drt_ref_lidar1, istate_lidar1);
 }
 
+// The worst-case uncertainty reprojection value in the given sector is returned
+// in *stdev_worst. If we return *stdev_worst=0, that means that there isn't any
+// pair of sensors that can see the given sector
 static bool
 reprojection_uncertainty_in_sector(// out
                                    double* stdev_worst,
@@ -4342,9 +4354,6 @@ reprojection_uncertainty_in_sector(// out
 
                                    const double* Var_rt_lidar0_sensor,
                                    // in
-                                   const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
-                                   const unsigned int                 Nsensor_snapshots_filtered,
-
                                    // These apply to ALL the sensor_snapshots[]
                                    const unsigned int Nlidars,
                                    const unsigned int Ncameras,
@@ -4356,14 +4365,8 @@ reprojection_uncertainty_in_sector(// out
                                    const double object_spacing)
 {
     const
-        callback_context_t ctx = {.Ncameras              = Ncameras,
-                                  .Nlidars               = Nlidars,
-                                  .Nsnapshots            = Nsensor_snapshots_filtered,
-                                  .snapshots             = sensor_snapshots_filtered,
-                                  .models                = models,
-                                  .object_height_n       = object_height_n,
-                                  .object_width_n        = object_width_n,
-                                  .object_spacing        = object_spacing};
+        callback_context_t ctx = {.Ncameras = Ncameras,
+                                  .Nlidars  = Nlidars};
 
     if(!(state_index_lidar(0,&ctx) < 0 &&
          state_index_lidar(1,&ctx) == 0))
@@ -4376,6 +4379,9 @@ reprojection_uncertainty_in_sector(// out
     const int Nstate_camera       = num_states_cameras(&ctx);
     const int Nstate_sensor_poses = Nstate_lidar + Nstate_camera;
 
+    // 0 by default, the best-possible uncertainty value. If we end up returning
+    // this, that means that there isn't any pair of sensors that can see this
+    // sector
     double l_worst = 0.0;
 
     for(int ilidar0=0; ilidar0<Nlidars-1; ilidar0++)
@@ -4411,8 +4417,8 @@ reprojection_uncertainty_in_sector(// out
                                            Var_p1,
                                            // in
                                            &pquery_ref_recomputed,
-                                           (double*)&rt_ref_lidar[ilidar1],
                                            dpref__drt_ref_lidar0,
+                                           (double*)&rt_ref_lidar[ilidar1],
                                            Var_rt_lidar0_sensor,
                                            Nstate_sensor_poses,
                                            istate_lidar0,
@@ -4960,6 +4966,7 @@ bool _clc_internal(// out
                                              sensor_snapshots_unsorted,
                                              sensor_snapshots_sorted,
                                              Nsensor_snapshots,
+                                             lidar_packet_stride,
                                              Nlidars,
                                              Ncameras,
                                              models,
@@ -4971,8 +4978,9 @@ bool _clc_internal(// out
             if(stdev_worst != NULL)
                 for(int isector = 0; isector < Nsectors; isector++)
                 {
-                    const double sector_width_rad = M_PI/(double)Nsectors;
+                    const double sector_width_rad = 2.*M_PI/(double)Nsectors;
 
+                    // point at the center of the sector
                     const mrcal_point3_t pquery_vehicle =
                         {.x = uncertainty_quantification_range * cos( ((double)isector + 0.5) * sector_width_rad),
                          .y = uncertainty_quantification_range * sin( ((double)isector + 0.5) * sector_width_rad),
@@ -4992,8 +5000,6 @@ bool _clc_internal(// out
                                                            threshold_valid_lidar_Npoints,
 
                                                            Var_rt_lidar0_sensor,
-                                                           sensor_snapshots_filtered,
-                                                           Nsensor_snapshots_filtered,
                                                            Nlidars,
                                                            Ncameras,
                                                            models,
