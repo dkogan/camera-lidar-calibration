@@ -4339,22 +4339,19 @@ reprojection_uncertainty_in_sector(// out
                                    // in
                                    const mrcal_point3_t* pquery_ref,
                                    const mrcal_pose_t* rt_ref_lidar,
+                                   const mrcal_pose_t* rt_ref_camera,
                                    const int isector,
                                    const int Nsectors,
+                                   // dense array of shape (Nlidars,Nsectors)
                                    const int* Nobservations_per_lidar_per_sector,
                                    const int threshold_valid_lidar_Npoints,
+                                   const uint64_t* bitarray_isvisible_per_camera_per_sector,
 
                                    const double* Var_rt_lidar0_sensor,
                                    // in
                                    // These apply to ALL the sensor_snapshots[]
                                    const unsigned int Nlidars,
-                                   const unsigned int Ncameras,
-                                   const mrcal_cameramodel_t*const* models, // Ncameras of these
-
-                                   // The dimensions of the chessboard grid being detected in the images
-                                   const int object_height_n,
-                                   const int object_width_n,
-                                   const double object_spacing)
+                                   const unsigned int Ncameras)
 {
     const
         callback_context_t ctx = {.Ncameras = Ncameras,
@@ -5018,18 +5015,16 @@ bool _clc_internal(// out
                                                            // in
                                                            &pquery_ref,
                                                            rt_ref_lidar,
+                                                           rt_ref_camera,
                                                            isector,
                                                            Nsectors,
                                                            Nobservations_per_lidar_per_sector,
                                                            threshold_valid_lidar_Npoints,
+                                                           bitarray_isvisible_per_camera_per_sector,
 
                                                            Var_rt_lidar0_sensor,
                                                            Nlidars,
-                                                           Ncameras,
-                                                           models,
-                                                           object_height_n,
-                                                           object_width_n,
-                                                           object_spacing))
+                                                           Ncameras))
                         goto done;
                 }
         }
