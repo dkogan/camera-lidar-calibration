@@ -3696,7 +3696,7 @@ static bool make_reprojected_plots( const double* Rt_lidar0_lidar,
     return true;
 }
 
-static bool count_observations_in_sector(// out
+static bool count_lidar_observations_in_sector(// out
                                          // A dense array of shape (Nlidars,Nsectors)
                                          int*                               Nobservations_per_lidar_per_sector,
                                          // in
@@ -3705,7 +3705,6 @@ static bool count_observations_in_sector(// out
                                          const int                          Nrings,
 
                                          const double*                      Rt_lidar0_lidar,
-                                         const double*                      Rt_lidar0_camera,
                                          const double                       threshold_valid_lidar_range,
                                          const clc_sensor_snapshot_unsorted_t* sensor_snapshots_unsorted,
                                          const clc_sensor_snapshot_sorted_t*   sensor_snapshots_sorted,
@@ -3714,18 +3713,13 @@ static bool count_observations_in_sector(// out
                                          // in clc_lidar_scan_unsorted_t
                                          // <=0 means "points stored densely"
                                          int                                lidar_packet_stride,
-                                         const int                          Nlidars,
-                                         const int                          Ncameras,
-                                         const mrcal_cameramodel_t*const*   models, // Ncameras of these
-                                         const int                          object_height_n,
-                                         const int                          object_width_n,
-                                         const double                       object_spacing)
+                                         const int                          Nlidars)
 {
     if(1 !=
        (sensor_snapshots_unsorted        != NULL) +
        (sensor_snapshots_sorted          != NULL))
     {
-        MSG("count_observations_in_sector() works only off clc_sensor_snapshot_unsorted_t or clc_sensor_snapshot_sorted_t data");
+        MSG("count_lidar_observations_in_sector() works only off clc_sensor_snapshot_unsorted_t or clc_sensor_snapshot_sorted_t data");
         return false;
     }
 
@@ -4260,82 +4254,130 @@ static void accumulate_covariance_pairwise(// out
                                            double*               Var_p1,
                                            // in
                                            const mrcal_point3_t* pquery_ref_recomputed,
-                                           const double*         dpref__drt_ref_lidar0,
-                                           const double*         rt_ref_lidar1,
-                                           const double*         Var_rt_lidar0_sensor,
+                                           const double*         dpref__drt_ref_sensor0,
+                                           const double*         rt_ref_sensor1,
+                                           const double*         Var_rt_sensor0_sensor,
                                            const int             Nstate_sensor_poses,
-                                           const int             istate_lidar0,
-                                           const int             istate_lidar1)
+                                           const int             istate_sensor0,
+                                           const int             istate_sensor1)
 {
     memset(Var_p1, 0, 6*sizeof(double));
 
-    double dp1__drt_ref_lidar1[3*6];
-    double dp1__dpref         [3*3];
+    double dp1__drt_ref_sensor1[3*6];
+    double dp1__dpref          [3*3];
     mrcal_point3_t p1; // probably don't need to store this; I just want the gradient
-    mrcal_transform_point_rt_inverted(p1.xyz,dp1__drt_ref_lidar1,dp1__dpref,
-                                      rt_ref_lidar1, pquery_ref_recomputed->xyz);
+    mrcal_transform_point_rt_inverted(p1.xyz,dp1__drt_ref_sensor1,dp1__dpref,
+                                      rt_ref_sensor1, pquery_ref_recomputed->xyz);
 
-    // I have a point from the lidar0 frame expressed in
-    // lidar1 coords. The covariance of this quantity is the
+    // I have a point from the sensor0 frame expressed in
+    // sensor1 coords. The covariance of this quantity is the
     // uncertainty between these two sensors in this
     // location.
     //
-    // p1 = f( rt_ref_lidar1, pref )
-    //    = f( rt_ref_lidar1, g( rt_ref_lidar0, p0 ) )
-    // dp1 ~ dp1/drt_ref_lidar1 drt_ref_lidar1 + dp1/dpref dpref/drt_ref_lidar0 drt_ref_lidar0
+    // p1 = f( rt_ref_sensor1, pref )
+    //    = f( rt_ref_sensor1, g( rt_ref_sensor0, p0 ) )
+    // dp1 ~ dp1/drt_ref_sensor1 drt_ref_sensor1 + dp1/dpref dpref/drt_ref_sensor0 drt_ref_sensor0
     //
     // Var(dp1) = M Var(b) Mt
     //
     // where M is dp1/db where b is the solver state. This
     // solver state contains the scaled quantities
-    // rt_ref_lidar0 and rt_ref_lidar1. So we have
+    // rt_ref_sensor0 and rt_ref_sensor1. So we have
     //
-    //   (dp1/db)[:,istate_rt_ref_lidar0] = dp1/dpref dpref/drt_ref_lidar0
-    //   (dp1/db)[:,istate_rt_ref_lidar1] = dp1/drt_ref_lidar1
+    //   (dp1/db)[:,istate_rt_ref_sensor0] = dp1/dpref dpref/drt_ref_sensor0
+    //   (dp1/db)[:,istate_rt_ref_sensor1] = dp1/drt_ref_sensor1
     //
 
     // I really should use the factorization here instead of
     // the precomputed Var=inv(JtJ).
 
     // I need M Var Mt; M has two non-zero blocks: one for
-    // drt_ref_lidar0 and another for drt_ref_lidar1. So I
+    // drt_ref_sensor0 and another for drt_ref_sensor1. So I
     // only need to look at those blocks of M:
     //
     // M Var Mt = d0 Var00 d0t + d0 Var01 d1t + d1 Var10 d0t + d1 Var11 d1t
     //
     // Var is symmetric so (d0 Var01 d1t)t = d1 Var10 d0t
-    if(istate_lidar0 >= 0)
+    if(istate_sensor0 >= 0)
     {
-        double dp1__drt_ref_lidar0[3*6];
+        double dp1__drt_ref_sensor0[3*6];
         multiply_matrix_matrix(// out
-                               dp1__drt_ref_lidar0, 6, 1,
+                               dp1__drt_ref_sensor0, 6, 1,
                                // in
                                dp1__dpref, 3, 1,
-                               dpref__drt_ref_lidar0, 6, 1,
+                               dpref__drt_ref_sensor0, 6, 1,
                                3,3,6,
                                false);
 
         Ma_Var_Mbt_block_accumulate(// out
                                     Var_p1,
                                     // in
-                                    Var_rt_lidar0_sensor,
+                                    Var_rt_sensor0_sensor,
                                     Nstate_sensor_poses,
-                                    dp1__drt_ref_lidar0, istate_lidar0,
-                                    dp1__drt_ref_lidar1, istate_lidar1);
+                                    dp1__drt_ref_sensor0, istate_sensor0,
+                                    dp1__drt_ref_sensor1, istate_sensor1);
 
         M_Var_Mt_block_accumulate(// out
                                   Var_p1,
                                   // in
-                                  Var_rt_lidar0_sensor,
+                                  Var_rt_sensor0_sensor,
                                   Nstate_sensor_poses,
-                                  dp1__drt_ref_lidar0, istate_lidar0);
+                                  dp1__drt_ref_sensor0, istate_sensor0);
     }
     M_Var_Mt_block_accumulate(// out
                               Var_p1,
                               // in
-                              Var_rt_lidar0_sensor,
+                              Var_rt_sensor0_sensor,
                               Nstate_sensor_poses,
-                              dp1__drt_ref_lidar1, istate_lidar1);
+                              dp1__drt_ref_sensor1, istate_sensor1);
+}
+
+// returns true if isector is observed by isensor
+static bool
+lidar_camera_indices_from_sensor(// out
+                                 int* ilidar,
+                                 int* icamera,
+                                 // <0 if we're at the reference
+                                 int* istate_sensor,
+                                 const double** rt_ref_sensor,
+                                 // in
+                                 const int isensor,
+
+                                 const mrcal_pose_t* rt_ref_lidar,
+                                 const mrcal_pose_t* rt_ref_camera,
+                                 const int isector,
+                                 const int Nsectors,
+                                 // dense array of shape (Nlidars,Nsectors)
+                                 const int* Nobservations_per_lidar_per_sector,
+                                 const int threshold_valid_lidar_Npoints,
+                                 // dense bitarray of shape (Ncameras,Nsectors)
+                                 const uint64_t* bitarray_isvisible_per_camera_per_sector,
+                                 const unsigned int Nlidars,
+                                 const unsigned int Ncameras)
+{
+
+    if(isensor < Nlidars)
+    {
+        *ilidar = isensor;
+        *icamera = -1;
+
+        if(Nobservations_per_lidar_per_sector[(*ilidar) * Nsectors + isector] < threshold_valid_lidar_Npoints)
+            return false;
+        *rt_ref_sensor = (double*)&rt_ref_lidar[*ilidar];
+        *istate_sensor = state_index_lidar(*ilidar, &ctx);
+    }
+    else
+    {
+        *icamera = isensor-Nlidars;
+        *ilidar  = -1;
+
+        if(!bitarray64_check(bitarray_isvisible_per_camera_per_sector,
+                             (*icamera) * Nsectors + isector))
+            return false;
+        *rt_ref_sensor = (double*)&rt_ref_camera[*icamera];
+        *istate_sensor = state_index_camera(*icamera, &ctx);
+    }
+    return true;
 }
 
 // The worst-case uncertainty reprojection value in the given sector is returned
@@ -4379,37 +4421,75 @@ reprojection_uncertainty_in_sector(// out
     const int Nstate_camera       = num_states_cameras(&ctx);
     const int Nstate_sensor_poses = Nstate_lidar + Nstate_camera;
 
+    const int Nsensors = Nlidars + Ncameras;
+
     // 0 by default, the best-possible uncertainty value. If we end up returning
     // this, that means that there isn't any pair of sensors that can see this
     // sector
     double l_worst = 0.0;
 
-    for(int ilidar0=0; ilidar0<Nlidars-1; ilidar0++)
+    for(int isensor0=0; isensor0<Nsensors-1; isensor0++)
     {
-        if(Nobservations_per_lidar_per_sector[ilidar0*Nsectors + isector] < threshold_valid_lidar_Npoints)
+        int ilidar0, icamera0;
+        // <0 if we're at the reference
+        int istate_sensor0;
+        const double* rt_ref_sensor0;
+        if(!lidar_camera_indices_from_sensor(// out
+                                             &ilidar0,
+                                             &icamera0,
+                                             // <0 if we're at the reference
+                                             &istate_sensor0,
+                                             &rt_ref_sensor0,
+                                             // in
+                                             isensor0,
+
+                                             rt_ref_lidar,
+                                             rt_ref_camera,
+                                             isector,
+                                             Nsectors,
+                                             Nobservations_per_lidar_per_sector,
+                                             threshold_valid_lidar_Npoints,
+                                             bitarray_isvisible_per_camera_per_sector,
+                                             Nlidars,
+                                             Ncameras))
             continue;
 
         mrcal_point3_t p0;
         mrcal_transform_point_rt_inverted(p0.xyz,NULL,NULL,
-                                          (double*)&rt_ref_lidar[ilidar0], pquery_ref->xyz);
+                                          rt_ref_sensor0, pquery_ref->xyz);
 
-        double dpref__drt_ref_lidar0[3*6];
+        double dpref__drt_ref_sensor0[3*6];
         mrcal_point3_t pquery_ref_recomputed; // will be pquery_ref again. I probably don't NEED to store it
-        mrcal_transform_point_rt(pquery_ref_recomputed.xyz,dpref__drt_ref_lidar0,NULL,
-                                 (double*)&rt_ref_lidar[ilidar0], p0.xyz);
+        mrcal_transform_point_rt(pquery_ref_recomputed.xyz,dpref__drt_ref_sensor0,NULL,
+                                 rt_ref_sensor0, p0.xyz);
 
-        // <0 if we're at the reference
-        const int istate_lidar0 = state_index_lidar(ilidar0, &ctx);
-
-        for(int ilidar1=ilidar0+1; ilidar1<Nlidars; ilidar1++)
+        for(int isensor1=isensor0+1; isensor1<Nsensors; isensor1++)
         {
-            if(Nobservations_per_lidar_per_sector[ilidar1*Nsectors + isector] < threshold_valid_lidar_Npoints)
+            int ilidar1, icamera1;
+            // <1 if we're at the reference
+            int istate_sensor1;
+            const double* rt_ref_sensor1;
+            if(!lidar_camera_indices_from_sensor(// out
+                                                 &ilidar1,
+                                                 &icamera1,
+                                                 // <1 if we're at the reference
+                                                 &istate_sensor1,
+                                                 &rt_ref_sensor1,
+                                                 // in
+                                                 isensor1,
+
+                                                 rt_ref_lidar,
+                                                 rt_ref_camera,
+                                                 isector,
+                                                 Nsectors,
+                                                 Nobservations_per_lidar_per_sector,
+                                                 threshold_valid_lidar_Npoints,
+                                                 bitarray_isvisible_per_camera_per_sector,
+                                                 Nlidars,
+                                                 Ncameras))
                 continue;
 
-            // These two lidars can BOTH observe points in this sector. So their reprojection uncertainty should be low
-
-            // <0 if we're at the reference
-            const int istate_lidar1 = state_index_lidar(ilidar1, &ctx);
+            // These two sensors can BOTH observe points in this sector. So their reprojection uncertainty should be low
 
             // (3,3) symmetric matrix; upper-triangle only stored; 6 values
             double Var_p1[6];
@@ -4417,12 +4497,12 @@ reprojection_uncertainty_in_sector(// out
                                            Var_p1,
                                            // in
                                            &pquery_ref_recomputed,
-                                           dpref__drt_ref_lidar0,
-                                           (double*)&rt_ref_lidar[ilidar1],
+                                           dpref__drt_ref_sensor0,
+                                           rt_ref_sensor1,
                                            Var_rt_lidar0_sensor,
                                            Nstate_sensor_poses,
-                                           istate_lidar0,
-                                           istate_lidar1);
+                                           istate_sensor0,
+                                           istate_sensor1);
 
             double l[3]; // ALL the eigenvalues, in ascending order
 
@@ -4935,7 +5015,7 @@ bool _clc_internal(// out
             // It is more numerically stable to not compute Var=inv(JtJ) and
             // then compute M Var Mt, but instead to use the factorization of
             // JtJ to compute M Var Mt directly. But using the covariance code I
-            // already have is faster, so I do that for now
+            // already wrote is easier, so I do that for now
 
 
             // vehicle coords are
@@ -4953,26 +5033,20 @@ bool _clc_internal(// out
             const int    threshold_valid_lidar_Npoints    = 100;
             const double uncertainty_quantification_range = 10;
 
-            if(!count_observations_in_sector(// out
+            if(!count_lidar_observations_in_sector(// out
                                              Nobservations_per_lidar_per_sector,
                                              // in
                                              Rt_vehicle_ref,
                                              Nsectors,
                                              ctx->Nrings,
                                              Rt_lidar0_lidar,
-                                             Rt_lidar0_camera,
                                              threshold_valid_lidar_range,
 
                                              sensor_snapshots_unsorted,
                                              sensor_snapshots_sorted,
                                              Nsensor_snapshots,
                                              lidar_packet_stride,
-                                             Nlidars,
-                                             Ncameras,
-                                             models,
-                                             object_height_n,
-                                             object_width_n,
-                                             object_spacing))
+                                             Nlidars))
                 goto done;
 
             if(stdev_worst != NULL)
