@@ -3700,7 +3700,7 @@ static bool count_observations_in_sector(// out
                                          // A dense array of shape (Nlidars,Nsectors)
                                          int*                               Nobservations_per_lidar_per_sector,
                                          // in
-                                         const double*                      Rt_vehicle_lidar0,
+                                         const double*                      Rt_vehicle_ref,
                                          const int                          Nsectors,
                                          const int                          Nrings,
 
@@ -3736,7 +3736,7 @@ static bool count_observations_in_sector(// out
     double Rt_vehicle_lidar[4*3*(Nlidars-1)];
     for(int ilidar=0; ilidar<Nlidars-1; ilidar++)
         mrcal_compose_Rt(&Rt_vehicle_lidar[4*3*ilidar],
-                         Rt_vehicle_lidar0, &Rt_lidar0_lidar[4*3*ilidar]);
+                         Rt_vehicle_ref, &Rt_lidar0_lidar[4*3*ilidar]);
 
     for(int isnapshot=0; isnapshot<Nsensor_snapshots; isnapshot++)
     {
@@ -3840,7 +3840,7 @@ static bool count_observations_in_sector(// out
                 {
                     if(ilidar == 0)
                         mrcal_transform_point_Rt(p.xyz,NULL,NULL,
-                                                 Rt_vehicle_lidar0,
+                                                 Rt_vehicle_ref,
                                                  p.xyz);
                     else
                         mrcal_transform_point_Rt(p.xyz,NULL,NULL,
@@ -4942,9 +4942,9 @@ bool _clc_internal(// out
             // x: forward
             // y: left
             // z: up
-            double Rt_vehicle_lidar0[4*3];
+            double Rt_vehicle_ref[4*3];
             // The vehicle frame IS the lidar0 frame for now
-            mrcal_identity_Rt(Rt_vehicle_lidar0);
+            mrcal_identity_Rt(Rt_vehicle_ref);
 
             memset(Nobservations_per_lidar_per_sector, 0, sizeof(Nobservations_per_lidar_per_sector[0])*Nlidars*Nsectors);
 
@@ -4956,7 +4956,7 @@ bool _clc_internal(// out
             if(!count_observations_in_sector(// out
                                              Nobservations_per_lidar_per_sector,
                                              // in
-                                             Rt_vehicle_lidar0,
+                                             Rt_vehicle_ref,
                                              Nsectors,
                                              ctx->Nrings,
                                              Rt_lidar0_lidar,
@@ -4987,7 +4987,7 @@ bool _clc_internal(// out
                          .z = 0};
                     mrcal_point3_t pquery_ref;
                     mrcal_transform_point_Rt_inverted(pquery_ref.xyz,NULL,NULL,
-                                                      Rt_vehicle_lidar0, pquery_vehicle.xyz);
+                                                      Rt_vehicle_ref, pquery_vehicle.xyz);
 
                     if(!reprojection_uncertainty_in_sector(// out
                                                            &stdev_worst[isector],
