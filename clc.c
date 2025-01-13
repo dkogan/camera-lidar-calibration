@@ -4469,7 +4469,14 @@ reprojection_uncertainty_in_sector(// out
         }
     }
 
-    *stdev_worst = sqrt(l_worst);
+    if(l_worst >= 0.0)
+        *stdev_worst = sqrt(l_worst);
+    else
+    {
+        // round-off path
+        // We have overlapping data, but it's VERY uncertain
+        *stdev_worst = 1e-20;
+    }
 
     return true;
 }
