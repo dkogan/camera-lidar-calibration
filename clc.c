@@ -4360,13 +4360,6 @@ reprojection_uncertainty_in_sector(// out
         callback_context_t ctx = {.Ncameras = Ncameras,
                                   .Nlidars  = Nlidars};
 
-    if(!(state_index_lidar(0,&ctx) < 0 &&
-         state_index_lidar(1,&ctx) == 0))
-    {
-        MSG("Here I'm assuming that lidar0 is at the reference and lidar1 is at the start of the state vector; I'm assuming this in the layout of Var_rt_lidar0_sensor: it should be the same as the states");
-        return false;
-    }
-
     const int Nstate_lidar        = num_states_lidars (&ctx);
     const int Nstate_camera       = num_states_cameras(&ctx);
     const int Nstate_sensor_poses = Nstate_lidar + Nstate_camera;
