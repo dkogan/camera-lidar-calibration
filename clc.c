@@ -3743,56 +3743,6 @@ static bool count_lidar_observations_in_sector(// out
             &sensor_snapshots_sorted[isnapshot] :
             NULL;
 
-#if 0
-        for(int icamera=0; icamera<Ncameras; icamera++)
-        {
-            const mrcal_point2_t* chessboard_corners =
-                snapshot->chessboard_corners[icamera];
-            if(chessboard_corners == NULL)
-                continue;
-
-            for(int i=0; i<ctx->object_height_n; i++)
-                for(int j=0; j<ctx->object_width_n; j++)
-                {
-                    mrcal_point2_t q;
-                    mrcal_point3_t pref = {.x = (double)j*ctx->object_spacing,
-                                           .y = (double)i*ctx->object_spacing,
-                                           .z = 0.};
-                    mrcal_point3_t pcam;
-                    double dpcam_drtcb[3*6];
-                    mrcal_point3_t dq_dpcam[2];
-                    mrcal_transform_point_rt(pcam.xyz, dpcam_drtcb, NULL,
-                                             rt_camera_board, pref.xyz);
-                    mrcal_project(&q, dq_dpcam, NULL,
-                                  &pcam,1,
-                                  &ctx->models[icamera]->lensmodel,
-                                  ctx->models[icamera]->intrinsics);
-
-                    for(int k=0; k<2; k++)
-                    {
-                        const mrcal_point3_t* dqi_dpcam = &dq_dpcam[k];
-                        double dqi_drtcb[6];
-                        for(int l=0; l<6; l++)
-                        {
-                            dqi_drtcb[l] = 0.;
-                            for(int m=0;m<3;m++)
-                                dqi_drtcb[l] +=
-                                    dqi_dpcam->xyz[m] *
-                                    dpcam_drtcb[6*m + l];
-                        }
-
-                        if(Jt) Jrowptr[iMeasurement] = iJacobian;
-                        x[iMeasurement] = (q.xy[k] - chessboard_corners[i*ctx->object_width_n+j].xy[k]) / SCALE_MEASUREMENT_PX;
-                    }
-                }
-        }
-#endif
-        if(Ncameras)
-        {
-            MSG("This isn't implemented yet for cameras");
-            assert(0);
-        }
-
         for(int ilidar=0; ilidar<Nlidars; ilidar++)
         {
             int Npoints;
