@@ -4602,9 +4602,9 @@ bool _clc_internal(// out
          // (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
-         // A dense array of shape (Nlidars,Nsectors); may be NULL; requires Var_rt_lidar0_sensor!=NULL
+         // A dense array of shape (Nlidars,Nsectors); may be NULL
          int* Nobservations_per_lidar_per_sector,
-         // array of shape (Nsectors,); may be NULL; requires Nobservations_per_lidar_per_sector!=NULL
+         // array of shape (Nsectors,); may be NULL; requires Nobservations_per_lidar_per_sector!=NULL, Var_rt_lidar0_sensor!=NULL
          double* stdev_worst,
          const int Nsectors, // ignored if Nobservations_per_lidar_per_sector==NULL && stdev_worst==NULL
 
@@ -4654,17 +4654,11 @@ bool _clc_internal(// out
         return false;
     }
 
-    if( NULL != Nobservations_per_lidar_per_sector &&
-        NULL == Var_rt_lidar0_sensor )
-    {
-        MSG("Nobservations_per_lidar_per_sector requires Var_rt_lidar0_sensor!=NULL");
-        return false;
-    }
-
     if( NULL != stdev_worst &&
-        NULL == Nobservations_per_lidar_per_sector )
+        (NULL == Nobservations_per_lidar_per_sector ||
+         NULL == Var_rt_lidar0_sensor) )
     {
-        MSG("stdev_worst requires Nobservations_per_lidar_per_sector!=NULL");
+        MSG("stdev_worst requires Nobservations_per_lidar_per_sector!=NULL and Var_rt_lidar0_sensor!=NULL");
         return false;
     }
 
@@ -5198,9 +5192,9 @@ bool clc_unsorted(// out
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
-         // A dense array of shape (Nlidars,Nsectors); may be NULL; requires Var_rt_lidar0_sensor!=NULL
+         // A dense array of shape (Nlidars,Nsectors); may be NULL
          int* Nobservations_per_lidar_per_sector,
-         // array of shape (Nsectors,); may be NULL; requires Nobservations_per_lidar_per_sector!=NULL
+         // array of shape (Nsectors,); may be NULL; requires Nobservations_per_lidar_per_sector!=NULL, Var_rt_lidar0_sensor!=NULL
          double* stdev_worst,
          const int Nsectors, // ignored if Nobservations_per_lidar_per_sector==NULL && stdev_worst==NULL
 
@@ -5267,9 +5261,9 @@ bool clc_sorted(// out
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
-         // A dense array of shape (Nlidars,Nsectors); may be NULL; requires Var_rt_lidar0_sensor!=NULL
+         // A dense array of shape (Nlidars,Nsectors); may be NULL
          int* Nobservations_per_lidar_per_sector,
-         // array of shape (Nsectors,); may be NULL; requires Nobservations_per_lidar_per_sector!=NULL; requires Var_rt_lidar0_sensor!=NULL
+         // array of shape (Nsectors,); may be NULL; requires Nobservations_per_lidar_per_sector!=NULL, Var_rt_lidar0_sensor!=NULL; requires Var_rt_lidar0_sensor!=NULL
          double* stdev_worst,
          const int Nsectors, // ignored if Nobservations_per_lidar_per_sector==NULL && stdev_worst==NULL
 
