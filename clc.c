@@ -4614,6 +4614,8 @@ bool _clc_internal(// out
 
          // A dense array of shape (Nlidars,Nsectors); may be NULL
          int* Nobservations_per_lidar_per_sector,
+         // A dense array of shape (Nsensors,Nsectors); may be NULL
+         uint8_t* isvisible_per_sensor_per_sector,
          // array of shape (Nsectors,); may be NULL; requires Nobservations_per_lidar_per_sector!=NULL, Var_rt_lidar0_sensor!=NULL
          double* stdev_worst,
          const int Nsectors, // ignored if Nobservations_per_lidar_per_sector==NULL && stdev_worst==NULL
@@ -5119,22 +5121,48 @@ bool _clc_internal(// out
                                              Nlidars))
                 goto done;
 
+            const int Nwords = bitarray64_nwords(Ncameras * Nsectors);
+            uint64_t bitarray_isvisible_per_camera_per_sector[Nwords];
+
+            evaluate_camera_visibility(// out
+                                       bitarray_isvisible_per_camera_per_sector,
+                                       Nwords,
+                                       // in
+                                       Rt_vehicle_ref,
+                                       uncertainty_quantification_range,
+                                       Nsectors,
+                                       Ncameras,
+                                       Rt_lidar0_camera,
+                                       models);
+
+            if(NULL != isvisible_per_sensor_per_sector)
+            {
+                const int Nsensors = Nlidars + Ncameras;
+
+                for(int isector=0; isector<Nsectors; isector++)
+                {
+                    for(int isensor=0; isensor<Nsensors; isensor++)
+                    {
+                        if(isensor < Nlidars)
+                        {
+                            const int ilidar = isensor;
+                            isvisible_per_sensor_per_sector[Nsectors*isensor + isector] =
+                                (uint8_t)(Nobservations_per_lidar_per_sector[ilidar * Nsectors + isector] > threshold_valid_lidar_Npoints);
+                        }
+                        else
+                        {
+                            const int icamera = isensor-Nlidars;
+                            isvisible_per_sensor_per_sector[Nsectors*isensor + isector] =
+                                (uint8_t)bitarray64_check(bitarray_isvisible_per_camera_per_sector,
+                                                          icamera * Nsectors + isector);
+                        }
+                    }
+                }
+            }
+
+
             if(stdev_worst != NULL)
             {
-                const int Nwords = bitarray64_nwords(Ncameras * Nsectors);
-                uint64_t bitarray_isvisible_per_camera_per_sector[Nwords];
-
-                evaluate_camera_visibility(// out
-                                           bitarray_isvisible_per_camera_per_sector,
-                                           Nwords,
-                                           // in
-                                           Rt_vehicle_ref,
-                                           uncertainty_quantification_range,
-                                           Nsectors,
-                                           Ncameras,
-                                           Rt_lidar0_camera,
-                                           models);
-
                 const double sector_width_rad = 2.*M_PI/(double)Nsectors;
                 const double c = cos(sector_width_rad);
                 const double s = sin(sector_width_rad);
@@ -5204,6 +5232,8 @@ bool clc_unsorted(// out
 
          // A dense array of shape (Nlidars,Nsectors); may be NULL
          int* Nobservations_per_lidar_per_sector,
+         // A dense array of shape (Nsensors,Nsectors); may be NULL
+         uint8_t* isvisible_per_sensor_per_sector,
          // array of shape (Nsectors,); may be NULL; requires Nobservations_per_lidar_per_sector!=NULL, Var_rt_lidar0_sensor!=NULL
          double* stdev_worst,
          const int Nsectors, // ignored if Nobservations_per_lidar_per_sector==NULL && stdev_worst==NULL
@@ -5243,6 +5273,7 @@ bool clc_unsorted(// out
                          rt_ref_camera,
                          Var_rt_lidar0_sensor,
                          Nobservations_per_lidar_per_sector,
+                         isvisible_per_sensor_per_sector,
                          stdev_worst,
                          Nsectors,
                          buf_inputs_dump,
@@ -5309,6 +5340,7 @@ bool clc_sorted(// out
                          rt_ref_camera,
                          Var_rt_lidar0_sensor,
                          Nobservations_per_lidar_per_sector,
+                         NULL,
                          stdev_worst,
                          Nsectors,
                          buf_inputs_dump,
@@ -5366,7 +5398,7 @@ bool clc_lidar_segmented(// out
                          rt_ref_lidar,
                          rt_ref_camera,
                          Var_rt_lidar0_sensor,
-                         NULL,NULL,0,
+                         NULL,NULL,NULL,0,
                          buf_inputs_dump,
                          size_inputs_dump,
 
@@ -5422,7 +5454,7 @@ bool clc_lidar_segmented_dense(// out
                          rt_ref_lidar,
                          rt_ref_camera,
                          Var_rt_lidar0_sensor,
-                         NULL,NULL,0,
+                         NULL,NULL,NULL,0,
                          buf_inputs_dump,
                          size_inputs_dump,
 

@@ -435,6 +435,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     PyArrayObject* rt_ref_camera                      = NULL;
     PyArrayObject* Var_rt_lidar0_sensor               = NULL;
     PyArrayObject* Nobservations_per_lidar_per_sector = NULL;
+    PyArrayObject* isvisible_per_sensor_per_sector    = NULL;
     PyArrayObject* stdev_worst                        = NULL;
     PyObject*      inputs_dump                        = NULL;
 
@@ -624,6 +625,12 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                                                                                NPY_INT);
         if(Nobservations_per_lidar_per_sector == NULL) goto done;
 
+        const int Nsensors = Nlidars + Ncameras;
+        isvisible_per_sensor_per_sector = (PyArrayObject*)PyArray_SimpleNew(2,
+                                                                            ((npy_intp[]){Nsensors,Nsectors}),
+                                                                            NPY_UINT8);
+        if(isvisible_per_sensor_per_sector == NULL) goto done;
+
         stdev_worst = (PyArrayObject*)PyArray_SimpleNew(1,
                                                         ((npy_intp[]){Nsectors}),
                                                         NPY_FLOAT64);
@@ -634,6 +641,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          (mrcal_pose_t*)PyArray_DATA(rt_ref_camera),
                          (double      *)PyArray_DATA(Var_rt_lidar0_sensor),
                          (int         *)PyArray_DATA(Nobservations_per_lidar_per_sector),
+                         (uint8_t     *)PyArray_DATA(isvisible_per_sensor_per_sector),
                          (double      *)PyArray_DATA(stdev_worst),
                          Nsectors,
                          dump_optimization_inputs ? &buf_inputs_dump  : NULL,
@@ -660,11 +668,12 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     }
 
     if(buf_inputs_dump == NULL)
-        result = Py_BuildValue("{sOsOsOsOsO}",
+        result = Py_BuildValue("{sOsOsOsOsOsO}",
                                "rt_ref_lidar",  rt_ref_lidar,
                                "rt_ref_camera", rt_ref_camera,
                                "Var",           Var_rt_lidar0_sensor,
                                "Nobservations_per_lidar_per_sector", Nobservations_per_lidar_per_sector,
+                               "isvisible_per_sensor_per_sector",    isvisible_per_sensor_per_sector,
                                "stdev_worst",   stdev_worst);
     else
     {
@@ -675,11 +684,12 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
             BARF("PyBytes_FromStringAndSize(buf_inputs_dump) failed");
             goto done;
         }
-        result = Py_BuildValue("{sOsOsOsOsOsO}",
+        result = Py_BuildValue("{sOsOsOsOsOsOsO}",
                                "rt_ref_lidar",  rt_ref_lidar,
                                "rt_ref_camera", rt_ref_camera,
                                "Var",           Var_rt_lidar0_sensor,
                                "Nobservations_per_lidar_per_sector", Nobservations_per_lidar_per_sector,
+                               "isvisible_per_sensor_per_sector",    isvisible_per_sensor_per_sector,
                                "stdev_worst",   stdev_worst,
                                "inputs-dump",   inputs_dump);
     }
