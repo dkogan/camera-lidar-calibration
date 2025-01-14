@@ -3713,23 +3713,15 @@ static bool count_lidar_observations_in_sector(// out
                                          const double*                      rt_lidar0_lidar,
                                          const double                       threshold_valid_lidar_range,
                                          const double                       threshold_valid_lidar_Npoints,
-                                         const clc_sensor_snapshot_unsorted_t* sensor_snapshots_unsorted,
-                                         const clc_sensor_snapshot_sorted_t*   sensor_snapshots_sorted,
-                                         const int                          Nsensor_snapshots,
+
+                                         // just ONE snapshot
+                                         const clc_sensor_snapshot_unsorted_t* sensor_snapshot,
                                          // The stride, in bytes, between each successive points or rings value
                                          // in clc_lidar_scan_unsorted_t
                                          // <=0 means "points stored densely"
                                          int                                lidar_packet_stride,
                                          const int                          Nlidars)
 {
-    if(1 !=
-       (sensor_snapshots_unsorted        != NULL) +
-       (sensor_snapshots_sorted          != NULL))
-    {
-        MSG("count_lidar_observations_in_sector() works only off clc_sensor_snapshot_unsorted_t or clc_sensor_snapshot_sorted_t data");
-        return false;
-    }
-
     if(lidar_packet_stride <= 0)
         // stored densely
         lidar_packet_stride = sizeof(clc_point3f_t);
@@ -3744,85 +3736,51 @@ static bool count_lidar_observations_in_sector(// out
                          rt_vehicle_lidar);
     }
 
-    // A dense array of shape (Nlidars,Nsectors)
-    int Nobservations_per_lidar_per_sector[Nlidars*Nsectors];
-    memset(Nobservations_per_lidar_per_sector, 0, Nlidars*Nsectors*sizeof(Nobservations_per_lidar_per_sector));
-
-    for(int isnapshot=0; isnapshot<Nsensor_snapshots; isnapshot++)
+    for(int ilidar=0; ilidar<Nlidars; ilidar++)
     {
-        const clc_sensor_snapshot_unsorted_t* sensor_snapshot_unsorted =
-            (sensor_snapshots_unsorted != NULL ) ?
-            &sensor_snapshots_unsorted[isnapshot] :
-            NULL;
-        const clc_sensor_snapshot_sorted_t* sensor_snapshot_sorted =
-            (sensor_snapshots_sorted != NULL ) ?
-            &sensor_snapshots_sorted[isnapshot] :
-            NULL;
+        int Nobservations_per_sector[Nsectors];
+        memset(Nobservations_per_sector, 0, Nsectors*sizeof(Nobservations_per_sector));
 
-        for(int ilidar=0; ilidar<Nlidars; ilidar++)
+        int Npoints;
+        clc_point3f_t* points;
+
+        const clc_lidar_scan_unsorted_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+        if(lidar_scan->points == NULL)
+            continue;
+        Npoints = lidar_scan->Npoints;
+        points  = lidar_scan->points;
+
+        for(int ipoint=0; ipoint<Npoints; ipoint++)
         {
-            int Npoints;
-            clc_point3f_t* points;
-
-            if(sensor_snapshot_unsorted != NULL)
+            mrcal_point3_t p;
+            mrcal_point3_from_clc_point3f(&p,
+                                          (clc_point3f_t*)((uint8_t*)points + lidar_packet_stride*ipoint));
+            if(mrcal_point3_norm2(p) >=
+               threshold_valid_lidar_range*threshold_valid_lidar_range)
             {
-                const clc_lidar_scan_unsorted_t* lidar_scan = &sensor_snapshot_unsorted->lidar_scans[ilidar];
-                if(lidar_scan->points == NULL)
-                    continue;
+                mrcal_transform_point_rt(p.xyz,NULL,NULL,
+                                         &Rt_vehicle_lidar[4*3*ilidar],
+                                         p.xyz);
 
-                Npoints = lidar_scan->Npoints;
-                points  = lidar_scan->points;
-            }
-            else if(sensor_snapshot_sorted != NULL)
-            {
-                const clc_lidar_scan_sorted_t* lidar_scan = &sensor_snapshot_sorted->lidar_scans[ilidar];
-                if(lidar_scan->points == NULL)
-                    continue;
-                Npoints = 0;
-                for(int iring=0; iring<Nrings; iring++)
-                    Npoints += lidar_scan->Npoints[iring];
-                points = lidar_scan->points;
-            }
-            else
-            {
-                MSG("This path is unreachable. This is a bug");
-                return false;
-            }
+                double yaw = atan2(p.y, p.x); // yaw is in [-pi..pi]
+                if(yaw < 0.) yaw += 2.*M_PI;  // yaw is in [0..2pi]
 
-
-            for(int ipoint=0; ipoint<Npoints; ipoint++)
-            {
-                mrcal_point3_t p;
-                mrcal_point3_from_clc_point3f(&p,
-                                              (clc_point3f_t*)((uint8_t*)points + lidar_packet_stride*ipoint));
-                if(mrcal_point3_norm2(p) >=
-                   threshold_valid_lidar_range*threshold_valid_lidar_range)
-                {
-                    mrcal_transform_point_rt(p.xyz,NULL,NULL,
-                                             &Rt_vehicle_lidar[4*3*ilidar],
-                                             p.xyz);
-
-                    double yaw = atan2(p.y, p.x); // yaw is in [-pi..pi]
-                    if(yaw < 0.) yaw += 2.*M_PI;  // yaw is in [0..2pi]
-
-                    const double sector_width_rad = 2.*M_PI/(double)Nsectors;
-                    int isector = yaw / sector_width_rad;
-                    // just in case; for round-off
-                    if(     isector < 0        ) isector = 0;
-                    else if(isector >= Nsectors) isector = Nsectors-1;
-                    Nobservations_per_lidar_per_sector[ilidar*Nsectors + isector]++;
-                }
+                const double sector_width_rad = 2.*M_PI/(double)Nsectors;
+                int isector = yaw / sector_width_rad;
+                // just in case; for round-off
+                if(     isector < 0        ) isector = 0;
+                else if(isector >= Nsectors) isector = Nsectors-1;
+                Nobservations_per_sector[isector]++;
             }
         }
-    }
 
-    for(int ilidar=0; ilidar<Nlidars; ilidar++)
         for(int isector=0; isector<Nsectors; isector++)
         {
             const int isensor = ilidar;
             isvisible_per_sensor_per_sector[isensor * Nsectors + isector] =
-                (uint8_t)(Nobservations_per_lidar_per_sector[ilidar*Nsectors + isector] >= threshold_valid_lidar_Npoints);
+                (uint8_t)(Nobservations_per_sector[isector] >= threshold_valid_lidar_Npoints);
         }
+    }
 
     return true;
 }
@@ -5082,17 +5040,16 @@ bool clc_post_solve_statistics( // out
                                 // on output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
                                 const double* Var_rt_lidar0_sensor,
                                 const mrcal_pose_t* rt_vehicle_lidar0,
-                                const int Nlidars,
-                                const int Ncameras,
-                                const mrcal_cameramodel_t*const* models, // Ncameras of these
 
-                                const clc_sensor_snapshot_unsorted_t*        sensor_snapshots_unsorted,
-                                const clc_sensor_snapshot_sorted_t*          sensor_snapshots_sorted,
-
-                                const unsigned int                    Nsensor_snapshots,
+                                // just ONE snapshot
+                                const clc_sensor_snapshot_unsorted_t* sensor_snapshot,
                                 // The stride, in bytes, between each successive points or rings value
                                 // in clc_lidar_scan_unsorted_t
-                                const unsigned int           lidar_packet_stride)
+                                const unsigned int           lidar_packet_stride,
+                                const int Nlidars,
+                                const int Ncameras,
+                                const mrcal_cameramodel_t*const* models // Ncameras of these
+                                )
 {
     // It is more numerically stable to not compute Var=inv(JtJ) and
     // then compute M Var Mt, but instead to use the factorization of
@@ -5119,9 +5076,7 @@ bool clc_post_solve_statistics( // out
                                            threshold_valid_lidar_range,
                                            threshold_valid_lidar_Npoints,
 
-                                           sensor_snapshots_unsorted,
-                                           sensor_snapshots_sorted,
-                                           Nsensor_snapshots,
+                                           sensor_snapshot,
                                            lidar_packet_stride,
                                            Nlidars))
         return false;
