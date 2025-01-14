@@ -12,6 +12,8 @@
 #include "minimath/minimath_generated.h"
 #include "mrgingham-c-bridge.hh"
 #include "opencv-c-bridge.hh"
+#include "bitarray.h"
+
 
 typedef struct
 {
@@ -4303,7 +4305,8 @@ lidar_camera_indices_from_sensor(// out
                                  // dense bitarray of shape (Ncameras,Nsectors)
                                  const uint64_t* bitarray_isvisible_per_camera_per_sector,
                                  const unsigned int Nlidars,
-                                 const unsigned int Ncameras)
+                                 const unsigned int Ncameras,
+                                 const callback_context_t* ctx)
 {
 
     if(isensor < Nlidars)
@@ -4314,7 +4317,7 @@ lidar_camera_indices_from_sensor(// out
         if(Nobservations_per_lidar_per_sector[(*ilidar) * Nsectors + isector] < threshold_valid_lidar_Npoints)
             return false;
         *rt_ref_sensor = (double*)&rt_ref_lidar[*ilidar];
-        *istate_sensor = state_index_lidar(*ilidar, &ctx);
+        *istate_sensor = state_index_lidar(*ilidar, ctx);
     }
     else
     {
@@ -4325,7 +4328,7 @@ lidar_camera_indices_from_sensor(// out
                              (*icamera) * Nsectors + isector))
             return false;
         *rt_ref_sensor = (double*)&rt_ref_camera[*icamera];
-        *istate_sensor = state_index_camera(*icamera, &ctx);
+        *istate_sensor = state_index_camera(*icamera, ctx);
     }
     return true;
 }
@@ -4391,7 +4394,8 @@ reprojection_uncertainty_in_sector(// out
                                              threshold_valid_lidar_Npoints,
                                              bitarray_isvisible_per_camera_per_sector,
                                              Nlidars,
-                                             Ncameras))
+                                             Ncameras,
+                                             &ctx))
             continue;
 
         mrcal_point3_t p0;
@@ -4426,7 +4430,8 @@ reprojection_uncertainty_in_sector(// out
                                                  threshold_valid_lidar_Npoints,
                                                  bitarray_isvisible_per_camera_per_sector,
                                                  Nlidars,
-                                                 Ncameras))
+                                                 Ncameras,
+                                                 &ctx))
                 continue;
 
             // These two sensors can BOTH observe points in this sector. So their reprojection uncertainty should be low
@@ -4471,6 +4476,120 @@ reprojection_uncertainty_in_sector(// out
     return true;
 }
 
+
+static bool is_point_in_view_of_camera(// in
+                                       const mrcal_point3_t* p,
+                                       const mrcal_cameramodel_t* model)
+{
+    mrcal_point2_t q;
+    if(!mrcal_project(&q, NULL,NULL,
+                      p,
+                      1,
+                      &model->lensmodel, model->intrinsics))
+        return false;
+
+    if(q.x < 0 || q.y < 0 ||
+       q.x > model->imagersize[0]-1 || q.y > model->imagersize[1]-1)
+        return false;
+
+    mrcal_point3_t p1;
+    if(!mrcal_unproject(&p1,
+                        &q,
+                        1,
+                        &model->lensmodel, model->intrinsics))
+        return false;
+    if(p->x-p1.x < -1e-3 || p->x-p1.x > 1e-3 ||
+       p->y-p1.y < -1e-3 || p->y-p1.y > 1e-3)
+        return false;
+
+    return true;
+}
+
+static void evaluate_camera_visibility(// out
+                                       // dense bitarray of shape (Ncameras,Nsectors)
+                                       uint64_t* bitarray_isvisible_per_camera_per_sector,
+                                       const int Nwords,
+                                       // in
+                                       const double* Rt_vehicle_ref,
+                                       const double uncertainty_quantification_range,
+                                       const int Nsectors,
+                                       const int Ncameras,
+                                       const double* Rt_lidar0_camera,
+                                       const mrcal_cameramodel_t*const* models)
+{
+    memset(bitarray_isvisible_per_camera_per_sector, 0, Nwords*sizeof(bitarray_isvisible_per_camera_per_sector[0]));
+
+
+    const double sector_width_rad = 2.*M_PI/(double)Nsectors;
+    const double c = cos(sector_width_rad);
+    const double s = sin(sector_width_rad);
+
+    // I will rotate this by sector_width_rad with each step
+    mrcal_point3_t pquery_vehicle_left =
+        {.x = uncertainty_quantification_range * 1.,
+         .y = uncertainty_quantification_range * 0.,
+         .z = 0};
+
+    mrcal_point3_t pquery_ref_left;
+    mrcal_transform_point_Rt_inverted(pquery_ref_left.xyz,NULL,NULL,
+                                      Rt_vehicle_ref, pquery_vehicle_left.xyz);
+
+    const int Nwords_cameras = bitarray64_nwords(Ncameras);
+
+    uint64_t bitarray_isvisible_left_per_camera[Nwords_cameras];
+    for(int icamera=0; icamera<Ncameras; icamera++)
+    {
+        mrcal_point3_t pquery_cam_left;
+        mrcal_transform_point_Rt_inverted(pquery_cam_left.xyz,NULL,NULL,
+                                          &Rt_lidar0_camera[4*3*icamera], pquery_ref_left.xyz);
+        if(is_point_in_view_of_camera(&pquery_cam_left, models[icamera]))
+            bitarray64_set(  bitarray_isvisible_left_per_camera, icamera);
+        else
+            bitarray64_clear(bitarray_isvisible_left_per_camera, icamera);
+    }
+
+
+
+    for(int isector=0; isector<Nsectors; isector++)
+    {
+        const double x = pquery_vehicle_left.x;
+        const double y = pquery_vehicle_left.y;
+        mrcal_point3_t pquery_vehicle_right =
+            {.x = x*c - y*s,
+             .y = y*c + x*s,
+             .z = 0};
+
+        mrcal_point3_t pquery_ref_right;
+        mrcal_transform_point_Rt_inverted(pquery_ref_right.xyz,NULL,NULL,
+                                          Rt_vehicle_ref, pquery_vehicle_right.xyz);
+
+        uint64_t bitarray_isvisible_right_per_camera[Nwords_cameras];
+        for(int icamera=0; icamera<Ncameras; icamera++)
+        {
+            mrcal_point3_t pquery_cam_right;
+            mrcal_transform_point_Rt_inverted(pquery_cam_right.xyz,NULL,NULL,
+                                              &Rt_lidar0_camera[4*3*icamera], pquery_ref_right.xyz);
+            if(is_point_in_view_of_camera(&pquery_cam_right, models[icamera]))
+                bitarray64_set(  bitarray_isvisible_right_per_camera, icamera);
+            else
+            {
+                bitarray64_clear(bitarray_isvisible_right_per_camera, icamera);
+                continue;
+            }
+
+            // I just checked if we're visible on the right. If it's ALSO
+            // visible on the left, report this sector as visible
+            if(bitarray64_check(bitarray_isvisible_left_per_camera,  icamera))
+                bitarray64_set(bitarray_isvisible_per_camera_per_sector,
+                               icamera * Nsectors + isector);
+        }
+
+        pquery_vehicle_left = pquery_vehicle_right;
+        pquery_ref_left     = pquery_ref_right;
+        for(int iword=0; iword<Nwords_cameras; iword++)
+            bitarray_isvisible_left_per_camera[iword] = bitarray_isvisible_right_per_camera[iword];
+    }
+}
 
 static
 bool _clc_internal(// out
@@ -4997,15 +5116,33 @@ bool _clc_internal(// out
                 goto done;
 
             if(stdev_worst != NULL)
-                for(int isector = 0; isector < Nsectors; isector++)
-                {
-                    const double sector_width_rad = 2.*M_PI/(double)Nsectors;
+            {
+                const int Nwords = bitarray64_nwords(Ncameras * Nsectors);
+                uint64_t bitarray_isvisible_per_camera_per_sector[Nwords];
 
+                evaluate_camera_visibility(// out
+                                           bitarray_isvisible_per_camera_per_sector,
+                                           Nwords,
+                                           // in
+                                           Rt_vehicle_ref,
+                                           uncertainty_quantification_range,
+                                           Nsectors,
+                                           Ncameras,
+                                           Rt_lidar0_camera,
+                                           models);
+
+                const double sector_width_rad = 2.*M_PI/(double)Nsectors;
+                const double c = cos(sector_width_rad);
+                const double s = sin(sector_width_rad);
+
+                // I will rotate this by sector_width_rad with each step
+                mrcal_point3_t pquery_vehicle =
+                    {.x = uncertainty_quantification_range * cos(0.5 * sector_width_rad),
+                     .y = uncertainty_quantification_range * sin(0.5 * sector_width_rad),
+                     .z = 0};
+                for(int isector=0; isector<Nsectors; isector++)
+                {
                     // point at the center of the sector
-                    const mrcal_point3_t pquery_vehicle =
-                        {.x = uncertainty_quantification_range * cos( ((double)isector + 0.5) * sector_width_rad),
-                         .y = uncertainty_quantification_range * sin( ((double)isector + 0.5) * sector_width_rad),
-                         .z = 0};
                     mrcal_point3_t pquery_ref;
                     mrcal_transform_point_Rt_inverted(pquery_ref.xyz,NULL,NULL,
                                                       Rt_vehicle_ref, pquery_vehicle.xyz);
@@ -5026,7 +5163,13 @@ bool _clc_internal(// out
                                                            Nlidars,
                                                            Ncameras))
                         goto done;
+
+                    const double x = pquery_vehicle.x;
+                    const double y = pquery_vehicle.y;
+                    pquery_vehicle.x = x*c - y*s;
+                    pquery_vehicle.y = y*c + x*s;
                 }
+            }
         }
     }
 
