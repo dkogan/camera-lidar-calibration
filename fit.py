@@ -701,64 +701,61 @@ if args.dump is not None:
 
 
 
-
 #### stolen from show-aligned-lidar-pointclouds.py
 ####
 # These apply to ALL the sensors, not just the ones being requested
-lidars_origin  = context['result']['rt_ref_lidar'][:,3:]
-lidars_forward = mrcal.rotate_point_r(context['result']['rt_ref_lidar'][:,:3], np.array((1.,0,0)))
-lidars_forward_xy = np.array(lidars_forward[...,:2])
+lidars_origin   = context['result']['rt_ref_lidar' ][:,3:]
+cameras_origin  = context['result']['rt_ref_camera'][:,3:]
+lidars_forward  = mrcal.rotate_point_r(context['result']['rt_ref_lidar' ][:,:3], np.array((1.,0,0 )))
+cameras_forward = mrcal.rotate_point_r(context['result']['rt_ref_camera'][:,:3], np.array(( 0,0,1.)))
+
+sensors_origin  = nps.glue(lidars_origin,  cameras_origin,  axis=-2)
+sensors_forward = nps.glue(lidars_forward, cameras_forward, axis=-2)
+
+sensors_forward_xy = np.array(sensors_forward[...,:2])
 # to avoid /0 for straight-up vectors
-mag_lidars_forward_xy = nps.mag(lidars_forward_xy)
-i = mag_lidars_forward_xy>0
-lidars_forward_xy[i,:] /= nps.dummy(mag_lidars_forward_xy[i], axis=-1)
-lidars_forward_xy[~i,:] = 0
-lidar_forward_arrow_length = 4.
-def data_tuples_lidar_forward_vectors():
-    return \
+mag_sensors_forward_xy = nps.mag(sensors_forward_xy)
+i = mag_sensors_forward_xy>0
+sensors_forward_xy[i,:] /= nps.dummy(mag_sensors_forward_xy[i], axis=-1)
+sensors_forward_xy[~i,:] = 0
+sensor_forward_arrow_length = 4.
+data_tuples_sensor_forward_vectors = \
     (
-      # LIDAR positions AND their forward vectors
-      (nps.glue( lidars_origin [...,:2],
-                 lidars_forward_xy * lidar_forward_arrow_length,
+      # sensor positions AND their forward vectors
+      (nps.glue( sensors_origin [...,:2],
+                 sensors_forward_xy * sensor_forward_arrow_length,
                  axis = -1 ),
        dict(_with = 'vectors lw 2 lc "black"',
             tuplesize = -4) ),
 
-      # # JUST the LIDAR positions
-      # ( lidars_origin [...,:2],
-      #   dict(_with = 'points pt 2 lc "black"',
-      #        tuplesize = -2) ),
-
-      ( lidars_origin[...,0],
-        lidars_origin[...,1],
-        np.array(context['lidar_topic']),
+      ( sensors_origin[...,0],
+        sensors_origin[...,1],
+        np.array(context['lidar_topic'] + context['camera_topic']),
         dict(_with = 'labels textcolor "black"',
              tuplesize = 3)),
      )
 
 
+# shape (Nsensors, Nsectors)
+isvisible_per_sensor_per_sector = result['isvisible_per_sensor_per_sector']
 
-
-
-# shape (Nlidars, Nsectors)
-Nobservations_per_lidar_per_sector = result['Nobservations_per_lidar_per_sector']
-Nlidars,Nsectors = Nobservations_per_lidar_per_sector.shape
+Nsensors,Nsectors = isvisible_per_sensor_per_sector.shape
 dth = np.pi*2./Nsectors
 th = np.arange(Nsectors)*dth + dth/2.
-plotradius = nps.transpose(np.arange(Nlidars) + 10)
+plotradius = nps.transpose(np.arange(Nsensors) + 10)
 ones = np.ones( (Nsectors,) )
 gp.plot( (th,                 # angle
           plotradius*ones,    # radius
           ones*dth*0.9,       # angular width of slice
           ones*0.9,           # depth of slice
-          Nobservations_per_lidar_per_sector > 100,
+          isvisible_per_sensor_per_sector,
           dict(_with = 'sectors palette fill solid',
                tuplesize = 5)),
 
-         *data_tuples_lidar_forward_vectors(),
+         *data_tuples_sensor_forward_vectors,
 
-         _xrange = (-10-Nlidars,10+Nlidars),
-         _yrange = (-10-Nlidars,10+Nlidars),
+         _xrange = (-10-Nsensors,10+Nsensors),
+         _yrange = (-10-Nsensors,10+Nsensors),
          square = True,
          unset = 'colorbox',
          title = 'Observability map of each LIDAR',
@@ -774,7 +771,7 @@ gp.plot( (th[i],                 # angle
           stdev_worst[i],
           dict(tuplesize = 5,
                _with = 'sectors palette fill solid')),
-         *data_tuples_lidar_forward_vectors(),
+         *data_tuples_sensor_forward_vectors,
          _xrange = (-11,11),
          _yrange = (-11,11),
          square = True,
