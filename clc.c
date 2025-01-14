@@ -4492,14 +4492,24 @@ static bool is_point_in_view_of_camera(// in
        q.x > model->imagersize[0]-1 || q.y > model->imagersize[1]-1)
         return false;
 
+    // project() found a pixel q that maps to the point p. The nonlinear effects
+    // of the equations out-of-bounds of the camera could have played a role
+    // here. I unproject q back to the world and compare with the requested p.
+    // If I get the vector in space, then I know this point WAS in view
     mrcal_point3_t p1;
     if(!mrcal_unproject(&p1,
                         &q,
                         1,
                         &model->lensmodel, model->intrinsics))
         return false;
-    if(p->x-p1.x < -1e-3 || p->x-p1.x > 1e-3 ||
-       p->y-p1.y < -1e-3 || p->y-p1.y > 1e-3)
+
+    // p1 is not normalized. And it doesn't have the same magnitude as p. I look
+    // at the angle error between them
+    const double cos_error_mag_mag =
+        mrcal_point3_inner(*p, p1);
+    const double mag_mag_sq = mrcal_point3_norm2(*p) * mrcal_point3_norm2(p1);
+    const double cos_err_max = cos(0.01 * M_PI/180.);
+    if( cos_error_mag_mag*cos_error_mag_mag < cos_err_max*cos_err_max*mag_mag_sq )
         return false;
 
     return true;
