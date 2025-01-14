@@ -744,6 +744,8 @@ dth = np.pi*2./Nsectors
 th = np.arange(Nsectors)*dth + dth/2.
 plotradius = nps.transpose(np.arange(Nsensors) + 10)
 ones = np.ones( (Nsectors,) )
+
+filename = '/tmp/observability.pdf'
 gp.plot( (th,                 # angle
           plotradius*ones,    # radius
           ones*dth*0.9,       # angular width of slice
@@ -759,11 +761,13 @@ gp.plot( (th,                 # angle
          square = True,
          unset = 'colorbox',
          title = 'Observability map of each LIDAR',
-         hardcopy = '/tmp/observability.pdf',
+         hardcopy = filename,
         )
+print(f"Wrote '{filename}'")
 
 stdev_worst = result['stdev_worst']
 i = stdev_worst != 0
+filename = '/tmp/direction.pdf'
 gp.plot( (th[i],                 # angle
           10.*ones[i],           # radius
           ones[i]*dth*0.9,       # angular width of slice
@@ -776,8 +780,9 @@ gp.plot( (th[i],                 # angle
          _yrange = (-11,11),
          square = True,
          title = 'Worst-case uncertainty. Put the board in high-uncertainty regions',
-         hardcopy = '/tmp/direction.pdf',
+         hardcopy = filename,
         )
+print(f"Wrote '{filename}'")
 
 import IPython
 IPython.embed()
