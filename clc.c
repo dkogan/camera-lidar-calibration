@@ -3713,9 +3713,7 @@ static bool count_lidar_observations_in_sector(// out
                                          const double*                      rt_lidar0_lidar,
                                          const double                       threshold_valid_lidar_range,
                                          const double                       threshold_valid_lidar_Npoints,
-
-                                         // just ONE snapshot
-                                         const clc_sensor_snapshot_unsorted_t* sensor_snapshot,
+                                         const clc_lidar_scan_unsorted_t* lidar_scans, // Nlidars of these
                                          // The stride, in bytes, between each successive points or rings value
                                          // in clc_lidar_scan_unsorted_t
                                          // <=0 means "points stored densely"
@@ -3744,7 +3742,7 @@ static bool count_lidar_observations_in_sector(// out
         int Npoints;
         clc_point3f_t* points;
 
-        const clc_lidar_scan_unsorted_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+        const clc_lidar_scan_unsorted_t* lidar_scan = &lidar_scans[ilidar];
         if(lidar_scan->points == NULL)
             continue;
         Npoints = lidar_scan->Npoints;
@@ -5038,11 +5036,9 @@ bool clc_post_solve_statistics( // out
                                 // Covariance of the output. Symmetric matrix of shape
                                 // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written
                                 // on output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
-                                const double* Var_rt_lidar0_sensor,
+                                const double*       Var_rt_lidar0_sensor,
                                 const mrcal_pose_t* rt_vehicle_lidar0,
-
-                                // just ONE snapshot
-                                const clc_sensor_snapshot_unsorted_t* sensor_snapshot,
+                                const clc_lidar_scan_unsorted_t* lidar_scans, // Nlidars of these
                                 // The stride, in bytes, between each successive points or rings value
                                 // in clc_lidar_scan_unsorted_t
                                 const unsigned int           lidar_packet_stride,
@@ -5076,7 +5072,7 @@ bool clc_post_solve_statistics( // out
                                            threshold_valid_lidar_range,
                                            threshold_valid_lidar_Npoints,
 
-                                           sensor_snapshot,
+                                           lidar_scans,
                                            lidar_packet_stride,
                                            Nlidars))
         return false;
