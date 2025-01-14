@@ -271,14 +271,6 @@ bool clc_unsorted(// out
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
-         // A dense array of shape (Nlidars,Nsectors); may be NULL
-         int* Nobservations_per_lidar_per_sector,
-         // A dense array of shape (Nsensors,Nsectors); may be NULL
-         uint8_t* isvisible_per_sensor_per_sector,
-         // array of shape (Nsectors,); may be NULL; requires Nobservations_per_lidar_per_sector!=NULL, Var_rt_lidar0_sensor!=NULL
-         double* stdev_worst,
-         const int Nsectors, // ignored if Nobservations_per_lidar_per_sector==NULL && stdev_worst==NULL
-
          // Pass non-NULL to get the fit-inputs dump. On success, these encode
          // the data buffer. The caller must free(*buf_inputs_dump) when done.
          char**  buf_inputs_dump,
@@ -318,12 +310,6 @@ bool clc_sorted(// out
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
-
-         // A dense array of shape (Nlidars,Nsectors); may be NULL
-         int* Nobservations_per_lidar_per_sector,
-         // array of shape (Nsectors,); may be NULL; requires Nobservations_per_lidar_per_sector!=NULL, Var_rt_lidar0_sensor!=NULL
-         double* stdev_worst,
-         const int Nsectors, // ignored if Nobservations_per_lidar_per_sector==NULL && stdev_worst==NULL
 
          // Pass non-NULL to get the fit-inputs dump. On success, these encode
          // the data buffer. The caller must free(*buf_inputs_dump) when done.
