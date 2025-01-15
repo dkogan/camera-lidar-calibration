@@ -100,7 +100,7 @@ for isample in range(args.Nsamples):
     if (isample+1) % 20 == 0:
         print(f"Sampling {isample+1}/{args.Nsamples}")
 
-    result = clc.fit_from_optimization_inputs(context['result']['inputs-dump'],
+    result = clc.fit_from_optimization_inputs(context['result']['inputs_dump'],
                                               inject_noise = True)
     p0_sampled[isample] = mrcal.transform_point_rt(result['rt_ref_lidar'][ilidar], p1)
 

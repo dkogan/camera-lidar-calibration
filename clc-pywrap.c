@@ -670,7 +670,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                                "rt_ref_lidar",  rt_ref_lidar,
                                "rt_ref_camera", rt_ref_camera,
                                "Var",           Var_rt_lidar0_sensor,
-                               "inputs-dump",   inputs_dump);
+                               "inputs_dump",   inputs_dump);
     }
 
  done:
@@ -968,7 +968,7 @@ static PyObject* py_fit_from_optimization_inputs(PyObject* NPY_UNUSED(self),
 
     SET_SIGINT();
 
-    char* keywords[] = { "inputs-dump",
+    char* keywords[] = { "inputs_dump",
                          "inject_noise",
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
@@ -981,7 +981,7 @@ static PyObject* py_fit_from_optimization_inputs(PyObject* NPY_UNUSED(self),
 
     if(!PyBytes_Check(inputs_dump))
     {
-        BARF("inputs-dump should be a 'bytes' object");
+        BARF("inputs_dump should be a 'bytes' object");
         goto done;
     }
     if(!clc_fit_from_optimization_inputs(// out
