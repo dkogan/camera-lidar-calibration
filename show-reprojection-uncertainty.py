@@ -99,9 +99,6 @@ x_sample = np.linspace(-args.radius,args.radius,args.gridn)
 y_sample = np.linspace(-args.radius,args.radius,args.gridn)
 z_sample = 1
 
-Nxsample = len(x_sample)
-Nysample = len(y_sample)
-
 ### point coordinates in the lidar0 frame. This is the solve reference:
 ### ilidar_in_solve_from_ilidar[ilidar]==0
 # Each has shape (Ny_sample,Nx_sample)
@@ -176,7 +173,7 @@ if do_plot_worst_eigenvalue_heatmap:
         cos_vertical = np.abs(eigv_worst[...,2])
         thdeg_vertical = np.arccos(np.clip(cos_vertical,-1,1)) * 180./np.pi
 
-        using = f'({x_sample[0]} + $1*({x_sample[-1]-x_sample[0]})/{Nxsample-1}):({y_sample[0]} + $2*({y_sample[-1]-y_sample[0]})/{Nysample-1}):3'
+        using = f'({x_sample[0]} + $1*({x_sample[-1]-x_sample[0]})/{args.gridn-1}):({y_sample[0]} + $2*({y_sample[-1]-y_sample[0]})/{args.gridn-1}):3'
 
         clc.plot((uncertainty_1sigma,
               dict(tuplesize = 3,
