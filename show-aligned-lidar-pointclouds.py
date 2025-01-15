@@ -79,73 +79,11 @@ import gnuplotlib as gp
 
 
 
-if args.context is None:
-    ilidar_in_solve_from_ilidar = None
-    context                     = None
-else:
-    with open(args.context, "rb") as f:
-        context = pickle.load(f)
-
-
-    ilidar_in_solve_from_ilidar = [None] * len(args.lidar_topic)
-    for ilidar in range(len(args.lidar_topic)):
-        lidar_topic_requested = args.lidar_topic[ilidar]
-        try:
-            ilidar_in_solve_from_ilidar[ilidar] = \
-                context['lidar_topic'].index(lidar_topic_requested)
-        except:
-            print(f"Requested topic '{lidar_topic_requested}' not present in the context file '{args.context}'; topics: {context['lidar_topic']}",
-                  file=sys.stderr)
-            sys.exit(1)
-
-
-
-if args.lidar_models is None:
-    # one transform for each lidar in the solve
-    rt_lidar0_lidar = context['result']['rt_ref_lidar']
-else:
-    # one transform for each --lidar-topic
-    lidar_models = [mrcal.cameramodel(f) for f in args.lidar_models]
-    rt_lidar0_lidar = [m.extrinsics_rt_toref() for m in lidar_models]
 
 
 
 
 
-
-
-def plot(*args,
-         hardcopy = None,
-         **kwargs):
-    r'''Wrapper for gp.plot(), but printing out where the hardcopy went'''
-    gp.plot(*args, **kwargs,
-            hardcopy = hardcopy)
-    if hardcopy is not None:
-        print(f"Wrote '{hardcopy}'")
-
-
-
-try:
-    pointcloud_msgs = \
-        [ next(bag_interface.messages(args.bag, (topic,))) \
-          for topic in args.lidar_topic ]
-except:
-    raise Exception(f"Bag '{args.bag}' doesn't have at least one message for each of {args.lidar_topic}")
-
-# Package into a numpy array
-pointclouds = [ msg['array']['xyz'].astype(float) \
-                for msg in pointcloud_msgs ]
-
-# Throw out everything that's too far, in the LIDAR's own frame
-pointclouds = [ p[ nps.mag(p) < args.threshold ] for p in pointclouds ]
-
-# Transform to ref coords
-if context is None:
-    pointclouds = [ mrcal.transform_point_rt(rt_lidar0_lidar[i],
-                                             p) for i,p in enumerate(pointclouds) ]
-else:
-    pointclouds = [ mrcal.transform_point_rt(rt_lidar0_lidar[ ilidar_in_solve_from_ilidar[i] ],
-                                             p) for i,p in enumerate(pointclouds) ]
 
 # from "gnuplot -e 'show linetype'"
 color_sequence_rgb = (
@@ -159,13 +97,62 @@ color_sequence_rgb = (
     "#000000"
 )
 
-data_tuples = [ ( p, dict( tuplesize = -3,
-                           legend    = args.lidar_topic[i],
-                           _with     = f'points pt 7 ps 1 lc rgb "{color_sequence_rgb[i%len(color_sequence_rgb)]}"')) \
-                for i,p in enumerate(pointclouds) ]
+
+def plot(*args,
+         hardcopy = None,
+         **kwargs):
+    r'''Wrapper for gp.plot(), but printing out where the hardcopy went'''
+    gp.plot(*args, **kwargs,
+            hardcopy = hardcopy)
+    if hardcopy is not None:
+        print(f"Wrote '{hardcopy}'")
 
 
-if context is None:
+def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
+                               *,
+                               ilidar_in_solve_from_ilidar = None):
+
+    try:
+        pointcloud_msgs = \
+            [ next(bag_interface.messages(bag, (topic,))) \
+              for topic in lidar_topic ]
+    except:
+        raise Exception(f"Bag '{bag}' doesn't have at least one message for each of {lidar_topic}")
+
+    # Package into a numpy array
+    pointclouds = [ msg['array']['xyz'].astype(float) \
+                    for msg in pointcloud_msgs ]
+
+    # Throw out everything that's too far, in the LIDAR's own frame
+    pointclouds = [ p[ nps.mag(p) < threshold ] for p in pointclouds ]
+
+    if ilidar_in_solve_from_ilidar is not None:
+        pointclouds = \
+            [ mrcal.transform_point_rt(rt_lidar0_lidar[ ilidar_in_solve_from_ilidar[i] ],
+                                       p) for i,p in enumerate(pointclouds) ]
+    else:
+        pointclouds = \
+            [ mrcal.transform_point_rt(rt_lidar0_lidar[i],
+                                       p) for i,p in enumerate(pointclouds) ]
+
+    data_tuples = [ ( p, dict( tuplesize = -3,
+                               legend    = args.lidar_topic[i],
+                               _with     = f'points pt 7 ps 1 lc rgb "{color_sequence_rgb[i%len(color_sequence_rgb)]}"')) \
+                    for i,p in enumerate(pointclouds) ]
+
+    return data_tuples
+
+
+
+
+if args.context is None:
+    # Simple case. We have the lidar models and no context. We just plot the
+    # geometry, and we're done. No uncertainty reporting is possible or
+    # requested
+    rt_lidar0_lidar = [mrcal.cameramodel(f).extrinsics_rt_toref() for f in args.lidar_models]
+
+    data_tuples = get_pointcloud_plot_tuples(args.bag, args.lidar_topic, args.threshold,
+                                             ilidar_in_solve_from_ilidar = None)
     plot(*data_tuples,
          _3d = True,
          square = True,
@@ -175,6 +162,33 @@ if context is None:
          wait = True)
     sys.exit()
 
+
+
+
+with open(args.context, "rb") as f:
+    context = pickle.load(f)
+
+
+ilidar_in_solve_from_ilidar = [None] * len(args.lidar_topic)
+for ilidar in range(len(args.lidar_topic)):
+    lidar_topic_requested = args.lidar_topic[ilidar]
+    try:
+        ilidar_in_solve_from_ilidar[ilidar] = \
+            context['lidar_topic'].index(lidar_topic_requested)
+    except:
+        print(f"Requested topic '{lidar_topic_requested}' not present in the context file '{args.context}'; topics: {context['lidar_topic']}",
+              file=sys.stderr)
+        sys.exit(1)
+
+# one transform for each lidar in the solve
+rt_lidar0_lidar = context['result']['rt_ref_lidar']
+
+
+
+
+
+data_tuples = get_pointcloud_plot_tuples(args.bag, args.lidar_topic, args.threshold,
+                                         ilidar_in_solve_from_ilidar = None)
 
 x_sample = np.linspace(-20,20,25)
 y_sample = np.linspace(-20,20,25)
