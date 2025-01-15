@@ -94,6 +94,8 @@ def post_solve_statistics(*,
         bag_interface. \
         first_message_from_each_topic(bag, lidar_topic)
 
+    kwargs = dict(kwargs)
+    del kwargs['inputs_dump']
     return _clc.post_solve_statistics(lidar_scans = tuple(lidar_points(msg) for msg in messages),
                                       **kwargs)
 
