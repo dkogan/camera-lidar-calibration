@@ -772,7 +772,7 @@ print(f"Wrote '{filename}'")
 
 stdev_worst = statistics['stdev_worst']
 i = stdev_worst != 0
-filename = '/tmp/direction.pdf'
+filename = '/tmp/uncertainty.pdf'
 gp.plot( (th[i],                 # angle
           10.*ones[i],           # radius
           ones[i]*dth*0.9,       # angular width of slice
