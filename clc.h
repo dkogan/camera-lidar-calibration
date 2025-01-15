@@ -407,6 +407,33 @@ bool clc_lidar_segmented_dense(// out
          bool check_gradient__use_distance_to_plane,
          bool check_gradient);
 
+bool clc_post_solve_statistics( // out
+                                // A dense array of shape (Nsensors,Nsectors)
+                                uint8_t* isvisible_per_sensor_per_sector,
+                                // array of shape (Nsectors,)
+                                double* stdev_worst,
+                                const int Nsectors,
+
+                                // out,in
+                                // On input:  the ref frame is lidar-0
+                                // On output: the ref frame is the vehicle frame, as defined in rt_vehicle_lidar0
+                                mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
+                                mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+
+                                // in
+                                // Covariance of the output. Symmetric matrix of shape
+                                // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written
+                                // on output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
+                                const double*       Var_rt_lidar0_sensor,
+                                const mrcal_pose_t* rt_vehicle_lidar0,
+                                const clc_lidar_scan_unsorted_t* lidar_scans, // Nlidars of these
+                                // The stride, in bytes, between each successive points or rings value
+                                // in clc_lidar_scan_unsorted_t
+                                const unsigned int           lidar_packet_stride,
+                                const int Nlidars,
+                                const int Ncameras,
+                                const mrcal_cameramodel_t*const* models // Ncameras of these
+                                );
 
 bool clc_fit_from_optimization_inputs(// out
                                       int* Nlidars,

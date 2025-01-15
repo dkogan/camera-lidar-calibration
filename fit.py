@@ -696,7 +696,12 @@ if args.dump is not None:
 
 
 
-
+statistics = clc.post_solve_statistics(bag               = args.bag[0],
+                                       lidar_topic       = args.lidar_topic,
+                                       Nsectors          = 36,
+                                       rt_vehicle_lidar0 = mrcal.identity_rt(),
+                                       models            = args.models,
+                                       **result)
 
 
 
@@ -737,7 +742,7 @@ data_tuples_sensor_forward_vectors = \
 
 
 # shape (Nsensors, Nsectors)
-isvisible_per_sensor_per_sector = result['isvisible_per_sensor_per_sector']
+isvisible_per_sensor_per_sector = statistics['isvisible_per_sensor_per_sector']
 
 Nsensors,Nsectors = isvisible_per_sensor_per_sector.shape
 dth = np.pi*2./Nsectors
@@ -760,12 +765,12 @@ gp.plot( (th,                 # angle
          _yrange = (-10-Nsensors,10+Nsensors),
          square = True,
          unset = 'colorbox',
-         title = 'Observability map of each LIDAR',
+         title = 'Observability map of each sensor',
          hardcopy = filename,
         )
 print(f"Wrote '{filename}'")
 
-stdev_worst = result['stdev_worst']
+stdev_worst = statistics['stdev_worst']
 i = stdev_worst != 0
 filename = '/tmp/direction.pdf'
 gp.plot( (th[i],                 # angle

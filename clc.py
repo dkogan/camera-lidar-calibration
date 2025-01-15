@@ -36,18 +36,19 @@ def lidar_segmentation(*,
               plane_n = plane_pn[:,3:] )
 
 
+def lidar_points(msg):
+    if msg is None: return None
+    array = msg['array']
+    return \
+        (array['xyz' ],
+         array['ring'])
+
+
 def calibrate(*,
               bags, lidar_topic, camera_topic,
               check_gradient__use_distance_to_plane = False,
               check_gradient                        = False,
               **kwargs):
-
-    def lidar_points(msg):
-        if msg is None: return None
-        array = msg['array']
-        return \
-            (array['xyz' ],
-             array['ring'])
 
     def images(msg):
         if msg is None: return None
@@ -80,6 +81,21 @@ def calibrate(*,
                            check_gradient__use_distance_to_plane = check_gradient__use_distance_to_plane,
                            check_gradient                        = check_gradient,
                            **kwargs)
+
+def post_solve_statistics(*,
+                          bag,
+                          lidar_topic,
+                          **kwargs):
+
+    if not os.path.exists(bag):
+        raise Exception(f"Bag path '{bag}' does not exist")
+
+    messages = \
+        bag_interface. \
+        first_message_from_each_topic(bag, lidar_topic)
+
+    return _clc.post_solve_statistics(lidar_scans = tuple(lidar_points(msg) for msg in messages),
+                                      **kwargs)
 
 lidar_segmentation_default_context = _clc.lidar_segmentation_default_context
 fit_from_optimization_inputs       = _clc.fit_from_optimization_inputs
