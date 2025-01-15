@@ -33,6 +33,7 @@ def parse_args():
                         help = '''The LIDAR topics to visualize. This is a
                         comma-separated list of topics''')
     parser.add_argument('--bag',
+                        required = True,
                         help = '''The one bag we're visualizing''')
     parser.add_argument('--context',
                         help = '''.pickle file from fit.py''')
