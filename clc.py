@@ -45,6 +45,21 @@ def lidar_points(msg):
          array['ring'])
 
 
+def is_message_pointcloud(msg):
+
+    if msg is None:
+        # I don't know if this was supposed to be a point cloud. I arbitrarily
+        # say "no"
+        return False
+
+    dtype_names = msg['array'].dtype.names
+
+    if dtype_names is None:
+        return False
+
+    return 'xyz' in dtype_names
+
+
 def calibrate(*,
               bags, lidar_topic, camera_topic,
               check_gradient__use_distance_to_plane = False,
@@ -83,9 +98,10 @@ def calibrate(*,
                            check_gradient                        = check_gradient,
                            **kwargs)
 
+
 def post_solve_statistics(*,
                           bag,
-                          lidar_topic,
+                          topics, # all the topics; I only use the LIDAR ones
                           **kwargs):
 
     if not os.path.exists(bag):
@@ -93,7 +109,12 @@ def post_solve_statistics(*,
 
     messages = \
         bag_interface. \
-        first_message_from_each_topic(bag, lidar_topic)
+        first_message_from_each_topic(bag, topics)
+
+    # Grab the LIDAR messages. Any missing messages are reported as NOT lidar
+    # messages, since I can't tell what it's supposed to be from looking at the
+    # data
+    messages = [msg for msg in messages if is_message_pointcloud(msg)]
 
     kwargs = dict(kwargs)
     del kwargs['inputs_dump']
@@ -207,10 +228,13 @@ def transformation_covariance_decomposed( # shape (...,3)
 
 def get_data_tuples_sensor_forward_vectors(rt_ref_lidar,
                                            rt_ref_camera,
-                                           lidar_topic,
-                                           camera_topic,
+                                           topics,
                                            *,
                                            isensor_solve = None):
+
+    if len(rt_ref_lidar)+len(rt_ref_camera) != len(topics):
+        raise Exception("Mismatched transform/topic counts")
+
     # These apply to ALL the sensors, not just the ones being requested
     lidars_origin   = rt_ref_lidar [:,3:]
     cameras_origin  = rt_ref_camera[:,3:]
@@ -243,7 +267,7 @@ def get_data_tuples_sensor_forward_vectors(rt_ref_lidar,
 
           ( nps.dummy(sensors_origin[...,0], -1),
             nps.dummy(sensors_origin[...,1], -1),
-            nps.dummy(np.array(lidar_topic + camera_topic),-1),
+            nps.dummy(np.array(topics),-1),
             dict(_with = with_labels,
                  tuplesize = 3)),
          )

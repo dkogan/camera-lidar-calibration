@@ -209,8 +209,7 @@ for ilidar,topic in enumerate(args.lidar_topic):
     data_tuples_sensor_forward_vectors = \
         clc.get_data_tuples_sensor_forward_vectors(context['result']['rt_ref_lidar' ],
                                                    context['result']['rt_ref_camera'],
-                                                   context['lidar_topic'],
-                                                   context['camera_topic'],
+                                                   context['topics'],
                                                    isensor_solve = ilidar_solve)
 
 

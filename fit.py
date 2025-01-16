@@ -6,10 +6,10 @@ SYNOPSIS
 
   $ lidars=(/lidar/vl_points_0)
   $ cameras=(/front/multisense/{{left,right}/image_mono_throttle,aux/image_color_throttle})
+  $ sensors=($lidars $cameras)
 
   $ ./fit.py \
-      --lidar-topic  ${(j:,:)lidars}  \
-      --camera-topic ${(j:,:)cameras} \
+      --topics ${(j:,:)sensors} \
       --bag 'camera-lidar-*.bag'      \
       intrinsics/{left,right,aux}_camera/camera-0-OPENCV8.cameramodel
 
@@ -40,19 +40,12 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('--lidar-topic',
+    parser.add_argument('--topics',
                         type=str,
                         required = True,
-                        help = '''Which lidar(s) we're talking to. This is a
-                        comma-separated list of topics. Any number of lidars >=
-                        1 is supported''')
-
-    parser.add_argument('--camera-topic',
-                        type=str,
-                        help = '''The topic that contains the images. This is a
-                        comma-separated list of topics. Any number of cameras
-                        (including none) is supported. The number of camera
-                        topics must match the number of given models EXACTLY''')
+                        help = '''Which lidar(s) and camera(s) we're talking to.
+                        This is a comma-separated list of topics. Any Nlidars >=
+                        1 and Ncameras >= 0 is supported''')
 
     parser.add_argument('--bag',
                         type=str,
@@ -72,9 +65,9 @@ def parse_args():
     parser.add_argument('models',
                         type = str,
                         nargs='*',
-                        help='''Camera model for the optical calibration. Only
+                        help='''Camera models for the optical calibration. Only
                         the intrinsics are used. The number of models given must
-                        match the number of --camera-topic EXACTLY''')
+                        match the number of camera --topics arguments EXACTLY''')
 
     args = parser.parse_args()
 
@@ -93,16 +86,7 @@ def parse_args():
         sys.exit(1)
     args.bag = bags
 
-    args.lidar_topic  = args.lidar_topic.split(',')
-    if args.camera_topic is not None:
-        args.camera_topic = args.camera_topic.split(',')
-    else:
-        args.camera_topic = []
-
-    if len(args.models) != len(args.camera_topic):
-        print(f"The number of models given must match the number of --camera-topic EXACTLY",
-              file=sys.stderr)
-        sys.exit(1)
+    args.topics = args.topics.split(',')
 
     return args
 
@@ -651,8 +635,7 @@ else:
     calibration_object_kwargs = dict()
 
 kwargs_calibrate = dict(bags            = args.bag,
-                        lidar_topic     = args.lidar_topic,
-                        camera_topic    = args.camera_topic,
+                        topics          = args.topics,
                         models          = args.models,
                         check_gradient  = False,
                         Npoints_per_segment                = 15,
@@ -684,8 +667,7 @@ for ilidar,rt_ref_lidar in enumerate(result['rt_ref_lidar']):
 
 context = \
     dict(result           = result,
-         lidar_topic      = args.lidar_topic,
-         camera_topic     = args.camera_topic,
+         topics           = args.topics,
          kwargs_calibrate = kwargs_calibrate)
 if args.dump is not None:
     with open(args.dump, 'wb') as f:
@@ -697,7 +679,7 @@ if args.dump is not None:
 
 
 statistics = clc.post_solve_statistics(bag               = args.bag[0],
-                                       lidar_topic       = args.lidar_topic,
+                                       topics            = args.topics,
                                        Nsectors          = 36,
                                        rt_vehicle_lidar0 = mrcal.identity_rt(),
                                        models            = args.models,
@@ -709,8 +691,7 @@ statistics = clc.post_solve_statistics(bag               = args.bag[0],
 data_tuples_sensor_forward_vectors = \
     clc.get_data_tuples_sensor_forward_vectors(context['result']['rt_ref_lidar' ],
                                                context['result']['rt_ref_camera'],
-                                               context['lidar_topic'],
-                                               context['camera_topic'])
+                                               context['topics'])
 
 
 
