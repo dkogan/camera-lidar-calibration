@@ -9,7 +9,7 @@ SYNOPSIS
       /tmp/lidar[01]-mounted.cameramodel
     [plot pops up to show the aligned points]
 
-Displays aligned point clouds. Useful for debugging
+Displays the point clouds in a common vehicle coordinate system
 
 '''
 
