@@ -69,12 +69,7 @@ def parse_args():
 
 args = parse_args()
 
-import bag_interface
-import pickle
-import numpysane as nps
 import mrcal
-import gnuplotlib as gp
-
 import clc
 
 
