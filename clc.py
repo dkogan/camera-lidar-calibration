@@ -206,6 +206,50 @@ def reprojection_covariance_decomposed( # shape (...,3)
     return l,v
 
 
+def get_data_tuples_sensor_forward_vectors(rt_ref_lidar,
+                                           rt_ref_camera,
+                                           lidar_topic,
+                                           camera_topic,
+                                           *,
+                                           isensor_solve = None):
+    # These apply to ALL the sensors, not just the ones being requested
+    lidars_origin   = rt_ref_lidar [:,3:]
+    cameras_origin  = rt_ref_camera[:,3:]
+    lidars_forward  = mrcal.rotate_point_r(rt_ref_lidar [:,:3], np.array((1.,0,0 )))
+    cameras_forward = mrcal.rotate_point_r(rt_ref_camera[:,:3], np.array(( 0,0,1.)))
+
+    sensors_origin  = nps.glue(lidars_origin,  cameras_origin,  axis=-2)
+    sensors_forward = nps.glue(lidars_forward, cameras_forward, axis=-2)
+
+    sensors_forward_xy = np.array(sensors_forward[...,:2])
+    # to avoid /0 for straight-up vectors
+    mag_sensors_forward_xy = nps.mag(sensors_forward_xy)
+    i = mag_sensors_forward_xy>0
+    sensors_forward_xy[i,:] /= nps.dummy(mag_sensors_forward_xy[i], axis=-1)
+    sensors_forward_xy[~i,:] = 0
+    sensor_forward_arrow_length = 4.
+
+    with_labels = np.array(['labels textcolor "black"'] * len(sensors_origin))
+    if isensor_solve is not None:
+        with_labels[isensor_solve] = 'labels textcolor "red"'
+
+    return \
+        (
+          # sensor positions AND their forward vectors
+          (nps.glue( sensors_origin [...,:2],
+                     sensors_forward_xy * sensor_forward_arrow_length,
+                     axis = -1 ),
+           dict(_with = 'vectors lw 2 lc "black"',
+                tuplesize = -4) ),
+
+          ( nps.dummy(sensors_origin[...,0], -1),
+            nps.dummy(sensors_origin[...,1], -1),
+            nps.dummy(np.array(lidar_topic + camera_topic),-1),
+            dict(_with = with_labels,
+                 tuplesize = 3)),
+         )
+
+
 
 
 lidar_segmentation_default_context = _clc.lidar_segmentation_default_context

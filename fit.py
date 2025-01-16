@@ -706,39 +706,12 @@ statistics = clc.post_solve_statistics(bag               = args.bag[0],
 
 
 
-#### stolen from show-aligned-lidar-pointclouds.py
-####
-# These apply to ALL the sensors, not just the ones being requested
-lidars_origin   = context['result']['rt_ref_lidar' ][:,3:]
-cameras_origin  = context['result']['rt_ref_camera'][:,3:]
-lidars_forward  = mrcal.rotate_point_r(context['result']['rt_ref_lidar' ][:,:3], np.array((1.,0,0 )))
-cameras_forward = mrcal.rotate_point_r(context['result']['rt_ref_camera'][:,:3], np.array(( 0,0,1.)))
-
-sensors_origin  = nps.glue(lidars_origin,  cameras_origin,  axis=-2)
-sensors_forward = nps.glue(lidars_forward, cameras_forward, axis=-2)
-
-sensors_forward_xy = np.array(sensors_forward[...,:2])
-# to avoid /0 for straight-up vectors
-mag_sensors_forward_xy = nps.mag(sensors_forward_xy)
-i = mag_sensors_forward_xy>0
-sensors_forward_xy[i,:] /= nps.dummy(mag_sensors_forward_xy[i], axis=-1)
-sensors_forward_xy[~i,:] = 0
-sensor_forward_arrow_length = 4.
 data_tuples_sensor_forward_vectors = \
-    (
-      # sensor positions AND their forward vectors
-      (nps.glue( sensors_origin [...,:2],
-                 sensors_forward_xy * sensor_forward_arrow_length,
-                 axis = -1 ),
-       dict(_with = 'vectors lw 2 lc "black"',
-            tuplesize = -4) ),
+    clc.get_data_tuples_sensor_forward_vectors(context['result']['rt_ref_lidar' ],
+                                               context['result']['rt_ref_camera'],
+                                               context['lidar_topic'],
+                                               context['camera_topic'])
 
-      ( sensors_origin[...,0],
-        sensors_origin[...,1],
-        np.array(context['lidar_topic'] + context['camera_topic']),
-        dict(_with = 'labels textcolor "black"',
-             tuplesize = 3)),
-     )
 
 
 # shape (Nsensors, Nsectors)
