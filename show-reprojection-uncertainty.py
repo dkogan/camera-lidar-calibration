@@ -75,7 +75,10 @@ def parse_args():
     args.lidar_topic = args.lidar_topic.split(',')
 
     if args.rt_vehicle_lidar0 is not None:
-       args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0, dtype=float)
+        args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0, dtype=float)
+        args.Rt_vehicle_lidar0 = mrcal.Rt_from_rt(args.rt_vehicle_lidar0)
+    else:
+        args.Rt_vehicle_lidar0 = None
 
     return args
 
@@ -89,6 +92,29 @@ import mrcal
 import gnuplotlib as gp
 
 import clc
+
+
+
+
+def get_psphere(scale = 1.):
+
+
+    az = np.linspace(-np.pi, np.pi,40, endpoint = False)
+    el = nps.mv(np.linspace(-np.pi/2., np.pi/2., 20), -1,-2)
+    caz = np.cos(az)
+    saz = np.sin(az)
+    cel = np.cos(el)
+    sel = np.sin(el)
+
+    # 1. is "to scale". Higher numbers improve legibility
+    scale = 10.
+
+    # shape (Npoints,3)
+    return \
+        scale * \
+        nps.clump(nps.mv(nps.cat(caz*cel, saz*cel, sel*np.ones(az.shape)),
+                         0,-1),
+                  n=2)
 
 
 
@@ -112,40 +138,23 @@ x_sample = np.linspace(-args.radius,args.radius,args.gridn)
 y_sample = np.linspace(-args.radius,args.radius,args.gridn)
 z_sample = 0
 
-### point coordinates in the vehicle frame
-
-# Each has shape (Ny_sample,Nx_sample)
-px0, py0 = np.meshgrid(x_sample,y_sample)
-pz0 = z_sample * np.ones(px0.shape, dtype=float)
 # shape (Nysample, Nxsample,3)
-p0 = nps.mv(nps.cat(px0,py0,pz0),
-            0,-1)
+p0_vehicle = \
+    nps.mv(nps.cat( *np.meshgrid(x_sample,y_sample),
+                    z_sample * np.ones((args.gridn,args.gridn), dtype=float) ),
+           0,-1)
 
 # I want p0 in the lidar0 frame, so I transform
-if args.rt_vehicle_lidar0 is not None:
-    mrcal.transform_point_rt(args.rt_vehicle_lidar0, p0,
-                             inverted = True,
-                             out      = p0)
+if args.Rt_vehicle_lidar0 is not None:
+    p0 = mrcal.transform_point_Rt(args.Rt_vehicle_lidar0, p0_vehicle,
+                                  inverted = True)
 
 if args.ellipsoids:
-
-    az = np.linspace(-np.pi, np.pi,40, endpoint = False)
-    el = nps.mv(np.linspace(-np.pi/2., np.pi/2., 20), -1,-2)
-    caz = np.cos(az)
-    saz = np.sin(az)
-    cel = np.cos(el)
-    sel = np.sin(el)
-
-    # shape (Npoints,3)
-    psphere = nps.clump(nps.mv(nps.cat(caz*cel, saz*cel, sel*np.ones(az.shape)),
-                               0,-1),
-                        n=2)
-
-    # 1. is "to scale". Higher numbers improve legibility
-    ellipse_scale = 10.
-
-    data_tuples = clc.get_pointcloud_plot_tuples(args.bag, args.lidar_topic, args.threshold,
-                                                 ilidar_in_solve_from_ilidar = None)
+    psphere = get_psphere(scale = 10.) # 10x ellipses to improve legibility
+    data_tuples = \
+        clc.get_pointcloud_plot_tuples(args.bag, args.lidar_topic, args.threshold,
+                                       ilidar_in_solve_from_ilidar = None,
+                                       Rt_vehicle_lidar0           = args.Rt_vehicle_lidar0)
 
 
     for ilidar,topic in enumerate(args.lidar_topic):
@@ -159,15 +168,21 @@ if args.ellipsoids:
                                                    context['result']['Var'])
         stdev = np.sqrt(l)
 
+        # v stored each eigenvector in COLUMNS. I transpose to store them in
+        # rows instead, to follow numpy's broadcasting rules
+        v = nps.transpose(v)
+        # v is in the lidar0 system. Transform to the vehicle system
+        v_vehicle = mrcal.rotate_point_R(args.Rt_vehicle_lidar0[:,3:],
+                                         v)
+
         # shape (Nspherepoints,Nysample,Nxsample,3)
-        pellipsoid = \
-            p0 + \
-            ellipse_scale * \
+        pellipsoid_vehicle = \
+            p0_vehicle + \
             nps.matmult(# shape (Nspherepoints,1,1,1,3) * (Nysample,Nxsample,1,3)
                         nps.dummy(psphere, -2,-2,-2) * nps.dummy(stdev, axis=-2),
-                        nps.transpose(v))[...,0,:]
+                        v_vehicle)[...,0,:]
 
-        data_tuples.append( ( nps.clump(pellipsoid, n=3),
+        data_tuples.append( ( nps.clump(pellipsoid_vehicle, n=3),
                               dict( tuplesize = -3,
                                     _with     = f'dots lc rgb "{clc.color_sequence_rgb[ilidar_solve%len(clc.color_sequence_rgb)]}"',
                                     legend = f'1-sigma uncertainty for {topic}')), )
@@ -175,9 +190,9 @@ if args.ellipsoids:
     clc.plot(*data_tuples,
          _3d = True,
          square = True,
-         xlabel = 'x',
-         ylabel = 'y',
-         zlabel = 'z',
+         xlabel = 'x (vehicle)',
+         ylabel = 'y (vehicle)',
+         zlabel = 'z (vehicle)',
          wait = True)
 
     sys.exit()
@@ -235,13 +250,24 @@ for ilidar,topic in enumerate(args.lidar_topic):
                                                context['result']['Var'])
     stdev = np.sqrt(l)
 
+    # v stored each eigenvector in COLUMNS. I transpose to store them in
+    # rows instead, to follow numpy's broadcasting rules
+    v = nps.transpose(v)
+    # v is in the lidar0 system. Transform to the vehicle system
+    v_vehicle = mrcal.rotate_point_R(args.Rt_vehicle_lidar0[:,3:],
+                                     v)
+
 
     # shape (Nysample,Nxsample)
 
     iworst  = np.argmax(stdev,axis=-1, keepdims=True)
     uncertainty_1sigma = np.take_along_axis(stdev,iworst, -1)[...,0]
 
-    eigv_worst = np.take_along_axis(v,nps.dummy(iworst,-1), -1)[...,0]
+
+    raise Exception("ERROR v_vehicle was transposed, but now it is not")
+
+
+    eigv_worst = np.take_along_axis(v_vehicle,nps.dummy(iworst,-1), -1)[...,0]
     cos_vertical = np.abs(eigv_worst[...,2])
     thdeg_vertical = np.arccos(np.clip(cos_vertical,-1,1)) * 180./np.pi
 
@@ -256,8 +282,8 @@ for ilidar,topic in enumerate(args.lidar_topic):
          cbmin = 0,
          square = True,
          wait = True,
-         xlabel = 'x',
-         ylabel = 'y',
+         xlabel = 'x (vehicle)',
+         ylabel = 'y (vehicle)',
          title = f'Worst-case 1-sigma transform uncertainty for {topic} (top-down view)',
          ascii = 1, # needed for the "using" scale
          _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
@@ -273,8 +299,8 @@ for ilidar,topic in enumerate(args.lidar_topic):
          cbmax = 30,
          square = True,
          wait = True,
-         xlabel = 'x',
-         ylabel = 'y',
+         xlabel = 'x (vehicle)',
+         ylabel = 'y (vehicle)',
          title = f'Worst-case transform uncertainty for {topic} (top-down view): angle off vertical (deg)',
          ascii = 1, # needed for the "using" scale
          _set  = ('xrange [:] noextend', 'yrange [:] noextend'),

@@ -126,7 +126,8 @@ def plot(*args,
 
 def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
                                *,
-                               ilidar_in_solve_from_ilidar = None):
+                               ilidar_in_solve_from_ilidar = None,
+                               Rt_vehicle_lidar0           = None):
 
     try:
         pointcloud_msgs = \
@@ -151,12 +152,54 @@ def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
             [ mrcal.transform_point_rt(rt_lidar0_lidar[i],
                                        p) for i,p in enumerate(pointclouds) ]
 
+    if Rt_vehicle_lidar0 is not None:
+        pointclouds = mrcal.transform_point_Rt(Rt_vehicle_lidar0,
+                                               pointclouds)
+
     data_tuples = [ ( p, dict( tuplesize = -3,
                                legend    = args.lidar_topic[i],
                                _with     = f'points pt 7 ps 1 lc rgb "{clc.color_sequence_rgb[i%len(clc.color_sequence_rgb)]}"')) \
                     for i,p in enumerate(pointclouds) ]
 
     return data_tuples
+
+
+def reprojection_covariance_decomposed( # shape (...,3)
+                                        p0,
+
+                                        rt_lidar0_lidar,
+                                        ilidar_solve,
+                                        Var
+
+# add Rt_vehicle_lidar0           = None
+
+):
+
+    if ilidar_solve <= 0:
+        raise Exception("Must have ilidar_solve>0 because ilidar_solve==0 is the reference frame, and has no covariance")
+
+    # shape (...,3)
+    p1 = \
+        mrcal.transform_point_rt(rt_lidar0_lidar[ilidar_solve], p0, inverted=True)
+
+    # shape (...,3,6)
+    _,dp0__drt_lidar01,_ = \
+        mrcal.transform_point_rt(rt_lidar0_lidar[ilidar_solve], p1,
+                                 get_gradients = True)
+
+    # shape (6,6)
+    Var_rt_lidar01 = Var[ilidar_solve-1,:,
+                         ilidar_solve-1,:]
+
+    # shape (...,3,3)
+    Var_p0 = nps.matmult(dp0__drt_lidar01,
+                         Var_rt_lidar01,
+                         nps.transpose(dp0__drt_lidar01))
+
+    # shape (...,3) and (...,3,3)
+    l,v = mrcal.sorted_eig(Var_p0)
+
+    return l,v
 
 
 

@@ -27,6 +27,15 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
+    parser.add_argument('--rt-vehicle-lidar0',
+                        type=float,
+                        nargs=6,
+                        help='''The vehicle-lidar0 transform. The solve is
+                        always done in lidar0 coordinates, but we may want to
+                        operate in a different "vehicle" frame. This argument
+                        specifies the relationship between those frames. If
+                        omitted, we assume an identity transform: the vehicle
+                        frame is the lidar0 frame''')
     parser.add_argument('--lidar-topic',
                         type=str,
                         required = True,
@@ -55,6 +64,12 @@ def parse_args():
               file=sys.stderr)
         sys.exit(1)
 
+    if args.rt_vehicle_lidar0 is not None:
+        args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0, dtype=float)
+        args.Rt_vehicle_lidar0 = mrcal.Rt_from_rt(args.rt_vehicle_lidar0)
+    else:
+        args.Rt_vehicle_lidar0 = None
+
     return args
 
 
@@ -72,11 +87,12 @@ rt_lidar0_lidar = [mrcal.cameramodel(f).extrinsics_rt_toref() for f in args.lida
 
 data_tuples = \
     clc.get_pointcloud_plot_tuples(args.bag, args.lidar_topic, args.threshold,
-                                   ilidar_in_solve_from_ilidar = None)
+                                   ilidar_in_solve_from_ilidar = None
+                                   Rt_vehicle_lidar0           = args.Rt_vehicle_lidar0)
 clc.plot(*data_tuples,
          _3d = True,
          square = True,
-         xlabel = 'x',
-         ylabel = 'y',
-         zlabel = 'z',
+         xlabel = 'x (vehicle)',
+         ylabel = 'y (vehicle)',
+         zlabel = 'z (vehicle)',
          wait = True)
