@@ -64,12 +64,6 @@ def parse_args():
               file=sys.stderr)
         sys.exit(1)
 
-    if args.rt_vehicle_lidar0 is not None:
-        args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0, dtype=float)
-        args.Rt_vehicle_lidar0 = mrcal.Rt_from_rt(args.rt_vehicle_lidar0)
-    else:
-        args.Rt_vehicle_lidar0 = None
-
     return args
 
 
@@ -83,10 +77,21 @@ import gnuplotlib as gp
 
 import clc
 
+
+
+if args.rt_vehicle_lidar0 is not None:
+    args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0, dtype=float)
+    args.Rt_vehicle_lidar0 = mrcal.Rt_from_rt(args.rt_vehicle_lidar0)
+else:
+    args.Rt_vehicle_lidar0 = None
+
+
+
 rt_lidar0_lidar = [mrcal.cameramodel(f).extrinsics_rt_toref() for f in args.lidar_models]
 
 data_tuples = \
     clc.get_pointcloud_plot_tuples(args.bag, args.lidar_topic, args.threshold,
+                                   rt_lidar0_lidar,
                                    ilidar_in_solve_from_ilidar = None
                                    Rt_vehicle_lidar0           = args.Rt_vehicle_lidar0)
 clc.plot(*data_tuples,

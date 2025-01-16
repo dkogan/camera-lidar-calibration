@@ -5,6 +5,7 @@ import numpy as np
 import numpysane as nps
 import os
 
+import mrcal
 import bag_interface
 import _clc
 
@@ -118,6 +119,8 @@ def plot(*args,
          hardcopy = None,
          **kwargs):
     r'''Wrapper for gp.plot(), but printing out where the hardcopy went'''
+
+    import gnuplotlib as gp
     gp.plot(*args, **kwargs,
             hardcopy = hardcopy)
     if hardcopy is not None:
@@ -125,6 +128,7 @@ def plot(*args,
 
 
 def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
+                               rt_lidar0_lidar,
                                *,
                                ilidar_in_solve_from_ilidar = None,
                                Rt_vehicle_lidar0           = None):
@@ -157,8 +161,8 @@ def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
                                                pointclouds)
 
     data_tuples = [ ( p, dict( tuplesize = -3,
-                               legend    = args.lidar_topic[i],
-                               _with     = f'points pt 7 ps 1 lc rgb "{clc.color_sequence_rgb[i%len(clc.color_sequence_rgb)]}"')) \
+                               legend    = lidar_topic[i],
+                               _with     = f'points pt 7 ps 1 lc rgb "{color_sequence_rgb[i%len(color_sequence_rgb)]}"')) \
                     for i,p in enumerate(pointclouds) ]
 
     return data_tuples

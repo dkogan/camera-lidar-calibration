@@ -74,12 +74,6 @@ def parse_args():
     args = parser.parse_args()
     args.lidar_topic = args.lidar_topic.split(',')
 
-    if args.rt_vehicle_lidar0 is not None:
-        args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0, dtype=float)
-        args.Rt_vehicle_lidar0 = mrcal.Rt_from_rt(args.rt_vehicle_lidar0)
-    else:
-        args.Rt_vehicle_lidar0 = None
-
     return args
 
 
@@ -94,6 +88,14 @@ import gnuplotlib as gp
 import clc
 
 
+if args.rt_vehicle_lidar0 is not None:
+    args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0, dtype=float)
+    args.Rt_vehicle_lidar0 = mrcal.Rt_from_rt(args.rt_vehicle_lidar0)
+else:
+    args.Rt_vehicle_lidar0 = None
+
+
+
 
 
 def get_psphere(scale = 1.):
@@ -105,9 +107,6 @@ def get_psphere(scale = 1.):
     saz = np.sin(az)
     cel = np.cos(el)
     sel = np.sin(el)
-
-    # 1. is "to scale". Higher numbers improve legibility
-    scale = 10.
 
     # shape (Npoints,3)
     return \
@@ -153,6 +152,7 @@ if args.ellipsoids:
     psphere = get_psphere(scale = 10.) # 10x ellipses to improve legibility
     data_tuples = \
         clc.get_pointcloud_plot_tuples(args.bag, args.lidar_topic, args.threshold,
+                                       context['result']['rt_ref_lidar'],
                                        ilidar_in_solve_from_ilidar = None,
                                        Rt_vehicle_lidar0           = args.Rt_vehicle_lidar0)
 
@@ -172,7 +172,7 @@ if args.ellipsoids:
         # rows instead, to follow numpy's broadcasting rules
         v = nps.transpose(v)
         # v is in the lidar0 system. Transform to the vehicle system
-        v_vehicle = mrcal.rotate_point_R(args.Rt_vehicle_lidar0[:,3:],
+        v_vehicle = mrcal.rotate_point_R(args.Rt_vehicle_lidar0[:3,:],
                                          v)
 
         # shape (Nspherepoints,Nysample,Nxsample,3)
@@ -254,20 +254,14 @@ for ilidar,topic in enumerate(args.lidar_topic):
     # rows instead, to follow numpy's broadcasting rules
     v = nps.transpose(v)
     # v is in the lidar0 system. Transform to the vehicle system
-    v_vehicle = mrcal.rotate_point_R(args.Rt_vehicle_lidar0[:,3:],
+    v_vehicle = mrcal.rotate_point_R(args.Rt_vehicle_lidar0[:3,:],
                                      v)
 
+    # The eigenvalues/vectors are sorted. The worst-case one is biggest, and
+    # stored last
+    uncertainty_1sigma = stdev    [...,-1]
+    eigv_worst         = v_vehicle[...,-1]
 
-    # shape (Nysample,Nxsample)
-
-    iworst  = np.argmax(stdev,axis=-1, keepdims=True)
-    uncertainty_1sigma = np.take_along_axis(stdev,iworst, -1)[...,0]
-
-
-    raise Exception("ERROR v_vehicle was transposed, but now it is not")
-
-
-    eigv_worst = np.take_along_axis(v_vehicle,nps.dummy(iworst,-1), -1)[...,0]
     cos_vertical = np.abs(eigv_worst[...,2])
     thdeg_vertical = np.arccos(np.clip(cos_vertical,-1,1)) * 180./np.pi
 
