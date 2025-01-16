@@ -5,7 +5,7 @@ SYNOPSIS
 
   $ ./show-aligned-lidar-pointclouds.py                   \
       --bag camera-lidar.bag                              \
-      --lidar-topic /lidar/vl_points_0,/lidar/vl_points_1 \
+      --topic /lidar/vl_points_0,/lidar/vl_points_1 \
       /tmp/lidar[01]-mounted.cameramodel
     [plot pops up to show the aligned points]
 
@@ -36,7 +36,7 @@ def parse_args():
                         specifies the relationship between those frames. If
                         omitted, we assume an identity transform: the vehicle
                         frame is the lidar0 frame''')
-    parser.add_argument('--lidar-topic',
+    parser.add_argument('--topic',
                         type=str,
                         required = True,
                         help = '''The LIDAR topics to visualize. This is a
@@ -51,16 +51,16 @@ def parse_args():
     parser.add_argument('lidar-models',
                         nargs   = '+',
                         help = '''The .cameramodel for the lidars in question.
-                        Must correspond to the set in --lidar-topic.''')
+                        Must correspond to the set in --topic.''')
 
 
     args = parser.parse_args()
 
-    args.lidar_topic = args.lidar_topic.split(',')
+    args.topic = args.topic.split(',')
     args.lidar_models = getattr(args, 'lidar-models')
 
-    if len(args.lidar_models) != len(args.lidar_topic):
-        print(f"MUST have been given a matching number of lidar models and topics. Got {len(args.lidar_models)=} and {len(args.lidar_topic)=} instead",
+    if len(args.lidar_models) != len(args.topic):
+        print(f"MUST have been given a matching number of lidar models and topics. Got {len(args.lidar_models)=} and {len(args.topic)=} instead",
               file=sys.stderr)
         sys.exit(1)
 
@@ -85,10 +85,9 @@ else:
 rt_lidar0_lidar = [mrcal.cameramodel(f).extrinsics_rt_toref() for f in args.lidar_models]
 
 data_tuples = \
-    clc.get_pointcloud_plot_tuples(args.bag, args.lidar_topic, args.threshold,
+    clc.get_pointcloud_plot_tuples(args.bag, args.topic, args.threshold,
                                    rt_lidar0_lidar,
-                                   ilidar_in_solve_from_ilidar = None
-                                   Rt_vehicle_lidar0           = args.Rt_vehicle_lidar0)
+                                   Rt_vehicle_lidar0 = args.Rt_vehicle_lidar0)
 clc.plot(*data_tuples,
          _3d = True,
          square = True,

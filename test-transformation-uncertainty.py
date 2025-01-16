@@ -18,10 +18,10 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('--lidar-topic',
+    parser.add_argument('--topic',
                         type=str,
                         required = True,
-                        help = '''The one LIDAR topic to validate''')
+                        help = '''The one topic to validate''')
     parser.add_argument('--context',
                         required = True,
                         help = '''.pickle file from fit.py --dump''')
@@ -56,18 +56,22 @@ import testutils
 with open(args.context, "rb") as f:
     context = pickle.load(f)
 
-rt_lidar0_lidar = context['result']['rt_ref_lidar']
+rt_lidar0_lidar  = context['result']['rt_ref_lidar' ]
+rt_lidar0_camera = context['result']['rt_ref_camera']
 
-lidar_topic_requested = args.lidar_topic
+Nlidars  = len(rt_lidar0_lidar)
+Ncameras = len(rt_lidar0_camera)
+
+topic_requested = args.topic
 try:
-    ilidar = \
-        context['lidar_topic'].index(lidar_topic_requested)
+    isensor = \
+        context['topics'].index(topic_requested)
 except:
-    print(f"Requested topic '{lidar_topic_requested}' not present in the context file '{args.context}; topics: {context['lidar_topic']}'",
+    print(f"Requested topic '{topic_requested}' not present in the context file '{args.context}; topics: {context['topics']}'",
           file=sys.stderr)
     sys.exit(1)
 
-if ilidar == 0:
+if isensor == 0:
     print("Validating lidar0, which is at the reference coordinate system. Nothing to do",
           file = sys.stderr)
     sys.exit(1)
@@ -76,22 +80,24 @@ if ilidar == 0:
 # shape (..., 3)
 p0 = np.array(args.p0)
 
-p1 = mrcal.transform_point_rt(rt_lidar0_lidar[ilidar], p0, inverted=True)
+if isensor < Nlidars: rt_lidar0_sensor = rt_lidar0_lidar [isensor]
+else:                 rt_lidar0_sensor = rt_lidar0_camera[isensor-Nlidars]
+p1 = mrcal.transform_point_rt(rt_lidar0_sensor, p0, inverted=True)
 
 # shape (Nysample,Nxsample,3,6)
-_,dp0__drt_lidar_ref,_ = \
-    mrcal.transform_point_rt(rt_lidar0_lidar[ilidar], p1,
+_,dp0__drt_sensor_ref,_ = \
+    mrcal.transform_point_rt(rt_lidar0_sensor, p1,
                              get_gradients = True)
 
 # shape (6,6)
-Var_rt_lidar_ref = context['result']['Var'][ilidar-1,:,
-                                            ilidar-1,:]
+Var_rt_sensor_ref = context['result']['Var'][isensor-1,:,
+                                             isensor-1,:]
 
 # shape (Nysample,Nxsample,3,3)
 Var_predicted = \
-    nps.matmult(dp0__drt_lidar_ref,
-                Var_rt_lidar_ref,
-                nps.transpose(dp0__drt_lidar_ref))
+    nps.matmult(dp0__drt_sensor_ref,
+                Var_rt_sensor_ref,
+                nps.transpose(dp0__drt_sensor_ref))
 
 
 
@@ -102,7 +108,11 @@ for isample in range(args.Nsamples):
 
     result = clc.fit_from_optimization_inputs(context['result']['inputs_dump'],
                                               inject_noise = True)
-    p0_sampled[isample] = mrcal.transform_point_rt(result['rt_ref_lidar'][ilidar], p1)
+
+    if isensor < Nlidars: rt_lidar0_sensor__sampled = result['rt_ref_lidar' ][isensor]
+    else:                 rt_lidar0_sensor__sampled = result['rt_ref_camera'][isensor-Nlidars]
+
+    p0_sampled[isample] = mrcal.transform_point_rt(rt_lidar0_sensor__sampled, p1)
 
 
 
@@ -113,7 +123,7 @@ Var_observed = nps.matmult((p0_sampled - p0_sampled_mean).T,
 
 testutils.confirm_covariances_equal(Var_predicted,
                                     Var_observed ,
-                                    what = f"transformation to reference lidar {context['lidar_topic'][0]} of {lidar_topic_requested}",
+                                    what = f"transformation to reference lidar {context['topics'][0]} of {topic_requested}",
                                     eps_eigenvalues       = 0.2, # relative
                                     eps_eigenvectors_deg  = 5.,
                                     check_sqrt_eigenvalue = True)

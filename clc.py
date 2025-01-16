@@ -43,6 +43,9 @@ def lidar_points(msg):
     return \
         (array['xyz' ],
          array['ring'])
+def images(msg):
+    if msg is None: return None
+    return msg['array']
 
 
 def is_message_pointcloud(msg):
@@ -60,40 +63,57 @@ def is_message_pointcloud(msg):
     return 'xyz' in dtype_names
 
 
+def sorted_sensor_snapshots(bags, topics):
+
+    for bag in bags:
+        if not os.path.exists(bag):
+            raise Exception(f"Bag path '{bag}' does not exist")
+
+    messages_bags = \
+        [bag_interface.first_message_from_each_topic(bag, topics) \
+         for bag in bags]
+
+    # I need to figure out which topic corresponds to a lidar and which to a
+    # camera. I can get this information from the data, but if any bag is
+    # missing any particular topic, I cannot figure this out from that bag.
+    itopics_lidar  = set()
+    itopics_camera = set()
+
+    Ntopics_identified = 0
+    for messages in messages_bags:
+        if Ntopics_identified == len(topics):
+            break
+
+        # messages is a list of length len(topics)
+        for i,msg in enumerate(messages):
+            if msg is None:
+                continue
+            if i in itopics_lidar or i in itopics_camera:
+                continue
+            if is_message_pointcloud(msg): itopics_lidar .add(i)
+            else:                          itopics_camera.add(i)
+            Ntopics_identified += 1
+    if Ntopics_identified != len(topics):
+        itopics_missing = \
+            set(range(len(topics))).difference(itopics_lidar).difference(itopics_camera)
+        raise Exception(f"Some topics have no data in any of the bags: {[topics[i] for i in itopics_missing]}")
+
+    itopics_lidar  = sorted(itopics_lidar)
+    itopics_camera = sorted(itopics_camera)
+
+    return \
+        tuple( ( tuple(lidar_points(messages[i]) for i in itopics_lidar),
+                 tuple(images      (messages[i]) for i in itopics_camera) ) \
+               for messages in messages_bags )
+
+
 def calibrate(*,
-              bags, lidar_topic, camera_topic,
+              bags, topics,
               check_gradient__use_distance_to_plane = False,
               check_gradient                        = False,
               **kwargs):
 
-    def images(msg):
-        if msg is None: return None
-        return msg['array']
-
-
-    def sensor_snapshot(bag):
-        if not os.path.exists(bag):
-            raise Exception(f"Bag path '{bag}' does not exist")
-
-        messages = \
-            bag_interface. \
-            first_message_from_each_topic(bag,
-                                          lidar_topic + camera_topic)
-        Nlidar = len(lidar_topic)
-        return \
-            ( tuple(lidar_points(msg) for msg in messages[:Nlidar]),
-              tuple(images      (msg) for msg in messages[Nlidar:]) )
-
-    if not (check_gradient__use_distance_to_plane or \
-            check_gradient ):
-        for i,bag in enumerate(bags):
-            print(f"Bag {i: 3d} {bag}")
-        for i,topic in enumerate(lidar_topic):
-            print(f"LIDAR topic {i: 2d} {topic}")
-        for i,topic in enumerate(camera_topic):
-            print(f"Camera topic {i: 2d} {topic}")
-
-    return _clc.calibrate( tuple(sensor_snapshot(bag) for bag in bags),
+    return _clc.calibrate( sorted_sensor_snapshots(bags, topics),
                            check_gradient__use_distance_to_plane = check_gradient__use_distance_to_plane,
                            check_gradient                        = check_gradient,
                            **kwargs)
@@ -151,8 +171,8 @@ def plot(*args,
 def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
                                rt_lidar0_lidar,
                                *,
-                               ilidar_in_solve_from_ilidar = None,
-                               Rt_vehicle_lidar0           = None):
+                               isensor_solve_from_isensor_requested = None,
+                               Rt_vehicle_lidar0                    = None):
 
     try:
         pointcloud_msgs = \
@@ -168,9 +188,9 @@ def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
     # Throw out everything that's too far, in the LIDAR's own frame
     pointclouds = [ p[ nps.mag(p) < threshold ] for p in pointclouds ]
 
-    if ilidar_in_solve_from_ilidar is not None:
+    if isensor_solve_from_isensor_requested is not None:
         pointclouds = \
-            [ mrcal.transform_point_rt(rt_lidar0_lidar[ ilidar_in_solve_from_ilidar[i] ],
+            [ mrcal.transform_point_rt(rt_lidar0_lidar[ isensor_solve_from_isensor_requested[i] ],
                                        p) for i,p in enumerate(pointclouds) ]
     else:
         pointclouds = \
@@ -191,29 +211,34 @@ def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
 
 def transformation_covariance_decomposed( # shape (...,3)
                                           p0,
-                                          rt_lidar0_lidar,
-                                          ilidar_solve,
+                                          rt_ref_lidar,
+                                          rt_ref_camera,
+                                          isensor,
                                           Var
 
 # add Rt_vehicle_lidar0           = None
 
 ):
 
-    if ilidar_solve <= 0:
-        raise Exception("Must have ilidar_solve>0 because ilidar_solve==0 is the reference frame, and has no covariance")
+    if isensor <= 0:
+        raise Exception("Must have isensor>0 because isensor==0 is the reference frame, and has no covariance")
+
+    Nlidars = len(rt_ref_lidar)
+    if isensor < Nlidars: rt_ref_sensor = rt_ref_lidar [isensor]
+    else:                 rt_ref_sensor = rt_ref_camera[isensor-Nlidars]
 
     # shape (...,3)
     p1 = \
-        mrcal.transform_point_rt(rt_lidar0_lidar[ilidar_solve], p0, inverted=True)
+        mrcal.transform_point_rt(rt_ref_sensor, p0, inverted=True)
 
     # shape (...,3,6)
     _,dp0__drt_lidar01,_ = \
-        mrcal.transform_point_rt(rt_lidar0_lidar[ilidar_solve], p1,
+        mrcal.transform_point_rt(rt_ref_sensor, p1,
                                  get_gradients = True)
 
     # shape (6,6)
-    Var_rt_lidar01 = Var[ilidar_solve-1,:,
-                         ilidar_solve-1,:]
+    Var_rt_lidar01 = Var[isensor-1,:,
+                         isensor-1,:]
 
     # shape (...,3,3)
     Var_p0 = nps.matmult(dp0__drt_lidar01,
@@ -230,7 +255,7 @@ def get_data_tuples_sensor_forward_vectors(rt_ref_lidar,
                                            rt_ref_camera,
                                            topics,
                                            *,
-                                           isensor_solve = None):
+                                           isensor = None):
 
     if len(rt_ref_lidar)+len(rt_ref_camera) != len(topics):
         raise Exception("Mismatched transform/topic counts")
@@ -253,8 +278,8 @@ def get_data_tuples_sensor_forward_vectors(rt_ref_lidar,
     sensor_forward_arrow_length = 4.
 
     with_labels = np.array(['labels textcolor "black"'] * len(sensors_origin))
-    if isensor_solve is not None:
-        with_labels[isensor_solve] = 'labels textcolor "red"'
+    if isensor is not None:
+        with_labels[isensor] = 'labels textcolor "red"'
 
     return \
         (

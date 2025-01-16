@@ -4,9 +4,9 @@ r'''Visualize transformation uncertainty between a pair of sensors
 
 SYNOPSIS
 
-  $ ./show-aligned-lidar-pointclouds.py                   \
+  $ ./show-transformation-uncertainty.py                  \
       --bag camera-lidar.bag                              \
-      --lidar-topic /lidar/vl_points_0,/lidar/vl_points_1 \
+      --topic /lidar/vl_points_0,/lidar/vl_points_1 \
       /tmp/lidar[01]-mounted.cameramodel
     [plot pops up to show the aligned points]
 
@@ -55,10 +55,10 @@ def parse_args():
                         ellipsoids. It is sometimes useful to see the ellipsoids
                         themselves, usually for debugging. Pass --ellipsoids to
                         do that''')
-    parser.add_argument('--lidar-topic',
+    parser.add_argument('--topic',
                         type=str,
                         required = True,
-                        help = '''The LIDAR topics to visualize. This is a
+                        help = '''The topics to visualize. This is a
                         comma-separated list of topics''')
     parser.add_argument('--bag',
                         required = True,
@@ -73,7 +73,7 @@ def parse_args():
 
 
     args = parser.parse_args()
-    args.lidar_topic = args.lidar_topic.split(',')
+    args.topic = args.topic.split(',')
 
     return args
 
@@ -122,14 +122,13 @@ with open(args.context, "rb") as f:
     context = pickle.load(f)
 
 
-ilidar_in_solve_from_ilidar = [None] * len(args.lidar_topic)
-for ilidar in range(len(args.lidar_topic)):
-    lidar_topic_requested = args.lidar_topic[ilidar]
+isensor_solve_from_isensor_requested = [None] * len(args.topic)
+for isensor_requested,topic_requested in enumerate(args.topic):
     try:
-        ilidar_in_solve_from_ilidar[ilidar] = \
-            context['lidar_topic'].index(lidar_topic_requested)
+        isensor_solve_from_isensor_requested[isensor_requested] = \
+            context['topics'].index(topic_requested)
     except:
-        print(f"Requested topic '{lidar_topic_requested}' not present in the context file '{args.context}'; topics: {context['lidar_topic']}",
+        print(f"Requested topic '{topic_requested}' not present in the context file '{args.context}'; topics: {context['topics']}",
               file=sys.stderr)
         sys.exit(1)
 
@@ -149,23 +148,26 @@ if args.Rt_vehicle_lidar0 is not None:
     p0 = mrcal.transform_point_Rt(args.Rt_vehicle_lidar0, p0_vehicle,
                                   inverted = True)
 
+
+
 if args.ellipsoids:
     psphere = get_psphere(scale = 10.) # 10x ellipses to improve legibility
     data_tuples = \
-        clc.get_pointcloud_plot_tuples(args.bag, args.lidar_topic, args.threshold,
+        clc.get_pointcloud_plot_tuples(args.bag, args.topic, args.threshold,
                                        context['result']['rt_ref_lidar'],
-                                       ilidar_in_solve_from_ilidar = None,
-                                       Rt_vehicle_lidar0           = args.Rt_vehicle_lidar0)
+                                       isensor_solve_from_isensor_requested = None,
+                                       Rt_vehicle_lidar0 = args.Rt_vehicle_lidar0)
 
 
-    for ilidar,topic in enumerate(args.lidar_topic):
-        ilidar_solve = ilidar_in_solve_from_ilidar[ilidar]
-        if ilidar_solve == 0: continue # reference coord system
+    for isensor_requested,topic_requested in enumerate(args.topic):
+        isensor_solve = isensor_solve_from_isensor_requested[isensor_requested]
+        if isensor_solve == 0: continue # reference coord system
 
         l,v = \
             clc.transformation_covariance_decomposed(p0,
-                                                     context['result']['rt_ref_lidar'],
-                                                     ilidar_solve,
+                                                     context['result']['rt_ref_lidar' ],
+                                                     context['result']['rt_ref_camera'],
+                                                     isensor_solve,
                                                      context['result']['Var'])
         stdev = np.sqrt(l)
 
@@ -185,8 +187,8 @@ if args.ellipsoids:
 
         data_tuples.append( ( nps.clump(pellipsoid_vehicle, n=3),
                               dict( tuplesize = -3,
-                                    _with     = f'dots lc rgb "{clc.color_sequence_rgb[ilidar_solve%len(clc.color_sequence_rgb)]}"',
-                                    legend = f'1-sigma uncertainty for {topic}')), )
+                                    _with     = f'dots lc rgb "{clc.color_sequence_rgb[isensor_solve%len(clc.color_sequence_rgb)]}"',
+                                    legend = f'1-sigma uncertainty for {topic_requested}')), )
 
     clc.plot(*data_tuples,
          _3d = True,
@@ -201,22 +203,23 @@ if args.ellipsoids:
 
 
 
-for ilidar,topic in enumerate(args.lidar_topic):
-    ilidar_solve = ilidar_in_solve_from_ilidar[ilidar]
-    if ilidar_solve == 0: continue # reference coord system
+for isensor_requested,topic_requested in enumerate(args.topic):
+    isensor_solve = isensor_solve_from_isensor_requested[isensor_requested]
+    if isensor_solve == 0: continue # reference coord system
 
     # These apply to ALL the sensors, not just the ones being requested
     data_tuples_sensor_forward_vectors = \
         clc.get_data_tuples_sensor_forward_vectors(context['result']['rt_ref_lidar' ],
                                                    context['result']['rt_ref_camera'],
                                                    context['topics'],
-                                                   isensor_solve = ilidar_solve)
+                                                   isensor = isensor_solve)
 
 
     l,v = \
         clc.transformation_covariance_decomposed(p0,
-                                                 context['result']['rt_ref_lidar'],
-                                                 ilidar_solve,
+                                                 context['result']['rt_ref_lidar' ],
+                                                 context['result']['rt_ref_camera'],
+                                                 isensor_solve,
                                                  context['result']['Var'])
     stdev = np.sqrt(l)
 
@@ -248,10 +251,10 @@ for ilidar,topic in enumerate(args.lidar_topic):
          wait = True,
          xlabel = 'x (vehicle)',
          ylabel = 'y (vehicle)',
-         title = f'Worst-case 1-sigma transform uncertainty for {topic} (top-down view)',
+         title = f'Worst-case 1-sigma transform uncertainty for {topic_requested} (top-down view)',
          ascii = 1, # needed for the "using" scale
          _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
-         hardcopy=f'/tmp/uncertainty-1sigma-ilidar={ilidar_solve}.gp')
+         hardcopy=f'/tmp/uncertainty-1sigma-isensor={isensor_solve}.gp')
 
     clc.plot((thdeg_vertical,
           dict(tuplesize = 3,
@@ -265,7 +268,7 @@ for ilidar,topic in enumerate(args.lidar_topic):
          wait = True,
          xlabel = 'x (vehicle)',
          ylabel = 'y (vehicle)',
-         title = f'Worst-case transform uncertainty for {topic} (top-down view): angle off vertical (deg)',
+         title = f'Worst-case transform uncertainty for {topic_requested} (top-down view): angle off vertical (deg)',
          ascii = 1, # needed for the "using" scale
          _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
-         hardcopy=f'/tmp/uncertainty-direction-1sigma-ilidar={ilidar_solve}.gp')
+         hardcopy=f'/tmp/uncertainty-direction-1sigma-isensor={isensor_solve}.gp')
