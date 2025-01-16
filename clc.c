@@ -4289,11 +4289,11 @@ lidar_camera_indices_from_sensor(// out
     }
 }
 
-// The worst-case uncertainty reprojection value in the given sector is returned
-// in *stdev_worst. If we return *stdev_worst=0, that means that there isn't any
+// The worst-case transformation uncertainty in the given sector is returned in
+// *stdev_worst. If we return *stdev_worst=0, that means that there isn't any
 // pair of sensors that can see the given sector
 static bool
-reprojection_uncertainty_in_sector(// out
+transformation_uncertainty_in_sector(// out
                                    double* stdev_worst,
                                    // in
                                    const mrcal_point3_t* pquery_ref,
@@ -4372,7 +4372,7 @@ reprojection_uncertainty_in_sector(// out
                                              Nlidars,
                                              &ctx);
 
-            // These two sensors can BOTH observe points in this sector. So their reprojection uncertainty should be low
+            // These two sensors can BOTH observe points in this sector. So their transformation uncertainty should be low
 
             // (3,3) symmetric matrix; upper-triangle only stored; 6 values
             double Var_p1[6];
@@ -5105,7 +5105,7 @@ bool clc_post_solve_statistics( // out
         mrcal_transform_point_rt_inverted(pquery_ref.xyz,NULL,NULL,
                                           (const double*)rt_vehicle_lidar0, pquery_vehicle.xyz);
 
-        if(!reprojection_uncertainty_in_sector(// out
+        if(!transformation_uncertainty_in_sector(// out
                                                &stdev_worst[isector],
                                                // in
                                                &pquery_ref,

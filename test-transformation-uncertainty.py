@@ -113,7 +113,7 @@ Var_observed = nps.matmult((p0_sampled - p0_sampled_mean).T,
 
 testutils.confirm_covariances_equal(Var_predicted,
                                     Var_observed ,
-                                    what = f"reprojection to reference lidar {context['lidar_topic'][0]} of {lidar_topic_requested}",
+                                    what = f"transformation to reference lidar {context['lidar_topic'][0]} of {lidar_topic_requested}",
                                     eps_eigenvalues       = 0.2, # relative
                                     eps_eigenvectors_deg  = 5.,
                                     check_sqrt_eigenvalue = True)

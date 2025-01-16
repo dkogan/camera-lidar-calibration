@@ -168,12 +168,11 @@ def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
     return data_tuples
 
 
-def reprojection_covariance_decomposed( # shape (...,3)
-                                        p0,
-
-                                        rt_lidar0_lidar,
-                                        ilidar_solve,
-                                        Var
+def transformation_covariance_decomposed( # shape (...,3)
+                                          p0,
+                                          rt_lidar0_lidar,
+                                          ilidar_solve,
+                                          Var
 
 # add Rt_vehicle_lidar0           = None
 

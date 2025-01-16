@@ -1,5 +1,6 @@
 #!/usr/bin/python3
-r'''Display a set of LIDAR point clouds in the aligned coordinate system
+
+r'''Visualize transformation uncertainty between a pair of sensors
 
 SYNOPSIS
 
@@ -49,7 +50,7 @@ def parse_args():
                         frame is the lidar0 frame''')
     parser.add_argument('--ellipsoids',
                         action='store_true',
-                        help = '''By default we plot the reprojection
+                        help = '''By default we plot the transformation
                         uncertainty, which is derived from uncertainty
                         ellipsoids. It is sometimes useful to see the ellipsoids
                         themselves, usually for debugging. Pass --ellipsoids to
@@ -162,10 +163,10 @@ if args.ellipsoids:
         if ilidar_solve == 0: continue # reference coord system
 
         l,v = \
-            clc.reprojection_covariance_decomposed(p0,
-                                                   context['result']['rt_ref_lidar'],
-                                                   ilidar_solve,
-                                                   context['result']['Var'])
+            clc.transformation_covariance_decomposed(p0,
+                                                     context['result']['rt_ref_lidar'],
+                                                     ilidar_solve,
+                                                     context['result']['Var'])
         stdev = np.sqrt(l)
 
         # v stored each eigenvector in COLUMNS. I transpose to store them in
@@ -214,10 +215,10 @@ for ilidar,topic in enumerate(args.lidar_topic):
 
 
     l,v = \
-        clc.reprojection_covariance_decomposed(p0,
-                                               context['result']['rt_ref_lidar'],
-                                               ilidar_solve,
-                                               context['result']['Var'])
+        clc.transformation_covariance_decomposed(p0,
+                                                 context['result']['rt_ref_lidar'],
+                                                 ilidar_solve,
+                                                 context['result']['Var'])
     stdev = np.sqrt(l)
 
     # v stored each eigenvector in COLUMNS. I transpose to store them in
