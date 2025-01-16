@@ -181,6 +181,10 @@ def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
     except:
         raise Exception(f"Bag '{bag}' doesn't have at least one message for each of {lidar_topic}")
 
+    for i,msg in enumerate(pointcloud_msgs):
+        if not is_message_pointcloud(msg):
+            raise Exception(f"Topic {lidar_topic[i]} is not a pointcloud type")
+
     # Package into a numpy array
     pointclouds = [ msg['array']['xyz'].astype(float) \
                     for msg in pointcloud_msgs ]
@@ -198,8 +202,8 @@ def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
                                        p) for i,p in enumerate(pointclouds) ]
 
     if Rt_vehicle_lidar0 is not None:
-        pointclouds = mrcal.transform_point_Rt(Rt_vehicle_lidar0,
-                                               pointclouds)
+        pointclouds = [mrcal.transform_point_Rt(Rt_vehicle_lidar0, p) \
+                       for p in pointclouds]
 
     data_tuples = [ ( p, dict( tuplesize = -3,
                                legend    = lidar_topic[i],
