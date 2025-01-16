@@ -38,6 +38,22 @@ def parse_args():
                         default = 20,
                         help='''How far we should sample the space. We use a
                         square grid, 2*radius m per side. By default radius=20''')
+    parser.add_argument('--rt-vehicle-lidar0',
+                        type=float,
+                        nargs=6,
+                        help='''The vehicle-lidar0 transform. The solve is
+                        always done in lidar0 coordinates, but we may want to
+                        operate in a different "vehicle" frame. This argument
+                        specifies the relationship between those frames. If
+                        omitted, we assume an identity transform: the vehicle
+                        frame is the lidar0 frame''')
+    parser.add_argument('--ellipsoids',
+                        action='store_true',
+                        help = '''By default we plot the reprojection
+                        uncertainty, which is derived from uncertainty
+                        ellipsoids. It is sometimes useful to see the ellipsoids
+                        themselves, usually for debugging. Pass --ellipsoids to
+                        do that''')
     parser.add_argument('--lidar-topic',
                         type=str,
                         required = True,
@@ -58,6 +74,9 @@ def parse_args():
     args = parser.parse_args()
     args.lidar_topic = args.lidar_topic.split(',')
 
+    if args.rt_vehicle_lidar0 is not None:
+       args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0, dtype=float)
+
     return args
 
 
@@ -71,12 +90,6 @@ import gnuplotlib as gp
 
 import clc
 
-
-
-
-
-do_plot_ellipsoids               = True
-do_plot_worst_eigenvalue_heatmap = False
 
 
 with open(args.context, "rb") as f:
@@ -97,10 +110,10 @@ for ilidar in range(len(args.lidar_topic)):
 
 x_sample = np.linspace(-args.radius,args.radius,args.gridn)
 y_sample = np.linspace(-args.radius,args.radius,args.gridn)
-z_sample = 1
+z_sample = 0
 
-### point coordinates in the lidar0 frame. This is the solve reference:
-### ilidar_in_solve_from_ilidar[ilidar]==0
+### point coordinates in the vehicle frame
+
 # Each has shape (Ny_sample,Nx_sample)
 px0, py0 = np.meshgrid(x_sample,y_sample)
 pz0 = z_sample * np.ones(px0.shape, dtype=float)
@@ -108,9 +121,13 @@ pz0 = z_sample * np.ones(px0.shape, dtype=float)
 p0 = nps.mv(nps.cat(px0,py0,pz0),
             0,-1)
 
+# I want p0 in the lidar0 frame, so I transform
+if args.rt_vehicle_lidar0 is not None:
+    mrcal.transform_point_rt(args.rt_vehicle_lidar0, p0,
+                             inverted = True,
+                             out      = p0)
 
-
-if do_plot_worst_eigenvalue_heatmap:
+if not args.ellipsoids:
 
 
     # These apply to ALL the sensors, not just the ones being requested
@@ -213,8 +230,7 @@ if do_plot_worst_eigenvalue_heatmap:
 
 
 
-if do_plot_ellipsoids:
-
+if args.ellipsoids:
 
     az = np.linspace(-np.pi, np.pi,40, endpoint = False)
     el = nps.mv(np.linspace(-np.pi/2., np.pi/2., 20), -1,-2)
