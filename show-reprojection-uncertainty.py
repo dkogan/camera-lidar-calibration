@@ -127,109 +127,6 @@ if args.rt_vehicle_lidar0 is not None:
                              inverted = True,
                              out      = p0)
 
-if not args.ellipsoids:
-
-
-    # These apply to ALL the sensors, not just the ones being requested
-    lidars_origin  = context['result']['rt_ref_lidar'][:,3:]
-    lidars_forward = mrcal.rotate_point_r(context['result']['rt_ref_lidar'][:,:3], np.array((1.,0,0)))
-    lidars_forward_xy = np.array(lidars_forward[...,:2])
-    # to avoid /0 for straight-up vectors
-    mag_lidars_forward_xy = nps.mag(lidars_forward_xy)
-    i = mag_lidars_forward_xy>0
-    lidars_forward_xy[i,:] /= nps.dummy(mag_lidars_forward_xy[i], axis=-1)
-    lidars_forward_xy[~i,:] = 0
-    lidar_forward_arrow_length = 4.
-    def data_tuples_lidar_forward_vectors(ilidar_solve):
-        return \
-        (
-          # LIDAR positions AND their forward vectors
-          (nps.glue( lidars_origin [...,:2],
-                     lidars_forward_xy * lidar_forward_arrow_length,
-                     axis = -1 ),
-           dict(_with = 'vectors lw 2 lc "black"',
-                tuplesize = -4) ),
-
-          # # JUST the LIDAR positions
-          # ( lidars_origin [...,:2],
-          #   dict(_with = 'points pt 2 lc "black"',
-          #        tuplesize = -2) ),
-
-          ( lidars_origin[np.arange(len(context['lidar_topic'])) != ilidar_solve,0],
-            lidars_origin[np.arange(len(context['lidar_topic'])) != ilidar_solve,1],
-            np.array(context['lidar_topic'])[np.arange(len(context['lidar_topic'])) != ilidar_solve],
-            dict(_with = 'labels textcolor "black"',
-                 tuplesize = 3)),
-          ( lidars_origin[np.array((ilidar_solve,),),0],
-            lidars_origin[np.array((ilidar_solve,),),1],
-            np.array(context['lidar_topic'])[np.array((ilidar_solve,),)],
-            dict(_with = 'labels textcolor "red"',
-                 tuplesize = 3))
-         )
-
-
-
-    for ilidar,topic in enumerate(args.lidar_topic):
-        ilidar_solve = ilidar_in_solve_from_ilidar[ilidar]
-        if ilidar_solve == 0: continue # reference coord system
-
-        l,v = \
-            clc.reprojection_covariance_decomposed(p0,
-                                                   context['result']['rt_ref_lidar'],
-                                                   ilidar_solve,
-                                                   context['result']['Var'])
-        stdev = np.sqrt(l)
-
-
-        # shape (Nysample,Nxsample)
-
-        iworst  = np.argmax(stdev,axis=-1, keepdims=True)
-        uncertainty_1sigma = np.take_along_axis(stdev,iworst, -1)[...,0]
-
-        eigv_worst = np.take_along_axis(v,nps.dummy(iworst,-1), -1)[...,0]
-        cos_vertical = np.abs(eigv_worst[...,2])
-        thdeg_vertical = np.arccos(np.clip(cos_vertical,-1,1)) * 180./np.pi
-
-        using = f'({x_sample[0]} + $1*({x_sample[-1]-x_sample[0]})/{args.gridn-1}):({y_sample[0]} + $2*({y_sample[-1]-y_sample[0]})/{args.gridn-1}):3'
-
-        clc.plot((uncertainty_1sigma,
-              dict(tuplesize = 3,
-                   _with = 'image',
-                   using = using),
-              ),
-             *data_tuples_lidar_forward_vectors(ilidar_solve),
-             cbmin = 0,
-             square = True,
-             wait = True,
-             xlabel = 'x',
-             ylabel = 'y',
-             title = f'Worst-case 1-sigma transform uncertainty for {topic} (top-down view)',
-             ascii = 1, # needed for the "using" scale
-             _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
-             hardcopy=f'/tmp/uncertainty-1sigma-ilidar={ilidar_solve}.gp')
-
-        clc.plot((thdeg_vertical,
-              dict(tuplesize = 3,
-                   _with = 'image',
-                   using = using),
-              ),
-             *data_tuples_lidar_forward_vectors(ilidar_solve),
-             cbmin = 0,
-             cbmax = 30,
-             square = True,
-             wait = True,
-             xlabel = 'x',
-             ylabel = 'y',
-             title = f'Worst-case transform uncertainty for {topic} (top-down view): angle off vertical (deg)',
-             ascii = 1, # needed for the "using" scale
-             _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
-             hardcopy=f'/tmp/uncertainty-direction-1sigma-ilidar={ilidar_solve}.gp')
-
-
-
-
-
-
 if args.ellipsoids:
 
     az = np.linspace(-np.pi, np.pi,40, endpoint = False)
@@ -282,3 +179,103 @@ if args.ellipsoids:
          ylabel = 'y',
          zlabel = 'z',
          wait = True)
+
+    sys.exit()
+
+
+
+
+# These apply to ALL the sensors, not just the ones being requested
+lidars_origin  = context['result']['rt_ref_lidar'][:,3:]
+lidars_forward = mrcal.rotate_point_r(context['result']['rt_ref_lidar'][:,:3], np.array((1.,0,0)))
+lidars_forward_xy = np.array(lidars_forward[...,:2])
+# to avoid /0 for straight-up vectors
+mag_lidars_forward_xy = nps.mag(lidars_forward_xy)
+i = mag_lidars_forward_xy>0
+lidars_forward_xy[i,:] /= nps.dummy(mag_lidars_forward_xy[i], axis=-1)
+lidars_forward_xy[~i,:] = 0
+lidar_forward_arrow_length = 4.
+def data_tuples_lidar_forward_vectors(ilidar_solve):
+    return \
+    (
+      # LIDAR positions AND their forward vectors
+      (nps.glue( lidars_origin [...,:2],
+                 lidars_forward_xy * lidar_forward_arrow_length,
+                 axis = -1 ),
+       dict(_with = 'vectors lw 2 lc "black"',
+            tuplesize = -4) ),
+
+      # # JUST the LIDAR positions
+      # ( lidars_origin [...,:2],
+      #   dict(_with = 'points pt 2 lc "black"',
+      #        tuplesize = -2) ),
+
+      ( lidars_origin[np.arange(len(context['lidar_topic'])) != ilidar_solve,0],
+        lidars_origin[np.arange(len(context['lidar_topic'])) != ilidar_solve,1],
+        np.array(context['lidar_topic'])[np.arange(len(context['lidar_topic'])) != ilidar_solve],
+        dict(_with = 'labels textcolor "black"',
+             tuplesize = 3)),
+      ( lidars_origin[np.array((ilidar_solve,),),0],
+        lidars_origin[np.array((ilidar_solve,),),1],
+        np.array(context['lidar_topic'])[np.array((ilidar_solve,),)],
+        dict(_with = 'labels textcolor "red"',
+             tuplesize = 3))
+     )
+
+
+
+for ilidar,topic in enumerate(args.lidar_topic):
+    ilidar_solve = ilidar_in_solve_from_ilidar[ilidar]
+    if ilidar_solve == 0: continue # reference coord system
+
+    l,v = \
+        clc.reprojection_covariance_decomposed(p0,
+                                               context['result']['rt_ref_lidar'],
+                                               ilidar_solve,
+                                               context['result']['Var'])
+    stdev = np.sqrt(l)
+
+
+    # shape (Nysample,Nxsample)
+
+    iworst  = np.argmax(stdev,axis=-1, keepdims=True)
+    uncertainty_1sigma = np.take_along_axis(stdev,iworst, -1)[...,0]
+
+    eigv_worst = np.take_along_axis(v,nps.dummy(iworst,-1), -1)[...,0]
+    cos_vertical = np.abs(eigv_worst[...,2])
+    thdeg_vertical = np.arccos(np.clip(cos_vertical,-1,1)) * 180./np.pi
+
+    using = f'({x_sample[0]} + $1*({x_sample[-1]-x_sample[0]})/{args.gridn-1}):({y_sample[0]} + $2*({y_sample[-1]-y_sample[0]})/{args.gridn-1}):3'
+
+    clc.plot((uncertainty_1sigma,
+          dict(tuplesize = 3,
+               _with = 'image',
+               using = using),
+          ),
+         *data_tuples_lidar_forward_vectors(ilidar_solve),
+         cbmin = 0,
+         square = True,
+         wait = True,
+         xlabel = 'x',
+         ylabel = 'y',
+         title = f'Worst-case 1-sigma transform uncertainty for {topic} (top-down view)',
+         ascii = 1, # needed for the "using" scale
+         _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
+         hardcopy=f'/tmp/uncertainty-1sigma-ilidar={ilidar_solve}.gp')
+
+    clc.plot((thdeg_vertical,
+          dict(tuplesize = 3,
+               _with = 'image',
+               using = using),
+          ),
+         *data_tuples_lidar_forward_vectors(ilidar_solve),
+         cbmin = 0,
+         cbmax = 30,
+         square = True,
+         wait = True,
+         xlabel = 'x',
+         ylabel = 'y',
+         title = f'Worst-case transform uncertainty for {topic} (top-down view): angle off vertical (deg)',
+         ascii = 1, # needed for the "using" scale
+         _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
+         hardcopy=f'/tmp/uncertainty-direction-1sigma-ilidar={ilidar_solve}.gp')
