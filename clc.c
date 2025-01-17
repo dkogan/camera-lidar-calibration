@@ -2899,9 +2899,12 @@ static bool dump_optimization_inputs(
     size_t* size_inputs_dump,
 
     // in
-    const double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
-    const double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
-    const double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+    const double* Rt_lidar0_board_seed,   // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+    const double* Rt_lidar0_lidar_seed,   // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
+    const double* Rt_lidar0_camera_seed,  // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+    const double* Rt_lidar0_board_solve,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+    const double* Rt_lidar0_lidar_solve,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
+    const double* Rt_lidar0_camera_solve, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
 
     const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
     const unsigned int                 Nsensor_snapshots_filtered,
@@ -2934,9 +2937,12 @@ static bool dump_optimization_inputs(
     fprintf(fp, "object_width_n             = %d\n", object_width_n);
     fprintf(fp, "object_spacing             = %f\n", object_spacing);
 
-    fwrite(Rt_lidar0_board,  sizeof(double), Nsensor_snapshots_filtered *4*3, fp);
-    fwrite(Rt_lidar0_lidar,  sizeof(double), (Nlidars-1)                *4*3, fp);
-    fwrite(Rt_lidar0_camera, sizeof(double), Ncameras                   *4*3, fp);
+    fwrite(Rt_lidar0_board_seed,   sizeof(double), Nsensor_snapshots_filtered *4*3, fp);
+    fwrite(Rt_lidar0_lidar_seed,   sizeof(double), (Nlidars-1)                *4*3, fp);
+    fwrite(Rt_lidar0_camera_seed,  sizeof(double), Ncameras                   *4*3, fp);
+    fwrite(Rt_lidar0_board_solve,  sizeof(double), Nsensor_snapshots_filtered *4*3, fp);
+    fwrite(Rt_lidar0_lidar_solve,  sizeof(double), (Nlidars-1)                *4*3, fp);
+    fwrite(Rt_lidar0_camera_solve, sizeof(double), Ncameras                   *4*3, fp);
 
 
     for(int isnapshot=0; isnapshot<Nsensor_snapshots_filtered; isnapshot++)
@@ -3273,7 +3279,8 @@ bool clc_fit_from_optimization_inputs(// out
                                       // in
                                       const char* buf_inputs_dump,
                                       size_t      size_inputs_dump,
-                                      bool inject_noise)
+                                      bool do_inject_noise,
+                                      bool do_fit_seed)
 {
     bool result = false;
 
@@ -3317,20 +3324,29 @@ bool clc_fit_from_optimization_inputs(// out
 
 
     {
-        double Rt_lidar0_board [Nsensor_snapshots_filtered *4*3];
-        double Rt_lidar0_lidar [(*Nlidars-1)               *4*3];
-        double Rt_lidar0_camera[*Ncameras                  *4*3];
+        double Rt_lidar0_board_seed  [Nsensor_snapshots_filtered *4*3];
+        double Rt_lidar0_lidar_seed  [(*Nlidars-1)               *4*3];
+        double Rt_lidar0_camera_seed [*Ncameras                  *4*3];
+        double Rt_lidar0_board_solve [Nsensor_snapshots_filtered *4*3];
+        double Rt_lidar0_lidar_solve [(*Nlidars-1)               *4*3];
+        double Rt_lidar0_camera_solve[*Ncameras                  *4*3];
 
         sensor_snapshot_segmented_t sensor_snapshots_filtered[Nsensor_snapshots_filtered];
         memset(sensor_snapshots_filtered, 0, Nsensor_snapshots_filtered*sizeof(sensor_snapshots_filtered[0]));
 
         mrcal_cameramodel_t* models[*Ncameras];
 
-        if(Nsensor_snapshots_filtered *4*3 != fread(Rt_lidar0_board,  sizeof(double), Nsensor_snapshots_filtered *4*3, fp))
+        if(Nsensor_snapshots_filtered *4*3 != fread(Rt_lidar0_board_seed,   sizeof(double), Nsensor_snapshots_filtered *4*3, fp))
             goto done_inner;
-        if((*Nlidars-1)               *4*3 != fread(Rt_lidar0_lidar,  sizeof(double), (*Nlidars-1)               *4*3, fp))
+        if((*Nlidars-1)               *4*3 != fread(Rt_lidar0_lidar_seed,   sizeof(double), (*Nlidars-1)               *4*3, fp))
             goto done_inner;
-        if(*Ncameras                  *4*3 != fread(Rt_lidar0_camera, sizeof(double), *Ncameras                  *4*3, fp))
+        if(*Ncameras                  *4*3 != fread(Rt_lidar0_camera_seed,  sizeof(double), *Ncameras                  *4*3, fp))
+            goto done_inner;
+        if(Nsensor_snapshots_filtered *4*3 != fread(Rt_lidar0_board_solve,  sizeof(double), Nsensor_snapshots_filtered *4*3, fp))
+            goto done_inner;
+        if((*Nlidars-1)               *4*3 != fread(Rt_lidar0_lidar_solve,  sizeof(double), (*Nlidars-1)               *4*3, fp))
+            goto done_inner;
+        if(*Ncameras                  *4*3 != fread(Rt_lidar0_camera_solve, sizeof(double), *Ncameras                  *4*3, fp))
             goto done_inner;
 
 
@@ -3399,7 +3415,7 @@ bool clc_fit_from_optimization_inputs(// out
                     if(Npoints != fread(points_and_plane_full->points, sizeof(points_and_plane_full->points[0]), Npoints, fp))
                         goto done_inner;
 
-                    if(inject_noise)
+                    if(do_inject_noise)
                     {
                         for(int i=0; i<Npoints; i++)
                         {
@@ -3438,14 +3454,39 @@ bool clc_fit_from_optimization_inputs(// out
                 goto done_inner;
         }
 
+        if(do_fit_seed)
+        {
+            result =
+                fit_seed(// in,out
+                         // seed state on input
+                         Rt_lidar0_board_solve,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+                         Rt_lidar0_lidar_solve,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
+                         Rt_lidar0_camera_solve, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+
+                         // in
+                         sensor_snapshots_filtered,
+                         Nsensor_snapshots_filtered,
+
+                         // These apply to ALL the sensor_snapshots[]
+                         *Nlidars,
+                         *Ncameras,
+                         (const mrcal_cameramodel_t * const*)models, // Ncameras of these
+
+                         // The dimensions of the chessboard grid being detected in the images
+                         object_height_n,
+                         object_width_n,
+                         object_spacing);
+        }
+
         result =
+            result &&
             fit(NULL,
 
                 // in,out
                 // seed state on input
-                Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
-                Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
-                Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+                Rt_lidar0_board_solve,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+                Rt_lidar0_lidar_solve,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
+                Rt_lidar0_camera_solve, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
 
                 // in
                 sensor_snapshots_filtered,
@@ -3470,10 +3511,10 @@ bool clc_fit_from_optimization_inputs(// out
             (*rt_ref_lidar)[0] = (mrcal_pose_t){};
             for(int i=1; i<*Nlidars; i++)
                 mrcal_rt_from_Rt( (double*)&(*rt_ref_lidar)[i], NULL,
-                                  &Rt_lidar0_lidar[(i-1)*4*3] );
+                                  &Rt_lidar0_lidar_solve[(i-1)*4*3] );
             for(int i=0; i<*Ncameras; i++)
                 mrcal_rt_from_Rt( (double*)&(*rt_ref_camera)[i], NULL,
-                                  &Rt_lidar0_camera[i*4*3] );
+                                  &Rt_lidar0_camera_solve[i*4*3] );
         }
     done_inner:
         for(int isnapshot=0; isnapshot<Nsensor_snapshots_filtered; isnapshot++)
@@ -4833,13 +4874,13 @@ bool _clc_internal(// out
     }
 
     {
-        double Rt_lidar0_board [Nsensor_snapshots_filtered * 4*3];
-        double Rt_lidar0_lidar [(Nlidars-1)                * 4*3];
-        double Rt_lidar0_camera[Ncameras                   * 4*3];
+        double Rt_lidar0_board_seed [Nsensor_snapshots_filtered * 4*3];
+        double Rt_lidar0_lidar_seed [(Nlidars-1)                * 4*3];
+        double Rt_lidar0_camera_seed[Ncameras                   * 4*3];
         if(!fit_seed(// out
-                     Rt_lidar0_board,
-                     Rt_lidar0_lidar,
-                     Rt_lidar0_camera,
+                     Rt_lidar0_board_seed,
+                     Rt_lidar0_lidar_seed,
+                     Rt_lidar0_camera_seed,
 
                      // in
                      sensor_snapshots_filtered,
@@ -4858,9 +4899,9 @@ bool _clc_internal(// out
         }
 
         plot_geometry("/tmp/geometry-seed.gp",
-                      Rt_lidar0_board,
-                      Rt_lidar0_lidar,
-                      Rt_lidar0_camera,
+                      Rt_lidar0_board_seed,
+                      Rt_lidar0_lidar_seed,
+                      Rt_lidar0_camera_seed,
                       sensor_snapshots_filtered,
                       Nsensor_snapshots_filtered,
                       Nlidars,
@@ -4870,9 +4911,9 @@ bool _clc_internal(// out
                       object_spacing,
                       false);
         plot_geometry("/tmp/geometry-seed-onlyaxes.gp",
-                      Rt_lidar0_board,
-                      Rt_lidar0_lidar,
-                      Rt_lidar0_camera,
+                      Rt_lidar0_board_seed,
+                      Rt_lidar0_lidar_seed,
+                      Rt_lidar0_camera_seed,
                       sensor_snapshots_filtered,
                       Nsensor_snapshots_filtered,
                       Nlidars,
@@ -4883,13 +4924,21 @@ bool _clc_internal(// out
                       true);
 
 
+        double Rt_lidar0_board_solve [Nsensor_snapshots_filtered * 4*3];
+        double Rt_lidar0_lidar_solve [(Nlidars-1)                * 4*3];
+        double Rt_lidar0_camera_solve[Ncameras                   * 4*3];
+        memcpy(Rt_lidar0_board_solve,  Rt_lidar0_board_seed,  sizeof(double)*Nsensor_snapshots_filtered * 4*3);
+        memcpy(Rt_lidar0_lidar_solve,  Rt_lidar0_lidar_seed,  sizeof(double)*(Nlidars-1)                * 4*3);
+        memcpy(Rt_lidar0_camera_solve, Rt_lidar0_camera_seed, sizeof(double)*Ncameras                   * 4*3);
+
+
         dogleg_solverContext_t* solver_context;
         if(!fit(&solver_context,
                 // in,out
                 // seed state on input
-                Rt_lidar0_board,
-                Rt_lidar0_lidar,
-                Rt_lidar0_camera,
+                Rt_lidar0_board_solve,
+                Rt_lidar0_lidar_solve,
+                Rt_lidar0_camera_solve,
 
                 // in
                 sensor_snapshots_filtered,
@@ -4932,12 +4981,14 @@ bool _clc_internal(// out
 
         if(buf_inputs_dump != NULL)
         {
-            if(!dump_optimization_inputs(
-                                         buf_inputs_dump,
+            if(!dump_optimization_inputs(buf_inputs_dump,
                                          size_inputs_dump,
-                                         Rt_lidar0_board,
-                                         Rt_lidar0_lidar,
-                                         Rt_lidar0_camera,
+                                         Rt_lidar0_board_seed,
+                                         Rt_lidar0_lidar_seed,
+                                         Rt_lidar0_camera_seed,
+                                         Rt_lidar0_board_solve,
+                                         Rt_lidar0_lidar_solve,
+                                         Rt_lidar0_camera_solve,
 
                                          sensor_snapshots_filtered,
                                          Nsensor_snapshots_filtered,
@@ -4961,9 +5012,9 @@ bool _clc_internal(// out
         }
 
         plot_geometry("/tmp/geometry.gp",
-                      Rt_lidar0_board,
-                      Rt_lidar0_lidar,
-                      Rt_lidar0_camera,
+                      Rt_lidar0_board_solve,
+                      Rt_lidar0_lidar_solve,
+                      Rt_lidar0_camera_solve,
                       sensor_snapshots_filtered,
                       Nsensor_snapshots_filtered,
                       Nlidars,
@@ -4973,9 +5024,9 @@ bool _clc_internal(// out
                       object_spacing,
                       false);
         plot_geometry("/tmp/geometry-onlyaxes.gp",
-                      Rt_lidar0_board,
-                      Rt_lidar0_lidar,
-                      Rt_lidar0_camera,
+                      Rt_lidar0_board_solve,
+                      Rt_lidar0_lidar_solve,
+                      Rt_lidar0_camera_solve,
                       sensor_snapshots_filtered,
                       Nsensor_snapshots_filtered,
                       Nlidars,
@@ -4988,14 +5039,14 @@ bool _clc_internal(// out
 
         for(unsigned int i=0; i<Ncameras; i++)
             mrcal_rt_from_Rt(rt_ref_camera[i].r.xyz, NULL,
-                             &Rt_lidar0_camera[i*4*3]);
+                             &Rt_lidar0_camera_solve[i*4*3]);
         memset(rt_ref_lidar, 0, sizeof(*rt_ref_lidar)); // lidar0 has the reference transform
         for(unsigned int i=0; i<Nlidars-1; i++)
             mrcal_rt_from_Rt(rt_ref_lidar[i+1].r.xyz, NULL,
-                             &Rt_lidar0_lidar[i*4*3]);
+                             &Rt_lidar0_lidar_solve[i*4*3]);
 
-        make_reprojected_plots( Rt_lidar0_lidar,
-                                Rt_lidar0_camera,
+        make_reprojected_plots( Rt_lidar0_lidar_solve,
+                                Rt_lidar0_camera_solve,
                                 sensor_snapshots_filtered,
                                 Nsensor_snapshots_filtered,
                                 Nlidars,

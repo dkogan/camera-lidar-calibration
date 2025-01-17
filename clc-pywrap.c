@@ -986,18 +986,21 @@ static PyObject* py_fit_from_optimization_inputs(PyObject* NPY_UNUSED(self),
     mrcal_pose_t*  rt_ref_camera    = NULL;
     PyArrayObject* py_rt_ref_lidar  = NULL;
     PyArrayObject* py_rt_ref_camera = NULL;
-    int            inject_noise     = 0;
+    int            do_inject_noise  = 0;
+    int            do_fit_seed      = 0;
 
     SET_SIGINT();
 
     char* keywords[] = { "inputs_dump",
-                         "inject_noise",
+                         "do_inject_noise",
+                         "do_fit_seed",
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" "p",
+                                     "O" "|$" "pp",
                                      keywords,
                                      &inputs_dump,
-                                     &inject_noise,
+                                     &do_inject_noise,
+                                     &do_fit_seed,
                                      NULL))
         goto done;
 
@@ -1014,7 +1017,8 @@ static PyObject* py_fit_from_optimization_inputs(PyObject* NPY_UNUSED(self),
                                          // in
                                          PyBytes_AS_STRING(inputs_dump),
                                          PyBytes_GET_SIZE( inputs_dump),
-                                         inject_noise))
+                                         do_inject_noise,
+                                         do_fit_seed))
     {
         BARF("clc_fit_from_optimization_inputs() failed");
         goto done;

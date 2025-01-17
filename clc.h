@@ -451,4 +451,5 @@ bool clc_fit_from_optimization_inputs(// out
                                       // in
                                       const char* buf_inputs_dump,
                                       size_t      size_inputs_dump,
-                                      bool inject_noise);
+                                      bool do_inject_noise,
+                                      bool do_fit_seed);
