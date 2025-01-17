@@ -440,16 +440,16 @@ bool clc_post_solve_statistics( // out
                                 const mrcal_cameramodel_t*const* models // Ncameras of these
                                 );
 
-bool clc_fit_from_optimization_inputs(// out
-                                      int* Nlidars,
-                                      int* Ncameras,
-                                      // Allocated by the function on success.
-                                      // It's the caller's responsibility to
-                                      // free() these
-                                      mrcal_pose_t** rt_ref_lidar,
-                                      mrcal_pose_t** rt_ref_camera,
-                                      // in
-                                      const char* buf_inputs_dump,
-                                      size_t      size_inputs_dump,
-                                      bool do_inject_noise,
-                                      bool do_fit_seed);
+bool clc_fit_from_inputs_dump(// out
+                              int* Nlidars,
+                              int* Ncameras,
+                              // Allocated by the function on success.
+                              // It's the caller's responsibility to
+                              // free() these
+                              mrcal_pose_t** rt_ref_lidar,
+                              mrcal_pose_t** rt_ref_camera,
+                              // in
+                              const char* buf_inputs_dump,
+                              size_t      size_inputs_dump,
+                              bool do_inject_noise,
+                              bool do_fit_seed);

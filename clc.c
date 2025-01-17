@@ -2892,7 +2892,7 @@ plot_geometry(const char* filename,
 }
 
 // same inputs as fit()
-static bool dump_optimization_inputs(
+static bool dump_inputs(
     // on success, these encode the data buffer. The caller must
     // free(*buf_inputs_dump) when done
     char**  buf_inputs_dump,
@@ -3268,19 +3268,19 @@ fit(// out
 }
 
 
-bool clc_fit_from_optimization_inputs(// out
-                                      int* Nlidars,
-                                      int* Ncameras,
-                                      // Allocated by the function on success.
-                                      // It's the caller's responsibility to
-                                      // free() these
-                                      mrcal_pose_t** rt_ref_lidar,
-                                      mrcal_pose_t** rt_ref_camera,
-                                      // in
-                                      const char* buf_inputs_dump,
-                                      size_t      size_inputs_dump,
-                                      bool do_inject_noise,
-                                      bool do_fit_seed)
+bool clc_fit_from_inputs_dump(// out
+                              int* Nlidars,
+                              int* Ncameras,
+                              // Allocated by the function on success.
+                              // It's the caller's responsibility to
+                              // free() these
+                              mrcal_pose_t** rt_ref_lidar,
+                              mrcal_pose_t** rt_ref_camera,
+                              // in
+                              const char* buf_inputs_dump,
+                              size_t      size_inputs_dump,
+                              bool do_inject_noise,
+                              bool do_fit_seed)
 {
     bool result = false;
 
@@ -4981,7 +4981,7 @@ bool _clc_internal(// out
 
         if(buf_inputs_dump != NULL)
         {
-            if(!dump_optimization_inputs(buf_inputs_dump,
+            if(!dump_inputs(buf_inputs_dump,
                                          size_inputs_dump,
                                          Rt_lidar0_board_seed,
                                          Rt_lidar0_lidar_seed,
@@ -5000,7 +5000,7 @@ bool _clc_internal(// out
                                          object_width_n,
                                          object_spacing))
             {
-                MSG("dump_optimization_inputs() failed");
+                MSG("dump_inputs() failed");
             }
         }
 

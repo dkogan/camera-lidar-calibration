@@ -449,7 +449,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     PyArrayObject* Var_rt_lidar0_sensor               = NULL;
     PyObject*      inputs_dump                        = NULL;
 
-    // used if(dump_optimization_inputs)
+    // used if(do_dump_inputs)
     char*  buf_inputs_dump  = NULL;
     size_t size_inputs_dump = NULL;
 
@@ -471,7 +471,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
 
     int check_gradient__use_distance_to_plane = 0;
     int check_gradient                        = 0;
-    int dump_optimization_inputs              = 0;
+    int do_dump_inputs                        = 0;
 
     // sensor_snapshots is a tuple. Each slice corresponds to
     // clc_sensor_snapshot_unsorted_t; it is a tuple:
@@ -497,7 +497,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          "object_spacing",
                          "check_gradient__use_distance_to_plane",
                          "check_gradient",
-                         "dump_optimization_inputs",
+                         "do_dump_inputs",
                          CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
@@ -511,7 +511,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                                      &object_spacing,
                                      &check_gradient__use_distance_to_plane,
                                      &check_gradient,
-                                     &dump_optimization_inputs,
+                                     &do_dump_inputs,
                                      CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX)
                                      NULL))
         goto done;
@@ -629,8 +629,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          (mrcal_pose_t*)PyArray_DATA(rt_ref_lidar),
                          (mrcal_pose_t*)PyArray_DATA(rt_ref_camera),
                          (double      *)PyArray_DATA(Var_rt_lidar0_sensor),
-                         dump_optimization_inputs ? &buf_inputs_dump  : NULL,
-                         dump_optimization_inputs ? &size_inputs_dump : NULL,
+                         do_dump_inputs ? &buf_inputs_dump  : NULL,
+                         do_dump_inputs ? &size_inputs_dump : NULL,
 
                          // in
                          sensor_snapshots,
@@ -973,7 +973,7 @@ static PyObject* py_post_solve_statistics(PyObject* NPY_UNUSED(self),
     return result;
 }
 
-static PyObject* py_fit_from_optimization_inputs(PyObject* NPY_UNUSED(self),
+static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
                                                  PyObject* args,
                                                  PyObject* kwargs)
 {
@@ -1009,7 +1009,7 @@ static PyObject* py_fit_from_optimization_inputs(PyObject* NPY_UNUSED(self),
         BARF("inputs_dump should be a 'bytes' object");
         goto done;
     }
-    if(!clc_fit_from_optimization_inputs(// out
+    if(!clc_fit_from_inputs_dump(// out
                                          &Nlidars,
                                          &Ncameras,
                                          &rt_ref_lidar,
@@ -1020,7 +1020,7 @@ static PyObject* py_fit_from_optimization_inputs(PyObject* NPY_UNUSED(self),
                                          do_inject_noise,
                                          do_fit_seed))
     {
-        BARF("clc_fit_from_optimization_inputs() failed");
+        BARF("clc_fit_from_inputs_dump() failed");
         goto done;
     }
 
@@ -1079,8 +1079,8 @@ static const char calibrate_docstring[] =
 static const char post_solve_statistics_docstring[] =
 #include "post_solve_statistics.docstring.h"
     ;
-static const char fit_from_optimization_inputs_docstring[] =
-#include "fit_from_optimization_inputs.docstring.h"
+static const char fit_from_inputs_dump_docstring[] =
+#include "fit_from_inputs_dump.docstring.h"
     ;
 static const char lidar_segmentation_default_context_docstring[] =
 #include "lidar_segmentation_default_context.docstring.h"
@@ -1090,7 +1090,7 @@ static PyMethodDef methods[] =
     {
      PYMETHODDEF_ENTRY(calibrate,                   py_calibrate,                    METH_VARARGS | METH_KEYWORDS),
      PYMETHODDEF_ENTRY(post_solve_statistics,       py_post_solve_statistics,        METH_VARARGS | METH_KEYWORDS),
-     PYMETHODDEF_ENTRY(fit_from_optimization_inputs,py_fit_from_optimization_inputs, METH_VARARGS | METH_KEYWORDS),
+     PYMETHODDEF_ENTRY(fit_from_inputs_dump,        py_fit_from_inputs_dump,         METH_VARARGS | METH_KEYWORDS),
      PYMETHODDEF_ENTRY(lidar_segmentation,          py_lidar_segmentation,           METH_VARARGS | METH_KEYWORDS),
      PYMETHODDEF_ENTRY(lidar_segmentation_default_context, py_lidar_segmentation_default_context, METH_NOARGS),
      {}

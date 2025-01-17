@@ -305,4 +305,4 @@ def get_data_tuples_sensor_forward_vectors(rt_ref_lidar,
 
 
 lidar_segmentation_default_context = _clc.lidar_segmentation_default_context
-fit_from_optimization_inputs       = _clc.fit_from_optimization_inputs
+fit_from_inputs_dump               = _clc.fit_from_inputs_dump
