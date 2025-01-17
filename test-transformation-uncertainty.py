@@ -107,7 +107,7 @@ for isample in range(args.Nsamples):
         print(f"Sampling {isample+1}/{args.Nsamples}")
 
     result = clc.fit_from_inputs_dump(context['result']['inputs_dump'],
-                                      inject_noise = True)
+                                      do_inject_noise = True)
 
     if isensor < Nlidars: rt_lidar0_sensor__sampled = result['rt_ref_lidar' ][isensor]
     else:                 rt_lidar0_sensor__sampled = result['rt_ref_camera'][isensor-Nlidars]
