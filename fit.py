@@ -91,6 +91,16 @@ def parse_args():
                         vehicle origin. In each sector we look at a point this
                         distance away from the origin. If omitted, we look 10m
                         ahead''')
+    parser.add_argument('--rt-vehicle-lidar0',
+                        type=float,
+                        nargs=6,
+                        help='''Used in the uncertainty quantification. The
+                        vehicle-lidar0 transform. The solve is always done in
+                        lidar0 coordinates, but we the uncertainty
+                        quantification operates in a different "vehicle" frame.
+                        This argument specifies the relationship between those
+                        frames. If omitted, we assume an identity transform: the
+                        vehicle frame is the lidar0 frame''')
     parser.add_argument('models',
                         type = str,
                         nargs='*',
@@ -131,6 +141,12 @@ import io
 import pickle
 import mrcal
 import clc
+
+
+if args.rt_vehicle_lidar0 is None:
+    args.rt_vehicle_lidar0 = mrcal.identity_rt()
+else: args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0)
+
 
 
 def find_multisense_units_lra(topics):
@@ -702,6 +718,7 @@ context = \
          threshold_valid_lidar_range      = args.threshold_valid_lidar_range,
          threshold_valid_lidar_Npoints    = args.threshold_valid_lidar_Npoints,
          uncertainty_quantification_range = args.uncertainty_quantification_range,
+         rt_vehicle_lidar0                = args.rt_vehicle_lidar0,
          kwargs_calibrate                 = kwargs_calibrate)
 if args.dump is not None:
     with open(args.dump, 'wb') as f:
@@ -718,7 +735,7 @@ statistics = clc.post_solve_statistics(bag                              = args.b
                                        threshold_valid_lidar_range      = args.threshold_valid_lidar_range,
                                        threshold_valid_lidar_Npoints    = args.threshold_valid_lidar_Npoints,
                                        uncertainty_quantification_range = args.uncertainty_quantification_range,
-                                       rt_vehicle_lidar0                = mrcal.identity_rt(),
+                                       rt_vehicle_lidar0                = args.rt_vehicle_lidar0,
                                        models                           = args.models,
                                        **result)
 
