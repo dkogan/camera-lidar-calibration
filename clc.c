@@ -3702,23 +3702,23 @@ static bool make_reprojected_plots( const double* Rt_lidar0_lidar,
     return true;
 }
 
-static bool count_lidar_observations_in_sector(// out
-                                         // A dense array of shape (Nsensors,Nsectors)
-                                         uint8_t* isvisible_per_sensor_per_sector,
-                                         // in
-                                         const double*                      rt_vehicle_ref,
-                                         const int                          Nsectors,
-                                         const int                          Nrings,
+static bool evaluate_lidar_visibility(// out
+                                      // A dense array of shape (Nlidars,Nsectors)
+                                      uint8_t* isvisible_per_lidar_per_sector,
+                                      // in
+                                      const double*                      rt_vehicle_ref,
+                                      const int                          Nsectors,
+                                      const int                          Nrings,
 
-                                         const double*                      rt_lidar0_lidar,
-                                         const double                       threshold_valid_lidar_range,
-                                         const double                       threshold_valid_lidar_Npoints,
-                                         const clc_lidar_scan_unsorted_t* lidar_scans, // Nlidars of these
-                                         // The stride, in bytes, between each successive points or rings value
-                                         // in clc_lidar_scan_unsorted_t
-                                         // <=0 means "points stored densely"
-                                         int                                lidar_packet_stride,
-                                         const int                          Nlidars)
+                                      const double*                      rt_lidar0_lidar,
+                                      const double                       threshold_valid_lidar_range,
+                                      const double                       threshold_valid_lidar_Npoints,
+                                      const clc_lidar_scan_unsorted_t* lidar_scans, // Nlidars of these
+                                      // The stride, in bytes, between each successive points or rings value
+                                      // in clc_lidar_scan_unsorted_t
+                                      // <=0 means "points stored densely"
+                                      int                                lidar_packet_stride,
+                                      const int                          Nlidars)
 {
     if(lidar_packet_stride <= 0)
         // stored densely
@@ -3726,8 +3726,6 @@ static bool count_lidar_observations_in_sector(// out
 
     for(int ilidar=0; ilidar<Nlidars; ilidar++)
     {
-        const int isensor = ilidar;
-
         double Rt_vehicle_lidar[4*3];
         double rt_vehicle_lidar[6];
         mrcal_compose_rt(rt_vehicle_lidar,NULL,NULL,NULL,NULL,
@@ -3744,9 +3742,9 @@ static bool count_lidar_observations_in_sector(// out
         const clc_lidar_scan_unsorted_t* lidar_scan = &lidar_scans[ilidar];
         if(lidar_scan->points == NULL)
         {
-            memset(&isvisible_per_sensor_per_sector[isensor * Nsectors],
+            memset(&isvisible_per_lidar_per_sector[ilidar * Nsectors],
                    0,
-                   Nsectors*sizeof(isvisible_per_sensor_per_sector[0]));
+                   Nsectors*sizeof(isvisible_per_lidar_per_sector[0]));
             continue;
         }
         Npoints = lidar_scan->Npoints;
@@ -3777,7 +3775,7 @@ static bool count_lidar_observations_in_sector(// out
         }
 
         for(int isector=0; isector<Nsectors; isector++)
-            isvisible_per_sensor_per_sector[isensor * Nsectors + isector] =
+            isvisible_per_lidar_per_sector[ilidar * Nsectors + isector] =
                 (uint8_t)(Nobservations_per_sector[isector] >= threshold_valid_lidar_Npoints);
     }
 
@@ -4454,19 +4452,16 @@ static bool is_point_in_view_of_camera(// in
 }
 
 static void evaluate_camera_visibility(// out
-                                       // dense array of shape (Nsensors,Nsectors)
-                                       uint8_t* isvisible_per_sensor_per_sector,
+                                       // dense array of shape (Ncameras,Nsectors)
+                                       uint8_t* isvisible_per_camera_per_sector,
                                        // in
                                        const double* rt_vehicle_ref,
                                        const double uncertainty_quantification_range,
                                        const int Nsectors,
-                                       const int Nlidars,
                                        const int Ncameras,
-                                       const double* rt_lidar0_camera,
+                                       const double* rt_ref_camera,
                                        const mrcal_cameramodel_t*const* models)
 {
-    const int Nsensors = Nlidars + Ncameras;
-
     const double sector_width_rad = 2.*M_PI/(double)Nsectors;
     const double c = cos(sector_width_rad);
     const double s = sin(sector_width_rad);
@@ -4488,7 +4483,7 @@ static void evaluate_camera_visibility(// out
     {
         mrcal_point3_t pquery_cam_left;
         mrcal_transform_point_rt_inverted(pquery_cam_left.xyz,NULL,NULL,
-                                          &rt_lidar0_camera[6*icamera], pquery_ref_left.xyz);
+                                          &rt_ref_camera[6*icamera], pquery_ref_left.xyz);
         if(is_point_in_view_of_camera(&pquery_cam_left, models[icamera]))
             bitarray64_set(  bitarray_isvisible_left_per_camera, icamera);
         else
@@ -4515,21 +4510,20 @@ static void evaluate_camera_visibility(// out
         {
             mrcal_point3_t pquery_cam_right;
             mrcal_transform_point_rt_inverted(pquery_cam_right.xyz,NULL,NULL,
-                                              &rt_lidar0_camera[6*icamera], pquery_ref_right.xyz);
-            const int isensor = Nlidars + icamera;
+                                              &rt_ref_camera[6*icamera], pquery_ref_right.xyz);
 
             if(is_point_in_view_of_camera(&pquery_cam_right, models[icamera]))
                 bitarray64_set(  bitarray_isvisible_right_per_camera, icamera);
             else
             {
                 bitarray64_clear(bitarray_isvisible_right_per_camera, icamera);
-                isvisible_per_sensor_per_sector[isensor * Nsectors + isector] = 0;
+                isvisible_per_camera_per_sector[icamera * Nsectors + isector] = 0;
                 continue;
             }
 
             // I just checked if we're visible on the right. If it's ALSO
             // visible on the left, report this sector as visible
-            isvisible_per_sensor_per_sector[isensor * Nsectors + isector] =
+            isvisible_per_camera_per_sector[icamera * Nsectors + isector] =
                 bitarray64_check(bitarray_isvisible_left_per_camera,  icamera);
         }
 
@@ -5061,30 +5055,29 @@ bool clc_post_solve_statistics( // out
     const int    threshold_valid_lidar_Npoints    = 100;
     const double uncertainty_quantification_range = 10;
 
-    if(!count_lidar_observations_in_sector(// out
-                                           isvisible_per_sensor_per_sector,
-                                           // in
-                                           (const double*)rt_vehicle_lidar0,
-                                           Nsectors,
-                                           _Nrings,
-                                           (const double*)rt_ref_lidar,
-                                           threshold_valid_lidar_range,
-                                           threshold_valid_lidar_Npoints,
+    if(!evaluate_lidar_visibility(// out
+                                  isvisible_per_sensor_per_sector,
+                                  // in
+                                  (const double*)rt_vehicle_lidar0,
+                                  Nsectors,
+                                  _Nrings,
+                                  (const double*)rt_ref_lidar,
+                                  threshold_valid_lidar_range,
+                                  threshold_valid_lidar_Npoints,
 
-                                           lidar_scans,
-                                           lidar_packet_stride,
-                                           Nlidars))
+                                  lidar_scans,
+                                  lidar_packet_stride,
+                                  Nlidars))
         return false;
 
     const int Nsensors = Nlidars + Ncameras;
 
     evaluate_camera_visibility(// out
-                               isvisible_per_sensor_per_sector,
+                               &isvisible_per_sensor_per_sector[Nlidars * Nsectors],
                                // in
                                (const double*)rt_vehicle_lidar0,
                                uncertainty_quantification_range,
                                Nsectors,
-                               Nlidars,
                                Ncameras,
                                (const double*)rt_ref_camera,
                                models);
