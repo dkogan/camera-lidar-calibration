@@ -62,6 +62,35 @@ def parse_args():
                         type=str,
                         help = '''Write solver diagnostics into the given
                         .pickle file''')
+
+    parser.add_argument('--Nsectors',
+                        type=int,
+                        default=36,
+                        help='''Used in the uncertainty quantification. We
+                        report the uncertainty in radial sectors around the
+                        vehicle origin. If omitted, we use 36 sectors''')
+    parser.add_argument('--threshold-valid-lidar-range',
+                        type=float,
+                        default=1.0,
+                        help='''Used in the uncertainty quantification. Lidar
+                        returns closer than this are classified as "occluded".
+                        This is used to determine the lidar field-of-view in the
+                        uncertainty reporting. If omitted, we set this to 1.0m''')
+    parser.add_argument('--threshold-valid-lidar-Npoints',
+                        type=int,
+                        default=100,
+                        help='''Used in the uncertainty quantification. We
+                        require at least this many unoccluded lidar returns in a
+                        sector to classify it as "visible". If omitted, we require
+                        100 returns''')
+    parser.add_argument('--uncertainty-quantification-range',
+                        type=int,
+                        default=10,
+                        help='''Used in the uncertainty quantification. We
+                        report the uncertainty in radial sectors around the
+                        vehicle origin. In each sector we look at a point this
+                        distance away from the origin. If omitted, we look 10m
+                        ahead''')
     parser.add_argument('models',
                         type = str,
                         nargs='*',
@@ -665,10 +694,15 @@ for ilidar,rt_ref_lidar in enumerate(result['rt_ref_lidar']):
     print(f"Wrote '{filename}'")
 
 
+
 context = \
-    dict(result           = result,
-         topics           = args.topics,
-         kwargs_calibrate = kwargs_calibrate)
+    dict(result                           = result,
+         topics                           = args.topics,
+         Nsectors                         = args.Nsectors,
+         threshold_valid_lidar_range      = args.threshold_valid_lidar_range,
+         threshold_valid_lidar_Npoints    = args.threshold_valid_lidar_Npoints,
+         uncertainty_quantification_range = args.uncertainty_quantification_range,
+         kwargs_calibrate                 = kwargs_calibrate)
 if args.dump is not None:
     with open(args.dump, 'wb') as f:
         pickle.dump( context,
@@ -678,11 +712,14 @@ if args.dump is not None:
 
 
 
-statistics = clc.post_solve_statistics(bag               = args.bag[0],
-                                       topics            = args.topics,
-                                       Nsectors          = 36,
-                                       rt_vehicle_lidar0 = mrcal.identity_rt(),
-                                       models            = args.models,
+statistics = clc.post_solve_statistics(bag                              = args.bag[0],
+                                       topics                           = args.topics,
+                                       Nsectors                         = args.Nsectors,
+                                       threshold_valid_lidar_range      = args.threshold_valid_lidar_range,
+                                       threshold_valid_lidar_Npoints    = args.threshold_valid_lidar_Npoints,
+                                       uncertainty_quantification_range = args.uncertainty_quantification_range,
+                                       rt_vehicle_lidar0                = mrcal.identity_rt(),
+                                       models                           = args.models,
                                        **result)
 
 
@@ -698,11 +735,11 @@ data_tuples_sensor_forward_vectors = \
 # shape (Nsensors, Nsectors)
 isvisible_per_sensor_per_sector = statistics['isvisible_per_sensor_per_sector']
 
-Nsensors,Nsectors = isvisible_per_sensor_per_sector.shape
-dth = np.pi*2./Nsectors
-th = np.arange(Nsectors)*dth + dth/2.
+Nsensors = isvisible_per_sensor_per_sector.shape[0]
+dth = np.pi*2./args.Nsectors
+th = np.arange(args.Nsectors)*dth + dth/2.
 plotradius = nps.transpose(np.arange(Nsensors) + 10)
-ones = np.ones( (Nsectors,) )
+ones = np.ones( (args.Nsectors,) )
 
 filename = '/tmp/observability.pdf'
 gp.plot( (th,                 # angle
