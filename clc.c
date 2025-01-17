@@ -4874,9 +4874,19 @@ bool _clc_internal(// out
     }
 
     {
-        double Rt_lidar0_board_seed [Nsensor_snapshots_filtered * 4*3];
-        double Rt_lidar0_lidar_seed [(Nlidars-1)                * 4*3];
-        double Rt_lidar0_camera_seed[Ncameras                   * 4*3];
+        double Rt_lidar0_board_seed  [Nsensor_snapshots_filtered * 4*3];
+        double Rt_lidar0_lidar_seed  [(Nlidars-1)                * 4*3];
+        double Rt_lidar0_camera_seed [Ncameras                   * 4*3];
+        double Rt_lidar0_board_solve [Nsensor_snapshots_filtered * 4*3];
+        double Rt_lidar0_lidar_solve [(Nlidars-1)                * 4*3];
+        double Rt_lidar0_camera_solve[Ncameras                   * 4*3];
+        memset(Rt_lidar0_board_seed,   0, sizeof(double)*Nsensor_snapshots_filtered * 4*3);
+        memset(Rt_lidar0_lidar_seed,   0, sizeof(double)*(Nlidars-1)                * 4*3);
+        memset(Rt_lidar0_camera_seed,  0, sizeof(double)*Ncameras                   * 4*3);
+        memset(Rt_lidar0_board_solve,  0, sizeof(double)*Nsensor_snapshots_filtered * 4*3);
+        memset(Rt_lidar0_lidar_solve,  0, sizeof(double)*(Nlidars-1)                * 4*3);
+        memset(Rt_lidar0_camera_solve, 0, sizeof(double)*Ncameras                   * 4*3);
+
         if(!fit_seed(// out
                      Rt_lidar0_board_seed,
                      Rt_lidar0_lidar_seed,
@@ -4895,8 +4905,38 @@ bool _clc_internal(// out
                      object_spacing))
         {
             MSG("fit_seed() failed");
+
+            if(buf_inputs_dump != NULL)
+            {
+                if(!dump_inputs(buf_inputs_dump,
+                                size_inputs_dump,
+                                Rt_lidar0_board_seed,
+                                Rt_lidar0_lidar_seed,
+                                Rt_lidar0_camera_seed,
+                                Rt_lidar0_board_solve,
+                                Rt_lidar0_lidar_solve,
+                                Rt_lidar0_camera_solve,
+
+                                sensor_snapshots_filtered,
+                                Nsensor_snapshots_filtered,
+
+                                Nlidars,
+                                Ncameras,
+                                models,
+                                object_height_n,
+                                object_width_n,
+                                object_spacing))
+                {
+                    MSG("dump_inputs() failed");
+                }
+            }
+
             goto done;
         }
+
+        memcpy(Rt_lidar0_board_solve,  Rt_lidar0_board_seed,  sizeof(double)*Nsensor_snapshots_filtered * 4*3);
+        memcpy(Rt_lidar0_lidar_solve,  Rt_lidar0_lidar_seed,  sizeof(double)*(Nlidars-1)                * 4*3);
+        memcpy(Rt_lidar0_camera_solve, Rt_lidar0_camera_seed, sizeof(double)*Ncameras                   * 4*3);
 
         plot_geometry("/tmp/geometry-seed.gp",
                       Rt_lidar0_board_seed,
@@ -4922,15 +4962,6 @@ bool _clc_internal(// out
                       object_width_n,
                       object_spacing,
                       true);
-
-
-        double Rt_lidar0_board_solve [Nsensor_snapshots_filtered * 4*3];
-        double Rt_lidar0_lidar_solve [(Nlidars-1)                * 4*3];
-        double Rt_lidar0_camera_solve[Ncameras                   * 4*3];
-        memcpy(Rt_lidar0_board_solve,  Rt_lidar0_board_seed,  sizeof(double)*Nsensor_snapshots_filtered * 4*3);
-        memcpy(Rt_lidar0_lidar_solve,  Rt_lidar0_lidar_seed,  sizeof(double)*(Nlidars-1)                * 4*3);
-        memcpy(Rt_lidar0_camera_solve, Rt_lidar0_camera_seed, sizeof(double)*Ncameras                   * 4*3);
-
 
         dogleg_solverContext_t* solver_context;
         if(!fit(&solver_context,
@@ -4958,7 +4989,58 @@ bool _clc_internal(// out
                 false, false, false))
         {
             MSG("fit() failed");
+
+            if(buf_inputs_dump != NULL)
+            {
+                if(!dump_inputs(buf_inputs_dump,
+                                size_inputs_dump,
+                                Rt_lidar0_board_seed,
+                                Rt_lidar0_lidar_seed,
+                                Rt_lidar0_camera_seed,
+                                Rt_lidar0_board_solve,
+                                Rt_lidar0_lidar_solve,
+                                Rt_lidar0_camera_solve,
+
+                                sensor_snapshots_filtered,
+                                Nsensor_snapshots_filtered,
+
+                                Nlidars,
+                                Ncameras,
+                                models,
+                                object_height_n,
+                                object_width_n,
+                                object_spacing))
+                {
+                    MSG("dump_inputs() failed");
+                }
+            }
+
             goto done;
+        }
+
+        if(buf_inputs_dump != NULL)
+        {
+            if(!dump_inputs(buf_inputs_dump,
+                            size_inputs_dump,
+                            Rt_lidar0_board_seed,
+                            Rt_lidar0_lidar_seed,
+                            Rt_lidar0_camera_seed,
+                            Rt_lidar0_board_solve,
+                            Rt_lidar0_lidar_solve,
+                            Rt_lidar0_camera_solve,
+
+                            sensor_snapshots_filtered,
+                            Nsensor_snapshots_filtered,
+
+                            Nlidars,
+                            Ncameras,
+                            models,
+                            object_height_n,
+                            object_width_n,
+                            object_spacing))
+            {
+                MSG("dump_inputs() failed");
+            }
         }
 
         if(Var_rt_lidar0_sensor != NULL)
@@ -4978,32 +5060,6 @@ bool _clc_internal(// out
             }
 
         dogleg_freeContext(&solver_context);
-
-        if(buf_inputs_dump != NULL)
-        {
-            if(!dump_inputs(buf_inputs_dump,
-                                         size_inputs_dump,
-                                         Rt_lidar0_board_seed,
-                                         Rt_lidar0_lidar_seed,
-                                         Rt_lidar0_camera_seed,
-                                         Rt_lidar0_board_solve,
-                                         Rt_lidar0_lidar_solve,
-                                         Rt_lidar0_camera_solve,
-
-                                         sensor_snapshots_filtered,
-                                         Nsensor_snapshots_filtered,
-
-                                         Nlidars,
-                                         Ncameras,
-                                         models,
-                                         object_height_n,
-                                         object_width_n,
-                                         object_spacing))
-            {
-                MSG("dump_inputs() failed");
-            }
-        }
-
 
         if(check_gradient__use_distance_to_plane || check_gradient)
         {
