@@ -686,7 +686,7 @@ kwargs_calibrate = dict(bags            = args.bag,
                         Npoints_per_segment                = 15,
                         threshold_min_Nsegments_in_cluster = 4,
                         **calibration_object_kwargs)
-result = clc.calibrate(dump_inputs = args.dump is not None,
+result = clc.calibrate(do_dump_inputs = args.dump is not None,
                        **kwargs_calibrate)
 
 
