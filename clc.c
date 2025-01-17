@@ -4293,6 +4293,8 @@ lidar_camera_indices_from_sensor(// out
 static bool
 transformation_uncertainty_in_sector(// out
                                    double* stdev_worst,
+                                   // dense array of shape (2,); corresponds to stdev_worst
+                                   uint16_t* isensors_pair_stdev_worst,
                                    // in
                                    const mrcal_point3_t* pquery_ref,
                                    const mrcal_pose_t* rt_ref_lidar,
@@ -4322,6 +4324,9 @@ transformation_uncertainty_in_sector(// out
     // this, that means that there isn't any pair of sensors that can see this
     // sector
     double l_worst = 0.0;
+
+    isensors_pair_stdev_worst[0] = 0;
+    isensors_pair_stdev_worst[1] = 0;
 
     for(int isensor0=0; isensor0<Nsensors-1; isensor0++)
     {
@@ -4396,7 +4401,12 @@ transformation_uncertainty_in_sector(// out
                                     false );
 
             // I find the worst worst-case eigenvalue
-            if(l[2] > l_worst) l_worst = l[2];
+            if(l[2] > l_worst)
+            {
+                l_worst = l[2];
+                isensors_pair_stdev_worst[0] = isensor0;
+                isensors_pair_stdev_worst[1] = isensor1;
+            }
         }
     }
 
@@ -5017,6 +5027,8 @@ bool clc_post_solve_statistics( // out
                                 uint8_t* isvisible_per_sensor_per_sector,
                                 // array of shape (Nsectors,)
                                 double* stdev_worst,
+                                // dense array of shape (Nsectors,2); corresponds to stdev_worst
+                                uint16_t* isensors_pair_stdev_worst,
                                 const int Nsectors,
 
                                 // out,in
@@ -5100,6 +5112,7 @@ bool clc_post_solve_statistics( // out
 
         if(!transformation_uncertainty_in_sector(// out
                                                &stdev_worst[isector],
+                                               &isensors_pair_stdev_worst[2*isector],
                                                // in
                                                &pquery_ref,
                                                rt_ref_lidar,

@@ -412,6 +412,8 @@ bool clc_post_solve_statistics( // out
                                 uint8_t* isvisible_per_sensor_per_sector,
                                 // array of shape (Nsectors,)
                                 double* stdev_worst,
+                                // dense array of shape (Nsectors,2); corresponds to stdev_worst
+                                uint16_t* isensors_pair_stdev_worst,
                                 const int Nsectors,
 
                                 // out,in

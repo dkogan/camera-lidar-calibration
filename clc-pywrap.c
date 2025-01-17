@@ -711,6 +711,7 @@ static PyObject* py_post_solve_statistics(PyObject* NPY_UNUSED(self),
     // out
     PyArrayObject* isvisible_per_sensor_per_sector = NULL;
     PyArrayObject* stdev_worst                     = NULL;
+    PyArrayObject* isensors_pair_stdev_worst       = NULL;
 
     // out,in
     PyArrayObject* rt_ref_lidar  = NULL;
@@ -907,9 +908,16 @@ static PyObject* py_post_solve_statistics(PyObject* NPY_UNUSED(self),
                                                     NPY_FLOAT64);
     if(stdev_worst == NULL) goto done;
 
+    isensors_pair_stdev_worst = (PyArrayObject*)PyArray_SimpleNew(2,
+                                                                  ((npy_intp[]){Nsectors,2}),
+                                                                  NPY_UINT16);
+    if(isensors_pair_stdev_worst == NULL) goto done;
+
+
     if(!clc_post_solve_statistics( // out
                                    (uint8_t     *)PyArray_DATA(isvisible_per_sensor_per_sector),
                                    (double      *)PyArray_DATA(stdev_worst),
+                                   (uint16_t    *)PyArray_DATA(isensors_pair_stdev_worst),
                                    Nsectors,
 
                                    // out,in
@@ -930,13 +938,15 @@ static PyObject* py_post_solve_statistics(PyObject* NPY_UNUSED(self),
         goto done;
     }
 
-    result = Py_BuildValue("{sOsO}",
+    result = Py_BuildValue("{sOsOsO}",
                            "isvisible_per_sensor_per_sector",    isvisible_per_sensor_per_sector,
-                           "stdev_worst",   stdev_worst);
+                           "stdev_worst",   stdev_worst,
+                           "isensors_pair_stdev_worst", isensors_pair_stdev_worst);
 
  done:
     Py_XDECREF(isvisible_per_sensor_per_sector);
     Py_XDECREF(stdev_worst);
+    Py_XDECREF(isensors_pair_stdev_worst);
     Py_XDECREF(py_model);
 
     Py_XDECREF(Var_rt_lidar0_sensor);
