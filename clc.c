@@ -5030,6 +5030,9 @@ bool clc_post_solve_statistics( // out
                                 // dense array of shape (Nsectors,2); corresponds to stdev_worst
                                 uint16_t* isensors_pair_stdev_worst,
                                 const int Nsectors,
+                                const double threshold_valid_lidar_range,
+                                const int    threshold_valid_lidar_Npoints,
+                                const double uncertainty_quantification_range,
 
                                 // out,in
                                 // On input:  the ref frame is lidar-0
@@ -5062,11 +5065,6 @@ bool clc_post_solve_statistics( // out
     // x: forward
     // y: left
     // z: up
-
-    const double threshold_valid_lidar_range      = 1.0;
-    const int    threshold_valid_lidar_Npoints    = 100;
-    const double uncertainty_quantification_range = 10;
-
     if(!evaluate_lidar_visibility(// out
                                   isvisible_per_sensor_per_sector,
                                   // in

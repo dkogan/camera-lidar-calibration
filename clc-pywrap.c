@@ -718,11 +718,14 @@ static PyObject* py_post_solve_statistics(PyObject* NPY_UNUSED(self),
     PyArrayObject* rt_ref_camera = NULL;
 
     // in
-    PyArrayObject* Var_rt_lidar0_sensor = NULL;
-    PyArrayObject* rt_vehicle_lidar0    = NULL;
-    PyObject*      py_lidar_scans       = NULL;
-    PyObject*      py_models            = NULL;
-    int            Nsectors             = 36;
+    PyArrayObject* Var_rt_lidar0_sensor             = NULL;
+    PyArrayObject* rt_vehicle_lidar0                = NULL;
+    PyObject*      py_lidar_scans                   = NULL;
+    PyObject*      py_models                        = NULL;
+    int            Nsectors                         = 36;
+    double         threshold_valid_lidar_range      = 1.0;
+    int            threshold_valid_lidar_Npoints    = 100;
+    double         uncertainty_quantification_range = 10;
 
     PyObject* py_model = NULL;
 
@@ -740,6 +743,9 @@ static PyObject* py_post_solve_statistics(PyObject* NPY_UNUSED(self),
     // clc_lidar_scan_unsorted_t
     char* keywords[] = { "lidar_scans",
                          "Nsectors",
+                         "threshold_valid_lidar_range",
+                         "threshold_valid_lidar_Npoints",
+                         "uncertainty_quantification_range",
                          "Var",
                          "rt_ref_lidar",
                          "rt_vehicle_lidar0",
@@ -747,11 +753,14 @@ static PyObject* py_post_solve_statistics(PyObject* NPY_UNUSED(self),
                          "models",
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "|$" "OiO&O&O&O&O",
+                                     "|$" "OididO&O&O&O&O",
                                      keywords,
 
                                      &py_lidar_scans,
                                      &Nsectors,
+                                     &threshold_valid_lidar_range,
+                                     &threshold_valid_lidar_Npoints,
+                                     &uncertainty_quantification_range,
                                      PyArray_Converter,           &Var_rt_lidar0_sensor,
                                      PyArray_Converter,           &rt_ref_lidar,
                                      PyArray_Converter,           &rt_vehicle_lidar0,
@@ -919,6 +928,9 @@ static PyObject* py_post_solve_statistics(PyObject* NPY_UNUSED(self),
                                    (double      *)PyArray_DATA(stdev_worst),
                                    (uint16_t    *)PyArray_DATA(isensors_pair_stdev_worst),
                                    Nsectors,
+                                   threshold_valid_lidar_range,
+                                   threshold_valid_lidar_Npoints,
+                                   uncertainty_quantification_range,
 
                                    // out,in
                                    (mrcal_pose_t*)PyArray_DATA(rt_ref_lidar),

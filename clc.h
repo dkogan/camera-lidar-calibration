@@ -415,6 +415,9 @@ bool clc_post_solve_statistics( // out
                                 // dense array of shape (Nsectors,2); corresponds to stdev_worst
                                 uint16_t* isensors_pair_stdev_worst,
                                 const int Nsectors,
+                                const double threshold_valid_lidar_range,
+                                const int    threshold_valid_lidar_Npoints,
+                                const double uncertainty_quantification_range,
 
                                 // out,in
                                 // On input:  the ref frame is lidar-0
