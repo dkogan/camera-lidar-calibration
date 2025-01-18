@@ -446,8 +446,11 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     PyObject*      py_models                          = NULL;
     PyArrayObject* rt_ref_lidar                       = NULL;
     PyArrayObject* rt_ref_camera                      = NULL;
+    PyArrayObject* rt_ref_lidar__seed                 = NULL;
+    PyArrayObject* rt_ref_camera__seed                = NULL;
     PyArrayObject* Var_rt_lidar0_sensor               = NULL;
     PyObject*      inputs_dump                        = NULL;
+    PyObject*      seed                               = NULL;
 
     // used if(do_dump_inputs)
     char*  buf_inputs_dump  = NULL;
@@ -492,6 +495,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse,...) &ctx.name,
     char* keywords[] = { "sensor_snapshots",
                          "models",
+                         "seed",
                          "object_height_n",
                          "object_width_n",
                          "object_spacing",
@@ -501,11 +505,12 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" "Oiidppp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
+                                     "O" "|$" "OOiidppp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
                                      ,
                                      keywords,
                                      (PyTupleObject*)&py_sensor_snapshots,
                                      &py_models,
+                                     &seed,
                                      &object_height_n,
                                      &object_width_n,
                                      &object_spacing,
@@ -529,6 +534,43 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     {
         BARF("Couldn't get len(sensor_snapshots)");
         goto done;
+    }
+
+    if(seed != NULL)
+    {
+        if(!PyDict_Check(seed))
+        {
+            BARF("seed is given; it must be a dict");
+            goto done;
+        }
+
+        if(NULL == (rt_ref_lidar__seed = (PyArrayObject*)PyDict_GetItemString(seed, "rt_ref_lidar")))
+        {
+            BARF("seed is given; it must be a dict and it must contain the key 'rt_ref_lidar'");
+            goto done;
+        }
+        if( !PyArray_Check(rt_ref_lidar__seed))
+        {
+            BARF("seed is given; seed['rt_ref_lidar'] must be a numpy array");
+            goto done;
+        }
+
+        if(NULL == (rt_ref_camera__seed = (PyArrayObject*)PyDict_GetItemString(seed, "rt_ref_camera")))
+        {
+            // No camera seed. That might be ok: this solve may not have any cameras
+        }
+        else if(rt_ref_camera__seed == (PyArrayObject*)Py_None)
+        {
+            rt_ref_camera__seed = NULL;
+        }
+        else
+        {
+            if( !PyArray_Check(rt_ref_camera__seed))
+            {
+                BARF("seed is given; seed['rt_ref_camera'] must be a numpy array");
+                goto done;
+            }
+        }
     }
 
     clc_is_bgr_mask_t is_bgr_mask = 0;
@@ -615,6 +657,51 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
         rt_ref_camera = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Ncameras,6}), NPY_FLOAT64);
         if(rt_ref_camera == NULL) goto done;
 
+        if(seed != NULL)
+        {
+            if(! (PyArray_IS_C_CONTIGUOUS(rt_ref_lidar__seed) &&
+                  PyArray_NDIM(rt_ref_lidar__seed)    == 2 &&
+                  PyArray_DIMS(rt_ref_lidar__seed)[0] == Nlidars &&
+                  PyArray_DIMS(rt_ref_lidar__seed)[1] == 6 &&
+                  PyArray_TYPE(rt_ref_lidar__seed)    == NPY_FLOAT64) )
+            {
+                BARF("rt_ref_lidar__seed should have shape (Nlidars=%d,6), have dtype=float64 and be contiguous",
+                     Nlidars);
+                goto done;
+            }
+            else
+                memcpy(PyArray_DATA(rt_ref_lidar),
+                       PyArray_DATA(rt_ref_lidar__seed),
+                       Nlidars*6*sizeof(double));
+
+            if(Ncameras == 0)
+            {
+                if(! (rt_ref_camera__seed == NULL ||
+                      (PyObject*)rt_ref_camera__seed == Py_None ||
+                      PyArray_SIZE(rt_ref_camera__seed) == 0) )
+                {
+                    BARF("camera data isn't given, so rt_ref_camera__seed shouldn't be given (or be None) as well");
+                    goto done;
+                }
+            }
+            else
+            {
+                if(! (PyArray_IS_C_CONTIGUOUS(rt_ref_camera__seed) &&
+                      PyArray_NDIM(rt_ref_camera__seed)    == 2 &&
+                      PyArray_DIMS(rt_ref_camera__seed)[0] == Ncameras &&
+                      PyArray_DIMS(rt_ref_camera__seed)[1] == 6 &&
+                      PyArray_TYPE(rt_ref_camera__seed)    == NPY_FLOAT64) )
+                {
+                    BARF("rt_ref_camera__seed should have shape (Ncameras=%d,6), have dtype=float64 and be contiguous",
+                         Ncameras);
+                    goto done;
+                }
+                memcpy(PyArray_DATA(rt_ref_camera),
+                       PyArray_DATA(rt_ref_camera__seed),
+                       Ncameras*6*sizeof(double));
+            }
+        }
+
         const int Nsensors_optimized = Nlidars-1 + Ncameras;
         Var_rt_lidar0_sensor = (PyArrayObject*)PyArray_SimpleNew(4,
                                                                  ((npy_intp[]){Nsensors_optimized, 6,
@@ -628,6 +715,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
         if(!clc_unsorted(// out
                          (mrcal_pose_t*)PyArray_DATA(rt_ref_lidar),
                          (mrcal_pose_t*)PyArray_DATA(rt_ref_camera),
+                         seed != NULL,
                          (double      *)PyArray_DATA(Var_rt_lidar0_sensor),
                          do_dump_inputs ? &buf_inputs_dump  : NULL,
                          do_dump_inputs ? &size_inputs_dump : NULL,

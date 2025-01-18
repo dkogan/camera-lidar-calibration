@@ -262,9 +262,11 @@ void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ct
 // On output, the rt_ref_lidar[] and rt_ref_camera[] arrays will be filled-in.
 // If solving for ALL the sensor geometry wasn't possible, we return false. On
 // success, we return true
-bool clc_unsorted(// out
+bool clc_unsorted(// in/out
+                  // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+         bool          use_given_seed_geometry,
 
          // Covariance of the output. Symmetric matrix of shape
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
@@ -302,9 +304,11 @@ bool clc_unsorted(// out
          bool check_gradient);
 
 
-bool clc_sorted(// out
+bool clc_sorted(// in/out
+                // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+         bool          use_given_seed_geometry,
 
          // Covariance of the output. Symmetric matrix of shape
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
@@ -339,9 +343,11 @@ bool clc_sorted(// out
          bool check_gradient);
 
 
-bool clc_lidar_segmented(// out
+bool clc_lidar_segmented(// in/out
+                         // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+         bool          use_given_seed_geometry,
 
          // Covariance of the output. Symmetric matrix of shape
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
@@ -373,9 +379,11 @@ bool clc_lidar_segmented(// out
          bool check_gradient__use_distance_to_plane,
          bool check_gradient);
 
-bool clc_lidar_segmented_dense(// out
+bool clc_lidar_segmented_dense(// in/out
+                               // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+         bool          use_given_seed_geometry,
 
          // Covariance of the output. Symmetric matrix of shape
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on

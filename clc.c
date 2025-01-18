@@ -1257,10 +1257,13 @@ bool cb_sensor_link(const uint16_t isensor1,
 }
 
 static bool
-fit_seed(// out
+fit_seed(// in/out
+         // if(use_given_seed_geometry) then we already have Rt_lidar0_lidar and
+         // Rt_lidar0_camera. We still need to compute Rt_lidar0_board
          double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
          double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
          double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+         bool use_given_seed_geometry,
 
          // in
          const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
@@ -1276,73 +1279,81 @@ fit_seed(// out
          const int object_width_n,
          const double object_spacing)
 {
-    const int Nsensors = Ncameras + Nlidars;
-    uint16_t shared_observation_counts[pairwise_N(Nsensors)];
-    connectivity_matrix(// out
-                        shared_observation_counts,
-                        // in
-                        sensor_snapshots_filtered,
-                        Nsensor_snapshots_filtered,
-
-                        // These apply to ALL the sensor_snapshots[]
-                        Ncameras,
-                        Nlidars);
-
-    MSG("Sensor shared-observations matrix for Nlidars=%d followed by Ncameras=%d:",
-        Nlidars, Ncameras);
-    print_full_symmetric_matrix_from_upper_triangle(shared_observation_counts,
-                                                    Nsensors);
-
     double Rt_camera_board_cache[Nsensor_snapshots_filtered*Ncameras * 4*3];
     memset(Rt_camera_board_cache,
            0,
            Nsensor_snapshots_filtered*Ncameras * 4*3*sizeof(Rt_camera_board_cache[0]));
+    // The Rt_camera_board_cache[] entries are all 0, which means "invalid"
 
-    cb_sensor_link_cookie_t cookie =
-        {
-            .sensor_snapshots_filtered  = sensor_snapshots_filtered,
-            .Nsensor_snapshots_filtered = Nsensor_snapshots_filtered,
-            .Nlidars                    = Nlidars,
-            .Ncameras                   = Ncameras,
-            .models                     = models,
-            .object_height_n            = object_height_n,
-            .object_width_n             = object_width_n,
-            .object_spacing             = object_spacing,
-            .Rt_lidar0_lidar            = Rt_lidar0_lidar,
-            .Rt_lidar0_camera           = Rt_lidar0_camera,
-            .Rt_camera_board_cache      = Rt_camera_board_cache
-        };
-
-
-    if(!mrcal_traverse_sensor_links( Nsensors,
-                                     shared_observation_counts,
-                                     cb_sensor_link,
-                                     &cookie))
+    if(!use_given_seed_geometry)
     {
-        MSG("mrcal_traverse_sensor_links() failed");
-        return false;
+        // compute Rt_lidar0_lidar and Rt_lidar0_camera
+
+        const int Nsensors = Ncameras + Nlidars;
+        uint16_t shared_observation_counts[pairwise_N(Nsensors)];
+        connectivity_matrix(// out
+                            shared_observation_counts,
+                            // in
+                            sensor_snapshots_filtered,
+                            Nsensor_snapshots_filtered,
+
+                            // These apply to ALL the sensor_snapshots[]
+                            Ncameras,
+                            Nlidars);
+
+        MSG("Sensor shared-observations matrix for Nlidars=%d followed by Ncameras=%d:",
+            Nlidars, Ncameras);
+        print_full_symmetric_matrix_from_upper_triangle(shared_observation_counts,
+                                                        Nsensors);
+
+
+        cb_sensor_link_cookie_t cookie =
+            {
+                .sensor_snapshots_filtered  = sensor_snapshots_filtered,
+                .Nsensor_snapshots_filtered = Nsensor_snapshots_filtered,
+                .Nlidars                    = Nlidars,
+                .Ncameras                   = Ncameras,
+                .models                     = models,
+                .object_height_n            = object_height_n,
+                .object_width_n             = object_width_n,
+                .object_spacing             = object_spacing,
+                .Rt_lidar0_lidar            = Rt_lidar0_lidar,
+                .Rt_lidar0_camera           = Rt_lidar0_camera,
+                .Rt_camera_board_cache      = Rt_camera_board_cache
+            };
+
+
+        if(!mrcal_traverse_sensor_links( Nsensors,
+                                         shared_observation_counts,
+                                         cb_sensor_link,
+                                         &cookie))
+        {
+            MSG("mrcal_traverse_sensor_links() failed");
+            return false;
+        }
+
+        // Traversed all the sensor links. It's possible that some sensors don't
+        // even have transitive overlap to the root sensor (lidar0). I can detect
+        // this by seeing an uninitialized Rt_lidar0_camera or Rt_lidar0_lidar.
+        bool any_connections_missing = false;
+        for(unsigned int i=0; i<Ncameras; i++)
+            if( Rt_uninitialized(&Rt_lidar0_camera[i*4*3]))
+            {
+                MSG("ERROR: Don't have complete observations overlap: camera %d not connected",
+                    i);
+                any_connections_missing = true;
+            }
+        for(unsigned int i=0; i<Nlidars-1; i++)
+            if( Rt_uninitialized(&Rt_lidar0_lidar[i*4*3]))
+            {
+                MSG("ERROR: Don't have complete observations overlap: lidar %d not connected",
+                    i+1);
+                any_connections_missing = true;
+            }
+        if(any_connections_missing)
+            return false;
     }
 
-    // Traversed all the sensor links. It's possible that some sensors don't
-    // even have transitive overlap to the root sensor (lidar0). I can detect
-    // this by seeing an uninitialized Rt_lidar0_camera or Rt_lidar0_lidar.
-    bool any_connections_missing = false;
-    for(unsigned int i=0; i<Ncameras; i++)
-        if( Rt_uninitialized(&Rt_lidar0_camera[i*4*3]))
-        {
-            MSG("ERROR: Don't have complete observations overlap: camera %d not connected",
-                i);
-            any_connections_missing = true;
-        }
-    for(unsigned int i=0; i<Nlidars-1; i++)
-        if( Rt_uninitialized(&Rt_lidar0_lidar[i*4*3]))
-        {
-            MSG("ERROR: Don't have complete observations overlap: lidar %d not connected",
-                i+1);
-            any_connections_missing = true;
-        }
-    if(any_connections_missing)
-        return false;
 
     // All the sensor-sensor transforms computed. I compute the pose of the
     // boards
@@ -3503,6 +3514,7 @@ bool clc_fit_from_inputs_dump(// out
                          Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
                          Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
                          Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+                         false,
 
                          // in
                          sensor_snapshots_filtered,
@@ -4626,9 +4638,11 @@ static void evaluate_camera_visibility(// out
 }
 
 static
-bool _clc_internal(// out
+bool _clc_internal(// in/out
+                   // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+         bool          use_given_seed_geometry,
 
          // Covariance of the output. Symmetric matrix of shape
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
@@ -4680,6 +4694,22 @@ bool _clc_internal(// out
     {
         MSG("Exactly one of (sensor_snapshots_sorted,sensor_snapshots_unsorted,sensor_snapshots_segmented,sensor_snapshots_segmented_dense) should be non-NULL");
         return false;
+    }
+
+    if(use_given_seed_geometry)
+    {
+        for(int i=0; i<3; i++)
+            if(rt_ref_lidar[0].r.xyz[i] != 0.)
+            {
+                MSG("use_given_seed_geometry is true, so rt_ref_lidar[0] MUST be the identity transformation");
+                return false;
+            }
+        for(int i=0; i<3; i++)
+            if(rt_ref_lidar[0].t.xyz[i] != 0.)
+            {
+                MSG("use_given_seed_geometry is true, so rt_ref_lidar[0] MUST be the identity transformation");
+                return false;
+            }
     }
 
     bool result = false;
@@ -4927,10 +4957,21 @@ bool _clc_internal(// out
         memset(Rt_lidar0_lidar_solve,  0, sizeof(double)*(Nlidars-1)                * 4*3);
         memset(Rt_lidar0_camera_solve, 0, sizeof(double)*Ncameras                   * 4*3);
 
-        if(!fit_seed(// out
+        if(use_given_seed_geometry)
+        {
+            for(int i=1; i<Nlidars; i++)
+                mrcal_Rt_from_rt(&Rt_lidar0_lidar_seed[4*3*(i-1)], NULL,
+                                 (const double*)&rt_ref_lidar[i]);
+            for(int i=0; i<Ncameras; i++)
+                mrcal_Rt_from_rt(&Rt_lidar0_camera_seed[4*3*i], NULL,
+                                 (const double*)&rt_ref_camera[i]);
+        }
+
+        if(!fit_seed(// in/out
                      Rt_lidar0_board_seed,
                      Rt_lidar0_lidar_seed,
                      Rt_lidar0_camera_seed,
+                     use_given_seed_geometry,
 
                      // in
                      sensor_snapshots_filtered,
@@ -5267,9 +5308,11 @@ bool clc_post_solve_statistics( // out
 }
 
 
-bool clc_unsorted(// out
+bool clc_unsorted(// in/out
+                  // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+         bool          use_given_seed_geometry,
 
          // Covariance of the output. Symmetric matrix of shape
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
@@ -5309,6 +5352,7 @@ bool clc_unsorted(// out
     return _clc_internal(// out
                          rt_ref_lidar,
                          rt_ref_camera,
+                         use_given_seed_geometry,
                          Var_rt_lidar0_sensor,
                          buf_inputs_dump,
                          size_inputs_dump,
@@ -5327,9 +5371,11 @@ bool clc_unsorted(// out
                          check_gradient);
 }
 
-bool clc_sorted(// out
+bool clc_sorted(// in/out
+                // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+         bool          use_given_seed_geometry,
 
          // Covariance of the output. Symmetric matrix of shape
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
@@ -5366,6 +5412,7 @@ bool clc_sorted(// out
     return _clc_internal(// out
                          rt_ref_lidar,
                          rt_ref_camera,
+                         use_given_seed_geometry,
                          Var_rt_lidar0_sensor,
                          buf_inputs_dump,
                          size_inputs_dump,
@@ -5384,9 +5431,11 @@ bool clc_sorted(// out
                          check_gradient);
 }
 
-bool clc_lidar_segmented(// out
+bool clc_lidar_segmented(// in/out
+                         // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+         bool          use_given_seed_geometry,
 
          // Covariance of the output. Symmetric matrix of shape
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
@@ -5421,6 +5470,7 @@ bool clc_lidar_segmented(// out
     return _clc_internal(// out
                          rt_ref_lidar,
                          rt_ref_camera,
+                         use_given_seed_geometry,
                          Var_rt_lidar0_sensor,
                          buf_inputs_dump,
                          size_inputs_dump,
@@ -5439,9 +5489,11 @@ bool clc_lidar_segmented(// out
                          check_gradient);
 }
 
-bool clc_lidar_segmented_dense(// out
+bool clc_lidar_segmented_dense(// in/out
+                               // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
+         bool          use_given_seed_geometry,
 
          // Covariance of the output. Symmetric matrix of shape
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
@@ -5476,6 +5528,7 @@ bool clc_lidar_segmented_dense(// out
     return _clc_internal(// out
                          rt_ref_lidar,
                          rt_ref_camera,
+                         use_given_seed_geometry,
                          Var_rt_lidar0_sensor,
                          buf_inputs_dump,
                          size_inputs_dump,
