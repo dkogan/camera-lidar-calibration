@@ -5003,7 +5003,8 @@ bool _clc_internal(// out
                       true);
 
         dogleg_solverContext_t* solver_context;
-        if(!fit(&solver_context,
+        bool fit_result =
+            fit(&solver_context,
                 // in,out
                 // seed state on input
                 Rt_lidar0_board_solve,
@@ -5025,37 +5026,7 @@ bool _clc_internal(// out
                 check_gradient__use_distance_to_plane,
                 check_gradient,
                 // skip nothing
-                false, false, false))
-        {
-            MSG("fit() failed");
-
-            if(buf_inputs_dump != NULL)
-            {
-                if(!dump_inputs(buf_inputs_dump,
-                                size_inputs_dump,
-                                Rt_lidar0_board_seed,
-                                Rt_lidar0_lidar_seed,
-                                Rt_lidar0_camera_seed,
-                                Rt_lidar0_board_solve,
-                                Rt_lidar0_lidar_solve,
-                                Rt_lidar0_camera_solve,
-
-                                sensor_snapshots_filtered,
-                                Nsensor_snapshots_filtered,
-
-                                Nlidars,
-                                Ncameras,
-                                models,
-                                object_height_n,
-                                object_width_n,
-                                object_spacing))
-                {
-                    MSG("dump_inputs() failed");
-                }
-            }
-
-            goto done;
-        }
+                false, false, false);
 
         if(buf_inputs_dump != NULL)
         {
@@ -5080,6 +5051,12 @@ bool _clc_internal(// out
             {
                 MSG("dump_inputs() failed");
             }
+        }
+
+        if(!fit_result)
+        {
+            MSG("fit() failed");
+            goto done;
         }
 
         if(Var_rt_lidar0_sensor != NULL)
