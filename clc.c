@@ -3279,8 +3279,13 @@ bool clc_fit_from_inputs_dump(// out
                               // in
                               const char* buf_inputs_dump,
                               size_t      size_inputs_dump,
-                              bool do_inject_noise,
-                              bool do_fit_seed)
+
+                              // if(!do_fit_seed && !do_inject_noise) { fit(previous fit_seed() result)     }
+                              // if(!do_fit_seed &&  do_inject_noise) { fit(previous fit() result)          }
+                              // if(do_fit_seed)                      { fit( fit_seed() )                   }
+                              bool do_fit_seed,
+                              // if true, the observations are noised; regardless of do_fit_seed
+                              bool do_inject_noise)
 {
     bool result = false;
 
@@ -3454,14 +3459,49 @@ bool clc_fit_from_inputs_dump(// out
                 goto done_inner;
         }
 
-        if(do_fit_seed)
+        // if(!do_fit_seed && !do_inject_noise) { fit(previous fit_seed() result)     }
+        // if(!do_fit_seed &&  do_inject_noise) { fit(previous fit() result)          }
+        // if(do_fit_seed)                      { fit( fit_seed() )                   }
+        double* Rt_lidar0_board;
+        double* Rt_lidar0_lidar;
+        double* Rt_lidar0_camera;
+        if(!do_fit_seed)
         {
+            result = true;
+            if(!do_inject_noise)
+            {
+                // No added noise. I start from the same place we started from
+                // the last time, to reproduce the previous solve faithfully
+                Rt_lidar0_board  = Rt_lidar0_board_seed;
+                Rt_lidar0_lidar  = Rt_lidar0_lidar_seed;
+                Rt_lidar0_camera = Rt_lidar0_camera_seed;
+            }
+            else
+            {
+                // Added noise. I start from the previous final solution. The
+                // noised solves are used in Monte Carlo simulations, and I'm
+                // not trying to reproduce the previous runs; rather I'm trying
+                // to quantify the sensitivity of the solution to perturbations.
+                // So I want this to finish quickly.
+                Rt_lidar0_board  = Rt_lidar0_board_solve;
+                Rt_lidar0_lidar  = Rt_lidar0_lidar_solve;
+                Rt_lidar0_camera = Rt_lidar0_camera_solve;
+            }
+        }
+        else
+        {
+            // Use the _seed buffers. This doesn't matter: either the _seed or
+            // _solve buffers would work, as long as this is consistent. I'm
+            // recomputing both here anyway
+            Rt_lidar0_board  = Rt_lidar0_board_seed;
+            Rt_lidar0_lidar  = Rt_lidar0_lidar_seed;
+            Rt_lidar0_camera = Rt_lidar0_camera_seed;
+
             result =
-                fit_seed(// in,out
-                         // seed state on input
-                         Rt_lidar0_board_solve,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
-                         Rt_lidar0_lidar_solve,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
-                         Rt_lidar0_camera_solve, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+                fit_seed(// out
+                         Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+                         Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
+                         Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
 
                          // in
                          sensor_snapshots_filtered,
@@ -3477,16 +3517,15 @@ bool clc_fit_from_inputs_dump(// out
                          object_width_n,
                          object_spacing);
         }
-
         result =
             result &&
             fit(NULL,
 
                 // in,out
                 // seed state on input
-                Rt_lidar0_board_solve,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
-                Rt_lidar0_lidar_solve,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
-                Rt_lidar0_camera_solve, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+                Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+                Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
+                Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
 
                 // in
                 sensor_snapshots_filtered,
@@ -3511,10 +3550,10 @@ bool clc_fit_from_inputs_dump(// out
             (*rt_ref_lidar)[0] = (mrcal_pose_t){};
             for(int i=1; i<*Nlidars; i++)
                 mrcal_rt_from_Rt( (double*)&(*rt_ref_lidar)[i], NULL,
-                                  &Rt_lidar0_lidar_solve[(i-1)*4*3] );
+                                  &Rt_lidar0_lidar[(i-1)*4*3] );
             for(int i=0; i<*Ncameras; i++)
                 mrcal_rt_from_Rt( (double*)&(*rt_ref_camera)[i], NULL,
-                                  &Rt_lidar0_camera_solve[i*4*3] );
+                                  &Rt_lidar0_camera[i*4*3] );
         }
     done_inner:
         for(int isnapshot=0; isnapshot<Nsensor_snapshots_filtered; isnapshot++)

@@ -451,5 +451,9 @@ bool clc_fit_from_inputs_dump(// out
                               // in
                               const char* buf_inputs_dump,
                               size_t      size_inputs_dump,
-                              bool do_inject_noise,
-                              bool do_fit_seed);
+                              // if(!do_fit_seed && !do_inject_noise) { fit(previous fit_seed() result)     }
+                              // if(!do_fit_seed &&  do_inject_noise) { fit(previous fit() result)          }
+                              // if(do_fit_seed)                      { fit( fit_seed() )                   }
+                              bool do_fit_seed,
+                              // if true, the observations are noised; regardless of do_fit_seed
+                              bool do_inject_noise);

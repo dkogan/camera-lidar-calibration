@@ -1017,8 +1017,8 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
                                          // in
                                          PyBytes_AS_STRING(inputs_dump),
                                          PyBytes_GET_SIZE( inputs_dump),
-                                         do_inject_noise,
-                                         do_fit_seed))
+                                         do_fit_seed,
+                                         do_inject_noise))
     {
         BARF("clc_fit_from_inputs_dump() failed");
         goto done;
