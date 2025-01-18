@@ -3285,7 +3285,8 @@ bool clc_fit_from_inputs_dump(// out
                               // if(do_fit_seed)                      { fit( fit_seed() )                   }
                               bool do_fit_seed,
                               // if true, the observations are noised; regardless of do_fit_seed
-                              bool do_inject_noise)
+                              bool do_inject_noise,
+                              bool do_skip_prints)
 {
     bool result = false;
 
@@ -3542,8 +3543,8 @@ bool clc_fit_from_inputs_dump(// out
                 object_spacing,
 
                 false,false,
-                // skip everything
-                true, true, true);
+                true, true,
+                do_skip_prints);
 
         if(result)
         {

@@ -988,19 +988,22 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
     PyArrayObject* py_rt_ref_camera = NULL;
     int            do_inject_noise  = 0;
     int            do_fit_seed      = 0;
+    int            do_skip_prints   = 1;
 
     SET_SIGINT();
 
     char* keywords[] = { "inputs_dump",
                          "do_inject_noise",
                          "do_fit_seed",
+                         "do_skip_prints",
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" "pp",
+                                     "O" "|$" "ppp",
                                      keywords,
                                      &inputs_dump,
                                      &do_inject_noise,
                                      &do_fit_seed,
+                                     &do_skip_prints,
                                      NULL))
         goto done;
 
@@ -1018,7 +1021,8 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
                                          PyBytes_AS_STRING(inputs_dump),
                                          PyBytes_GET_SIZE( inputs_dump),
                                          do_fit_seed,
-                                         do_inject_noise))
+                                         do_inject_noise,
+                                         do_skip_prints))
     {
         BARF("clc_fit_from_inputs_dump() failed");
         goto done;

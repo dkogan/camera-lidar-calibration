@@ -51,4 +51,5 @@ with open(args.context, "rb") as f:
 
 result = clc.fit_from_inputs_dump(context['result']['inputs_dump'],
                                   do_inject_noise = args.inject_noise,
-                                  do_fit_seed     = args.fit_seed)
+                                  do_fit_seed     = args.fit_seed,
+                                  do_skip_prints  = False)
