@@ -3108,12 +3108,13 @@ fit(// out
        !(check_gradient__use_distance_to_plane || check_gradient))
         dogleg_parameters.dogleg_debug = DOGLEG_DEBUG_VNLOG;
 
-    dogleg_solverContext_t* _solver_context = NULL;
+    dogleg_solverContext_t* _solver_context;
     dogleg_solverContext_t** pp_solver_context;
     if(solver_context != NULL)
         pp_solver_context = solver_context;
     else
         pp_solver_context = &_solver_context;
+    *pp_solver_context = NULL;
 
     const int Nstate        = num_states(&ctx);
     const int Nmeasurements = num_measurements(&ctx);
@@ -3272,8 +3273,18 @@ fit(// out
     result = true;
 
  done:
-    if(solver_context == NULL || !result)
-        dogleg_freeContext(&_solver_context);
+    if(solver_context == NULL)
+    {
+        // caller didn't ask for a context; if we have one, get rid of it
+        if(_solver_context != NULL)
+            dogleg_freeContext(&_solver_context);
+    }
+    else
+    {
+        // caller DID ask for a context; if we failed, get rid of it
+        if(!result && *solver_context != NULL)
+            dogleg_freeContext(solver_context);
+    }
 
     return result;
 }
