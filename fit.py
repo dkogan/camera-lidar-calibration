@@ -672,12 +672,12 @@ if len(args.models) > 0:
     m = mrcal.cameramodel(args.models[0])
     o = m.optimization_inputs()
     H,W = o['observations_board'].shape[-3:-1]
-    calibration_object_kwargs = \
+    kwargs_calibration_object = \
         dict(object_spacing  = o['calibration_object_spacing'],
              object_width_n  = W,
              object_height_n = H)
 else:
-    calibration_object_kwargs = dict()
+    kwargs_calibration_object = dict()
 
 kwargs_calibrate = dict(bags            = args.bag,
                         topics          = args.topics,
@@ -685,7 +685,7 @@ kwargs_calibrate = dict(bags            = args.bag,
                         check_gradient  = False,
                         Npoints_per_segment                = 15,
                         threshold_min_Nsegments_in_cluster = 4,
-                        **calibration_object_kwargs)
+                        **kwargs_calibration_object)
 result = clc.calibrate(do_dump_inputs = args.dump is not None,
                        **kwargs_calibrate)
 
