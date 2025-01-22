@@ -29,6 +29,10 @@ def parse_args():
                         default (no --fit-seed), we only call fit(): from the
                         previous fit_seed() result if no --inject-noise or from
                         the previous fit() result if --inject-noise''')
+    parser.add_argument('--exclude',
+                        type=int,
+                        nargs = '+',
+                        help = '''If given, exclude these snapshots''')
     parser.add_argument('context',
                         help = '''.pickle file from fit.py --dump or
                         buf_inputs_dump from the clc_...() C functions''')
@@ -55,7 +59,14 @@ with open(args.context, "rb") as f:
         # maybe it's a binary dump
         dump = f.read()
 
+if args.exclude:
+    args.exclude = \
+        np.array(args.exclude,
+                 dtype=np.int32)
+
+
 result = clc.fit_from_inputs_dump(dump,
+                                  isnapshot_exclude = args.exclude,
                                   do_inject_noise = args.inject_noise,
                                   do_fit_seed     = args.fit_seed,
                                   do_skip_prints  = False)

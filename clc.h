@@ -463,6 +463,9 @@ bool clc_fit_from_inputs_dump(// out
                               // in
                               const char* buf_inputs_dump,
                               size_t      size_inputs_dump,
+                              const int*  exclude_isnapshot, // NULL to not exclude any
+                              const int   Nexclude_isnapshot,
+
                               // if(!do_fit_seed && !do_inject_noise) { fit(previous fit_seed() result)     }
                               // if(!do_fit_seed &&  do_inject_noise) { fit(previous fit() result)          }
                               // if(do_fit_seed)                      { fit( fit_seed() )                   }

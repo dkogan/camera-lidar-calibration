@@ -3289,6 +3289,38 @@ fit(// out
     return result;
 }
 
+static void exclude_snapshots(// in,out
+                              uint8_t* buf,
+                              // in
+                              const int  sizeof_element,
+                              const int  Nsnapshots,
+                              const int* isnapshot_exclude, // NULL to not exclude any
+                              const int  Nisnapshot_exclude)
+{
+    int ifrom = 0;
+    int ito   = 0;
+    for(int i=0; i<Nisnapshot_exclude; i++)
+    {
+        const int iexclude = isnapshot_exclude[i];
+
+        memmove(&buf[(iexclude-i)  *sizeof_element],
+                &buf[(iexclude-i+1)*sizeof_element],
+                sizeof_element * (Nsnapshots - (iexclude+1)));
+    }
+}
+
+static void free_snapshot(sensor_snapshot_segmented_t* snapshot, const int Nlidars, const int Ncameras)
+{
+    for(int icamera=0; icamera<Ncameras; icamera++)
+        free(snapshot->chessboard_corners[icamera]);
+
+    for(int ilidar=0; ilidar<Nlidars; ilidar++)
+    {
+        points_and_plane_full_t* points_and_plane_full = &snapshot->lidar_scans[ilidar];
+        free(points_and_plane_full->points);
+        free((uint32_t*)points_and_plane_full->ipoint);
+    }
+}
 
 bool clc_fit_from_inputs_dump(// out
                               int* Nlidars,
@@ -3301,6 +3333,8 @@ bool clc_fit_from_inputs_dump(// out
                               // in
                               const char* buf_inputs_dump,
                               size_t      size_inputs_dump,
+                              const int*  isnapshot_exclude, // NULL to not exclude any
+                              const int   Nisnapshot_exclude,
 
                               // if(!do_fit_seed && !do_inject_noise) { fit(previous fit_seed() result)     }
                               // if(!do_fit_seed &&  do_inject_noise) { fit(previous fit() result)          }
@@ -3342,6 +3376,8 @@ bool clc_fit_from_inputs_dump(// out
     if(1 != sscanf(lineptr, "object_width_n             = %d\n",  &object_width_n)) goto done;
     if(0 >= getline(&lineptr, &nline, fp)) goto done;
     if(1 != sscanf(lineptr, "object_spacing             = %lf\n", &object_spacing)) goto done;
+
+    int Nsensor_snapshots_filtered_culled = Nsensor_snapshots_filtered;
 
     *rt_ref_lidar  = malloc(*Nlidars  * sizeof(mrcal_pose_t));
     if(*rt_ref_lidar == NULL)
@@ -3467,6 +3503,40 @@ bool clc_fit_from_inputs_dump(// out
             }
         }
 
+
+        if(isnapshot_exclude != NULL)
+        {
+            exclude_snapshots(// in,out
+                              (uint8_t*)Rt_lidar0_board_solve,
+                              // in
+                              sizeof(Rt_lidar0_board_solve[0])*4*3,
+                              Nsensor_snapshots_filtered,
+                              isnapshot_exclude,Nisnapshot_exclude);
+            exclude_snapshots(// in,out
+                              (uint8_t*)Rt_lidar0_board_seed,
+                              // in
+                              sizeof(Rt_lidar0_board_seed[0])*4*3,
+                              Nsensor_snapshots_filtered,
+                              isnapshot_exclude,Nisnapshot_exclude);
+
+
+            for(int i=0; i<Nisnapshot_exclude; i++)
+            {
+                const int iexclude = isnapshot_exclude[i];
+                free_snapshot(&sensor_snapshots_filtered[iexclude],
+                              *Nlidars, *Ncameras);
+            }
+            exclude_snapshots(// in,out
+                              (uint8_t*)sensor_snapshots_filtered,
+                              // in
+                              sizeof(sensor_snapshots_filtered[0]),
+                              Nsensor_snapshots_filtered,
+                              isnapshot_exclude,Nisnapshot_exclude);
+            Nsensor_snapshots_filtered_culled -= Nisnapshot_exclude;
+        }
+
+
+
         for(int icamera=0; icamera<*Ncameras; icamera++)
         {
             int Nbytes_here;
@@ -3529,7 +3599,7 @@ bool clc_fit_from_inputs_dump(// out
 
                          // in
                          sensor_snapshots_filtered,
-                         Nsensor_snapshots_filtered,
+                         Nsensor_snapshots_filtered_culled,
 
                          // These apply to ALL the sensor_snapshots[]
                          *Nlidars,
@@ -3553,7 +3623,7 @@ bool clc_fit_from_inputs_dump(// out
 
                 // in
                 sensor_snapshots_filtered,
-                Nsensor_snapshots_filtered,
+                Nsensor_snapshots_filtered_culled,
 
                 // These apply to ALL the sensor_snapshots[]
                 *Nlidars,
@@ -3580,19 +3650,10 @@ bool clc_fit_from_inputs_dump(// out
                                   &Rt_lidar0_camera[i*4*3] );
         }
     done_inner:
-        for(int isnapshot=0; isnapshot<Nsensor_snapshots_filtered; isnapshot++)
+        for(int isnapshot=0; isnapshot<Nsensor_snapshots_filtered_culled; isnapshot++)
         {
             sensor_snapshot_segmented_t* snapshot = &sensor_snapshots_filtered[isnapshot];
-
-            for(int icamera=0; icamera<*Ncameras; icamera++)
-                free(snapshot->chessboard_corners[icamera]);
-
-            for(int ilidar=0; ilidar<*Nlidars; ilidar++)
-            {
-                points_and_plane_full_t* points_and_plane_full = &snapshot->lidar_scans[ilidar];
-                free(points_and_plane_full->points);
-                free((uint32_t*)points_and_plane_full->ipoint);
-            }
+            free_snapshot(snapshot, *Nlidars, *Ncameras);
         }
 
         for(int icamera=0; icamera<*Ncameras; icamera++)

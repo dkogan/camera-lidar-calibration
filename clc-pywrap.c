@@ -1074,6 +1074,7 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
     mrcal_pose_t*  rt_ref_camera    = NULL;
     PyArrayObject* py_rt_ref_lidar  = NULL;
     PyArrayObject* py_rt_ref_camera = NULL;
+    PyArrayObject* py_isnapshot_exclude = NULL;
     int            do_inject_noise  = 0;
     int            do_fit_seed      = 0;
     int            do_skip_prints   = 1;
@@ -1081,14 +1082,16 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
     SET_SIGINT();
 
     char* keywords[] = { "inputs_dump",
+                         "isnapshot_exclude",
                          "do_inject_noise",
                          "do_fit_seed",
                          "do_skip_prints",
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" "ppp",
+                                     "O" "|$" "Oppp",
                                      keywords,
                                      &inputs_dump,
+                                     &py_isnapshot_exclude,
                                      &do_inject_noise,
                                      &do_fit_seed,
                                      &do_skip_prints,
@@ -1100,6 +1103,19 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
         BARF("inputs_dump should be a 'bytes' object");
         goto done;
     }
+
+    if(py_isnapshot_exclude == Py_None)
+        py_isnapshot_exclude = NULL;
+    if(py_isnapshot_exclude != NULL &&
+       ! (PyArray_Check(py_isnapshot_exclude) &&
+          PyArray_IS_C_CONTIGUOUS(py_isnapshot_exclude) &&
+          PyArray_NDIM(py_isnapshot_exclude)    == 1 &&
+          PyArray_TYPE(py_isnapshot_exclude)    == NPY_INT) )
+    {
+        BARF("isnapshot_exclude is given, so it must be a 1D contiguous numpy array of C 'int' integers");
+        goto done;
+    }
+
     if(!clc_fit_from_inputs_dump(// out
                                          &Nlidars,
                                          &Ncameras,
@@ -1108,6 +1124,8 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
                                          // in
                                          PyBytes_AS_STRING(inputs_dump),
                                          PyBytes_GET_SIZE( inputs_dump),
+                                         py_isnapshot_exclude == NULL ? NULL : (const int*)PyArray_DATA(py_isnapshot_exclude),
+                                         py_isnapshot_exclude == NULL ? 0    : PyArray_DIMS(py_isnapshot_exclude)[0],
                                          do_fit_seed,
                                          do_inject_noise,
                                          do_skip_prints))
