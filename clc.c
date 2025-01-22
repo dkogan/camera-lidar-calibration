@@ -4661,8 +4661,9 @@ bool _clc_internal(// in/out
          // (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
-         // Pass non-NULL to get the fit-inputs dump. On success, these encode
-         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         // Pass non-NULL to get the fit-inputs dump. These encode the data
+         // buffer. The caller must free(*buf_inputs_dump) when done. Even when
+         // this call fails
          char**  buf_inputs_dump,
          size_t* size_inputs_dump,
 
@@ -5185,15 +5186,6 @@ bool _clc_internal(// in/out
 
  done:
     free(pool);
-    if(buf_inputs_dump != NULL)
-    {
-        if(!result)
-        {
-            free(*buf_inputs_dump);
-            *buf_inputs_dump  = NULL;
-            *size_inputs_dump = 0;
-        }
-    }
     return result;
 }
 
@@ -5330,8 +5322,9 @@ bool clc_unsorted(// in/out
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
-         // Pass non-NULL to get the fit-inputs dump. On success, these encode
-         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         // Pass non-NULL to get the fit-inputs dump. These encode the data
+         // buffer. The caller must free(*buf_inputs_dump) when done. Even when
+         // this call fails
          char**  buf_inputs_dump,
          size_t* size_inputs_dump,
 
@@ -5393,8 +5386,9 @@ bool clc_sorted(// in/out
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
-         // Pass non-NULL to get the fit-inputs dump. On success, these encode
-         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         // Pass non-NULL to get the fit-inputs dump. These encode the data
+         // buffer. The caller must free(*buf_inputs_dump) when done. Even when
+         // this call fails
          char**  buf_inputs_dump,
          size_t* size_inputs_dump,
 
@@ -5453,8 +5447,9 @@ bool clc_lidar_segmented(// in/out
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
-         // Pass non-NULL to get the fit-inputs dump. On success, these encode
-         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         // Pass non-NULL to get the fit-inputs dump. These encode the data
+         // buffer. The caller must free(*buf_inputs_dump) when done. Even when
+         // this call fails
          char**  buf_inputs_dump,
          size_t* size_inputs_dump,
 
@@ -5511,8 +5506,9 @@ bool clc_lidar_segmented_dense(// in/out
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
 
-         // Pass non-NULL to get the fit-inputs dump. On success, these encode
-         // the data buffer. The caller must free(*buf_inputs_dump) when done.
+         // Pass non-NULL to get the fit-inputs dump. These encode the data
+         // buffer. The caller must free(*buf_inputs_dump) when done. Even when
+         // this call fails
          char**  buf_inputs_dump,
          size_t* size_inputs_dump,
 
