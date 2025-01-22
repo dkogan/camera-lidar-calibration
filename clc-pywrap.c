@@ -1078,6 +1078,7 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
     int            do_inject_noise  = 0;
     int            do_fit_seed      = 0;
     int            do_skip_prints   = 1;
+    int            do_skip_plots    = 1;
 
     SET_SIGINT();
 
@@ -1086,15 +1087,17 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
                          "do_inject_noise",
                          "do_fit_seed",
                          "do_skip_prints",
+                         "do_skip_plots",
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" "Oppp",
+                                     "O" "|$" "Opppp",
                                      keywords,
                                      &inputs_dump,
                                      &py_isnapshot_exclude,
                                      &do_inject_noise,
                                      &do_fit_seed,
                                      &do_skip_prints,
+                                     &do_skip_plots,
                                      NULL))
         goto done;
 
@@ -1128,7 +1131,8 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
                                          py_isnapshot_exclude == NULL ? 0    : PyArray_DIMS(py_isnapshot_exclude)[0],
                                          do_fit_seed,
                                          do_inject_noise,
-                                         do_skip_prints))
+                                         do_skip_prints,
+                                         do_skip_plots))
     {
         BARF("clc_fit_from_inputs_dump() failed");
         goto done;

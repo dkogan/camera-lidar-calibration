@@ -472,4 +472,5 @@ bool clc_fit_from_inputs_dump(// out
                               bool do_fit_seed,
                               // if true, the observations are noised; regardless of do_fit_seed
                               bool do_inject_noise,
+                              bool do_skip_plots,
                               bool do_skip_prints);

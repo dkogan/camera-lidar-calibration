@@ -69,4 +69,5 @@ result = clc.fit_from_inputs_dump(dump,
                                   isnapshot_exclude = args.exclude,
                                   do_inject_noise = args.inject_noise,
                                   do_fit_seed     = args.fit_seed,
-                                  do_skip_prints  = False)
+                                  do_skip_prints  = False,
+                                  do_skip_plots   = False)
