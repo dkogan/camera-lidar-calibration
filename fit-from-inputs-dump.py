@@ -30,7 +30,8 @@ def parse_args():
                         previous fit_seed() result if no --inject-noise or from
                         the previous fit() result if --inject-noise''')
     parser.add_argument('context',
-                        help = '''.pickle file from fit.py --dump''')
+                        help = '''.pickle file from fit.py --dump or
+                        buf_inputs_dump from the clc_...() C functions''')
     args = parser.parse_args()
 
     return args
@@ -47,9 +48,14 @@ import clc
 import testutils
 
 with open(args.context, "rb") as f:
-    context = pickle.load(f)
+    try:
+        context = pickle.load(f)
+        dump    = context['result']['inputs_dump']
+    except pickle.UnpicklingError:
+        # maybe it's a binary dump
+        dump = f.read()
 
-result = clc.fit_from_inputs_dump(context['result']['inputs_dump'],
+result = clc.fit_from_inputs_dump(dump,
                                   do_inject_noise = args.inject_noise,
                                   do_fit_seed     = args.fit_seed,
                                   do_skip_prints  = False)
