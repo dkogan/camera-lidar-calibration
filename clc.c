@@ -1445,9 +1445,9 @@ fit_seed(// in/out
 
             if(validation_failed_here) validation_failed = true;
 
-            MSG("%sisnapshot=%d ilidar=%d p0_err_mag=%.2f th_err_deg=%.2f",
+            MSG("%sisnapshot=%d ilidar=%d th_err_deg=%.2f p0_err_mag=%.2f",
                 validation_failed_here ? "FAILED: " : "",
-                isnapshot, ilidar, p0_err_mag, th_err_deg);
+                isnapshot, ilidar, th_err_deg, p0_err_mag);
         }
 
         for(unsigned int icamera=0; icamera<Ncameras; icamera++)
