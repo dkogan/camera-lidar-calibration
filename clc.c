@@ -1035,21 +1035,15 @@ bool align_point_clouds(// out
 
         const double cos_err = mrcal_point3_inner(normals0_validation, normals0[i]);
 
-#warning unhardcode
         const double cos_threshold = cos(7.*M_PI/180.);
         if(cos_err < cos_threshold)
-        {
-            MSG("Inconsistent seed rotation for isnapshot=%d: th=%.1f deg. Giving up",
+            MSG("WARNING: inconsistent seed rotation for isnapshot=%d: th=%.1f deg. Most likely this is wrong, and we're about to fail the fit_seed() validation",
                 isnapshot,
                 acos(cos_err) * 180./M_PI);
-            return false;
-        }
         else
-        {
             MSG("Seed rotation for isnapshot=%d: th=%.1f deg",
                 isnapshot,
                 acos(cos_err) * 180./M_PI);
-        }
     }
 
     // Now the translation. R01 x1 + t01 ~ x0
@@ -1089,20 +1083,14 @@ bool align_point_clouds(// out
                                                   *(mrcal_point3_t*)(&Rt01[9]));
         double norm2_t01_err = mrcal_point3_norm2(t01_err);
 
-#warning unhardcode
         if(norm2_t01_err > 0.5*0.5)
-        {
-            MSG("Inconsistent seed translation for isnapshot=%d: mag(t01_err)=%.1f. Giving up",
+            MSG("WARNING: inconsistent seed translation for isnapshot=%d: mag(t01_err)=%.1f. Most likely this is wrong, and we're about to fail the fit_seed() validation",
                 isnapshot,
                 sqrt(norm2_t01_err));
-            return false;
-        }
         else
-        {
             MSG("Seed translation for isnapshot=%d: mag(t01_err)=%.1f",
                 isnapshot,
                 sqrt(norm2_t01_err));
-        }
     }
 
     return true;
