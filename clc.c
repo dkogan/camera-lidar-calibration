@@ -3317,6 +3317,58 @@ static void free_snapshot(sensor_snapshot_segmented_t* snapshot, const int Nlida
     }
 }
 
+static bool is_R_rotation(const double* R)
+{
+    // each row/col must be orthonormal. Making sure that R Rt = I does that
+    for(int i=0; i<3; i++)
+        for(int j=i; j<3; j++)
+        {
+            double dot = 0.;
+            for(int k=0; k<3; k++)
+                dot += R[i*3 + k]*R[j*3 + k];
+            if(i == j)
+            {
+                if(fabs(dot-1.0) > 1e-9)
+                    return false;
+            }
+            else
+            {
+                if(fabs(dot) > 1e-9)
+                    return false;
+            }
+        }
+
+    // Should also have det(R) = +1. Otherwise there could be a mirror here
+    const double det =
+        R[0]*(R[4]*R[8]-R[5]*R[7])-R[1]*(R[3]*R[8]-R[5]*R[6])+R[2]*(R[3]*R[7]-R[4]*R[6]);
+    if(fabs(det-1.0) > 1e-9)
+        return false;
+
+    return true;
+}
+
+static bool
+confirm_Rt_are_valid(// in
+                     const double* Rt_all,
+                     const int N,
+                     const char* what)
+{
+    for(int i=0; i<N; i++)
+    {
+        const double* Rt = &Rt_all[4*3*i];
+        const double* R  = &Rt[0*3];
+        const double* t  = &Rt[3*3];
+
+        if(!is_R_rotation(R))
+        {
+            MSG("ERROR: %s[%d] does NOT contain a valid rotation matrix",
+                what, i);
+            return false;
+        }
+    }
+    return true;
+}
+
 bool clc_fit_from_inputs_dump(// out
                               int* Nlidars,
                               int* Ncameras,
@@ -3642,6 +3694,15 @@ bool clc_fit_from_inputs_dump(// out
                 Rt_lidar0_board  = Rt_lidar0_board_solve;
                 Rt_lidar0_lidar  = Rt_lidar0_lidar_solve;
                 Rt_lidar0_camera = Rt_lidar0_camera_solve;
+            }
+
+            // We use the seed from the dump. If it isn't valid, we throw an
+            // error
+            if(!(confirm_Rt_are_valid(Rt_lidar0_board_seed,   Nsensor_snapshots_filtered, "Rt_lidar0_board_seed") &&
+                 confirm_Rt_are_valid(Rt_lidar0_lidar_seed,   (*Nlidars-1),               "Rt_lidar0_lidar_seed") &&
+                 confirm_Rt_are_valid(Rt_lidar0_camera_seed,  *Ncameras,                  "Rt_lidar0_camera_seed")))
+            {
+                goto done_inner;
             }
         }
         else
