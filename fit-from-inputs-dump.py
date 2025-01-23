@@ -8,8 +8,10 @@ For debugging
 
 import sys
 import argparse
+import argparse_helpers
 import re
 import os
+
 
 def parse_args():
 
@@ -30,9 +32,9 @@ def parse_args():
                         previous fit_seed() result if no --inject-noise or from
                         the previous fit() result if --inject-noise''')
     parser.add_argument('--exclude',
-                        type=int,
-                        nargs = '+',
-                        help = '''If given, exclude these snapshots''')
+                        type=argparse_helpers.comma_separated_list_of_non_negative_integers,
+                        help = '''Optional comma-separated list of integers >=
+                        0. If given, exclude these snapshots''')
     parser.add_argument('context',
                         help = '''.pickle file from fit.py --dump or
                         buf_inputs_dump from the clc_...() C functions''')

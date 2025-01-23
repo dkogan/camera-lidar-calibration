@@ -3278,7 +3278,7 @@ fit(// out
     return result;
 }
 
-static void exclude_snapshots(// in,out
+static bool exclude_snapshots(// in,out
                               uint8_t* buf,
                               // in
                               const int  sizeof_element,
@@ -3291,11 +3291,17 @@ static void exclude_snapshots(// in,out
     for(int i=0; i<Nisnapshot_exclude; i++)
     {
         const int iexclude = isnapshot_exclude[i];
-
+        if(iexclude < 0 || iexclude >= Nsnapshots)
+        {
+            MSG("iexclude should index snapshots, so it should be in [0,Nsnapshots-1] = [0,%d], but it is %d",
+                Nsnapshots-1, iexclude);
+            return false;
+        }
         memmove(&buf[(iexclude-i)  *sizeof_element],
                 &buf[(iexclude-i+1)*sizeof_element],
                 sizeof_element * (Nsnapshots - (iexclude+1)));
     }
+    return true;
 }
 
 static void free_snapshot(sensor_snapshot_segmented_t* snapshot, const int Nlidars, const int Ncameras)
@@ -3486,6 +3492,17 @@ bool clc_fit_from_inputs_dump(// out
 
                     if(points_and_plane_full->n != fread((uint32_t*)points_and_plane_full->ipoint, sizeof(points_and_plane_full->ipoint[0]), points_and_plane_full->n, fp))
                         goto done_inner;
+
+                    for(int i=0; i<points_and_plane_full->n; i++)
+                    {
+                        const clc_point3f_t* p = &points_and_plane_full->points[ points_and_plane_full->ipoint[i] ];
+                        if(p->x > 1000 ||p->y > 1000 ||p->z > 1000 || p->x < -1000 ||p->y < -1000 ||p->z < -1000)
+                        {
+                            MSG("******** READ BOGUS POINT FROM DUMP FILE: isnapshot=%d ilidar=%d iipt = %d ipt = %d p=(%f,%f,%f)",
+                                isnapshot, ilidar, i, points_and_plane_full->ipoint[i], p->x, p->y, p->z);
+                        }
+                    }
+
                 }
 
                 if(1 != fread(&points_and_plane_full->plane, sizeof(points_and_plane_full->plane), 1, fp))
@@ -3496,18 +3513,20 @@ bool clc_fit_from_inputs_dump(// out
 
         if(isnapshot_exclude != NULL)
         {
-            exclude_snapshots(// in,out
-                              (uint8_t*)Rt_lidar0_board_solve,
-                              // in
-                              sizeof(Rt_lidar0_board_solve[0])*4*3,
-                              Nsensor_snapshots_filtered,
-                              isnapshot_exclude,Nisnapshot_exclude);
-            exclude_snapshots(// in,out
-                              (uint8_t*)Rt_lidar0_board_seed,
-                              // in
-                              sizeof(Rt_lidar0_board_seed[0])*4*3,
-                              Nsensor_snapshots_filtered,
-                              isnapshot_exclude,Nisnapshot_exclude);
+            if(!exclude_snapshots(// in,out
+                                  (uint8_t*)Rt_lidar0_board_solve,
+                                  // in
+                                  sizeof(Rt_lidar0_board_solve[0])*4*3,
+                                  Nsensor_snapshots_filtered,
+                                  isnapshot_exclude,Nisnapshot_exclude))
+                goto done_inner;
+            if(!exclude_snapshots(// in,out
+                                  (uint8_t*)Rt_lidar0_board_seed,
+                                  // in
+                                  sizeof(Rt_lidar0_board_seed[0])*4*3,
+                                  Nsensor_snapshots_filtered,
+                                  isnapshot_exclude,Nisnapshot_exclude))
+                goto done_inner;
 
 
             for(int i=0; i<Nisnapshot_exclude; i++)
@@ -3516,12 +3535,13 @@ bool clc_fit_from_inputs_dump(// out
                 free_snapshot(&sensor_snapshots_filtered[iexclude],
                               *Nlidars, *Ncameras);
             }
-            exclude_snapshots(// in,out
-                              (uint8_t*)sensor_snapshots_filtered,
-                              // in
-                              sizeof(sensor_snapshots_filtered[0]),
-                              Nsensor_snapshots_filtered,
-                              isnapshot_exclude,Nisnapshot_exclude);
+            if(!exclude_snapshots(// in,out
+                                  (uint8_t*)sensor_snapshots_filtered,
+                                  // in
+                                  sizeof(sensor_snapshots_filtered[0]),
+                                  Nsensor_snapshots_filtered,
+                                  isnapshot_exclude,Nisnapshot_exclude))
+                goto done_inner;
             Nsensor_snapshots_filtered_culled -= Nisnapshot_exclude;
         }
 
