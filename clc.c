@@ -802,6 +802,7 @@ bool print_sensor_points(// out
     return true;
 }
 
+// Estimate the RELATIVE transform between two sensors
 static
 bool align_point_clouds(// out
                         double* Rt01,
