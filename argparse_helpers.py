@@ -20,3 +20,6 @@ def comma_separated_list_of_non_negative_integers(s):
         raise argparse.ArgumentTypeError(f"'{s}' should be a comma-separated list of integers >= 0")
     return l
 
+
+def comma_separated_list_of_floats(s):
+    return comma_separated_list(s, float, 'float')

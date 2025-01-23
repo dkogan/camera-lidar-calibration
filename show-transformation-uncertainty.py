@@ -17,10 +17,9 @@ Displays aligned point clouds. Useful for debugging
 
 import sys
 import argparse
+import argparse_helpers
 import re
 import os
-
-import numpy as np
 
 def parse_args():
 
@@ -40,8 +39,7 @@ def parse_args():
                         help='''How far we should sample the space. We use a
                         square grid, 2*radius m per side. By default radius=20''')
     parser.add_argument('--rt-vehicle-lidar0',
-                        type=float,
-                        nargs=6,
+                        type=argparse_helpers.comma_separated_list_of_floats,
                         help='''The vehicle-lidar0 transform. The solve is
                         always done in lidar0 coordinates, but we may want to
                         operate in a different "vehicle" frame. This argument
@@ -85,6 +83,7 @@ import pickle
 import numpysane as nps
 import mrcal
 import gnuplotlib as gp
+import numpy as np
 
 import clc
 

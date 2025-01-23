@@ -30,6 +30,7 @@ single frame (one set of images, LIDAR revolutions) of a stationary scene
 
 import sys
 import argparse
+import argparse_helpers
 import re
 import os
 
@@ -92,8 +93,7 @@ def parse_args():
                         distance away from the origin. If omitted, we look 10m
                         ahead''')
     parser.add_argument('--rt-vehicle-lidar0',
-                        type=float,
-                        nargs=6,
+                        type=argparse_helpers.comma_separated_list_of_floats,
                         help='''Used in the uncertainty quantification. The
                         vehicle-lidar0 transform. The solve is always done in
                         lidar0 coordinates, but we the uncertainty

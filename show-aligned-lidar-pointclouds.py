@@ -16,10 +16,9 @@ Displays the point clouds in a common vehicle coordinate system
 
 import sys
 import argparse
+import argparse_helpers
 import re
 import os
-
-import numpy as np
 
 def parse_args():
 
@@ -28,8 +27,7 @@ def parse_args():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument('--rt-vehicle-lidar0',
-                        type=float,
-                        nargs=6,
+                        type=argparse_helpers.comma_separated_list_of_floats,
                         help='''The vehicle-lidar0 transform. The solve is
                         always done in lidar0 coordinates, but we may want to
                         operate in a different "vehicle" frame. This argument
@@ -69,6 +67,8 @@ def parse_args():
 
 args = parse_args()
 
+
+import numpy as np
 import mrcal
 import clc
 
