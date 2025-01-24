@@ -818,7 +818,9 @@ bool align_point_clouds(// out
                         const mrcal_cameramodel_t*const*   models,
                         const int                          object_height_n,
                         const int                          object_width_n,
-                        const double                       object_spacing)
+                        const double                       object_spacing,
+                        const double                       fit_seed_position_err_threshold,
+                        const double                       fit_seed_cos_angle_err_threshold)
 {
     // Nsensor_snapshots_filtered is the max number I will need
     // These are double instead of float, since that's what the alignment code
@@ -1036,8 +1038,12 @@ bool align_point_clouds(// out
 
         const double cos_err = mrcal_point3_inner(normals0_validation, normals0[i]);
 
-        const double cos_threshold = cos(7.*M_PI/180.);
-        if(cos_err < cos_threshold)
+        // This isn't the same metric as the checks in fit_seed(), and these are
+        // warnings, while the checks in fit_seed() are errors. So I complain
+        // HERE only if the errors are really large. I want the threshold to be
+        // 2x the error. th -> 2th. costh ~ 1 - th^2/2 -> cos(2th) ~ costh*costh
+        // - sinth*sinth ~ costh*costh
+        if(cos_err < fit_seed_cos_angle_err_threshold*fit_seed_cos_angle_err_threshold)
             MSG("WARNING: inconsistent seed rotation for isnapshot=%d: th=%.1f deg. Most likely this is wrong, and we're about to fail the fit_seed() validation",
                 isnapshot,
                 acos(cos_err) * 180./M_PI);
@@ -1084,7 +1090,11 @@ bool align_point_clouds(// out
                                                   *(mrcal_point3_t*)(&Rt01[9]));
         double norm2_t01_err = mrcal_point3_norm2(t01_err);
 
-        if(norm2_t01_err > 0.5*0.5)
+        // This isn't the same metric as the checks in fit_seed(), and these are
+        // warnings, while the checks in fit_seed() are errors. So I complain
+        // HERE only if the errors are really large. I want the threshold to be
+        // 2x the error.
+        if(norm2_t01_err > 4.*fit_seed_position_err_threshold*fit_seed_position_err_threshold)
             MSG("WARNING: inconsistent seed translation for isnapshot=%d: mag(t01_err)=%.1f. Most likely this is wrong, and we're about to fail the fit_seed() validation",
                 isnapshot,
                 sqrt(norm2_t01_err));
@@ -1108,6 +1118,8 @@ typedef struct
     const int                          object_height_n;
     const int                          object_width_n;
     const double                       object_spacing;
+    const double                       fit_seed_position_err_threshold;
+    const double                       fit_seed_cos_angle_err_threshold;
     double*                            Rt_lidar0_lidar;
     double*                            Rt_lidar0_camera;
     double*                            Rt_camera_board_cache;
@@ -1132,6 +1144,9 @@ bool cb_sensor_link(const uint16_t isensor1,
     const int                          object_height_n            = cookie->object_height_n;
     const int                          object_width_n             = cookie->object_width_n;
     const double                       object_spacing             = cookie->object_spacing;
+    const double fit_seed_position_err_threshold                  = cookie->fit_seed_position_err_threshold;
+    const double fit_seed_cos_angle_err_threshold                 = cookie->fit_seed_cos_angle_err_threshold;
+
     double*                            Rt_lidar0_lidar            = cookie->Rt_lidar0_lidar;
     double*                            Rt_lidar0_camera           = cookie->Rt_lidar0_camera;
     double*                            Rt_camera_board_cache      = cookie->Rt_camera_board_cache;
@@ -1150,7 +1165,9 @@ bool cb_sensor_link(const uint16_t isensor1,
                            models,
                            object_height_n,
                            object_width_n,
-                           object_spacing))
+                           object_spacing,
+                           fit_seed_position_err_threshold,
+                           fit_seed_cos_angle_err_threshold))
         return false;
 
     if(isensor1 >= Nlidars)
@@ -1266,7 +1283,9 @@ fit_seed(// in/out
          // The dimensions of the chessboard grid being detected in the images
          const int object_height_n,
          const int object_width_n,
-         const double object_spacing)
+         const double object_spacing,
+         const double fit_seed_position_err_threshold,
+         const double fit_seed_cos_angle_err_threshold)
 {
     double Rt_camera_board_cache[Nsensor_snapshots_filtered*Ncameras * 4*3];
     memset(Rt_camera_board_cache,
@@ -1306,6 +1325,8 @@ fit_seed(// in/out
                 .object_height_n            = object_height_n,
                 .object_width_n             = object_width_n,
                 .object_spacing             = object_spacing,
+                .fit_seed_position_err_threshold  = fit_seed_position_err_threshold,
+                .fit_seed_cos_angle_err_threshold = fit_seed_cos_angle_err_threshold,
                 .Rt_lidar0_lidar            = Rt_lidar0_lidar,
                 .Rt_lidar0_camera           = Rt_lidar0_camera,
                 .Rt_camera_board_cache      = Rt_camera_board_cache
@@ -1425,18 +1446,18 @@ fit_seed(// in/out
             if(cos_err < -1.0) cos_err = -1.0;
             if(cos_err >  1.0) cos_err =  1.0;
 
-            const double th_err_deg = acos(cos_err) * 180. / M_PI;
             const mrcal_point3_t p0_err = mrcal_point3_sub(p0_lidar0_should, p0_lidar0_observed);
             const double p0_err_mag = mrcal_point3_mag(p0_err);
 
-#warning "unhardcode"
-            bool validation_failed_here = p0_err_mag > 0.5 || th_err_deg > 10.;
+            bool validation_failed_here =
+                p0_err_mag > fit_seed_position_err_threshold ||
+                cos_err    < fit_seed_cos_angle_err_threshold;
 
             if(validation_failed_here) validation_failed = true;
 
             MSG("%sisnapshot=%d ilidar=%d th_err_deg=%.2f p0_err_mag=%.2f",
                 validation_failed_here ? "FAILED: " : "",
-                isnapshot, ilidar, th_err_deg, p0_err_mag);
+                isnapshot, ilidar, acos(cos_err) * 180. / M_PI, p0_err_mag);
         }
 
         for(unsigned int icamera=0; icamera<Ncameras; icamera++)
@@ -3383,6 +3404,9 @@ bool clc_fit_from_inputs_dump(// out
                               const int*  isnapshot_exclude, // NULL to not exclude any
                               const int   Nisnapshot_exclude,
 
+                              const double fit_seed_position_err_threshold,
+                              const double fit_seed_cos_angle_err_threshold,
+
                               // if(!do_fit_seed && !do_inject_noise) { fit(previous fit_seed() result)     }
                               // if(!do_fit_seed &&  do_inject_noise) { fit(previous fit() result)          }
                               // if(do_fit_seed)                      { fit( fit_seed() )                   }
@@ -3733,7 +3757,10 @@ bool clc_fit_from_inputs_dump(// out
                          // The dimensions of the chessboard grid being detected in the images
                          object_height_n,
                          object_width_n,
-                         object_spacing);
+                         object_spacing,
+                         fit_seed_position_err_threshold,
+                         fit_seed_cos_angle_err_threshold);
+
 
             if(result && !do_skip_plots)
             {
@@ -4936,6 +4963,8 @@ bool _clc_internal(// in/out
 
          const clc_lidar_segmentation_context_t* ctx,
 
+         const double fit_seed_position_err_threshold,
+         const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
          bool check_gradient )
 {
@@ -5236,7 +5265,9 @@ bool _clc_internal(// in/out
                      models,
                      object_height_n,
                      object_width_n,
-                     object_spacing))
+                     object_spacing,
+                     fit_seed_position_err_threshold,
+                     fit_seed_cos_angle_err_threshold))
         {
             MSG("fit_seed() failed");
 
@@ -5591,6 +5622,8 @@ bool clc_unsorted(// in/out
 
          const clc_lidar_segmentation_context_t* ctx,
 
+         const double fit_seed_position_err_threshold,
+         const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
          bool check_gradient)
 {
@@ -5612,6 +5645,8 @@ bool clc_unsorted(// in/out
                          object_height_n, object_width_n, object_spacing,
                          is_bgr_mask,
                          ctx,
+                         fit_seed_position_err_threshold,
+                         fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
                          check_gradient);
 }
@@ -5652,6 +5687,8 @@ bool clc_sorted(// in/out
 
          const clc_lidar_segmentation_context_t* ctx,
 
+         const double fit_seed_position_err_threshold,
+         const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
          bool check_gradient)
 {
@@ -5673,6 +5710,8 @@ bool clc_sorted(// in/out
                          object_height_n, object_width_n, object_spacing,
                          is_bgr_mask,
                          ctx,
+                         fit_seed_position_err_threshold,
+                         fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
                          check_gradient);
 }
@@ -5711,6 +5750,8 @@ bool clc_lidar_segmented(// in/out
          // sensor_snapshots.images[] is color or not
          const clc_is_bgr_mask_t is_bgr_mask,
 
+         const double fit_seed_position_err_threshold,
+         const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
          bool check_gradient)
 {
@@ -5732,6 +5773,8 @@ bool clc_lidar_segmented(// in/out
                          object_height_n, object_width_n, object_spacing,
                          is_bgr_mask,
                          NULL,
+                         fit_seed_position_err_threshold,
+                         fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
                          check_gradient);
 }
@@ -5770,6 +5813,8 @@ bool clc_lidar_segmented_dense(// in/out
          // sensor_snapshots.images[] is color or not
          const clc_is_bgr_mask_t is_bgr_mask,
 
+         const double fit_seed_position_err_threshold,
+         const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
          bool check_gradient)
 {
@@ -5791,6 +5836,8 @@ bool clc_lidar_segmented_dense(// in/out
                          object_height_n, object_width_n, object_spacing,
                          is_bgr_mask,
                          NULL,
+                         fit_seed_position_err_threshold,
+                         fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
                          check_gradient);
 }

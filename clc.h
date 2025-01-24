@@ -301,6 +301,8 @@ bool clc_unsorted(// in/out
 
          const clc_lidar_segmentation_context_t* ctx,
 
+         const double fit_seed_position_err_threshold,
+         const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
          bool check_gradient);
 
@@ -341,6 +343,8 @@ bool clc_sorted(// in/out
 
          const clc_lidar_segmentation_context_t* ctx,
 
+         const double fit_seed_position_err_threshold,
+         const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
          bool check_gradient);
 
@@ -379,6 +383,8 @@ bool clc_lidar_segmented(// in/out
          // sensor_snapshots.images[] is color or not
          const clc_is_bgr_mask_t is_bgr_mask,
 
+         const double fit_seed_position_err_threshold,
+         const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
          bool check_gradient);
 
@@ -416,6 +422,8 @@ bool clc_lidar_segmented_dense(// in/out
          // sensor_snapshots.images[] is color or not
          const clc_is_bgr_mask_t is_bgr_mask,
 
+         const double fit_seed_position_err_threshold,
+         const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
          bool check_gradient);
 
@@ -465,6 +473,9 @@ bool clc_fit_from_inputs_dump(// out
                               size_t      size_inputs_dump,
                               const int*  exclude_isnapshot, // NULL to not exclude any
                               const int   Nexclude_isnapshot,
+
+                              const double fit_seed_position_err_threshold,
+                              const double fit_seed_cos_angle_err_threshold,
 
                               // if(!do_fit_seed && !do_inject_noise) { fit(previous fit_seed() result)     }
                               // if(!do_fit_seed &&  do_inject_noise) { fit(previous fit() result)          }

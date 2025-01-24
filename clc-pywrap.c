@@ -472,6 +472,9 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     int    object_width_n  = -1;
     double object_spacing  = -1.;
 
+    double fit_seed_position_err_threshold  = 0.5;
+    double fit_seed_cos_angle_err_threshold = cos(10.*M_PI/180.);
+
     int check_gradient__use_distance_to_plane = 0;
     int check_gradient                        = 0;
     int do_dump_inputs                        = 0;
@@ -499,13 +502,15 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          "object_height_n",
                          "object_width_n",
                          "object_spacing",
+                         "fit_seed_position_err_threshold",
+                         "fit_seed_cos_angle_err_threshold",
                          "check_gradient__use_distance_to_plane",
                          "check_gradient",
                          "do_dump_inputs",
                          CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" "OOiidppp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
+                                     "O" "|$" "OOiiddppp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
                                      ,
                                      keywords,
                                      (PyTupleObject*)&py_sensor_snapshots,
@@ -514,6 +519,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                                      &object_height_n,
                                      &object_width_n,
                                      &object_spacing,
+                                     &fit_seed_position_err_threshold,
+                                     &fit_seed_cos_angle_err_threshold,
                                      &check_gradient__use_distance_to_plane,
                                      &check_gradient,
                                      &do_dump_inputs,
@@ -732,6 +739,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          object_spacing,
                          is_bgr_mask,
                          &ctx,
+                         fit_seed_position_err_threshold,
+                         fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
                          check_gradient))
         {
@@ -1075,6 +1084,8 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
     PyArrayObject* py_rt_ref_lidar  = NULL;
     PyArrayObject* py_rt_ref_camera = NULL;
     PyArrayObject* py_isnapshot_exclude = NULL;
+    double fit_seed_position_err_threshold  = 0.5;
+    double fit_seed_cos_angle_err_threshold = cos(10.*M_PI/180.);
     int            do_inject_noise  = 0;
     int            do_fit_seed      = 0;
     int            do_skip_prints   = 1;
@@ -1084,16 +1095,20 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
 
     char* keywords[] = { "inputs_dump",
                          "isnapshot_exclude",
+                         "fit_seed_position_err_threshold",
+                         "fit_seed_cos_angle_err_threshold",
                          "do_inject_noise",
                          "do_fit_seed",
                          "do_skip_prints",
                          "do_skip_plots",
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" "Opppp",
+                                     "O" "|$" "Oddpppp",
                                      keywords,
                                      &inputs_dump,
                                      &py_isnapshot_exclude,
+                                     &fit_seed_position_err_threshold,
+                                     &fit_seed_cos_angle_err_threshold,
                                      &do_inject_noise,
                                      &do_fit_seed,
                                      &do_skip_prints,
@@ -1129,6 +1144,8 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
                                          PyBytes_GET_SIZE( inputs_dump),
                                          py_isnapshot_exclude == NULL ? NULL : (const int*)PyArray_DATA(py_isnapshot_exclude),
                                          py_isnapshot_exclude == NULL ? 0    : PyArray_DIMS(py_isnapshot_exclude)[0],
+                                         fit_seed_position_err_threshold,
+                                         fit_seed_cos_angle_err_threshold,
                                          do_fit_seed,
                                          do_inject_noise,
                                          do_skip_prints,
