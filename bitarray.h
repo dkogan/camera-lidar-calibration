@@ -71,6 +71,18 @@ static inline void bitarray64_set(uint64_t* bitarray, int ibit)
     bitarray[ibit/64] |= (1ul << (ibit % 64));
 }
 __attribute__((unused))
+static inline void bitarray64_set_all(uint64_t* bitarray, const int Nwords)
+{
+    for(int i=0; i<Nwords; i++)
+        bitarray[i] = ~0ULL;
+}
+__attribute__((unused))
+static inline void bitarray64_clear_all(uint64_t* bitarray, const int Nwords)
+{
+    for(int i=0; i<Nwords; i++)
+        bitarray[i] = 0ULL;
+}
+__attribute__((unused))
 static inline void bitarray64_clear(uint64_t* bitarray, int ibit)
 {
     bitarray[ibit/64] &= ~(1ul << (ibit % 64));
