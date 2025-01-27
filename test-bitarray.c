@@ -38,14 +38,14 @@ int main(int argc      __attribute__((unused)),
     bitarray64_set_range(bitarray, 64*5 + 0,  20);
     ref[5] = 0x00000000000fffff;
 
-    for(int i=0; i<Nwords; i++)
-    {
-        printf("word %d ref/computed/xor:\n0x%016"PRIx64"\n0x%016"PRIx64"\n0x%016"PRIx64"\n\n",
-               i,
-               ref[i],
-               bitarray[i],
-               ref[i] ^ bitarray[i]);
-    }
+    if(false)
+        for(int i=0; i<Nwords; i++)
+            printf("word %d ref/computed/xor:\n0x%016"PRIx64"\n0x%016"PRIx64"\n0x%016"PRIx64"\n\n",
+                   i,
+                   ref[i],
+                   bitarray[i],
+                   ref[i] ^ bitarray[i]);
+
     if(0 != memcmp(ref, bitarray, Nwords*sizeof(uint64_t)))
     {
         printf("\x1b[31m"
