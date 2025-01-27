@@ -37,6 +37,36 @@ static inline bool bitarray64_check(const uint64_t* bitarray, int ibit)
     return bitarray[ibit/64] & (1ul << (ibit % 64));
 }
 __attribute__((unused))
+static inline bool bitarray64_check_all_set(const uint64_t* bitarray, int Nbits)
+{
+    // Check the full words
+    const int Nwords_full = Nbits/64; // rounds down
+    for(int i=0; i<Nwords_full; i++)
+        if(bitarray[i] != ~0ul)
+            return false;
+    const int Nbits_remaining = Nbits - Nwords_full*64;
+    if(Nbits_remaining == 0)
+        return true;
+    // Check the last non-full word
+    const uint64_t mask = (1UL << Nbits_remaining) - 1UL;
+    return (bitarray[Nwords_full] & mask) == mask;
+}
+__attribute__((unused))
+static inline bool bitarray64_check_all_clear(const uint64_t* bitarray, int Nbits)
+{
+    // Check the full words
+    const int Nwords_full = Nbits/64; // rounds down
+    for(int i=0; i<Nwords_full; i++)
+        if(bitarray[i] != 0ul)
+            return false;
+    const int Nbits_remaining = Nbits - Nwords_full*64;
+    if(Nbits_remaining == 0)
+        return true;
+    // Check the last non-full word
+    const uint64_t mask = (1UL << Nbits_remaining) - 1UL;
+    return (bitarray[Nwords_full] & mask) == 0;
+}
+__attribute__((unused))
 static inline void bitarray64_set_range_oneword(uint64_t* word,
                                                 int ibit0, int Nbits)
 {
