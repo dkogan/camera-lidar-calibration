@@ -46,16 +46,149 @@ int main(int argc      __attribute__((unused)),
                    bitarray[i],
                    ref[i] ^ bitarray[i]);
 
+    int Nfailed = 0;
     if(0 != memcmp(ref, bitarray, Nwords*sizeof(uint64_t)))
     {
         printf("\x1b[31m"
                "FAILED: mismatched data"
                "\x1b[0m\n");
-        return 1;
+        Nfailed++;
     }
 
-    printf("\x1b[32m"
-           "ALL OK"
-           "\x1b[0m\n");
-    return 0;
+    if(bitarray64_check(bitarray,64*2+50-1))
+    {
+        printf("\x1b[31m"
+               "FAILED: bit 64*2+50-1 should be clear"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+    if(!bitarray64_check(bitarray,64*2+50))
+    {
+        printf("\x1b[31m"
+               "FAILED: bit 64*2+50 should be set"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+    if(!bitarray64_check(bitarray,64*2+50+100-1))
+    {
+        printf("\x1b[31m"
+               "FAILED: bit 64*2+50+100-1 should be set"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+    if(bitarray64_check(bitarray,64*2+50+100))
+    {
+        printf("\x1b[31m"
+               "FAILED: bit 64*2+50+100 should be clear"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+
+    if(bitarray64_check_all_set(bitarray,Nbits))
+    {
+        printf("\x1b[31m"
+               "FAILED: should NOT be all_set"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+    if(bitarray64_check_all_clear(bitarray,Nbits))
+    {
+        printf("\x1b[31m"
+               "FAILED: should NOT be all_clear"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+
+
+    for(int i=0; i<Nwords; i++) bitarray[i] = 0UL;
+    if(bitarray64_check_all_set(bitarray,Nbits))
+    {
+        printf("\x1b[31m"
+               "FAILED: should NOT be all_set"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+    if(!bitarray64_check_all_clear(bitarray,Nbits))
+    {
+        printf("\x1b[31m"
+               "FAILED: should be all_clear"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+
+    // Set one-bit-past-the end. This is out-of-bounds and we should still be
+    // all clear
+    bitarray[Nbits/64] |= 1UL << (Nbits%64);
+    if(bitarray64_check_all_set(bitarray,Nbits))
+    {
+        printf("\x1b[31m"
+               "FAILED: should NOT be all_set"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+    if(!bitarray64_check_all_clear(bitarray,Nbits))
+    {
+        printf("\x1b[31m"
+               "FAILED: should be all_clear"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+
+    // Set the last bit
+    bitarray[Nbits/64] |= 1UL << ((Nbits%64)-1);
+    if(bitarray64_check_all_set(bitarray,Nbits))
+    {
+        printf("\x1b[31m"
+               "FAILED: should NOT be all_set"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+    if(bitarray64_check_all_clear(bitarray,Nbits))
+    {
+        printf("\x1b[31m"
+               "FAILED: should NOT be all_clear"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+    bitarray[Nbits/64] = 0;
+    if(!bitarray64_check_all_clear(bitarray,Nbits))
+    {
+        printf("\x1b[31m"
+               "FAILED: should be all_clear"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+
+    // Set the first bit
+    bitarray[0] |= 1UL;
+    if(bitarray64_check_all_set(bitarray,Nbits))
+    {
+        printf("\x1b[31m"
+               "FAILED: should NOT be all_set"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+    if(bitarray64_check_all_clear(bitarray,Nbits))
+    {
+        printf("\x1b[31m"
+               "FAILED: should NOT be all_clear"
+               "\x1b[0m\n");
+        Nfailed++;
+    }
+
+
+
+    if(Nfailed == 0)
+    {
+        printf("\x1b[32m"
+               "ALL OK"
+               "\x1b[0m\n");
+        return 0;
+    }
+
+    printf("\x1b[31m"
+           "%d tests failed"
+           "\x1b[0m\n", Nfailed);
+
+    return Nfailed;
 }

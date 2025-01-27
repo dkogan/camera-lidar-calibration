@@ -31,6 +31,7 @@ CFLAGS += -I/usr/include/suitesparse
 LIB_SOURCES += lidar-segmentation.c clc.c mrgingham-c-bridge.cc opencv-c-bridge.cc
 
 test-bitarray: test-bitarray.c bitarray.h
+all: test-bitarray
 
 
 clc-pywrap.o: CFLAGS += $(PY_MRBUILD_CFLAGS)
