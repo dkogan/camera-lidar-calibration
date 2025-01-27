@@ -118,7 +118,6 @@ connectivity_matrix(// out
                     const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
                     const int                          Nsensor_snapshots_filtered,
 
-                    // These apply to ALL the sensor_snapshots[]
                     const int Ncameras,
                     const int Nlidars)
 {
@@ -1275,8 +1274,6 @@ fit_seed(// in/out
          const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
          const unsigned int                 Nsensor_snapshots_filtered,
 
-
-         // These apply to ALL the sensor_snapshots[]
          const unsigned int Nlidars,
          const unsigned int Ncameras,
          const mrcal_cameramodel_t*const* models, // Ncameras of these
@@ -1305,7 +1302,6 @@ fit_seed(// in/out
                             sensor_snapshots_filtered,
                             Nsensor_snapshots_filtered,
 
-                            // These apply to ALL the sensor_snapshots[]
                             Ncameras,
                             Nlidars);
 
@@ -2735,7 +2731,6 @@ _plot_geometry(FILE* fp,
                const sensor_snapshot_segmented_t* snapshots,
                const unsigned int                 Nsnapshots,
 
-               // These apply to ALL the sensor_snapshots[]
                const unsigned int Nlidars,
                const unsigned int Ncameras,
                const int object_height_n,
@@ -2872,7 +2867,6 @@ plot_geometry(const char* filename,
               const sensor_snapshot_segmented_t* snapshots,
               const unsigned int                 Nsnapshots,
 
-              // These apply to ALL the sensor_snapshots[]
               const unsigned int Nlidars,
               const unsigned int Ncameras,
               const int object_height_n,
@@ -2930,7 +2924,6 @@ static bool dump_inputs(
     const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
     const unsigned int                 Nsensor_snapshots_filtered,
 
-    // These apply to ALL the sensor_snapshots[]
     const unsigned int Nlidars,
     const unsigned int Ncameras,
     const mrcal_cameramodel_t*const* models, // Ncameras of these
@@ -3067,7 +3060,6 @@ fit(// out
     const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
     const unsigned int                 Nsensor_snapshots_filtered,
 
-    // These apply to ALL the sensor_snapshots[]
     const unsigned int Nlidars,
     const unsigned int Ncameras,
     const mrcal_cameramodel_t*const* models, // Ncameras of these
@@ -3749,7 +3741,6 @@ bool clc_fit_from_inputs_dump(// out
                          sensor_snapshots_filtered,
                          Nsensor_snapshots_filtered_culled,
 
-                         // These apply to ALL the sensor_snapshots[]
                          *Nlidars,
                          *Ncameras,
                          (const mrcal_cameramodel_t * const*)models, // Ncameras of these
@@ -3804,7 +3795,6 @@ bool clc_fit_from_inputs_dump(// out
                 sensor_snapshots_filtered,
                 Nsensor_snapshots_filtered_culled,
 
-                // These apply to ALL the sensor_snapshots[]
                 *Nlidars,
                 *Ncameras,
                 (const mrcal_cameramodel_t * const*)models, // Ncameras of these
@@ -4162,7 +4152,6 @@ static bool compute_covariance(// out
                                const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
                                const unsigned int                 Nsensor_snapshots_filtered,
 
-                               // These apply to ALL the sensor_snapshots[]
                                const unsigned int Nlidars,
                                const unsigned int Ncameras,
                                const mrcal_cameramodel_t*const* models, // Ncameras of these
@@ -4678,7 +4667,6 @@ transformation_uncertainty_in_sector(// out
 
                                    const double* Var_rt_lidar0_sensor,
                                    // in
-                                   // These apply to ALL the sensor_snapshots[]
                                    const unsigned int Nlidars,
                                    const unsigned int Ncameras)
 {
@@ -4948,7 +4936,6 @@ bool _clc_internal(// in/out
          // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
 
-         // These apply to ALL the sensor_snapshots[]
          const unsigned int Nlidars,
          const unsigned int Ncameras,
          const mrcal_cameramodel_t*const* models, // Ncameras of these
@@ -5259,7 +5246,6 @@ bool _clc_internal(// in/out
                      sensor_snapshots_filtered,
                      Nsensor_snapshots_filtered,
 
-                     // These apply to ALL the sensor_snapshots[]
                      Nlidars,
                      Ncameras,
                      models,
@@ -5341,7 +5327,6 @@ bool _clc_internal(// in/out
                 sensor_snapshots_filtered,
                 Nsensor_snapshots_filtered,
 
-                // These apply to ALL the sensor_snapshots[]
                 Nlidars,
                 Ncameras,
                 models,
@@ -5607,7 +5592,6 @@ bool clc_unsorted(// in/out
          // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
 
-         // These apply to ALL the sensor_snapshots[]
          const unsigned int Nlidars,
          const unsigned int Ncameras,
          const mrcal_cameramodel_t*const* models, // Ncameras of these
@@ -5672,7 +5656,6 @@ bool clc_sorted(// in/out
          const clc_sensor_snapshot_sorted_t* sensor_snapshots,
          const unsigned int                  Nsensor_snapshots,
 
-         // These apply to ALL the sensor_snapshots[]
          const unsigned int Nlidars,
          const unsigned int Ncameras,
          const mrcal_cameramodel_t*const* models, // Ncameras of these
@@ -5737,7 +5720,6 @@ bool clc_lidar_segmented(// in/out
          const clc_sensor_snapshot_segmented_t* sensor_snapshots,
          const unsigned int                     Nsensor_snapshots,
 
-         // These apply to ALL the sensor_snapshots[]
          const unsigned int Nlidars,
          const unsigned int Ncameras,
          const mrcal_cameramodel_t*const* models, // Ncameras of these
@@ -5800,7 +5782,6 @@ bool clc_lidar_segmented_dense(// in/out
          const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots,
          const unsigned int                           Nsensor_snapshots,
 
-         // These apply to ALL the sensor_snapshots[]
          const unsigned int Nlidars,
          const unsigned int Ncameras,
          const mrcal_cameramodel_t*const* models, // Ncameras of these

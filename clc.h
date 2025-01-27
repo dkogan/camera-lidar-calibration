@@ -286,7 +286,6 @@ bool clc_unsorted(// in/out
          // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
 
-         // These apply to ALL the sensor_snapshots[]
          const unsigned int Nlidars,
          const unsigned int Ncameras,
          const mrcal_cameramodel_t*const* models, // Ncameras of these
@@ -328,7 +327,6 @@ bool clc_sorted(// in/out
          const clc_sensor_snapshot_sorted_t* sensor_snapshots,
          const unsigned int                  Nsensor_snapshots,
 
-         // These apply to ALL the sensor_snapshots[]
          const unsigned int Nlidars,
          const unsigned int Ncameras,
          const mrcal_cameramodel_t*const* models, // Ncameras of these
@@ -370,7 +368,6 @@ bool clc_lidar_segmented(// in/out
          const clc_sensor_snapshot_segmented_t* sensor_snapshots,
          const unsigned int                     Nsensor_snapshots,
 
-         // These apply to ALL the sensor_snapshots[]
          const unsigned int Nlidars,
          const unsigned int Ncameras,
          const mrcal_cameramodel_t*const* models, // Ncameras of these
@@ -409,7 +406,6 @@ bool clc_lidar_segmented_dense(// in/out
          const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots,
          const unsigned int                           Nsensor_snapshots,
 
-         // These apply to ALL the sensor_snapshots[]
          const unsigned int Nlidars,
          const unsigned int Ncameras,
          const mrcal_cameramodel_t*const* models, // Ncameras of these
