@@ -47,4 +47,16 @@ DIST_PY3_MODULES := _clc$(PY_EXT_SUFFIX)
 
 all: _clc$(PY_EXT_SUFFIX)
 
+
+
+
+
+
+TESTS := ./test-bitarray
+
+test: all
+	@FAILED=""; $(foreach t,$(TESTS),echo "========== RUNNING: $(subst __, ,$t)"; $(subst __, ,$t) || FAILED="$$FAILED $t"; ) test -z "$$FAILED" || echo "SOME TEST SETS FAILED: $$FAILED !"; test -z "$$FAILED" && echo "ALL TEST SETS PASSED!"
+.PHONY: test
+
+
 include $(MRBUILD_MK)/Makefile.common.footer
