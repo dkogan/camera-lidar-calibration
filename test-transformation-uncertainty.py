@@ -34,6 +34,11 @@ def parse_args():
                         help='''Used for sampled validation of the given
                         --topics. we evaluate the uncertainty at the center of
                         this sector''')
+    parser.add_argument('--ibag',
+                        type=int,
+                        default = 0,
+                        help='''Which bag is used for the uncertainty
+                        quantification. By default we use bag 0''')
     parser.add_argument('--Nsamples',
                         type=int,
                         default=100,
@@ -216,7 +221,7 @@ def topic_index(l,t):
 
 
 kwargs_calibrate = context['kwargs_calibrate']
-kwargs = dict(bag                              = kwargs_calibrate['bags'][10],
+kwargs = dict(bag                              = kwargs_calibrate['bags'][args.ibag],
               topics                           = kwargs_calibrate['topics'],
               Nsectors                         = context         ['Nsectors'],
               threshold_valid_lidar_range      = context         ['threshold_valid_lidar_range'],
