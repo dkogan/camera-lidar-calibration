@@ -110,13 +110,29 @@ print_full_symmetric_matrix_from_upper_triangle(const uint16_t* A,
     }
 }
 
+
+
+#define LOOP_SNAPSHOT(CTXREF)                   \
+    for(int isnapshot=0;                        \
+        isnapshot < CTXREF Nsnapshots;          \
+        isnapshot++)
+
+#define LOOP_SNAPSHOT_HEADER(CTXREF,CONST)                              \
+        if(!bitarray64_check(CTXREF bitarray_snapshots_selected, isnapshot)) \
+            continue;                                                   \
+        CONST sensor_snapshot_segmented_t* snapshot = &CTXREF snapshots[isnapshot]
+
+
+
+
 static void
 connectivity_matrix(// out
                     uint16_t* shared_observation_counts,
 
                     // in
-                    const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
-                    const int                          Nsensor_snapshots_filtered,
+                    const sensor_snapshot_segmented_t* snapshots,
+                    const int                          Nsnapshots,
+                    const uint64_t*                    bitarray_snapshots_selected,
 
                     const int Ncameras,
                     const int Nlidars)
@@ -134,20 +150,20 @@ connectivity_matrix(// out
     const int Nsensors = Ncameras + Nlidars;
     memset(shared_observation_counts, 0, pairwise_N(Nsensors)*sizeof(shared_observation_counts[0]));
 
-    for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
+    LOOP_SNAPSHOT()
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
+        LOOP_SNAPSHOT_HEADER(,const);
 
         for(int icamera0=0; icamera0<Ncameras; icamera0++)
         {
             // camera-camera links
 
-            if(sensor_snapshot->chessboard_corners[icamera0] == NULL)
+            if(snapshot->chessboard_corners[icamera0] == NULL)
                 continue;
 
             for(int icamera1=icamera0+1; icamera1<Ncameras; icamera1++)
             {
-                if(sensor_snapshot->chessboard_corners[icamera1] == NULL)
+                if(snapshot->chessboard_corners[icamera1] == NULL)
                     continue;
 
                 const int idx = pairwise_index(Nlidars+icamera0,
@@ -159,7 +175,7 @@ connectivity_matrix(// out
             // camera-lidar links
             for(int ilidar1=0; ilidar1<Nlidars; ilidar1++)
             {
-                if(sensor_snapshot->lidar_scans[ilidar1].points == NULL)
+                if(snapshot->lidar_scans[ilidar1].points == NULL)
                     continue;
 
                 const int idx = pairwise_index(ilidar1,
@@ -172,12 +188,12 @@ connectivity_matrix(// out
         // lidar-lidar links
         for(int ilidar0=0; ilidar0<Nlidars-1; ilidar0++)
         {
-            if(sensor_snapshot->lidar_scans[ilidar0].points == NULL)
+            if(snapshot->lidar_scans[ilidar0].points == NULL)
                 continue;
 
             for(int ilidar1=ilidar0+1; ilidar1<Nlidars; ilidar1++)
             {
-                if(sensor_snapshot->lidar_scans[ilidar1].points == NULL)
+                if(snapshot->lidar_scans[ilidar1].points == NULL)
                     continue;
 
                 const int idx = pairwise_index(ilidar1, ilidar0,
@@ -399,8 +415,9 @@ compute_board_poses(// out
                     // in,out
                     double*                            Rt_camera_board_cache,
                     // in
-                    const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
-                    const int                          Nsensor_snapshots_filtered,
+                    const sensor_snapshot_segmented_t* snapshots,
+                    const int                          Nsnapshots,
+                    const uint64_t*                    bitarray_snapshots_selected,
                     const int                          Ncameras,
                     const int                          Nlidars,
                     const double*                      Rt_lidar0_lidar,
@@ -410,9 +427,9 @@ compute_board_poses(// out
                     const int                          object_width_n,
                     const double                       object_spacing)
 {
-    for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
+    LOOP_SNAPSHOT()
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
+        LOOP_SNAPSHOT_HEADER(,const);
 
         // cameras
 
@@ -421,7 +438,7 @@ compute_board_poses(// out
         bool done = false;
         for(int icamera=0; icamera<Ncameras; icamera++)
         {
-            if(sensor_snapshot->chessboard_corners[icamera] == NULL)
+            if(snapshot->chessboard_corners[icamera] == NULL)
                 continue;
 
             double* Rt_camera_board = &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
@@ -431,7 +448,7 @@ compute_board_poses(// out
                                         Rt_camera_board,
                                         // in
                                         models[icamera],
-                                        sensor_snapshot->chessboard_corners[icamera],
+                                        snapshot->chessboard_corners[icamera],
                                         object_height_n,
                                         object_width_n,
                                         object_spacing))
@@ -456,7 +473,7 @@ compute_board_poses(// out
 
         int ilidar_first=0;
         for(; ilidar_first<Nlidars; ilidar_first++)
-            if(sensor_snapshot->lidar_scans[ilidar_first].points != NULL)
+            if(snapshot->lidar_scans[ilidar_first].points != NULL)
                 break;
 
         if(ilidar_first == Nlidars)
@@ -470,9 +487,9 @@ compute_board_poses(// out
         // LIDAR will do
         mrcal_point3_t n,plidar_mean;
         mrcal_point3_from_clc_point3f(&n,
-                                      &sensor_snapshot->lidar_scans[ilidar_first].plane.n);
+                                      &snapshot->lidar_scans[ilidar_first].plane.n);
         mrcal_point3_from_clc_point3f(&plidar_mean,
-                                      &sensor_snapshot->lidar_scans[ilidar_first].plane.p_mean);
+                                      &snapshot->lidar_scans[ilidar_first].plane.p_mean);
 
         // I have the normal to the board, in lidar coordinates. Compute an
         // arbitrary rotation that matches this normal. This is unique only
@@ -687,7 +704,7 @@ bool boardcenter_normal__sensor(// out
                            // in
                            const uint16_t                     isensor,
                            const int                          isnapshot,
-                           const sensor_snapshot_segmented_t* sensor_snapshot,
+                           const sensor_snapshot_segmented_t* snapshot,
                            const int                          Nlidars,
                            const int                          Ncameras,
                            const mrcal_cameramodel_t*const*   models,
@@ -700,7 +717,7 @@ bool boardcenter_normal__sensor(// out
         // this is a lidar
         const int ilidar = isensor;
 
-        const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+        const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
         if(lidar_scan->points == NULL)
             return false;
 
@@ -712,7 +729,7 @@ bool boardcenter_normal__sensor(// out
         // this is a camera
         const int icamera = isensor - Nlidars;
 
-        const mrcal_point2_t* chessboard_corners = sensor_snapshot->chessboard_corners[icamera];
+        const mrcal_point2_t* chessboard_corners = snapshot->chessboard_corners[icamera];
         if(chessboard_corners == NULL)
             return false;
 
@@ -746,7 +763,7 @@ bool print_sensor_points(// out
                          const int                          isnapshot,
                          const char*                        id_pair,
                          const uint16_t                     isensor,
-                         const sensor_snapshot_segmented_t* sensor_snapshot,
+                         const sensor_snapshot_segmented_t* snapshot,
                          const double*                      Rt_camera_board_cache,
                          const int                          Nlidars,
                          const int                          Ncameras,
@@ -762,7 +779,7 @@ bool print_sensor_points(// out
         // this is a lidar
         const int ilidar = isensor;
 
-        const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+        const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
         if(lidar_scan->points == NULL)
             return false;
 
@@ -810,8 +827,9 @@ bool align_point_clouds(// out
                         const uint16_t isensor1,
                         const uint16_t isensor0,
 
-                        const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
-                        const int                          Nsensor_snapshots_filtered,
+                        const sensor_snapshot_segmented_t* snapshots,
+                        const int                          Nsnapshots,
+                        const uint64_t*                    bitarray_snapshots_selected,
                         const int                          Nlidars,
                         const int                          Ncameras,
                         const mrcal_cameramodel_t*const*   models,
@@ -821,14 +839,14 @@ bool align_point_clouds(// out
                         const double                       fit_seed_position_err_threshold,
                         const double                       fit_seed_cos_angle_err_threshold)
 {
-    // Nsensor_snapshots_filtered is the max number I will need
+    // Nsnapshots is the max number I will need
     // These are double instead of float, since that's what the alignment code
     // uses
-    mrcal_point3_t points0 [Nsensor_snapshots_filtered];
-    mrcal_point3_t points1 [Nsensor_snapshots_filtered];
-    mrcal_point3_t normals0[Nsensor_snapshots_filtered];
-    mrcal_point3_t normals1[Nsensor_snapshots_filtered];
-    int isnapshot_fit[Nsensor_snapshots_filtered]; // for diagnostics
+    mrcal_point3_t points0 [Nsnapshots];
+    mrcal_point3_t points1 [Nsnapshots];
+    mrcal_point3_t normals0[Nsnapshots];
+    mrcal_point3_t normals1[Nsnapshots];
+    int isnapshot_fit[Nsnapshots]; // for diagnostics
     int Nfit_snapshot = 0;
 
     // to pacify the compiler
@@ -836,8 +854,10 @@ bool align_point_clouds(// out
     normals1[0].x = 0;
 
     // Loop through all the observations
-    for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
+    LOOP_SNAPSHOT()
     {
+        LOOP_SNAPSHOT_HEADER(,const);
+
         if(!boardcenter_normal__sensor(// out
                                   &points0[Nfit_snapshot],
                                   &normals0[Nfit_snapshot],
@@ -845,7 +865,7 @@ bool align_point_clouds(// out
                                   // in
                                   isensor0,
                                   isnapshot,
-                                  &sensor_snapshots_filtered[isnapshot],
+                                  &snapshots[isnapshot],
                                   Nlidars,
                                   Ncameras,
                                   models,
@@ -859,7 +879,7 @@ bool align_point_clouds(// out
                                   // in
                                   isensor1,
                                   isnapshot,
-                                  &sensor_snapshots_filtered[isnapshot],
+                                  &snapshots[isnapshot],
                                   Nlidars,
                                   Ncameras,
                                   models,
@@ -954,7 +974,7 @@ bool align_point_clouds(// out
                                          isnapshot,
                                          "sensor0",
                                          isensor0,
-                                         &sensor_snapshots_filtered[isnapshot],
+                                         &snapshots[isnapshot],
                                          Rt_camera_board_cache,
                                          Nlidars,
                                          Ncameras,
@@ -965,7 +985,7 @@ bool align_point_clouds(// out
                                          isnapshot,
                                          "sensor1",
                                          isensor1,
-                                         &sensor_snapshots_filtered[isnapshot],
+                                         &snapshots[isnapshot],
                                          Rt_camera_board_cache,
                                          Nlidars,
                                          Ncameras,
@@ -1016,15 +1036,15 @@ bool align_point_clouds(// out
             else if(isensor1 < Nlidars) ilidar = isensor1;
             else assert(0);
 
-            if(sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].ipoint != NULL)
+            if(snapshots[isnapshot].lidar_scans[ilidar].ipoint != NULL)
             {
-                int i0 = sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].ipoint[0];
-                const clc_point3f_t* p = &sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].points[i0];
+                int i0 = snapshots[isnapshot].lidar_scans[ilidar].ipoint[0];
+                const clc_point3f_t* p = &snapshots[isnapshot].lidar_scans[ilidar].points[i0];
                 MSG("p0 = %f %f %f", p->x, p->y, p->z);
             }
             else
             {
-                const clc_point3f_t* p = &sensor_snapshots_filtered[isnapshot].lidar_scans[ilidar].points[0];
+                const clc_point3f_t* p = &snapshots[isnapshot].lidar_scans[ilidar].points[0];
                 MSG("p0 = %f %f %f", p->x, p->y, p->z);
             }
         }
@@ -1108,8 +1128,9 @@ bool align_point_clouds(// out
 
 typedef struct
 {
-    const sensor_snapshot_segmented_t* sensor_snapshots_filtered;
-    const int                          Nsensor_snapshots_filtered;
+    const sensor_snapshot_segmented_t* snapshots;
+    const int                          Nsnapshots;
+    const uint64_t*                    bitarray_snapshots_selected;
     const int                          Nlidars;
     const int                          Ncameras;
     const mrcal_cameramodel_t*const*   models; // Ncameras of these
@@ -1135,16 +1156,17 @@ bool cb_sensor_link(const uint16_t isensor1,
 
     cb_sensor_link_cookie_t* cookie = (cb_sensor_link_cookie_t*)_cookie;
 
-    const sensor_snapshot_segmented_t* sensor_snapshots_filtered  = cookie->sensor_snapshots_filtered;
-    const int                          Nsensor_snapshots_filtered = cookie->Nsensor_snapshots_filtered;
-    const int                          Nlidars                    = cookie->Nlidars;
-    const int                          Ncameras                   = cookie->Ncameras;
-    const mrcal_cameramodel_t*const*   models                     = cookie->models;
-    const int                          object_height_n            = cookie->object_height_n;
-    const int                          object_width_n             = cookie->object_width_n;
-    const double                       object_spacing             = cookie->object_spacing;
-    const double fit_seed_position_err_threshold                  = cookie->fit_seed_position_err_threshold;
-    const double fit_seed_cos_angle_err_threshold                 = cookie->fit_seed_cos_angle_err_threshold;
+    const sensor_snapshot_segmented_t* snapshots                        = cookie->snapshots;
+    const int                          Nsnapshots                       = cookie->Nsnapshots;
+    const uint64_t*                    bitarray_snapshots_selected      = cookie->bitarray_snapshots_selected;
+    const int                          Nlidars                          = cookie->Nlidars;
+    const int                          Ncameras                         = cookie->Ncameras;
+    const mrcal_cameramodel_t*const*   models                           = cookie->models;
+    const int                          object_height_n                  = cookie->object_height_n;
+    const int                          object_width_n                   = cookie->object_width_n;
+    const double                       object_spacing                   = cookie->object_spacing;
+    const double                       fit_seed_position_err_threshold  = cookie->fit_seed_position_err_threshold;
+    const double                       fit_seed_cos_angle_err_threshold = cookie->fit_seed_cos_angle_err_threshold;
 
     double*                            Rt_lidar0_lidar            = cookie->Rt_lidar0_lidar;
     double*                            Rt_lidar0_camera           = cookie->Rt_lidar0_camera;
@@ -1157,8 +1179,9 @@ bool cb_sensor_link(const uint16_t isensor1,
                            // in
                            isensor1,
                            isensor0,
-                           sensor_snapshots_filtered,
-                           Nsensor_snapshots_filtered,
+                           snapshots,
+                           Nsnapshots,
+                           bitarray_snapshots_selected,
                            Nlidars,
                            Ncameras,
                            models,
@@ -1265,14 +1288,15 @@ static bool
 fit_seed(// in/out
          // if(use_given_seed_geometry) then we already have Rt_lidar0_lidar and
          // Rt_lidar0_camera. We still need to compute Rt_lidar0_board
-         double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+         double* Rt_lidar0_board,  // Nsnapshots poses ( (4,3) Rt arrays ) of these to fill
          double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
          double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
          bool use_given_seed_geometry,
 
          // in
-         const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
-         const unsigned int                 Nsensor_snapshots_filtered,
+         const sensor_snapshot_segmented_t* snapshots,
+         const int                          Nsnapshots,
+         const uint64_t*                    bitarray_snapshots_selected,
 
          const unsigned int Nlidars,
          const unsigned int Ncameras,
@@ -1284,10 +1308,10 @@ fit_seed(// in/out
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold)
 {
-    double Rt_camera_board_cache[Nsensor_snapshots_filtered*Ncameras * 4*3];
+    double Rt_camera_board_cache[Nsnapshots*Ncameras * 4*3];
     memset(Rt_camera_board_cache,
            0,
-           Nsensor_snapshots_filtered*Ncameras * 4*3*sizeof(Rt_camera_board_cache[0]));
+           Nsnapshots*Ncameras * 4*3*sizeof(Rt_camera_board_cache[0]));
     // The Rt_camera_board_cache[] entries are all 0, which means "invalid"
 
     if(!use_given_seed_geometry)
@@ -1299,9 +1323,9 @@ fit_seed(// in/out
         connectivity_matrix(// out
                             shared_observation_counts,
                             // in
-                            sensor_snapshots_filtered,
-                            Nsensor_snapshots_filtered,
-
+                            snapshots,
+                            Nsnapshots,
+                            bitarray_snapshots_selected,
                             Ncameras,
                             Nlidars);
 
@@ -1310,24 +1334,23 @@ fit_seed(// in/out
         print_full_symmetric_matrix_from_upper_triangle(shared_observation_counts,
                                                         Nsensors);
 
-
         cb_sensor_link_cookie_t cookie =
             {
-                .sensor_snapshots_filtered  = sensor_snapshots_filtered,
-                .Nsensor_snapshots_filtered = Nsensor_snapshots_filtered,
-                .Nlidars                    = Nlidars,
-                .Ncameras                   = Ncameras,
-                .models                     = models,
-                .object_height_n            = object_height_n,
-                .object_width_n             = object_width_n,
-                .object_spacing             = object_spacing,
+                .snapshots                        = snapshots,
+                .Nsnapshots                       = Nsnapshots,
+                .bitarray_snapshots_selected      = bitarray_snapshots_selected,
+                .Nlidars                          = Nlidars,
+                .Ncameras                         = Ncameras,
+                .models                           = models,
+                .object_height_n                  = object_height_n,
+                .object_width_n                   = object_width_n,
+                .object_spacing                   = object_spacing,
                 .fit_seed_position_err_threshold  = fit_seed_position_err_threshold,
                 .fit_seed_cos_angle_err_threshold = fit_seed_cos_angle_err_threshold,
-                .Rt_lidar0_lidar            = Rt_lidar0_lidar,
-                .Rt_lidar0_camera           = Rt_lidar0_camera,
-                .Rt_camera_board_cache      = Rt_camera_board_cache
+                .Rt_lidar0_lidar                  = Rt_lidar0_lidar,
+                .Rt_lidar0_camera                 = Rt_lidar0_camera,
+                .Rt_camera_board_cache            = Rt_camera_board_cache
             };
-
 
         if(!mrcal_traverse_sensor_links( Nsensors,
                                          shared_observation_counts,
@@ -1360,15 +1383,15 @@ fit_seed(// in/out
             return false;
     }
 
-
     // All the sensor-sensor transforms computed. I compute the pose of the
     // boards
     if(!compute_board_poses(// out
                             Rt_lidar0_board,
                             Rt_camera_board_cache,
                             // in
-                            sensor_snapshots_filtered,
-                            Nsensor_snapshots_filtered,
+                            snapshots,
+                            Nsnapshots,
+                            bitarray_snapshots_selected,
                             Ncameras,
                             Nlidars,
                             Rt_lidar0_lidar,
@@ -1388,9 +1411,9 @@ fit_seed(// in/out
     // seed solve
     bool validation_failed = false;
 
-    for(unsigned int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
+    LOOP_SNAPSHOT()
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
+        LOOP_SNAPSHOT_HEADER(,const);
 
         const mrcal_point3_t n_lidar0_should = {.x = Rt_lidar0_board[isnapshot*4*3 + 0*3 + 2],
                                                 .y = Rt_lidar0_board[isnapshot*4*3 + 1*3 + 2],
@@ -1418,16 +1441,16 @@ fit_seed(// in/out
 
         for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
         {
-            if(sensor_snapshot->lidar_scans[ilidar].points == NULL)
+            if(snapshot->lidar_scans[ilidar].points == NULL)
                 continue;
 
             mrcal_point3_t n_lidar0_observed;
             mrcal_point3_t p0_lidar0_observed;
 
             mrcal_point3_from_clc_point3f(&n_lidar0_observed,
-                                          &sensor_snapshot->lidar_scans[ilidar].plane.n);
+                                          &snapshot->lidar_scans[ilidar].plane.n);
             mrcal_point3_from_clc_point3f(&p0_lidar0_observed,
-                                          &sensor_snapshot->lidar_scans[ilidar].plane.p_mean);
+                                          &snapshot->lidar_scans[ilidar].plane.p_mean);
             if(ilidar != 0)
             {
                 mrcal_rotate_point_R(n_lidar0_observed.xyz, NULL, NULL,
@@ -1458,7 +1481,7 @@ fit_seed(// in/out
 
         for(unsigned int icamera=0; icamera<Ncameras; icamera++)
         {
-            if(sensor_snapshot->chessboard_corners[icamera] == NULL)
+            if(snapshot->chessboard_corners[icamera] == NULL)
                 continue;
 
             for(int i=0; i<object_height_n; i++)
@@ -1482,7 +1505,7 @@ fit_seed(// in/out
 
                     double errsq =
                         mrcal_point2_norm2( mrcal_point2_sub(q,
-                                                             sensor_snapshot->chessboard_corners[icamera][i*object_width_n + j]));
+                                                             snapshot->chessboard_corners[icamera][i*object_width_n + j]));
 #warning "unhardcode"
                     bool validation_failed_here = errsq > 10.*10.;
 
@@ -1510,14 +1533,14 @@ typedef struct
     unsigned int Nlidars;
 
     const sensor_snapshot_segmented_t* snapshots;
-    unsigned int Nsnapshots;
+    const int Nsnapshots;
+    const uint64_t* bitarray_snapshots_selected;
 
     const mrcal_cameramodel_t*const* models; // Ncameras of these
     // The dimensions of the chessboard grid being detected in the images
     const int object_height_n;
     const int object_width_n;
     const double object_spacing;
-
 
     // simplified computation for seeding
     bool use_distance_to_plane : 1;
@@ -1550,17 +1573,46 @@ static int num_states_cameras(const callback_context_t* ctx)
 {
     return ctx->Ncameras*6;
 }
-static int state_index_board(const int isnapshot,
+static int state_index_board(const int _isnapshot,
                              const callback_context_t* ctx)
 {
+    if(bitarray64_check_all_clear(ctx->bitarray_snapshots_selected, ctx->Nsnapshots))
+    {
+        MSG("ERROR: bitarray_snapshots_selected is all clear. Did we forget to initialize it?");
+        return -1;
+    }
+#warning "this is slow. Cache this function, or make the callers use it cumulatively"
+    int isnapshot_state = 0;
+    LOOP_SNAPSHOT(ctx->)
+    {
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
+
+        if(isnapshot >= _isnapshot) break;
+        isnapshot_state++;
+    }
+
     return
         num_states_lidars(ctx) +
         num_states_cameras(ctx) +
-        isnapshot * 6;
+        isnapshot_state * 6;
 }
 static int num_states_boards(const callback_context_t* ctx)
 {
-    return ctx->Nsnapshots*6;
+    if(bitarray64_check_all_clear(ctx->bitarray_snapshots_selected, ctx->Nsnapshots))
+    {
+        MSG("ERROR: bitarray_snapshots_selected is all clear. Did we forget to initialize it?");
+        return -1;
+    }
+#warning "this is slow. Cache this function, or make the callers use it cumulatively"
+    int isnapshot_state = 0;
+    LOOP_SNAPSHOT(ctx->)
+    {
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
+
+        isnapshot_state++;
+    }
+
+    return isnapshot_state*6;
 }
 
 static int num_states(const callback_context_t* ctx)
@@ -1576,22 +1628,22 @@ static int measurement_index_lidar(const unsigned int _isnapshot,
                                    const unsigned int _ilidar,
                                    const callback_context_t* ctx)
 {
-    int imeas = 0;
+    int imeasurement = 0;
 
-    for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
+    LOOP_SNAPSHOT(ctx->)
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
         for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
         {
             if(_isnapshot == isnapshot && _ilidar == ilidar)
-                return imeas;
+                return imeasurement;
 
-            const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+            const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
 
             if(lidar_scan->points == NULL)
                 continue;
 
-            imeas += lidar_scan->n;
+            imeasurement += lidar_scan->n;
         }
     }
     return -1;
@@ -1601,12 +1653,12 @@ static int num_measurements_lidars(const callback_context_t* ctx)
 {
     int Nmeasurements = 0;
 
-    for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
+    LOOP_SNAPSHOT(ctx->)
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
         for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
         {
-            const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+            const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
 
             if(lidar_scan->points == NULL)
                 continue;
@@ -1616,22 +1668,22 @@ static int num_measurements_lidars(const callback_context_t* ctx)
     }
     return Nmeasurements;
 }
-static int measurement_index_camera(const unsigned int isnapshot,
+static int measurement_index_camera(const unsigned int _isnapshot,
                                     const unsigned int icamera,
                                     const callback_context_t* ctx)
 {
     int imeasurement = 0;
 
-    for(unsigned int _isnapshot=0; _isnapshot < ctx->Nsnapshots; _isnapshot++)
+    LOOP_SNAPSHOT(ctx->)
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[_isnapshot];
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
         for(int _icamera=0; _icamera<(int)ctx->Ncameras; _icamera++)
         {
             const mrcal_point2_t* chessboard_corners =
-                sensor_snapshot->chessboard_corners[_icamera];
+                snapshot->chessboard_corners[_icamera];
             if(chessboard_corners == NULL) continue;
 
-            if(isnapshot == _isnapshot && (int)icamera == _icamera)
+            if(_isnapshot == isnapshot && (int)icamera == _icamera)
                 return
                     num_measurements_lidars(ctx) +
                     imeasurement;
@@ -1649,13 +1701,13 @@ static int num_measurements_cameras(const callback_context_t* ctx)
 {
     int Nobservations_camera = 0;
 
-    for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
+    LOOP_SNAPSHOT(ctx->)
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
         for(int icamera=0; icamera<(int)ctx->Ncameras; icamera++)
         {
             const mrcal_point2_t* chessboard_corners =
-                sensor_snapshot->chessboard_corners[icamera];
+                snapshot->chessboard_corners[icamera];
             if(chessboard_corners != NULL) Nobservations_camera++;
         }
     }
@@ -1675,7 +1727,15 @@ static int measurement_index_regularization(const callback_context_t* ctx)
 
 static int num_measurements_regularization(const callback_context_t* ctx)
 {
-    return 6*ctx->Nsnapshots;
+    int isnapshot_state = 0;
+    LOOP_SNAPSHOT(ctx->)
+    {
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
+
+        isnapshot_state++;
+    }
+
+    return 6*isnapshot_state;
 }
 static int num_measurements(const callback_context_t* ctx)
 {
@@ -1689,13 +1749,13 @@ static int num_j_nonzero(const callback_context_t* ctx)
     int nnz = 0;
 
     // lidar
-    for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
+    LOOP_SNAPSHOT(ctx->)
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
 
         for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
         {
-            const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+            const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
 
             if(lidar_scan->points == NULL)
                 continue;
@@ -1705,11 +1765,8 @@ static int num_j_nonzero(const callback_context_t* ctx)
         }
     }
 
-    // camera
     nnz += num_measurements_cameras(ctx) * 6 * 2;
-
-    // regularization
-    nnz += ctx->Nsnapshots * 6;
+    nnz += num_measurements_regularization(ctx);
 
     return nnz;
 }
@@ -1755,10 +1812,11 @@ pack_solver_state(// out
         for(int j=0; j<3; j++) b[istate++] = rt_lidar0_camera[i*6 + j] / SCALE_ROTATION_CAMERA;
         for(int j=3; j<6; j++) b[istate++] = rt_lidar0_camera[i*6 + j] / SCALE_TRANSLATION_CAMERA;
     }
-    for(unsigned int i=0; i<ctx->Nsnapshots; i++)
+    LOOP_SNAPSHOT(ctx->)
     {
-        for(int j=0; j<3; j++) b[istate++] = rt_lidar0_board[i*6 + j] / SCALE_ROTATION_FRAME;
-        for(int j=3; j<6; j++) b[istate++] = rt_lidar0_board[i*6 + j] / SCALE_TRANSLATION_FRAME;
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
+        for(int j=0; j<3; j++) b[istate++] = rt_lidar0_board[isnapshot*6 + j] / SCALE_ROTATION_FRAME;
+        for(int j=3; j<6; j++) b[istate++] = rt_lidar0_board[isnapshot*6 + j] / SCALE_TRANSLATION_FRAME;
     }
 }
 
@@ -1786,10 +1844,14 @@ unpack_solver_state(// out
         for(int j=0; j<3; j++) rt_lidar0_camera[i*6 + j] = b[istate++] * SCALE_ROTATION_CAMERA;
         for(int j=3; j<6; j++) rt_lidar0_camera[i*6 + j] = b[istate++] * SCALE_TRANSLATION_CAMERA;
     }
-    for(unsigned int i=0; i<ctx->Nsnapshots; i++)
+
+    // The skipped poses are reset to 0
+    memset(rt_lidar0_board, 0, ctx->Nsnapshots*6*sizeof(rt_lidar0_board[0]));
+    LOOP_SNAPSHOT(ctx->)
     {
-        for(int j=0; j<3; j++) rt_lidar0_board[i*6 + j] = b[istate++] * SCALE_ROTATION_FRAME;
-        for(int j=3; j<6; j++) rt_lidar0_board[i*6 + j] = b[istate++] * SCALE_TRANSLATION_FRAME;
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
+        for(int j=0; j<3; j++) rt_lidar0_board[isnapshot*6 + j] = b[istate++] * SCALE_ROTATION_FRAME;
+        for(int j=3; j<6; j++) rt_lidar0_board[isnapshot*6 + j] = b[istate++] * SCALE_TRANSLATION_FRAME;
     }
 }
 
@@ -1888,14 +1950,14 @@ static void cost(const double*   b,
                         b,
                         ctx);
 
-    for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
+    LOOP_SNAPSHOT(ctx->)
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
 
         bool any_lidar_data_here = false;
         for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
         {
-            const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+            const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
             if(lidar_scan->points != NULL)
             {
                 any_lidar_data_here = true;
@@ -1952,7 +2014,7 @@ static void cost(const double*   b,
             //       = inner(nlidar0, t_lidar0_board - v)
             for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
             {
-                const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+                const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
 
                 if(lidar_scan->points == NULL)
                     continue;
@@ -2110,7 +2172,7 @@ static void cost(const double*   b,
             //                      = -d1 (the same d1 as in the crude solve above)
             for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
             {
-                const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+                const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
 
                 if(lidar_scan->points == NULL)
                     continue;
@@ -2309,11 +2371,10 @@ static void cost(const double*   b,
 
     // camera stuff
     int istate_board = state_index_board(0, ctx);
-    for(unsigned int isnapshot=0;
-        isnapshot < ctx->Nsnapshots;
-        isnapshot++, istate_board += 6)
+
+    LOOP_SNAPSHOT(ctx->)
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
 
         int istate_camera = state_index_camera(0, ctx);
 
@@ -2322,7 +2383,7 @@ static void cost(const double*   b,
             icamera++, istate_camera += 6)
         {
             const mrcal_point2_t* chessboard_corners =
-                sensor_snapshot->chessboard_corners[icamera];
+                snapshot->chessboard_corners[icamera];
             if(chessboard_corners == NULL)
                 continue;
 
@@ -2427,6 +2488,8 @@ static void cost(const double*   b,
                     }
                 }
         }
+
+        istate_board += 6;
     }
 
 
@@ -2438,8 +2501,9 @@ static void cost(const double*   b,
     // LIDAR-only observations: (n,d). That disparate representation would take
     // more typing, so I don't do that just yet
     int ivar = state_index_board(0, ctx);
-    for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
+    LOOP_SNAPSHOT(ctx->)
     {
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
         double* rt_lidar0_board = &rt_lidar0_board_all[isnapshot*6];
 
         for(int i=0; i<3; i++)
@@ -2496,8 +2560,6 @@ plot_residuals(const char* filename_base,
     const int imeas_regularization_0       = measurement_index_regularization(ctx);
     const int Nmeas_regularization         = num_measurements_regularization(ctx);
 
-
-
     char*  str_measurement_indices  = NULL;
     size_t size_measurement_indices = 0;
     FILE* fp_measurement_indices = open_memstream(&str_measurement_indices,
@@ -2518,12 +2580,12 @@ plot_residuals(const char* filename_base,
         "--set 'arrow from %1$d, graph 0 to %1$d, graph 1 nohead' "
         "--set 'label \"regularization\" at %1$d,graph 0 left front offset 0,character 2 boxed' ";
     int iMeasurement = 0;
-    for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
+    LOOP_SNAPSHOT(ctx->)
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
         for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
         {
-            const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+            const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
             if(lidar_scan->points == NULL)
                 continue;
             fprintf(fp_measurement_indices,
@@ -2532,15 +2594,15 @@ plot_residuals(const char* filename_base,
             iMeasurement += lidar_scan->n;
         }
     }
-    for(unsigned int isnapshot=0; isnapshot < ctx->Nsnapshots; isnapshot++)
+    LOOP_SNAPSHOT(ctx->)
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &ctx->snapshots[isnapshot];
+        LOOP_SNAPSHOT_HEADER(ctx->,const);
         for(int icamera=0;
             icamera<(int)ctx->Ncameras;
             icamera++)
         {
             const mrcal_point2_t* chessboard_corners =
-                sensor_snapshot->chessboard_corners[icamera];
+                snapshot->chessboard_corners[icamera];
             if(chessboard_corners == NULL)
                 continue;
             fprintf(fp_measurement_indices,
@@ -2724,12 +2786,13 @@ write_axes(FILE* fp,
 static bool
 _plot_geometry(FILE* fp,
 
-               const double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+               const double* Rt_lidar0_board,  // Nsnapshots poses ( (4,3) Rt arrays ) of these to fill
                const double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
                const double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
 
                const sensor_snapshot_segmented_t* snapshots,
-               const unsigned int                 Nsnapshots,
+               const int                          Nsnapshots,
+               const uint64_t*                    bitarray_snapshots_selected,
 
                const unsigned int Nlidars,
                const unsigned int Ncameras,
@@ -2781,8 +2844,10 @@ _plot_geometry(FILE* fp,
 
     if(!only_axes)
     {
-        for(unsigned int isnapshot=0; isnapshot < Nsnapshots; isnapshot++)
+        LOOP_SNAPSHOT()
         {
+            LOOP_SNAPSHOT_HEADER(,const);
+
             char curveid[Nlidars][32];
             for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
             {
@@ -2795,11 +2860,9 @@ _plot_geometry(FILE* fp,
                 }
             }
 
-            const sensor_snapshot_segmented_t* sensor_snapshot = &snapshots[isnapshot];
-
             for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
             {
-                const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+                const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
 
                 if(lidar_scan->points == NULL)
                     continue;
@@ -2831,7 +2894,7 @@ _plot_geometry(FILE* fp,
             // any camera observations
             for(int icamera=0; icamera<(int)Ncameras; icamera++)
             {
-                if(sensor_snapshot->chessboard_corners[icamera] == NULL)
+                if(snapshot->chessboard_corners[icamera] == NULL)
                     continue;
 
                 for(int i=0; i<object_height_n; i++)
@@ -2860,12 +2923,13 @@ _plot_geometry(FILE* fp,
 static bool
 plot_geometry(const char* filename,
 
-              const double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+              const double* Rt_lidar0_board,  // Nsnapshots poses ( (4,3) Rt arrays ) of these to fill
               const double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
               const double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
 
               const sensor_snapshot_segmented_t* snapshots,
-              const unsigned int                 Nsnapshots,
+              const int                          Nsnapshots,
+              const uint64_t*                    bitarray_snapshots_selected,
 
               const unsigned int Nlidars,
               const unsigned int Ncameras,
@@ -2883,6 +2947,7 @@ plot_geometry(const char* filename,
                                      Rt_lidar0_camera,
                                      snapshots,
                                      Nsnapshots,
+                                     bitarray_snapshots_selected,
                                      Nlidars,
                                      Ncameras,
                                      object_height_n,
@@ -2914,15 +2979,16 @@ static bool dump_inputs(
     size_t* size_inputs_dump,
 
     // in
-    const double* Rt_lidar0_board_seed,   // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+    const double* Rt_lidar0_board_seed,   // Nsnapshots poses ( (4,3) Rt arrays ) of these to fill
     const double* Rt_lidar0_lidar_seed,   // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
     const double* Rt_lidar0_camera_seed,  // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
-    const double* Rt_lidar0_board_solve,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+    const double* Rt_lidar0_board_solve,  // Nsnapshots poses ( (4,3) Rt arrays ) of these to fill
     const double* Rt_lidar0_lidar_solve,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
     const double* Rt_lidar0_camera_solve, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
 
-    const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
-    const unsigned int                 Nsensor_snapshots_filtered,
+    const sensor_snapshot_segmented_t* snapshots,
+    const int                          Nsnapshots,
+    const uint64_t*                    bitarray_snapshots_selected,
 
     const unsigned int Nlidars,
     const unsigned int Ncameras,
@@ -2944,24 +3010,24 @@ static bool dump_inputs(
         goto done;
     }
 
-    fprintf(fp, "Nsensor_snapshots_filtered = %d\n", Nsensor_snapshots_filtered);
-    fprintf(fp, "Nlidars                    = %d\n", Nlidars);
-    fprintf(fp, "Ncameras                   = %d\n", Ncameras);
-    fprintf(fp, "object_height_n            = %d\n", object_height_n);
-    fprintf(fp, "object_width_n             = %d\n", object_width_n);
-    fprintf(fp, "object_spacing             = %f\n", object_spacing);
+    fprintf(fp, "Nsnapshots      = %d\n", Nsnapshots);
+    fprintf(fp, "Nlidars         = %d\n", Nlidars);
+    fprintf(fp, "Ncameras        = %d\n", Ncameras);
+    fprintf(fp, "object_height_n = %d\n", object_height_n);
+    fprintf(fp, "object_width_n  = %d\n", object_width_n);
+    fprintf(fp, "object_spacing  = %f\n", object_spacing);
 
-    fwrite(Rt_lidar0_board_seed,   sizeof(double), Nsensor_snapshots_filtered *4*3, fp);
-    fwrite(Rt_lidar0_lidar_seed,   sizeof(double), (Nlidars-1)                *4*3, fp);
-    fwrite(Rt_lidar0_camera_seed,  sizeof(double), Ncameras                   *4*3, fp);
-    fwrite(Rt_lidar0_board_solve,  sizeof(double), Nsensor_snapshots_filtered *4*3, fp);
-    fwrite(Rt_lidar0_lidar_solve,  sizeof(double), (Nlidars-1)                *4*3, fp);
-    fwrite(Rt_lidar0_camera_solve, sizeof(double), Ncameras                   *4*3, fp);
+    fwrite(Rt_lidar0_board_seed,        sizeof(double),   Nsnapshots *4*3,               fp);
+    fwrite(Rt_lidar0_lidar_seed,        sizeof(double),   (Nlidars-1)*4*3,               fp);
+    fwrite(Rt_lidar0_camera_seed,       sizeof(double),   Ncameras   *4*3,               fp);
+    fwrite(Rt_lidar0_board_solve,       sizeof(double),   Nsnapshots *4*3,               fp);
+    fwrite(Rt_lidar0_lidar_solve,       sizeof(double),   (Nlidars-1)*4*3,               fp);
+    fwrite(Rt_lidar0_camera_solve,      sizeof(double),   Ncameras   *4*3,               fp);
+    fwrite(bitarray_snapshots_selected, sizeof(uint64_t), bitarray64_nwords(Nsnapshots), fp);
 
-
-    for(int isnapshot=0; isnapshot<Nsensor_snapshots_filtered; isnapshot++)
+    LOOP_SNAPSHOT()
     {
-        const sensor_snapshot_segmented_t* snapshot = &sensor_snapshots_filtered[isnapshot];
+        LOOP_SNAPSHOT_HEADER(,const);
 
         for(int icamera=0; icamera<Ncameras; icamera++)
         {
@@ -3052,13 +3118,14 @@ fit(// out
 
     // in,out
     // seed state on input
-    double* Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+    double* Rt_lidar0_board,  // Nsnapshots poses ( (4,3) Rt arrays ) of these to fill
     double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
     double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
 
     // in
-    const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
-    const unsigned int                 Nsensor_snapshots_filtered,
+    const sensor_snapshot_segmented_t* snapshots,
+    const unsigned int                 Nsnapshots,
+    const uint64_t*                    bitarray_snapshots_selected,
 
     const unsigned int Nlidars,
     const unsigned int Ncameras,
@@ -3079,12 +3146,16 @@ fit(// out
     bool result = false;
 
 
-    double rt_lidar0_board [6*Nsensor_snapshots_filtered];
+    double rt_lidar0_board [6*Nsnapshots];
     double rt_lidar0_lidar [6*(Nlidars-1)];
     double rt_lidar0_camera[6*Ncameras];
-    for(unsigned int i=0; i<Nsensor_snapshots_filtered; i++)
-        mrcal_rt_from_Rt(&rt_lidar0_board[i*6], NULL,
-                         &Rt_lidar0_board[i*4*3]);
+
+    LOOP_SNAPSHOT()
+    {
+        LOOP_SNAPSHOT_HEADER(,const);
+        mrcal_rt_from_Rt(&rt_lidar0_board[isnapshot*6], NULL,
+                         &Rt_lidar0_board[isnapshot*4*3]);
+    }
     for(unsigned int i=0; i<(Nlidars-1); i++)
         mrcal_rt_from_Rt(&rt_lidar0_lidar[i*6], NULL,
                          &Rt_lidar0_lidar[i*4*3]);
@@ -3092,12 +3163,11 @@ fit(// out
         mrcal_rt_from_Rt(&rt_lidar0_camera[i*6], NULL,
                          &Rt_lidar0_camera[i*4*3]);
 
-
-
     callback_context_t ctx = {.Ncameras              = Ncameras,
                               .Nlidars               = Nlidars,
-                              .Nsnapshots            = Nsensor_snapshots_filtered,
-                              .snapshots             = sensor_snapshots_filtered,
+                              .Nsnapshots            = Nsnapshots,
+                              .snapshots             = snapshots,
+                              .bitarray_snapshots_selected = bitarray_snapshots_selected,
                               .use_distance_to_plane = false,
                               .report_imeas          = false,
                               .models                = models,
@@ -3134,7 +3204,7 @@ fit(// out
         const int Nstate_board   = num_states_boards (&ctx);
 
         printf("## Nstate=%d Nmeasurements=%d Nlidars=%d Ncameras=%d Nsnapshots=%d\n",
-               Nstate,Nmeasurements,Nlidars,Ncameras,Nsensor_snapshots_filtered);
+               Nstate,Nmeasurements,Nlidars,Ncameras,Nsnapshots);
         if(Ncameras > 0)
             printf("## States rt_lidar0_lidar in [%d,%d], rt_lidar0_camera in [%d,%d], rt_lidar0_board in [%d,%d]\n",
                    istate_lidar1,  istate_lidar1  + Nstate_lidar -1,
@@ -3226,9 +3296,12 @@ fit(// out
                         // in
                         b,
                         &ctx);
-    for(unsigned int i=0; i<Nsensor_snapshots_filtered; i++)
-        mrcal_Rt_from_rt(&Rt_lidar0_board[i*4*3], NULL,
-                         &rt_lidar0_board[i*6]);
+    LOOP_SNAPSHOT()
+    {
+        LOOP_SNAPSHOT_HEADER(,const);
+        mrcal_Rt_from_rt(&Rt_lidar0_board[isnapshot*4*3], NULL,
+                         &rt_lidar0_board[isnapshot*6]);
+    }
     for(unsigned int i=0; i<(Nlidars-1); i++)
         mrcal_Rt_from_rt(&Rt_lidar0_lidar[i*4*3], NULL,
                          &rt_lidar0_lidar[i*6]);
@@ -3291,32 +3364,6 @@ fit(// out
     return result;
 }
 
-static bool exclude_snapshots(// in,out
-                              uint8_t* buf,
-                              // in
-                              const int  sizeof_element,
-                              const int  Nsnapshots,
-                              const int* isnapshot_exclude, // NULL to not exclude any
-                              const int  Nisnapshot_exclude)
-{
-    int ifrom = 0;
-    int ito   = 0;
-    for(int i=0; i<Nisnapshot_exclude; i++)
-    {
-        const int iexclude = isnapshot_exclude[i];
-        if(iexclude < 0 || iexclude >= Nsnapshots)
-        {
-            MSG("iexclude should index snapshots, so it should be in [0,Nsnapshots-1] = [0,%d], but it is %d",
-                Nsnapshots-1, iexclude);
-            return false;
-        }
-        memmove(&buf[(iexclude-i)  *sizeof_element],
-                &buf[(iexclude-i+1)*sizeof_element],
-                sizeof_element * (Nsnapshots - (iexclude+1)));
-    }
-    return true;
-}
-
 static void free_snapshot(sensor_snapshot_segmented_t* snapshot, const int Nlidars, const int Ncameras)
 {
     for(int icamera=0; icamera<Ncameras; icamera++)
@@ -3325,8 +3372,11 @@ static void free_snapshot(sensor_snapshot_segmented_t* snapshot, const int Nlida
     for(int ilidar=0; ilidar<Nlidars; ilidar++)
     {
         points_and_plane_full_t* points_and_plane_full = &snapshot->lidar_scans[ilidar];
-        free(points_and_plane_full->points);
-        free((uint32_t*)points_and_plane_full->ipoint);
+        if(points_and_plane_full != NULL)
+        {
+            free(points_and_plane_full->points);
+            free((uint32_t*)points_and_plane_full->ipoint);
+        }
     }
 }
 
@@ -3423,13 +3473,13 @@ bool clc_fit_from_inputs_dump(// out
     char*  lineptr = NULL;
     size_t nline   = 0;
 
-    unsigned int Nsensor_snapshots_filtered;
+    unsigned int Nsnapshots;
     int          object_height_n;
     int          object_width_n;
     double       object_spacing;
 
     if(0 >= getline(&lineptr, &nline, fp)) goto done;
-    if(1 != sscanf(lineptr, "Nsensor_snapshots_filtered = %d\n",  &Nsensor_snapshots_filtered)) goto done;
+    if(1 != sscanf(lineptr, "Nsnapshots = %d\n",  &Nsnapshots)) goto done;
     if(0 >= getline(&lineptr, &nline, fp)) goto done;
     if(1 != sscanf(lineptr, "Nlidars                    = %d\n",  Nlidars)) goto done;
     if(0 >= getline(&lineptr, &nline, fp)) goto done;
@@ -3441,8 +3491,6 @@ bool clc_fit_from_inputs_dump(// out
     if(0 >= getline(&lineptr, &nline, fp)) goto done;
     if(1 != sscanf(lineptr, "object_spacing             = %lf\n", &object_spacing)) goto done;
 
-    int Nsensor_snapshots_filtered_culled = Nsensor_snapshots_filtered;
-
     *rt_ref_lidar  = malloc(*Nlidars  * sizeof(mrcal_pose_t));
     if(*rt_ref_lidar == NULL)
         goto done;
@@ -3452,37 +3500,41 @@ bool clc_fit_from_inputs_dump(// out
 
 
     {
-        double Rt_lidar0_board_seed  [Nsensor_snapshots_filtered *4*3];
+        double Rt_lidar0_board_seed  [Nsnapshots *4*3];
         double Rt_lidar0_lidar_seed  [(*Nlidars-1)               *4*3];
         double Rt_lidar0_camera_seed [*Ncameras                  *4*3];
-        double Rt_lidar0_board_solve [Nsensor_snapshots_filtered *4*3];
+        double Rt_lidar0_board_solve [Nsnapshots *4*3];
         double Rt_lidar0_lidar_solve [(*Nlidars-1)               *4*3];
         double Rt_lidar0_camera_solve[*Ncameras                  *4*3];
 
-        sensor_snapshot_segmented_t sensor_snapshots_filtered[Nsensor_snapshots_filtered];
-        memset(sensor_snapshots_filtered, 0, Nsensor_snapshots_filtered*sizeof(sensor_snapshots_filtered[0]));
+        sensor_snapshot_segmented_t snapshots[Nsnapshots];
+        memset(snapshots, 0, Nsnapshots*sizeof(snapshots[0]));
+
+        const int Nwords = bitarray64_nwords(Nsnapshots);
+        uint64_t bitarray_snapshots_selected[Nwords];
 
         mrcal_cameramodel_t* models[*Ncameras];
 
-        if(Nsensor_snapshots_filtered *4*3 != fread(Rt_lidar0_board_seed,   sizeof(double), Nsensor_snapshots_filtered *4*3, fp))
+        if(Nsnapshots *4*3 != fread(Rt_lidar0_board_seed,   sizeof(double), Nsnapshots *4*3, fp))
             goto done_inner;
         if((*Nlidars-1)               *4*3 != fread(Rt_lidar0_lidar_seed,   sizeof(double), (*Nlidars-1)               *4*3, fp))
             goto done_inner;
         if(*Ncameras                  *4*3 != fread(Rt_lidar0_camera_seed,  sizeof(double), *Ncameras                  *4*3, fp))
             goto done_inner;
-        if(Nsensor_snapshots_filtered *4*3 != fread(Rt_lidar0_board_solve,  sizeof(double), Nsensor_snapshots_filtered *4*3, fp))
+        if(Nsnapshots *4*3 != fread(Rt_lidar0_board_solve,  sizeof(double), Nsnapshots *4*3, fp))
             goto done_inner;
         if((*Nlidars-1)               *4*3 != fread(Rt_lidar0_lidar_solve,  sizeof(double), (*Nlidars-1)               *4*3, fp))
             goto done_inner;
         if(*Ncameras                  *4*3 != fread(Rt_lidar0_camera_solve, sizeof(double), *Ncameras                  *4*3, fp))
             goto done_inner;
-
+        if(Nwords                          != fread(bitarray_snapshots_selected, sizeof(uint64_t), Nwords, fp))
+            goto done_inner;
 
         int Ncamera_observations = 0;
 
-        for(int isnapshot=0; isnapshot<Nsensor_snapshots_filtered; isnapshot++)
+        LOOP_SNAPSHOT()
         {
-            sensor_snapshot_segmented_t* snapshot = &sensor_snapshots_filtered[isnapshot];
+            LOOP_SNAPSHOT_HEADER(,); // NOT const
 
             for(int icamera=0; icamera<*Ncameras; icamera++)
             {
@@ -3580,40 +3632,8 @@ bool clc_fit_from_inputs_dump(// out
 
 
         if(isnapshot_exclude != NULL)
-        {
-            if(!exclude_snapshots(// in,out
-                                  (uint8_t*)Rt_lidar0_board_solve,
-                                  // in
-                                  sizeof(Rt_lidar0_board_solve[0])*4*3,
-                                  Nsensor_snapshots_filtered,
-                                  isnapshot_exclude,Nisnapshot_exclude))
-                goto done_inner;
-            if(!exclude_snapshots(// in,out
-                                  (uint8_t*)Rt_lidar0_board_seed,
-                                  // in
-                                  sizeof(Rt_lidar0_board_seed[0])*4*3,
-                                  Nsensor_snapshots_filtered,
-                                  isnapshot_exclude,Nisnapshot_exclude))
-                goto done_inner;
-
-
             for(int i=0; i<Nisnapshot_exclude; i++)
-            {
-                const int iexclude = isnapshot_exclude[i];
-                free_snapshot(&sensor_snapshots_filtered[iexclude],
-                              *Nlidars, *Ncameras);
-            }
-            if(!exclude_snapshots(// in,out
-                                  (uint8_t*)sensor_snapshots_filtered,
-                                  // in
-                                  sizeof(sensor_snapshots_filtered[0]),
-                                  Nsensor_snapshots_filtered,
-                                  isnapshot_exclude,Nisnapshot_exclude))
-                goto done_inner;
-            Nsensor_snapshots_filtered_culled -= Nisnapshot_exclude;
-        }
-
-
+                bitarray64_clear(bitarray_snapshots_selected, isnapshot_exclude[i]);
 
         for(int icamera=0; icamera<*Ncameras; icamera++)
         {
@@ -3637,8 +3657,9 @@ bool clc_fit_from_inputs_dump(// out
                           Rt_lidar0_board_seed,
                           Rt_lidar0_lidar_seed,
                           Rt_lidar0_camera_seed,
-                          sensor_snapshots_filtered,
-                          Nsensor_snapshots_filtered_culled,
+                          snapshots,
+                          Nsnapshots,
+                          bitarray_snapshots_selected,
                           *Nlidars,
                           *Ncameras,
                           object_height_n,
@@ -3649,8 +3670,9 @@ bool clc_fit_from_inputs_dump(// out
                           Rt_lidar0_board_seed,
                           Rt_lidar0_lidar_seed,
                           Rt_lidar0_camera_seed,
-                          sensor_snapshots_filtered,
-                          Nsensor_snapshots_filtered_culled,
+                          snapshots,
+                          Nsnapshots,
+                          bitarray_snapshots_selected,
                           *Nlidars,
                           *Ncameras,
                           object_height_n,
@@ -3661,8 +3683,9 @@ bool clc_fit_from_inputs_dump(// out
                           Rt_lidar0_board_solve,
                           Rt_lidar0_lidar_solve,
                           Rt_lidar0_camera_solve,
-                          sensor_snapshots_filtered,
-                          Nsensor_snapshots_filtered_culled,
+                          snapshots,
+                          Nsnapshots,
+                          bitarray_snapshots_selected,
                           *Nlidars,
                           *Ncameras,
                           object_height_n,
@@ -3673,8 +3696,9 @@ bool clc_fit_from_inputs_dump(// out
                           Rt_lidar0_board_solve,
                           Rt_lidar0_lidar_solve,
                           Rt_lidar0_camera_solve,
-                          sensor_snapshots_filtered,
-                          Nsensor_snapshots_filtered_culled,
+                          snapshots,
+                          Nsnapshots,
+                          bitarray_snapshots_selected,
                           *Nlidars,
                           *Ncameras,
                           object_height_n,
@@ -3714,11 +3738,22 @@ bool clc_fit_from_inputs_dump(// out
 
             // We use the seed from the dump. If it isn't valid, we throw an
             // error
-            if(!(confirm_Rt_are_valid(Rt_lidar0_board_seed,   Nsensor_snapshots_filtered, "Rt_lidar0_board_seed") &&
-                 confirm_Rt_are_valid(Rt_lidar0_lidar_seed,   (*Nlidars-1),               "Rt_lidar0_lidar_seed") &&
-                 confirm_Rt_are_valid(Rt_lidar0_camera_seed,  *Ncameras,                  "Rt_lidar0_camera_seed")))
+            if(!(confirm_Rt_are_valid(Rt_lidar0_lidar_seed,   (*Nlidars-1), "Rt_lidar0_lidar_seed") &&
+                 confirm_Rt_are_valid(Rt_lidar0_camera_seed,  *Ncameras,    "Rt_lidar0_camera_seed")))
             {
                 goto done_inner;
+            }
+
+            LOOP_SNAPSHOT()
+            {
+                LOOP_SNAPSHOT_HEADER(,const);
+
+                if(!is_R_rotation(&Rt_lidar0_board_seed[4*3*isnapshot]))
+                {
+                    MSG("ERROR: %s[isnapshot=%d] does NOT contain a valid rotation matrix",
+                        "Rt_lidar0_board_seed", isnapshot);
+                    return false;
+                }
             }
         }
         else
@@ -3732,14 +3767,15 @@ bool clc_fit_from_inputs_dump(// out
 
             result =
                 fit_seed(// out
-                         Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+                         Rt_lidar0_board,  // Nsnapshots poses ( (4,3) Rt arrays ) of these to fill
                          Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
                          Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
                          false,
 
                          // in
-                         sensor_snapshots_filtered,
-                         Nsensor_snapshots_filtered_culled,
+                         snapshots,
+                         Nsnapshots,
+                         bitarray_snapshots_selected,
 
                          *Nlidars,
                          *Ncameras,
@@ -3759,8 +3795,9 @@ bool clc_fit_from_inputs_dump(// out
                               Rt_lidar0_board,
                               Rt_lidar0_lidar,
                               Rt_lidar0_camera,
-                              sensor_snapshots_filtered,
-                              Nsensor_snapshots_filtered_culled,
+                              snapshots,
+                              Nsnapshots,
+                              bitarray_snapshots_selected,
                               *Nlidars,
                               *Ncameras,
                               object_height_n,
@@ -3771,8 +3808,9 @@ bool clc_fit_from_inputs_dump(// out
                               Rt_lidar0_board,
                               Rt_lidar0_lidar,
                               Rt_lidar0_camera,
-                              sensor_snapshots_filtered,
-                              Nsensor_snapshots_filtered_culled,
+                              snapshots,
+                              Nsnapshots,
+                              bitarray_snapshots_selected,
                               *Nlidars,
                               *Ncameras,
                               object_height_n,
@@ -3787,13 +3825,14 @@ bool clc_fit_from_inputs_dump(// out
 
                 // in,out
                 // seed state on input
-                Rt_lidar0_board,  // Nsensor_snapshots_filtered poses ( (4,3) Rt arrays ) of these to fill
+                Rt_lidar0_board,  // Nsnapshots poses ( (4,3) Rt arrays ) of these to fill
                 Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
                 Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
 
                 // in
-                sensor_snapshots_filtered,
-                Nsensor_snapshots_filtered_culled,
+                snapshots,
+                Nsnapshots,
+                bitarray_snapshots_selected,
 
                 *Nlidars,
                 *Ncameras,
@@ -3817,8 +3856,9 @@ bool clc_fit_from_inputs_dump(// out
                               Rt_lidar0_board,
                               Rt_lidar0_lidar,
                               Rt_lidar0_camera,
-                              sensor_snapshots_filtered,
-                              Nsensor_snapshots_filtered_culled,
+                              snapshots,
+                              Nsnapshots,
+                              bitarray_snapshots_selected,
                               *Nlidars,
                               *Ncameras,
                               object_height_n,
@@ -3829,8 +3869,9 @@ bool clc_fit_from_inputs_dump(// out
                               Rt_lidar0_board,
                               Rt_lidar0_lidar,
                               Rt_lidar0_camera,
-                              sensor_snapshots_filtered,
-                              Nsensor_snapshots_filtered_culled,
+                              snapshots,
+                              Nsnapshots,
+                              bitarray_snapshots_selected,
                               *Nlidars,
                               *Ncameras,
                               object_height_n,
@@ -3847,9 +3888,11 @@ bool clc_fit_from_inputs_dump(// out
                                   &Rt_lidar0_camera[i*4*3] );
         }
     done_inner:
-        for(int isnapshot=0; isnapshot<Nsensor_snapshots_filtered_culled; isnapshot++)
+        for(int isnapshot=0; isnapshot<Nsnapshots; isnapshot++)
         {
-            sensor_snapshot_segmented_t* snapshot = &sensor_snapshots_filtered[isnapshot];
+            // don't check bitarray_snapshots_selected to free EVERYTHING, even
+            // the snapshots we just excluded
+            sensor_snapshot_segmented_t* snapshot = &snapshots[isnapshot];
             free_snapshot(snapshot, *Nlidars, *Ncameras);
         }
 
@@ -3977,21 +4020,22 @@ bool lidar_segmentation(// out
 
 static bool make_reprojected_plots( const double* Rt_lidar0_lidar,
                                     const double* Rt_lidar0_camera,
-                                    const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
-                                    const int                          Nsensor_snapshots_filtered,
+                                    const sensor_snapshot_segmented_t* snapshots,
+                                    const int                          Nsnapshots,
+                                    const uint64_t*                    bitarray_snapshots_selected,
                                     const int                          Nlidars,
                                     const int                          Ncameras,
                                     const mrcal_cameramodel_t*const*   models, // Ncameras of these
                                     const int                          object_height_n,
                                     const int                          object_width_n )
 {
-    for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
+    LOOP_SNAPSHOT()
     {
-        const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
+        LOOP_SNAPSHOT_HEADER(,const);
 
         for(int ilidar=0; ilidar<Nlidars; ilidar++)
         {
-            const points_and_plane_full_t* lidar_scan = &sensor_snapshot->lidar_scans[ilidar];
+            const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
             if(lidar_scan->points == NULL)
                 continue;
 
@@ -4002,7 +4046,7 @@ static bool make_reprojected_plots( const double* Rt_lidar0_lidar,
 
             for(int icamera=0; icamera<Ncameras; icamera++)
             {
-                const mrcal_point2_t* chessboard_corners = sensor_snapshot->chessboard_corners[icamera];
+                const mrcal_point2_t* chessboard_corners = snapshot->chessboard_corners[icamera];
                 if(chessboard_corners == NULL)
                     continue;
 
@@ -4149,8 +4193,9 @@ static bool evaluate_lidar_visibility(// out
 static bool compute_covariance(// out
                                double* Var_rt_lidar0_sensor,
                                // in
-                               const sensor_snapshot_segmented_t* sensor_snapshots_filtered,
-                               const unsigned int                 Nsensor_snapshots_filtered,
+                               const sensor_snapshot_segmented_t* snapshots,
+                               const int                          Nsnapshots,
+                               const uint64_t*                    bitarray_snapshots_selected,
 
                                const unsigned int Nlidars,
                                const unsigned int Ncameras,
@@ -4261,8 +4306,10 @@ print(Var - Var_c)
 
     callback_context_t ctx = {.Ncameras              = Ncameras,
                               .Nlidars               = Nlidars,
-                              .Nsnapshots            = Nsensor_snapshots_filtered,
-                              .snapshots             = sensor_snapshots_filtered,
+                              .Nsnapshots            = Nsnapshots,
+                              .snapshots             = snapshots,
+                              .bitarray_snapshots_selected = bitarray_snapshots_selected,
+
                               .models                = models,
                               .object_height_n       = object_height_n,
                               .object_width_n        = object_width_n,
@@ -4274,8 +4321,6 @@ print(Var - Var_c)
     const int Nstate_lidar   = num_states_lidars (&ctx);
     const int istate_camera0 = state_index_camera(0, &ctx);
     const int Nstate_camera  = num_states_cameras(&ctx);
-    const int istate_board0  = state_index_board (0, &ctx);
-    const int Nstate_board   = num_states_boards (&ctx);
 
     const int Nstate         = num_states(&ctx);
 
@@ -4931,7 +4976,7 @@ bool _clc_internal(// in/out
          const clc_sensor_snapshot_segmented_t*       sensor_snapshots_segmented,
          const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots_segmented_dense,
 
-         const unsigned int                    Nsensor_snapshots,
+         const unsigned int                    Nsnapshots,
          // The stride, in bytes, between each successive points or rings value
          // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
@@ -4944,8 +4989,7 @@ bool _clc_internal(// in/out
          const int object_width_n,
          const double object_spacing,
 
-         // bits indicating whether a camera in
-         // sensor_snapshots.images[] is color or not
+         // bits indicating whether a camera is color or not
          const clc_is_bgr_mask_t is_bgr_mask,
 
          const clc_lidar_segmentation_context_t* ctx,
@@ -4983,15 +5027,25 @@ bool _clc_internal(// in/out
 
     bool result = false;
 
-    // I start by finding the chessboard in the raw sensor data, and throwing
-    // out the sensor snapshots with too few shared-sensor observations
-    sensor_snapshot_segmented_t sensor_snapshots_filtered[Nsensor_snapshots];
+    // I need to segment the LIDAR data. And I need to select a subset of the
+    // sensor snapshots (by looking for overlapping sensor measurements,
+    // throwing out inconsistent data as outliers, etc). The segmentation
+    // results go here. The snapshot selections are in
+    // bitarray_snapshots_selected
+    sensor_snapshot_segmented_t snapshots[Nsnapshots];
+
+    // I start with ALL the snapshots DISABLED. As I get overlapping
+    // observations, I add them one by one
+    const int Nwords_bitarray_snapshots_selected = bitarray64_nwords(Nsnapshots);
+    uint64_t bitarray_snapshots_selected[Nwords_bitarray_snapshots_selected];
+    bitarray64_clear_all(bitarray_snapshots_selected, Nwords_bitarray_snapshots_selected);
+
 
     // If we need to sort or segment the lidar data, I need to allocate memory.
     // Here I get the buffer sizes
     int Npoints_buffer      = 0;
     int Nlidar_scans_buffer = 0;
-    for(unsigned int isnapshot=0; isnapshot < Nsensor_snapshots; isnapshot++)
+    for(unsigned int isnapshot=0; isnapshot < Nsnapshots; isnapshot++)
         for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
         {
             if(sensor_snapshots_unsorted != NULL)
@@ -5010,7 +5064,7 @@ bool _clc_internal(// in/out
           (Nlidar_scans_buffer + Nplanes_max) * sizeof(clc_points_and_plane_t)
           + (8-1)) & ~(8-1);
     const int Nbytes_pool_camera =
-        Nsensor_snapshots*Ncameras*object_width_n*object_height_n*sizeof(mrcal_point2_t);
+        Nsnapshots*Ncameras*object_width_n*object_height_n*sizeof(mrcal_point2_t);
 
     // contains the points_pool and the points_and_plane_pool and the chessboard
     // grid detections
@@ -5030,8 +5084,8 @@ bool _clc_internal(// in/out
     mrcal_point2_t* chessboard_corners_pool = (mrcal_point2_t*)&pool[Nbytes_pool_lidar];
 
 
-    int Nsensor_snapshots_filtered = 0;
-    for(unsigned int isnapshot=0; isnapshot < Nsensor_snapshots; isnapshot++)
+    int Nsnapshots_selected = 0;
+    for(unsigned int isnapshot=0; isnapshot < Nsnapshots; isnapshot++)
     {
         int Nsensors_observing = 0;
 
@@ -5054,14 +5108,14 @@ bool _clc_internal(// in/out
 
         for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
         {
-            sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar] =
+            snapshots[isnapshot].lidar_scans[ilidar] =
                 (points_and_plane_full_t){};
 
 
             if(sensor_snapshot_unsorted != NULL ||
                sensor_snapshot_sorted   != NULL)
             {
-                if(!lidar_segmentation(&sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar],
+                if(!lidar_segmentation(&snapshots[isnapshot].lidar_scans[ilidar],
 
                                        points_pool,
                                        points_and_plane_pool,
@@ -5084,7 +5138,7 @@ bool _clc_internal(// in/out
                 if(scan_segmented->points_and_plane.n == 0)
                     continue;
 
-                sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar] =
+                snapshots[isnapshot].lidar_scans[ilidar] =
                     (points_and_plane_full_t){ .points = scan_segmented->points,
                                                .n      = scan_segmented->points_and_plane.n,
                                                .ipoint = scan_segmented->points_and_plane.ipoint,
@@ -5096,7 +5150,7 @@ bool _clc_internal(// in/out
                 if(scan_segmented->points_and_plane.n == 0)
                     continue;
 
-                sensor_snapshots_filtered[Nsensor_snapshots_filtered].lidar_scans[ilidar] =
+                snapshots[isnapshot].lidar_scans[ilidar] =
                     (points_and_plane_full_t){ .points = scan_segmented->points,
                                                .n      = scan_segmented->points_and_plane.n,
                                                .ipoint = NULL,
@@ -5116,7 +5170,7 @@ bool _clc_internal(// in/out
 
         for(unsigned int icamera=0; icamera<Ncameras; icamera++)
         {
-            sensor_snapshots_filtered[Nsensor_snapshots_filtered].chessboard_corners[icamera] =
+            snapshots[isnapshot].chessboard_corners[icamera] =
                 &chessboard_corners_pool[ (isnapshot*Ncameras +
                                            icamera) * object_width_n*object_height_n ];
 
@@ -5131,18 +5185,18 @@ bool _clc_internal(// in/out
 
             if(image->data == NULL)
             {
-                sensor_snapshots_filtered[Nsensor_snapshots_filtered].chessboard_corners[icamera] = NULL;
+                snapshots[isnapshot].chessboard_corners[icamera] = NULL;
                 continue;
             }
 
-            if(!chessboard_detection_mrgingham(sensor_snapshots_filtered[Nsensor_snapshots_filtered].chessboard_corners[icamera],
+            if(!chessboard_detection_mrgingham(snapshots[isnapshot].chessboard_corners[icamera],
 
                                                image,
                                                is_bgr_mask & (1U << icamera),
                                                object_height_n,
                                                object_width_n))
             {
-                sensor_snapshots_filtered[Nsensor_snapshots_filtered].chessboard_corners[icamera] = NULL;
+                snapshots[isnapshot].chessboard_corners[icamera] = NULL;
                 continue;
             }
             MSG("Sensor snapshot %d observed by sensor %d (camera%d)",
@@ -5160,12 +5214,15 @@ bool _clc_internal(// in/out
             continue;
         }
 
-        MSG("isnapshot_original=%d corresponds to isnapshot_filtered=%d",
-            isnapshot, Nsensor_snapshots_filtered);
-        Nsensor_snapshots_filtered++;
+        // This snapshot has observations from sufficient overlapping sensors. I
+        // use it
+        bitarray64_set(bitarray_snapshots_selected, isnapshot);
+        MSG("isnapshot=%d selected",
+            isnapshot);
+        Nsnapshots_selected++;
     }
 
-    MSG("Have %d joint observations", Nsensor_snapshots_filtered);
+    MSG("Have %d joint observations", Nsnapshots_selected);
 
     {
         int NlidarObservations [Nlidars ];
@@ -5176,16 +5233,15 @@ bool _clc_internal(// in/out
         for(unsigned int i=0; i<Ncameras; i++) NcameraObservations[i] = 0;
         for(unsigned int i=0; i<Nlidars;  i++) NlidarObservations [i] = 0;
 
-        for(int isnapshot=0; isnapshot < Nsensor_snapshots_filtered; isnapshot++)
+        LOOP_SNAPSHOT()
         {
-            const sensor_snapshot_segmented_t* sensor_snapshot = &sensor_snapshots_filtered[isnapshot];
-
+            LOOP_SNAPSHOT_HEADER(,const);
             for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
-                if(sensor_snapshot->lidar_scans[ilidar].points != NULL)
+                if(snapshot->lidar_scans[ilidar].points != NULL)
                     NlidarObservations[ilidar]++;
 
             for(unsigned int icamera=0; icamera<Ncameras; icamera++)
-                if(sensor_snapshot->chessboard_corners[icamera] != NULL)
+                if(snapshot->chessboard_corners[icamera] != NULL)
                     NcameraObservations[icamera]++;
 
         }
@@ -5213,18 +5269,18 @@ bool _clc_internal(// in/out
     }
 
     {
-        double Rt_lidar0_board_seed  [Nsensor_snapshots_filtered * 4*3];
-        double Rt_lidar0_lidar_seed  [(Nlidars-1)                * 4*3];
-        double Rt_lidar0_camera_seed [Ncameras                   * 4*3];
-        double Rt_lidar0_board_solve [Nsensor_snapshots_filtered * 4*3];
-        double Rt_lidar0_lidar_solve [(Nlidars-1)                * 4*3];
-        double Rt_lidar0_camera_solve[Ncameras                   * 4*3];
-        memset(Rt_lidar0_board_seed,   0, sizeof(double)*Nsensor_snapshots_filtered * 4*3);
-        memset(Rt_lidar0_lidar_seed,   0, sizeof(double)*(Nlidars-1)                * 4*3);
-        memset(Rt_lidar0_camera_seed,  0, sizeof(double)*Ncameras                   * 4*3);
-        memset(Rt_lidar0_board_solve,  0, sizeof(double)*Nsensor_snapshots_filtered * 4*3);
-        memset(Rt_lidar0_lidar_solve,  0, sizeof(double)*(Nlidars-1)                * 4*3);
-        memset(Rt_lidar0_camera_solve, 0, sizeof(double)*Ncameras                   * 4*3);
+        double Rt_lidar0_board_seed  [Nsnapshots                     * 4*3];
+        double Rt_lidar0_lidar_seed  [(Nlidars-1)                    * 4*3];
+        double Rt_lidar0_camera_seed [Ncameras                       * 4*3];
+        double Rt_lidar0_board_solve [Nsnapshots                     * 4*3];
+        double Rt_lidar0_lidar_solve [(Nlidars-1)                    * 4*3];
+        double Rt_lidar0_camera_solve[Ncameras                       * 4*3];
+        memset(Rt_lidar0_board_seed,   0, sizeof(double)*Nsnapshots  * 4*3);
+        memset(Rt_lidar0_lidar_seed,   0, sizeof(double)*(Nlidars-1) * 4*3);
+        memset(Rt_lidar0_camera_seed,  0, sizeof(double)*Ncameras    * 4*3);
+        memset(Rt_lidar0_board_solve,  0, sizeof(double)*Nsnapshots  * 4*3);
+        memset(Rt_lidar0_lidar_solve,  0, sizeof(double)*(Nlidars-1) * 4*3);
+        memset(Rt_lidar0_camera_solve, 0, sizeof(double)*Ncameras    * 4*3);
 
         if(use_given_seed_geometry)
         {
@@ -5243,8 +5299,9 @@ bool _clc_internal(// in/out
                      use_given_seed_geometry,
 
                      // in
-                     sensor_snapshots_filtered,
-                     Nsensor_snapshots_filtered,
+                     snapshots,
+                     Nsnapshots,
+                     bitarray_snapshots_selected,
 
                      Nlidars,
                      Ncameras,
@@ -5268,8 +5325,9 @@ bool _clc_internal(// in/out
                                 Rt_lidar0_lidar_solve,
                                 Rt_lidar0_camera_solve,
 
-                                sensor_snapshots_filtered,
-                                Nsensor_snapshots_filtered,
+                                snapshots,
+                                Nsnapshots,
+                                bitarray_snapshots_selected,
 
                                 Nlidars,
                                 Ncameras,
@@ -5285,16 +5343,17 @@ bool _clc_internal(// in/out
             goto done;
         }
 
-        memcpy(Rt_lidar0_board_solve,  Rt_lidar0_board_seed,  sizeof(double)*Nsensor_snapshots_filtered * 4*3);
-        memcpy(Rt_lidar0_lidar_solve,  Rt_lidar0_lidar_seed,  sizeof(double)*(Nlidars-1)                * 4*3);
-        memcpy(Rt_lidar0_camera_solve, Rt_lidar0_camera_seed, sizeof(double)*Ncameras                   * 4*3);
+        memcpy(Rt_lidar0_board_solve,  Rt_lidar0_board_seed,  sizeof(double)*Nsnapshots  * 4*3);
+        memcpy(Rt_lidar0_lidar_solve,  Rt_lidar0_lidar_seed,  sizeof(double)*(Nlidars-1) * 4*3);
+        memcpy(Rt_lidar0_camera_solve, Rt_lidar0_camera_seed, sizeof(double)*Ncameras    * 4*3);
 
         plot_geometry("/tmp/geometry-seed.gp",
                       Rt_lidar0_board_seed,
                       Rt_lidar0_lidar_seed,
                       Rt_lidar0_camera_seed,
-                      sensor_snapshots_filtered,
-                      Nsensor_snapshots_filtered,
+                      snapshots,
+                      Nsnapshots,
+                      bitarray_snapshots_selected,
                       Nlidars,
                       Ncameras,
                       object_height_n,
@@ -5305,8 +5364,9 @@ bool _clc_internal(// in/out
                       Rt_lidar0_board_seed,
                       Rt_lidar0_lidar_seed,
                       Rt_lidar0_camera_seed,
-                      sensor_snapshots_filtered,
-                      Nsensor_snapshots_filtered,
+                      snapshots,
+                      Nsnapshots,
+                      bitarray_snapshots_selected,
                       Nlidars,
                       Ncameras,
                       object_height_n,
@@ -5324,8 +5384,9 @@ bool _clc_internal(// in/out
                 Rt_lidar0_camera_solve,
 
                 // in
-                sensor_snapshots_filtered,
-                Nsensor_snapshots_filtered,
+                snapshots,
+                Nsnapshots,
+                bitarray_snapshots_selected,
 
                 Nlidars,
                 Ncameras,
@@ -5350,8 +5411,9 @@ bool _clc_internal(// in/out
                             Rt_lidar0_lidar_solve,
                             Rt_lidar0_camera_solve,
 
-                            sensor_snapshots_filtered,
-                            Nsensor_snapshots_filtered,
+                            snapshots,
+                            Nsnapshots,
+                            bitarray_snapshots_selected,
 
                             Nlidars,
                             Ncameras,
@@ -5372,8 +5434,9 @@ bool _clc_internal(// in/out
 
         if(Var_rt_lidar0_sensor != NULL)
             if(!compute_covariance(Var_rt_lidar0_sensor,
-                                   sensor_snapshots_filtered,
-                                   Nsensor_snapshots_filtered,
+                                   snapshots,
+                                   Nsnapshots,
+                                   bitarray_snapshots_selected,
                                    Nlidars,
                                    Ncameras,
                                    models,
@@ -5398,8 +5461,9 @@ bool _clc_internal(// in/out
                       Rt_lidar0_board_solve,
                       Rt_lidar0_lidar_solve,
                       Rt_lidar0_camera_solve,
-                      sensor_snapshots_filtered,
-                      Nsensor_snapshots_filtered,
+                      snapshots,
+                      Nsnapshots,
+                      bitarray_snapshots_selected,
                       Nlidars,
                       Ncameras,
                       object_height_n,
@@ -5410,8 +5474,9 @@ bool _clc_internal(// in/out
                       Rt_lidar0_board_solve,
                       Rt_lidar0_lidar_solve,
                       Rt_lidar0_camera_solve,
-                      sensor_snapshots_filtered,
-                      Nsensor_snapshots_filtered,
+                      snapshots,
+                      Nsnapshots,
+                      bitarray_snapshots_selected,
                       Nlidars,
                       Ncameras,
                       object_height_n,
@@ -5430,8 +5495,9 @@ bool _clc_internal(// in/out
 
         make_reprojected_plots( Rt_lidar0_lidar_solve,
                                 Rt_lidar0_camera_solve,
-                                sensor_snapshots_filtered,
-                                Nsensor_snapshots_filtered,
+                                snapshots,
+                                Nsnapshots,
+                                bitarray_snapshots_selected,
                                 Nlidars,
                                 Ncameras,
                                 models, // Ncameras of these
@@ -5587,7 +5653,7 @@ bool clc_unsorted(// in/out
 
          // in
          const clc_sensor_snapshot_unsorted_t* sensor_snapshots,
-         const unsigned int                    Nsensor_snapshots,
+         const unsigned int                    Nsnapshots,
          // The stride, in bytes, between each successive points or rings value
          // in clc_lidar_scan_unsorted_t
          const unsigned int           lidar_packet_stride,
@@ -5621,7 +5687,7 @@ bool clc_unsorted(// in/out
 
                          // in
                          sensor_snapshots, NULL, NULL, NULL,
-                         Nsensor_snapshots,
+                         Nsnapshots,
                          lidar_packet_stride,
                          Nlidars,
                          Ncameras,
@@ -5654,7 +5720,7 @@ bool clc_sorted(// in/out
 
          // in
          const clc_sensor_snapshot_sorted_t* sensor_snapshots,
-         const unsigned int                  Nsensor_snapshots,
+         const unsigned int                  Nsnapshots,
 
          const unsigned int Nlidars,
          const unsigned int Ncameras,
@@ -5685,7 +5751,7 @@ bool clc_sorted(// in/out
 
                          // in
                          NULL, sensor_snapshots, NULL, NULL,
-                         Nsensor_snapshots,
+                         Nsnapshots,
                          0,
                          Nlidars,
                          Ncameras,
@@ -5718,7 +5784,7 @@ bool clc_lidar_segmented(// in/out
 
          // in
          const clc_sensor_snapshot_segmented_t* sensor_snapshots,
-         const unsigned int                     Nsensor_snapshots,
+         const unsigned int                     Nsnapshots,
 
          const unsigned int Nlidars,
          const unsigned int Ncameras,
@@ -5747,7 +5813,7 @@ bool clc_lidar_segmented(// in/out
 
                          // in
                          NULL, NULL, sensor_snapshots, NULL,
-                         Nsensor_snapshots,
+                         Nsnapshots,
                          0,
                          Nlidars,
                          Ncameras,
@@ -5780,7 +5846,7 @@ bool clc_lidar_segmented_dense(// in/out
 
          // in
          const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots,
-         const unsigned int                           Nsensor_snapshots,
+         const unsigned int                           Nsnapshots,
 
          const unsigned int Nlidars,
          const unsigned int Ncameras,
@@ -5809,7 +5875,7 @@ bool clc_lidar_segmented_dense(// in/out
 
                          // in
                          NULL, NULL, NULL, sensor_snapshots,
-                         Nsensor_snapshots,
+                         Nsnapshots,
                          0,
                          Nlidars,
                          Ncameras,
