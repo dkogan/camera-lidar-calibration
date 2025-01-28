@@ -3722,33 +3722,35 @@ bool clc_fit_from_inputs_dump(// out
                 do_skip_plots,
                 do_skip_prints);
 
-        if(result && !do_skip_plots)
+        if(result)
         {
-            plot_geometry("/tmp/geometry.gp",
-                          Rt_lidar0_board,
-                          Rt_lidar0_lidar,
-                          Rt_lidar0_camera,
-                          sensor_snapshots_filtered,
-                          Nsensor_snapshots_filtered_culled,
-                          *Nlidars,
-                          *Ncameras,
-                          object_height_n,
-                          object_width_n,
-                          object_spacing,
-                          false);
-            plot_geometry("/tmp/geometry-onlyaxes.gp",
-                          Rt_lidar0_board,
-                          Rt_lidar0_lidar,
-                          Rt_lidar0_camera,
-                          sensor_snapshots_filtered,
-                          Nsensor_snapshots_filtered_culled,
-                          *Nlidars,
-                          *Ncameras,
-                          object_height_n,
-                          object_width_n,
-                          object_spacing,
-                          true);
-
+            if(!do_skip_plots)
+            {
+                plot_geometry("/tmp/geometry.gp",
+                              Rt_lidar0_board,
+                              Rt_lidar0_lidar,
+                              Rt_lidar0_camera,
+                              sensor_snapshots_filtered,
+                              Nsensor_snapshots_filtered_culled,
+                              *Nlidars,
+                              *Ncameras,
+                              object_height_n,
+                              object_width_n,
+                              object_spacing,
+                              false);
+                plot_geometry("/tmp/geometry-onlyaxes.gp",
+                              Rt_lidar0_board,
+                              Rt_lidar0_lidar,
+                              Rt_lidar0_camera,
+                              sensor_snapshots_filtered,
+                              Nsensor_snapshots_filtered_culled,
+                              *Nlidars,
+                              *Ncameras,
+                              object_height_n,
+                              object_width_n,
+                              object_spacing,
+                              true);
+            }
             (*rt_ref_lidar)[0] = (mrcal_pose_t){};
             for(int i=1; i<*Nlidars; i++)
                 mrcal_rt_from_Rt( (double*)&(*rt_ref_lidar)[i], NULL,
