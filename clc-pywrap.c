@@ -1122,7 +1122,7 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
         goto done;
     }
 
-    if(py_isnapshot_exclude == Py_None)
+    if((PyObject*)py_isnapshot_exclude == Py_None)
         py_isnapshot_exclude = NULL;
     if(py_isnapshot_exclude != NULL &&
        ! (PyArray_Check(py_isnapshot_exclude) &&
