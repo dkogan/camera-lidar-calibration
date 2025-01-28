@@ -3715,7 +3715,6 @@ bool clc_fit_from_inputs_dump(// out
         double* Rt_lidar0_camera;
         if(!do_fit_seed)
         {
-            result = true;
             if(!do_inject_noise)
             {
                 // No added noise. I start from the same place we started from
@@ -3755,6 +3754,11 @@ bool clc_fit_from_inputs_dump(// out
                     return false;
                 }
             }
+
+
+            // The seed result. Here we just read it from a file, so this was
+            // successful
+            result = true;
         }
         else
         {
