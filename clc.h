@@ -130,30 +130,14 @@ typedef struct
 
 typedef struct
 {
-    // The caller has to know which camera is grayscale and which is color. This
-    // would be indicated by a bit array on a higher level
-    union
-    {
-        mrcal_image_uint8_t uint8;
-        mrcal_image_bgr_t   bgr;
-    } images[clc_Ncameras_max];
-
+    mrcal_point2_t* chessboard_corners[clc_Ncameras_max];
     clc_lidar_scan_segmented_t lidar_scans[clc_Nlidars_max];
-
 } clc_sensor_snapshot_segmented_t;
 
 typedef struct
 {
-    // The caller has to know which camera is grayscale and which is color. This
-    // would be indicated by a bit array on a higher level
-    union
-    {
-        mrcal_image_uint8_t uint8;
-        mrcal_image_bgr_t   bgr;
-    } images[clc_Ncameras_max];
-
+    mrcal_point2_t* chessboard_corners[clc_Ncameras_max];
     clc_lidar_scan_segmented_dense_t lidar_scans[clc_Nlidars_max];
-
 } clc_sensor_snapshot_segmented_dense_t;
 
 
@@ -376,10 +360,6 @@ bool clc_lidar_segmented(// in/out
          const int object_width_n,
          const double object_spacing,
 
-         // bits indicating whether a camera in
-         // sensor_snapshots.images[] is color or not
-         const clc_is_bgr_mask_t is_bgr_mask,
-
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
@@ -413,10 +393,6 @@ bool clc_lidar_segmented_dense(// in/out
          const int object_height_n,
          const int object_width_n,
          const double object_spacing,
-
-         // bits indicating whether a camera in
-         // sensor_snapshots.images[] is color or not
-         const clc_is_bgr_mask_t is_bgr_mask,
 
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,

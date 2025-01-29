@@ -5174,35 +5174,45 @@ bool _clc_internal(// in/out
 
         for(unsigned int icamera=0; icamera<Ncameras; icamera++)
         {
-            snapshots[isnapshot].chessboard_corners[icamera] =
-                &chessboard_corners_pool[ (isnapshot*Ncameras +
-                                           icamera) * object_width_n*object_height_n ];
-
-            // using uint8 type here; the image might be color. This is
-            // specified using the is_bgr_mask below
-            const mrcal_image_uint8_t* image;
-            if(     sensor_snapshot_unsorted  != NULL) image = &sensor_snapshot_unsorted ->images[icamera].uint8;
-            else if(sensor_snapshot_sorted    != NULL) image = &sensor_snapshot_sorted   ->images[icamera].uint8;
-            else if(sensor_snapshot_segmented != NULL) image = &sensor_snapshot_segmented->images[icamera].uint8;
+            if( sensor_snapshot_segmented != NULL)
+            {
+                snapshots[isnapshot].chessboard_corners[icamera] =
+                    sensor_snapshot_segmented->chessboard_corners[icamera];
+            }
+            else if(sensor_snapshot_segmented_dense != NULL)
+            {
+                snapshots[isnapshot].chessboard_corners[icamera] =
+                    sensor_snapshot_segmented_dense->chessboard_corners[icamera];
+            }
             else
-                assert(0);
-
-            if(image->data == NULL)
             {
-                snapshots[isnapshot].chessboard_corners[icamera] = NULL;
-                continue;
-            }
+                snapshots[isnapshot].chessboard_corners[icamera] =
+                    &chessboard_corners_pool[ (isnapshot*Ncameras +
+                                               icamera) * object_width_n*object_height_n ];
 
-            if(!chessboard_detection_mrgingham(snapshots[isnapshot].chessboard_corners[icamera],
+                // using uint8 type here; the image might be color. This is
+                // specified using the is_bgr_mask below
+                const mrcal_image_uint8_t* image;
+                if(     sensor_snapshot_unsorted  != NULL) image = &sensor_snapshot_unsorted ->images[icamera].uint8;
+                else if(sensor_snapshot_sorted    != NULL) image = &sensor_snapshot_sorted   ->images[icamera].uint8;
+                else
+                    assert(0);
+                if(image->data == NULL)
+                    snapshots[isnapshot].chessboard_corners[icamera] = NULL;
 
-                                               image,
-                                               is_bgr_mask & (1U << icamera),
-                                               object_height_n,
-                                               object_width_n))
-            {
-                snapshots[isnapshot].chessboard_corners[icamera] = NULL;
-                continue;
+                if(!chessboard_detection_mrgingham(snapshots[isnapshot].chessboard_corners[icamera],
+
+                                                   image,
+                                                   is_bgr_mask & (1U << icamera),
+                                                   object_height_n,
+                                                   object_width_n))
+                {
+                    snapshots[isnapshot].chessboard_corners[icamera] = NULL;
+                }
             }
+            if(snapshots[isnapshot].chessboard_corners[icamera] == NULL)
+                continue;
+
             MSG("Sensor snapshot %d observed by sensor %d (camera%d)",
                 isnapshot, Nlidars+icamera, icamera);
             Nsensors_observing++;
@@ -5798,10 +5808,6 @@ bool clc_lidar_segmented(// in/out
          const int object_width_n,
          const double object_spacing,
 
-         // bits indicating whether a camera in
-         // sensor_snapshots.images[] is color or not
-         const clc_is_bgr_mask_t is_bgr_mask,
-
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
@@ -5823,7 +5829,7 @@ bool clc_lidar_segmented(// in/out
                          Ncameras,
                          models,
                          object_height_n, object_width_n, object_spacing,
-                         is_bgr_mask,
+                         (clc_is_bgr_mask_t){},
                          NULL,
                          fit_seed_position_err_threshold,
                          fit_seed_cos_angle_err_threshold,
@@ -5860,10 +5866,6 @@ bool clc_lidar_segmented_dense(// in/out
          const int object_width_n,
          const double object_spacing,
 
-         // bits indicating whether a camera in
-         // sensor_snapshots.images[] is color or not
-         const clc_is_bgr_mask_t is_bgr_mask,
-
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
@@ -5885,7 +5887,7 @@ bool clc_lidar_segmented_dense(// in/out
                          Ncameras,
                          models,
                          object_height_n, object_width_n, object_spacing,
-                         is_bgr_mask,
+                         (clc_is_bgr_mask_t){},
                          NULL,
                          fit_seed_position_err_threshold,
                          fit_seed_cos_angle_err_threshold,
