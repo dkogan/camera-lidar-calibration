@@ -4,8 +4,10 @@
 #include <assert.h>
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include <mrcal/mrcal-image.h>
+#include <mrcal/basic-geometry.h>
+
 #include "util.h"
-#include "mrgingham-c-bridge.hh"
 
 
 // This was an attempt to use an existing buffer when invoking mrgingham, but it
@@ -47,9 +49,8 @@ public:
 
 
 extern "C"
-__attribute__((visibility("hidden")))
 bool
-chessboard_detection_mrgingham(// out
+clc_camera_chessboard_detection(// out
                                mrcal_point2_t* chessboard_corners,
                                // in
                                const mrcal_image_uint8_t* image, // might be color

@@ -10,7 +10,6 @@
 #include "clc.h"
 #include "util.h"
 #include "minimath/minimath_generated.h"
-#include "mrgingham-c-bridge.hh"
 #include "opencv-c-bridge.hh"
 #include "bitarray.h"
 
@@ -5200,7 +5199,7 @@ bool _clc_internal(// in/out
                 if(image->data == NULL)
                     snapshots[isnapshot].chessboard_corners[icamera] = NULL;
 
-                if(!chessboard_detection_mrgingham(snapshots[isnapshot].chessboard_corners[icamera],
+                if(!clc_camera_chessboard_detection(snapshots[isnapshot].chessboard_corners[icamera],
 
                                                    image,
                                                    is_bgr_mask & (1U << icamera),
