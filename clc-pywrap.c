@@ -475,6 +475,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     double fit_seed_position_err_threshold  = 0.5;
     double fit_seed_cos_angle_err_threshold = cos(10.*M_PI/180.);
 
+    int verbose                               = 0;
     int check_gradient__use_distance_to_plane = 0;
     int check_gradient                        = 0;
     int do_dump_inputs                        = 0;
@@ -504,13 +505,14 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          "object_spacing",
                          "fit_seed_position_err_threshold",
                          "fit_seed_cos_angle_err_threshold",
+                         "verbose",
                          "check_gradient__use_distance_to_plane",
                          "check_gradient",
                          "do_dump_inputs",
                          CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" "OOiiddppp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
+                                     "O" "|$" "OOiiddpppp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
                                      ,
                                      keywords,
                                      (PyTupleObject*)&py_sensor_snapshots,
@@ -521,6 +523,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                                      &object_spacing,
                                      &fit_seed_position_err_threshold,
                                      &fit_seed_cos_angle_err_threshold,
+                                     &verbose,
                                      &check_gradient__use_distance_to_plane,
                                      &check_gradient,
                                      &do_dump_inputs,
@@ -742,7 +745,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          fit_seed_position_err_threshold,
                          fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
-                         check_gradient))
+                         check_gradient,
+                         verbose))
         {
             BARF("clc_unsorted() failed");
             goto done;

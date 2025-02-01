@@ -5000,7 +5000,8 @@ bool _clc_internal(// in/out
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
-         bool check_gradient )
+         bool check_gradient,
+         bool verbose)
 {
     if(1 !=
        (sensor_snapshots_unsorted        != NULL) +
@@ -5414,8 +5415,10 @@ bool _clc_internal(// in/out
 
                 check_gradient__use_distance_to_plane,
                 check_gradient,
-                // skip nothing
-                false, false, false);
+                false,    // skip_presolve
+                !verbose, // skip_plots
+                !verbose  // skip_prints
+                );
 
         if(buf_inputs_dump != NULL)
         {
@@ -5692,7 +5695,8 @@ bool clc_unsorted(// in/out
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
-         bool check_gradient)
+         bool check_gradient,
+         bool verbose)
 {
     return _clc_internal(// out
                          rt_ref_lidar,
@@ -5715,7 +5719,8 @@ bool clc_unsorted(// in/out
                          fit_seed_position_err_threshold,
                          fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
-                         check_gradient);
+                         check_gradient,
+                         verbose);
 }
 
 bool clc_sorted(// in/out
@@ -5756,7 +5761,8 @@ bool clc_sorted(// in/out
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
-         bool check_gradient)
+         bool check_gradient,
+         bool verbose)
 {
     return _clc_internal(// out
                          rt_ref_lidar,
@@ -5779,7 +5785,8 @@ bool clc_sorted(// in/out
                          fit_seed_position_err_threshold,
                          fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
-                         check_gradient);
+                         check_gradient,
+                         verbose);
 }
 
 bool clc_lidar_segmented(// in/out
@@ -5814,7 +5821,8 @@ bool clc_lidar_segmented(// in/out
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
-         bool check_gradient)
+         bool check_gradient,
+         bool verbose)
 {
     return _clc_internal(// out
                          rt_ref_lidar,
@@ -5837,7 +5845,8 @@ bool clc_lidar_segmented(// in/out
                          fit_seed_position_err_threshold,
                          fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
-                         check_gradient);
+                         check_gradient,
+                         verbose);
 }
 
 bool clc_lidar_segmented_dense(// in/out
@@ -5872,7 +5881,8 @@ bool clc_lidar_segmented_dense(// in/out
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
-         bool check_gradient)
+         bool check_gradient,
+         bool verbose)
 {
     return _clc_internal(// out
                          rt_ref_lidar,
@@ -5895,6 +5905,7 @@ bool clc_lidar_segmented_dense(// in/out
                          fit_seed_position_err_threshold,
                          fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
-                         check_gradient);
+                         check_gradient,
+                         verbose);
 }
 

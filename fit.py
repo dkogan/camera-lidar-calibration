@@ -101,6 +101,9 @@ def parse_args():
                         This argument specifies the relationship between those
                         frames. If omitted, we assume an identity transform: the
                         vehicle frame is the lidar0 frame''')
+    parser.add_argument('--verbose',
+                        action = 'store_true',
+                        help='''Report details about the solve''')
     parser.add_argument('models',
                         type = str,
                         nargs='*',

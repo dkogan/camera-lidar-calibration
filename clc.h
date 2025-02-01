@@ -295,7 +295,8 @@ bool clc_unsorted(// in/out
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
-         bool check_gradient);
+         bool check_gradient,
+         bool verbose);
 
 
 bool clc_sorted(// in/out
@@ -336,7 +337,8 @@ bool clc_sorted(// in/out
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
-         bool check_gradient);
+         bool check_gradient,
+         bool verbose);
 
 
 bool clc_lidar_segmented(// in/out
@@ -371,7 +373,8 @@ bool clc_lidar_segmented(// in/out
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
-         bool check_gradient);
+         bool check_gradient,
+         bool verbose);
 
 bool clc_lidar_segmented_dense(// in/out
                                // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
@@ -405,7 +408,8 @@ bool clc_lidar_segmented_dense(// in/out
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
-         bool check_gradient);
+         bool check_gradient,
+         bool verbose);
 
 bool clc_post_solve_statistics( // out
                                 // A dense array of shape (Nsensors,Nsectors)
