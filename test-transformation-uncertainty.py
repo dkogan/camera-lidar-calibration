@@ -50,7 +50,7 @@ def parse_args():
 
     if args.topics is not None and args.isector is     None or \
        args.topics is     None and args.isector is not None:
-        print("Both of neither of --topics and --isector must be given",
+        print("Both or neither of --topics and --isector must be given",
               file=sys.stderr)
         sys.exit(1)
 
