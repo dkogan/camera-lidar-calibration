@@ -30,10 +30,6 @@ CFLAGS += -I/usr/include/suitesparse
 
 LIB_SOURCES += lidar-segmentation.c clc.c mrgingham-c-bridge.cc opencv-c-bridge.cc
 
-test-bitarray: test-bitarray.c bitarray.h
-all: test-bitarray
-
-
 clc-pywrap.o: CFLAGS += $(PY_MRBUILD_CFLAGS)
 clc-pywrap.o: $(addsuffix .h,$(wildcard *.docstring))
 
@@ -49,14 +45,10 @@ all: _clc$(PY_EXT_SUFFIX)
 
 
 
+# rules to build the tests. The tests are conducted via test.sh
+test-bitarray: test-bitarray.c bitarray.h
+tests:  test-bitarray
 
-
-
-TESTS := ./test-bitarray
-
-test: all
-	@FAILED=""; $(foreach t,$(TESTS),echo "========== RUNNING: $(subst __, ,$t)"; $(subst __, ,$t) || FAILED="$$FAILED $t"; ) test -z "$$FAILED" || echo "SOME TEST SETS FAILED: $$FAILED !"; test -z "$$FAILED" && echo "ALL TEST SETS PASSED!"
 .PHONY: test
-
 
 include $(MRBUILD_MK)/Makefile.common.footer
