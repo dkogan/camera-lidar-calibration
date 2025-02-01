@@ -265,11 +265,11 @@ for test in tests + tests_private:
     {bag} \
   | awk " $x0y0x1y1[1] < \$1 && \$1 < $x0y0x1y1[3] && $x0y0x1y1[2] < \$2 && \$2 < $x0y0x1y1[4]" \
   | feedgnuplot \
+      --style label "with labels" \
+      --tuplesize label 4 \
       --style all "with points pt 7 ps 0.5" \
       --style stage1-segment "with vectors" \
       --tuplesize stage1-segment 6 \
-      --style label "with labels" \
-      --tuplesize label 4 \
       --3d \
       --domain \
       --dataid \
