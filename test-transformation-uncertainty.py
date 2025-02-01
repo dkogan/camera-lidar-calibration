@@ -23,17 +23,22 @@ def parse_args():
                         help = '''.pickle file from fit.py --dump''')
     parser.add_argument('--topics',
                         type=str,
+                        nargs='+',
                         help = '''Used for sampled validation in the given
                         --isector. Either TOPIC1 or TOPIC0,TOPIC1. We look at
                         Var( transform(rt_1r, transform(rt_r0, p0)) ). If only
                         TOPIC1 is given, we assume that TOPIC0 is at the
                         reference of coordinates, and thus look at Var(
-                        transform(rt_1r, p0) )''')
+                        transform(rt_1r, p0) ). May be given multiple
+                        space-separated arguments to validate multiple sets of
+                        topics''')
     parser.add_argument('--isector',
                         type=int,
+                        nargs='+',
                         help='''Used for sampled validation of the given
                         --topics. we evaluate the uncertainty at the center of
-                        this sector''')
+                        this sector. My be given multiple space-separated
+                        arguments to validate multiple sets of sectors''')
     parser.add_argument('--ibag',
                         type=int,
                         default = 0,
@@ -55,11 +60,13 @@ def parse_args():
         sys.exit(1)
 
     if args.topics is not None:
-        args.topics = args.topics.split(',')
-        if len(args.topics) < 1 or len(args.topics) > 2:
-            print(f"--topics must be either TOPIC1 or TOPIC0,TOPIC1. Instead, got {len(args.topics)} topics",
-                  file=sys.stderr)
-            sys.exit(1)
+        args.topics = [T.split(',') for T in args.topics]
+        for T in args.topics:
+            if len(T) < 1 or len(T) > 2:
+                print(f"Every element of --topics must be either TOPIC1 or TOPIC0,TOPIC1. Instead, got {len(T)} topics in '{T}'",
+                      file=sys.stderr)
+                sys.exit(1)
+
     return args
 
 
@@ -172,7 +179,25 @@ def get_Var_predicted(isensor, isector):
                     nps.transpose(dp1__drt_ref_sensor01))
 
 
-def get_Var_observed(isensor, isector):
+def get_sampled_results():
+    print('Sampling...')
+
+    samples = [None] * args.Nsamples
+
+    for isample in range(args.Nsamples):
+        if (isample+1) % 20 == 0:
+            print(f"Sampling {isample+1}/{args.Nsamples}")
+
+        result = clc.fit_from_inputs_dump(context['result']['inputs_dump'],
+                                          do_inject_noise = True,
+                                          verbose         = args.verbose)
+
+        samples[isample] = (result['rt_ref_lidar'], result['rt_ref_camera'])
+
+    return samples
+
+
+def get_Var_observed(isensor, isector, samples):
 
     pref = get_pref(isector)
 
@@ -185,14 +210,9 @@ def get_Var_observed(isensor, isector):
 
     p1_sampled = np.zeros((args.Nsamples,3), dtype=float)
     for isample in range(args.Nsamples):
-        if (isample+1) % 20 == 0:
-            print(f"Sampling {isample+1}/{args.Nsamples}")
+        (rt_ref_lidar, rt_ref_camera) = samples[isample]
 
-        result = clc.fit_from_inputs_dump(context['result']['inputs_dump'],
-                                          do_inject_noise = True,
-                                          verbose         = args.verbose)
-
-        rt_ref_sensor__sampled = [get__rt_ref_sensor(i, result['rt_ref_lidar'], result['rt_ref_camera']) \
+        rt_ref_sensor__sampled = [get__rt_ref_sensor(i, rt_ref_lidar, rt_ref_camera) \
                                   for i in isensor]
 
         p1_sampled[isample] = \
@@ -222,7 +242,7 @@ def topic_index(l,t):
 
 
 
-
+################## bags[10]
 
 kwargs_calibrate = context['kwargs_calibrate']
 kwargs = dict(bag                              = kwargs_calibrate['bags'][args.ibag],
@@ -255,31 +275,35 @@ for isector in range(context['Nsectors']):
 
 
 
+samples = get_sampled_results()
 if args.topics is not None:
-    isensor = [topic_index(context['topics'],t) for t in args.topics]
 
-    if len(isensor) == 1:
-        if isensor[0] == 0:
-            print("Validating one sensor, lidar0, which is at the reference coordinate system. Nothing to do",
-                  file = sys.stderr)
-            sys.exit(1)
+    for topics in args.topics:
+        isensor = [topic_index(context['topics'],t) for t in topics]
 
-        isensor = (isensor[0],0)
-    else:
-        if isensor[0] == 0 and isensor[1] == 0:
-            print("Validating two sensors; both arelidar0, which is at the reference coordinate system. Nothing to do",
-                  file = sys.stderr)
-            sys.exit(1)
+        if len(isensor) == 1:
+            if isensor[0] == 0:
+                print("Validating one sensor, lidar0, which is at the reference coordinate system. Nothing to do",
+                      file = sys.stderr)
+                sys.exit(1)
 
-    Var_predicted = get_Var_predicted(isensor, args.isector)
-    Var_observed  = get_Var_observed (isensor, args.isector)
+            isensor = (isensor[0],0)
+        else:
+            if isensor[0] == 0 and isensor[1] == 0:
+                print("Validating two sensors; both arelidar0, which is at the reference coordinate system. Nothing to do",
+                      file = sys.stderr)
+                sys.exit(1)
 
-    testutils.confirm_covariances_equal(Var_predicted,
-                                        Var_observed ,
-                                        what = f"transformation between {args.topics} in the requested sector {args.isector}",
-                                        eps_eigenvalues       = 0.2, # relative
-                                        eps_eigenvectors_deg  = 5.,
-                                        check_sqrt_eigenvalue = True)
+        for isector in args.isector:
+            Var_predicted = get_Var_predicted(isensor, isector)
+            Var_observed  = get_Var_observed (isensor, isector, samples)
+
+            testutils.confirm_covariances_equal(Var_predicted,
+                                                Var_observed ,
+                                                what = f"transformation between {topics} in the requested sector {isector}",
+                                                eps_eigenvalues       = 0.2, # relative
+                                                eps_eigenvectors_deg  = 5.,
+                                                check_sqrt_eigenvalue = True)
 
 
 testutils.finish()
