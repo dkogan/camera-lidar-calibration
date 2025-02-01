@@ -424,7 +424,8 @@ compute_board_poses(// out
                     const mrcal_cameramodel_t*const*   models, // Ncameras of these
                     const int                          object_height_n,
                     const int                          object_width_n,
-                    const double                       object_spacing)
+                    const double                       object_spacing,
+                    bool verbose)
 {
     LOOP_SNAPSHOT()
     {
@@ -590,7 +591,7 @@ compute_board_poses(// out
             MSG("feedgnuplot failed. Giving up making the plot");       \
             return false;                                               \
         }                                                               \
-        MSG("Wrote '%s'", _filename);                                   \
+        MSG_IF_VERBOSE("Wrote '%s'", _filename);                        \
     }                                                                   \
 }
 
@@ -610,7 +611,8 @@ bool boardcenter_normal__camera(// out
                            const mrcal_point2_t*      observations,
                            const int                  object_height_n,
                            const int                  object_width_n,
-                           const double               object_spacing)
+                           const double               object_spacing,
+                           bool verbose)
 {
     if(!fit_Rt_camera_board(// out
                             Rt_camera_board,
@@ -660,7 +662,7 @@ bool boardcenter_normal__camera(// out
                      }
 
                  rms_error = sqrt(rms_error / (double)(object_width_n*object_height_n));
-                 MSG("RMS error: %.2f pixels", rms_error);
+                 MSG_IF_VERBOSE("RMS error: %.2f pixels", rms_error);
                 }),
 
             "--domain --dataid "
@@ -709,7 +711,8 @@ bool boardcenter_normal__sensor(// out
                            const mrcal_cameramodel_t*const*   models,
                            const int                          object_height_n,
                            const int                          object_width_n,
-                           const double                       object_spacing)
+                           const double                       object_spacing,
+                           bool verbose)
 {
     if(isensor < Nlidars)
     {
@@ -748,7 +751,8 @@ bool boardcenter_normal__sensor(// out
                                   chessboard_corners,
                                   object_height_n,
                                   object_width_n,
-                                  object_spacing))
+                                  object_spacing,
+                                  verbose))
             return false;
     }
 
@@ -836,7 +840,8 @@ bool align_point_clouds(// out
                         const int                          object_width_n,
                         const double                       object_spacing,
                         const double                       fit_seed_position_err_threshold,
-                        const double                       fit_seed_cos_angle_err_threshold)
+                        const double                       fit_seed_cos_angle_err_threshold,
+                        bool verbose)
 {
     // Nsnapshots is the max number I will need
     // These are double instead of float, since that's what the alignment code
@@ -870,7 +875,8 @@ bool align_point_clouds(// out
                                   models,
                                   object_height_n,
                                   object_width_n,
-                                  object_spacing) ||
+                                  object_spacing,
+                                  verbose) ||
            !boardcenter_normal__sensor(// out
                                   &points1[Nfit_snapshot],
                                   &normals1[Nfit_snapshot],
@@ -884,7 +890,8 @@ bool align_point_clouds(// out
                                   models,
                                   object_height_n,
                                   object_width_n,
-                                  object_spacing))
+                                  object_spacing,
+                                  verbose))
         {
             continue;
         }
@@ -1066,9 +1073,9 @@ bool align_point_clouds(// out
                 isnapshot,
                 acos(cos_err) * 180./M_PI);
         else
-            MSG("Seed rotation for isnapshot=%d: th=%.1f deg",
-                isnapshot,
-                acos(cos_err) * 180./M_PI);
+            MSG_IF_VERBOSE("Seed rotation for isnapshot=%d: th=%.1f deg",
+                           isnapshot,
+                           acos(cos_err) * 180./M_PI);
     }
 
     // Now the translation. R01 x1 + t01 ~ x0
@@ -1117,7 +1124,7 @@ bool align_point_clouds(// out
                 isnapshot,
                 sqrt(norm2_t01_err));
         else
-            MSG("Seed translation for isnapshot=%d: mag(t01_err)=%.1f",
+            MSG_IF_VERBOSE("Seed translation for isnapshot=%d: mag(t01_err)=%.1f",
                 isnapshot,
                 sqrt(norm2_t01_err));
     }
@@ -1142,6 +1149,7 @@ typedef struct
     double*                            Rt_lidar0_lidar;
     double*                            Rt_lidar0_camera;
     double*                            Rt_camera_board_cache;
+    const bool                         verbose;
 } cb_sensor_link_cookie_t;
 
 static
@@ -1166,11 +1174,11 @@ bool cb_sensor_link(const uint16_t isensor1,
     const double                       object_spacing                   = cookie->object_spacing;
     const double                       fit_seed_position_err_threshold  = cookie->fit_seed_position_err_threshold;
     const double                       fit_seed_cos_angle_err_threshold = cookie->fit_seed_cos_angle_err_threshold;
+    const bool                         verbose                          = cookie->verbose;
 
     double*                            Rt_lidar0_lidar            = cookie->Rt_lidar0_lidar;
     double*                            Rt_lidar0_camera           = cookie->Rt_lidar0_camera;
     double*                            Rt_camera_board_cache      = cookie->Rt_camera_board_cache;
-
     double Rt01[4*3];
     if(!align_point_clouds(// out
                            Rt01,
@@ -1188,7 +1196,8 @@ bool cb_sensor_link(const uint16_t isensor1,
                            object_width_n,
                            object_spacing,
                            fit_seed_position_err_threshold,
-                           fit_seed_cos_angle_err_threshold))
+                           fit_seed_cos_angle_err_threshold,
+                           verbose))
         return false;
 
     if(isensor1 >= Nlidars)
@@ -1305,7 +1314,8 @@ fit_seed(// in/out
          const int object_width_n,
          const double object_spacing,
          const double fit_seed_position_err_threshold,
-         const double fit_seed_cos_angle_err_threshold)
+         const double fit_seed_cos_angle_err_threshold,
+         bool verbose)
 {
     double Rt_camera_board_cache[Nsnapshots*Ncameras * 4*3];
     memset(Rt_camera_board_cache,
@@ -1328,10 +1338,13 @@ fit_seed(// in/out
                             Ncameras,
                             Nlidars);
 
-        MSG("Sensor shared-observations matrix for Nlidars=%d followed by Ncameras=%d:",
-            Nlidars, Ncameras);
-        print_full_symmetric_matrix_from_upper_triangle(shared_observation_counts,
-                                                        Nsensors);
+        if(verbose)
+        {
+            MSG("Sensor shared-observations matrix for Nlidars=%d followed by Ncameras=%d:",
+                Nlidars, Ncameras);
+            print_full_symmetric_matrix_from_upper_triangle(shared_observation_counts,
+                                                            Nsensors);
+        }
 
         cb_sensor_link_cookie_t cookie =
             {
@@ -1348,7 +1361,8 @@ fit_seed(// in/out
                 .fit_seed_cos_angle_err_threshold = fit_seed_cos_angle_err_threshold,
                 .Rt_lidar0_lidar                  = Rt_lidar0_lidar,
                 .Rt_lidar0_camera                 = Rt_lidar0_camera,
-                .Rt_camera_board_cache            = Rt_camera_board_cache
+                .Rt_camera_board_cache            = Rt_camera_board_cache,
+                .verbose                          = verbose
             };
 
         if(!mrcal_traverse_sensor_links( Nsensors,
@@ -1398,7 +1412,8 @@ fit_seed(// in/out
                             models,
                             object_height_n,
                             object_width_n,
-                            object_spacing))
+                            object_spacing,
+                            verbose))
     {
         MSG("compute_board_poses() failed");
         return false;
@@ -1473,9 +1488,9 @@ fit_seed(// in/out
 
             if(validation_failed_here) validation_failed = true;
 
-            MSG("%sisnapshot=%d ilidar=%d th_err_deg=%.2f p0_err_mag=%.2f",
-                validation_failed_here ? "FAILED: " : "",
-                isnapshot, ilidar, acos(cos_err) * 180. / M_PI, p0_err_mag);
+            MSG_IF_VERBOSE("%sisnapshot=%d ilidar=%d th_err_deg=%.2f p0_err_mag=%.2f",
+                           validation_failed_here ? "FAILED: " : "",
+                           isnapshot, ilidar, acos(cos_err) * 180. / M_PI, p0_err_mag);
         }
 
         for(unsigned int icamera=0; icamera<Ncameras; icamera++)
@@ -2550,7 +2565,8 @@ static void cost(const double*   b,
 static bool
 plot_residuals(const char* filename_base,
                const double* x,
-               const callback_context_t* ctx)
+               const callback_context_t* ctx,
+               bool verbose)
 {
     const int imeas_lidar_0                = measurement_index_lidar(0,0, ctx);
     const int Nmeas_lidar_observation_all  = num_measurements_lidars(ctx);
@@ -2935,7 +2951,8 @@ plot_geometry(const char* filename,
               const int object_height_n,
               const int object_width_n,
               const double object_spacing,
-              bool only_axes)
+              bool only_axes,
+              bool verbose)
 {
     bool result = false;
 
@@ -3139,7 +3156,7 @@ fit(// out
     bool check_gradient,
     bool skip_presolve,
     bool skip_plots,
-    bool skip_prints)
+    bool verbose)
 
 {
     bool result = false;
@@ -3175,7 +3192,7 @@ fit(// out
                               .object_spacing        = object_spacing};
     dogleg_parameters2_t dogleg_parameters;
     dogleg_getDefaultParameters(&dogleg_parameters);
-    if(!skip_prints &&
+    if(verbose &&
        !(check_gradient__use_distance_to_plane || check_gradient))
         dogleg_parameters.dogleg_debug = DOGLEG_DEBUG_VNLOG;
 
@@ -3229,7 +3246,7 @@ fit(// out
 
     cost(b, x, NULL, &ctx);
     if(!skip_plots)
-        plot_residuals("/tmp/residuals-seed", x, &ctx);
+        plot_residuals("/tmp/residuals-seed", x, &ctx, verbose);
 
     for(int i=0; i<Nmeasurements; i++)
         if( fabs(x[i])*SCALE_MEASUREMENT_PX > 1000 ||
@@ -3241,8 +3258,7 @@ fit(// out
 
     if(!skip_presolve)
     {
-        if(!skip_prints)
-            MSG("Starting pre-solve");
+        MSG_IF_VERBOSE("Starting pre-solve");
         ctx.use_distance_to_plane = true;
         if(!check_gradient__use_distance_to_plane)
         {
@@ -3261,8 +3277,7 @@ fit(// out
             result = true;
             goto done;
         }
-        if(!skip_prints)
-            MSG("Finished pre-solve; started full solve;");
+        MSG_IF_VERBOSE("Finished pre-solve; started full solve;");
     }
 
     ctx.use_distance_to_plane = false;
@@ -3283,8 +3298,7 @@ fit(// out
                               &dogleg_parameters,
                               pp_solver_context);
 
-    if(!skip_prints)
-        MSG("Finished full solve");
+    MSG_IF_VERBOSE("Finished full solve");
 
 
 
@@ -3309,9 +3323,8 @@ fit(// out
                          &rt_lidar0_camera[i*6]);
 
     cost(b, x, NULL, &ctx);
-    if(!skip_prints)
-        MSG("RMS fit error: %.2f normalized units",
-            sqrt(norm2x / (double)Nmeasurements));
+    MSG_IF_VERBOSE("RMS fit error: %.2f normalized units",
+                   sqrt(norm2x / (double)Nmeasurements));
 
     const int imeas_lidar_0                = measurement_index_lidar(0,0, &ctx);
     const int Nmeas_lidar_observation_all  = num_measurements_lidars(&ctx);
@@ -3320,7 +3333,7 @@ fit(// out
     const int imeas_regularization_0       = measurement_index_regularization(&ctx);
     const int Nmeas_regularization         = num_measurements_regularization(&ctx);
 
-    if(!skip_prints)
+    if(verbose)
     {
         if(Ncameras > 0)
         {
@@ -3342,7 +3355,7 @@ fit(// out
             norm2x_regularization/norm2x);
     }
     if(!skip_plots)
-        plot_residuals("/tmp/residuals", x, &ctx);
+        plot_residuals("/tmp/residuals", x, &ctx, verbose);
 
     result = true;
 
@@ -3455,7 +3468,7 @@ bool clc_fit_from_inputs_dump(// out
                               // if true, the observations are noised; regardless of do_fit_seed
                               bool do_inject_noise,
                               bool do_skip_plots,
-                              bool do_skip_prints)
+                              bool verbose)
 {
     bool result = false;
 
@@ -3664,7 +3677,8 @@ bool clc_fit_from_inputs_dump(// out
                           object_height_n,
                           object_width_n,
                           object_spacing,
-                          false);
+                          false,
+                          verbose);
             plot_geometry("/tmp/geometry-seed-dump-onlyaxes.gp",
                           Rt_lidar0_board_seed,
                           Rt_lidar0_lidar_seed,
@@ -3677,7 +3691,8 @@ bool clc_fit_from_inputs_dump(// out
                           object_height_n,
                           object_width_n,
                           object_spacing,
-                          true);
+                          true,
+                          verbose);
             plot_geometry("/tmp/geometry-solve-dump.gp",
                           Rt_lidar0_board_solve,
                           Rt_lidar0_lidar_solve,
@@ -3690,7 +3705,8 @@ bool clc_fit_from_inputs_dump(// out
                           object_height_n,
                           object_width_n,
                           object_spacing,
-                          false);
+                          false,
+                          verbose);
             plot_geometry("/tmp/geometry-solve-dump-onlyaxes.gp",
                           Rt_lidar0_board_solve,
                           Rt_lidar0_lidar_solve,
@@ -3703,7 +3719,8 @@ bool clc_fit_from_inputs_dump(// out
                           object_height_n,
                           object_width_n,
                           object_spacing,
-                          true);
+                          true,
+                          verbose);
         }
 
         // if(!do_fit_seed && !do_inject_noise) { fit(previous fit_seed() result)     }
@@ -3789,7 +3806,8 @@ bool clc_fit_from_inputs_dump(// out
                          object_width_n,
                          object_spacing,
                          fit_seed_position_err_threshold,
-                         fit_seed_cos_angle_err_threshold);
+                         fit_seed_cos_angle_err_threshold,
+                         verbose);
 
 
             if(result && !do_skip_plots)
@@ -3806,7 +3824,8 @@ bool clc_fit_from_inputs_dump(// out
                               object_height_n,
                               object_width_n,
                               object_spacing,
-                              false);
+                              false,
+                              verbose);
                 plot_geometry("/tmp/geometry-seed-onlyaxes.gp",
                               Rt_lidar0_board,
                               Rt_lidar0_lidar,
@@ -3819,7 +3838,8 @@ bool clc_fit_from_inputs_dump(// out
                               object_height_n,
                               object_width_n,
                               object_spacing,
-                              true);
+                              true,
+                              verbose);
             }
         }
         result =
@@ -3849,7 +3869,7 @@ bool clc_fit_from_inputs_dump(// out
                 false,false,
                 true,
                 do_skip_plots,
-                do_skip_prints);
+                verbose);
 
         if(result)
         {
@@ -3867,7 +3887,8 @@ bool clc_fit_from_inputs_dump(// out
                               object_height_n,
                               object_width_n,
                               object_spacing,
-                              false);
+                              false,
+                              verbose);
                 plot_geometry("/tmp/geometry-onlyaxes.gp",
                               Rt_lidar0_board,
                               Rt_lidar0_lidar,
@@ -3880,7 +3901,8 @@ bool clc_fit_from_inputs_dump(// out
                               object_height_n,
                               object_width_n,
                               object_spacing,
-                              true);
+                              true,
+                              verbose);
             }
             (*rt_ref_lidar)[0] = (mrcal_pose_t){};
             for(int i=1; i<*Nlidars; i++)
@@ -4030,7 +4052,8 @@ static bool make_reprojected_plots( const double* Rt_lidar0_lidar,
                                     const int                          Ncameras,
                                     const mrcal_cameramodel_t*const*   models, // Ncameras of these
                                     const int                          object_height_n,
-                                    const int                          object_width_n )
+                                    const int                          object_width_n,
+                                    bool  verbose)
 {
     LOOP_SNAPSHOT()
     {
@@ -5174,8 +5197,8 @@ bool _clc_internal(// in/out
             }
 
 
-            MSG("Sensor snapshot %d observed by sensor %d (lidar%d)",
-                isnapshot, ilidar, ilidar);
+            MSG_IF_VERBOSE("Sensor snapshot %d observed by sensor %d (lidar%d)",
+                           isnapshot, ilidar, ilidar);
             Nsensors_observing++;
         }
 
@@ -5217,30 +5240,29 @@ bool _clc_internal(// in/out
                 }
             }
 
-            MSG("Sensor snapshot %d observed by sensor %d (camera%d)",
-                isnapshot, Nlidars+icamera, icamera);
+            MSG_IF_VERBOSE("Sensor snapshot %d observed by sensor %d (camera%d)",
+                           isnapshot, Nlidars+icamera, icamera);
             Nsensors_observing++;
         }
 
-        MSG("Sensor snapshot %d observed by %d sensors",
-            isnapshot, Nsensors_observing);
+        MSG_IF_VERBOSE("Sensor snapshot %d observed by %d sensors",
+                       isnapshot, Nsensors_observing);
 
         if(Nsensors_observing < 2)
         {
-            MSG("Need at least 2. Throwing out isnapshot=%d",
-                isnapshot);
+            MSG_IF_VERBOSE("Need at least 2. Throwing out isnapshot=%d",
+                           isnapshot);
             continue;
         }
 
         // This snapshot has observations from sufficient overlapping sensors. I
         // use it
         bitarray64_set(bitarray_snapshots_selected, isnapshot);
-        MSG("isnapshot=%d selected",
-            isnapshot);
+        MSG_IF_VERBOSE("isnapshot=%d selected", isnapshot);
         Nsnapshots_selected++;
     }
 
-    MSG("Have %d joint observations", Nsnapshots_selected);
+    MSG_IF_VERBOSE("Have %d joint observations", Nsnapshots_selected);
 
     {
         int NlidarObservations [Nlidars ];
@@ -5328,7 +5350,8 @@ bool _clc_internal(// in/out
                      object_width_n,
                      object_spacing,
                      fit_seed_position_err_threshold,
-                     fit_seed_cos_angle_err_threshold))
+                     fit_seed_cos_angle_err_threshold,
+                     verbose))
         {
             MSG("fit_seed() failed");
 
@@ -5377,7 +5400,8 @@ bool _clc_internal(// in/out
                       object_height_n,
                       object_width_n,
                       object_spacing,
-                      false);
+                      false,
+                      verbose);
         plot_geometry("/tmp/geometry-seed-onlyaxes.gp",
                       Rt_lidar0_board_seed,
                       Rt_lidar0_lidar_seed,
@@ -5390,7 +5414,8 @@ bool _clc_internal(// in/out
                       object_height_n,
                       object_width_n,
                       object_spacing,
-                      true);
+                      true,
+                      verbose);
 
         dogleg_solverContext_t* solver_context;
         bool fit_result =
@@ -5417,7 +5442,7 @@ bool _clc_internal(// in/out
                 check_gradient,
                 false,    // skip_presolve
                 !verbose, // skip_plots
-                !verbose  // skip_prints
+                verbose   // verbose
                 );
 
         if(buf_inputs_dump != NULL)
@@ -5489,7 +5514,8 @@ bool _clc_internal(// in/out
                       object_height_n,
                       object_width_n,
                       object_spacing,
-                      false);
+                      false,
+                      verbose);
         plot_geometry("/tmp/geometry-onlyaxes.gp",
                       Rt_lidar0_board_solve,
                       Rt_lidar0_lidar_solve,
@@ -5502,7 +5528,8 @@ bool _clc_internal(// in/out
                       object_height_n,
                       object_width_n,
                       object_spacing,
-                      true);
+                      true,
+                      verbose);
 
 
         for(unsigned int i=0; i<Ncameras; i++)
@@ -5522,7 +5549,8 @@ bool _clc_internal(// in/out
                                 Ncameras,
                                 models, // Ncameras of these
                                 object_height_n,
-                                object_width_n );
+                                object_width_n,
+                                verbose);
     }
 
     result = true;

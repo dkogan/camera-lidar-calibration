@@ -4,6 +4,8 @@
 
 #define MSG(fmt, ...) fprintf(stderr, "%s(%d) %s(): " fmt "\n", __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
+#define MSG_IF_VERBOSE(...) do { if(verbose) { MSG(__VA_ARGS__); } } while(0)
+
 // available to this library, but NOT exported outside
 void eig_real_symmetric_3x3( // out
                              double* vsmallest, // the smallest-eigenvalue eigenvector; may be NULL

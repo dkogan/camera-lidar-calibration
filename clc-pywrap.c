@@ -1092,7 +1092,7 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
     double fit_seed_cos_angle_err_threshold = cos(10.*M_PI/180.);
     int            do_inject_noise  = 0;
     int            do_fit_seed      = 0;
-    int            do_skip_prints   = 1;
+    int            verbose          = 0;
     int            do_skip_plots    = 1;
 
     SET_SIGINT();
@@ -1103,7 +1103,7 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
                          "fit_seed_cos_angle_err_threshold",
                          "do_inject_noise",
                          "do_fit_seed",
-                         "do_skip_prints",
+                         "verbose",
                          "do_skip_plots",
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
@@ -1115,7 +1115,7 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
                                      &fit_seed_cos_angle_err_threshold,
                                      &do_inject_noise,
                                      &do_fit_seed,
-                                     &do_skip_prints,
+                                     &verbose,
                                      &do_skip_plots,
                                      NULL))
         goto done;
@@ -1152,8 +1152,8 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
                                          fit_seed_cos_angle_err_threshold,
                                          do_fit_seed,
                                          do_inject_noise,
-                                         do_skip_prints,
-                                         do_skip_plots))
+                                         do_skip_plots,
+                                         verbose))
     {
         BARF("clc_fit_from_inputs_dump() failed");
         goto done;

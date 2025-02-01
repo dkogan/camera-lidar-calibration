@@ -43,6 +43,9 @@ def parse_args():
                         type=int,
                         default=100,
                         help='''How many random samples to evaluate''')
+    parser.add_argument('--verbose',
+                        action = 'store_true',
+                        help='''Report details about the solve''')
     args = parser.parse_args()
 
     if args.topics is not None and args.isector is     None or \
@@ -186,7 +189,8 @@ def get_Var_observed(isensor, isector):
             print(f"Sampling {isample+1}/{args.Nsamples}")
 
         result = clc.fit_from_inputs_dump(context['result']['inputs_dump'],
-                                          do_inject_noise = True)
+                                          do_inject_noise = True,
+                                          verbose         = args.verbose)
 
         rt_ref_sensor__sampled = [get__rt_ref_sensor(i, result['rt_ref_lidar'], result['rt_ref_camera']) \
                                   for i in isensor]

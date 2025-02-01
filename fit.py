@@ -204,6 +204,7 @@ kwargs_calibrate = dict(bags            = args.bag,
                         topics          = args.topics,
                         models          = args.models,
                         check_gradient  = False,
+                        verbose         = args.verbose,
                         Npoints_per_segment                = 15,
                         threshold_min_Nsegments_in_cluster = 4,
                         **kwargs_calibration_object)

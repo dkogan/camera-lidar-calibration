@@ -35,6 +35,9 @@ def parse_args():
                         type=argparse_helpers.comma_separated_list_of_non_negative_integers,
                         help = '''Optional comma-separated list of integers >=
                         0. If given, exclude these snapshots''')
+    parser.add_argument('--verbose',
+                        action = 'store_true',
+                        help='''Report details about the solve''')
     parser.add_argument('context',
                         help = '''.pickle file from fit.py --dump or
                         buf_inputs_dump from the clc_...() C functions''')
@@ -71,5 +74,5 @@ result = clc.fit_from_inputs_dump(dump,
                                   isnapshot_exclude = args.exclude,
                                   do_inject_noise = args.inject_noise,
                                   do_fit_seed     = args.fit_seed,
-                                  do_skip_prints  = False,
+                                  verbose         = args.verbose,
                                   do_skip_plots   = False)
