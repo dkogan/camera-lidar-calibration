@@ -5196,21 +5196,18 @@ bool _clc_internal(// in/out
                 else if(sensor_snapshot_sorted    != NULL) image = &sensor_snapshot_sorted   ->images[icamera].uint8;
                 else
                     assert(0);
-                if(image->data == NULL)
-                    snapshots[isnapshot].chessboard_corners[icamera] = NULL;
+                if(image->data == NULL ||
+                   !clc_camera_chessboard_detection(snapshots[isnapshot].chessboard_corners[icamera],
 
-                if(!clc_camera_chessboard_detection(snapshots[isnapshot].chessboard_corners[icamera],
-
-                                                   image,
-                                                   is_bgr_mask & (1U << icamera),
-                                                   object_height_n,
-                                                   object_width_n))
+                                                    image,
+                                                    is_bgr_mask & (1U << icamera),
+                                                    object_height_n,
+                                                    object_width_n))
                 {
                     snapshots[isnapshot].chessboard_corners[icamera] = NULL;
+                    continue;
                 }
             }
-            if(snapshots[isnapshot].chessboard_corners[icamera] == NULL)
-                continue;
 
             MSG("Sensor snapshot %d observed by sensor %d (camera%d)",
                 isnapshot, Nlidars+icamera, icamera);
