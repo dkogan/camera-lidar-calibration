@@ -5067,6 +5067,9 @@ bool _clc_internal(// in/out
           (Nlidar_scans_buffer + Nplanes_max) * sizeof(clc_points_and_plane_t)
           + (8-1)) & ~(8-1);
     const int Nbytes_pool_camera =
+        ( sensor_snapshots_segmented       != NULL ||
+          sensor_snapshots_segmented_dense != NULL ) ?
+        0 :
         Nsnapshots*Ncameras*object_width_n*object_height_n*sizeof(mrcal_point2_t);
 
     // contains the points_pool and the points_and_plane_pool and the chessboard
@@ -5084,7 +5087,11 @@ bool _clc_internal(// in/out
     int points_pool_index           = 0;
     int points_and_plane_pool_index = 0;
 
-    mrcal_point2_t* chessboard_corners_pool = (mrcal_point2_t*)&pool[Nbytes_pool_lidar];
+    mrcal_point2_t* chessboard_corners_pool =
+        ( sensor_snapshots_segmented       != NULL ||
+          sensor_snapshots_segmented_dense != NULL ) ?
+        NULL :
+        (mrcal_point2_t*)&pool[Nbytes_pool_lidar];
 
 
     int Nsnapshots_selected = 0;
