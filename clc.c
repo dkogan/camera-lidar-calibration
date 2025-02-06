@@ -347,8 +347,8 @@ clc_estimate_camera_pose_from_fixed_point_observations(// out
     return false;
 }
 
-static void
-ref_calibration_object(// out
+void
+clc_ref_calibration_object(// out
                        mrcal_point3_t*            points_ref,
                        // in
                        const int                  object_height_n,
@@ -375,7 +375,7 @@ ref_calibration_object(// out
         }
 }
 
-static bool fit_Rt_camera_board(// out
+bool clc_fit_Rt_camera_board(// out
                  double*                    Rt_camera_board,
                  // in
                  const mrcal_cameramodel_t* model,
@@ -386,7 +386,7 @@ static bool fit_Rt_camera_board(// out
 {
     const int N = object_height_n*object_width_n;
     mrcal_point3_t points_ref[N];
-    ref_calibration_object(points_ref, object_height_n, object_width_n, object_spacing);
+    clc_ref_calibration_object(points_ref, object_height_n, object_width_n, object_spacing);
 
     if(!clc_estimate_camera_pose_from_fixed_point_observations( Rt_camera_board,
                                                              &model->lensmodel,
@@ -439,7 +439,7 @@ compute_board_poses(// out
             double* Rt_camera_board = &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
             if(Rt_uninitialized(Rt_camera_board))
             {
-                if(!fit_Rt_camera_board(// out
+                if(!clc_fit_Rt_camera_board(// out
                                         Rt_camera_board,
                                         // in
                                         models[icamera],
@@ -609,7 +609,7 @@ bool boardcenter_normal__camera(// out
                            const double               object_spacing,
                            bool verbose)
 {
-    if(!fit_Rt_camera_board(// out
+    if(!clc_fit_Rt_camera_board(// out
                             Rt_camera_board,
                             // in
                             model,
@@ -954,7 +954,7 @@ bool align_point_clouds(// out
                      N = object_height_n*object_width_n;
                  mrcal_point3_t chessboard_points_ref[N];
                  if(Ncameras > 0)
-                     ref_calibration_object(chessboard_points_ref, object_height_n, object_width_n, object_spacing);
+                     clc_ref_calibration_object(chessboard_points_ref, object_height_n, object_width_n, object_spacing);
 
                  for(int i=0; i<Nfit_snapshot; i++)
                  {
