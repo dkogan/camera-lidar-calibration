@@ -403,6 +403,31 @@ bool clc_fit_Rt_camera_board(// out
     return true;
 }
 
+static
+void get_pboardcenter_board(// out
+                            double* p,
+                            // in
+                            const int    object_height_n,
+                            const int    object_width_n,
+                            const double object_spacing,
+                            const int    Ncameras)
+{
+    if(Ncameras > 0)
+    {
+        // We have cameras; we know where the center of the board is
+        p[0] = (object_width_n -1)/2*object_spacing;
+        p[1] = (object_height_n-1)/2*object_spacing;
+        p[2] = 0.;
+        return;
+    }
+
+    // No cameras; we don't know where the center of the board is. We leave it
+    // at 0
+    p[0] = 0.;
+    p[1] = 0.;
+    p[2] = 0.;
+}
+
 static bool
 compute_board_poses(// out
                     double*                            Rt_lidar0_board,
@@ -492,29 +517,24 @@ compute_board_poses(// out
         double Rt_board_lidar[4*3] = {};
         mrcal_R_aligned_to_vector(Rt_board_lidar,
                                   n.xyz);
-        // I want pboardcenter_board to map to p: R_board_lidar
-        // p + t_board_lidar = pboardcenter_board
-        for(int i=0; i<3; i++)
-        {
-            if(Ncameras > 0)
-            {
-                // We have cameras; we know where the center of the board is
-                const mrcal_point3_t pboardcenter_board =
-                    { .x = (object_width_n -1)/2*object_spacing,
-                      .y = (object_height_n-1)/2*object_spacing,
-                      .z = 0. };
 
-                Rt_board_lidar[9+i] = pboardcenter_board.xyz[i];
-            }
-            else
-            {
-                // No cameras; we don't know where the center of the board
-                // is. We leave it at 0
-            }
+        // I want pboardcenter_board to map to p: R_board_lidar
+        // plidar_mean + t_board_lidar = pboardcenter_board
+        // -> t_board_lidar = pboardcenter_board - R_board_lidar plidar_mean
+        double* t_board_lidar = &Rt_board_lidar[3*3];
+        for(int i=0; i<3; i++)
+            get_pboardcenter_board(// out
+                                   t_board_lidar,
+                                   // in
+                                   object_height_n,
+                                   object_width_n,
+                                   object_spacing,
+                                   Ncameras);
+
+        for(int i=0; i<3; i++)
             for(int j=0; j<3; j++)
-                Rt_board_lidar[9+i] -=
+                t_board_lidar[i] -=
                     Rt_board_lidar[i*3 + j] * plidar_mean.xyz[j];
-        }
 
         double* Rt_lidar0_board__here = &Rt_lidar0_board[isnapshot*4*3];
         if(ilidar_first == 0)
