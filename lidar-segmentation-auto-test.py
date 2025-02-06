@@ -291,7 +291,7 @@ for test in tests + tests_private:
 
     if test['plane_n'] is None:
         testutils.confirm_equal(Nplanes_found, 0,
-                                msg=f'I expect to find exactly 0 planes')
+                                msg=f'I expect to find exactly 0 planes, but have {Nplanes_found=}')
         continue
 
 
