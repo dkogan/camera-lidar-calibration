@@ -223,17 +223,15 @@ static bool Rt_uninitialized(const double* Rt)
 // mrcal.calibration._estimate_camera_pose_from_fixed_point_observations(). Not
 // pushed to mrcal itself because it calls OpenCV, but mrcal does not link to it
 // in its C library
-static
 bool
-_estimate_camera_pose_from_fixed_point_observations(// out
+clc_estimate_camera_pose_from_fixed_point_observations(// out
                                                     double* Rt_cam_points,
                                                     // in
                                                     const mrcal_lensmodel_t* lensmodel,
                                                     const double*            intrinsics,
                                                     const mrcal_point2_t*    observations,
                                                     const mrcal_point3_t*    points_ref,
-                                                    const int                N,
-                                                    const char*              what)
+                                                    const int                N)
 {
     // if z<0, try again with bigger f
     // if too few points: try again with smaller f
@@ -290,9 +288,8 @@ _estimate_camera_pose_from_fixed_point_observations(// out
                 scale = 0.7;
                 continue;
             }
-            MSG("Insufficient observations; need at least 4; got %d instead. Cannot estimate initial extrinsics for %s",
-                Nobservations,
-                what);
+            MSG("Insufficient observations; need at least 4; got %d instead. Cannot estimate initial extrinsics",
+                Nobservations);
             return false;
         }
 
@@ -308,7 +305,7 @@ _estimate_camera_pose_from_fixed_point_observations(// out
                         camera_matrix,
                         false))
         {
-            MSG("solvePnP() failed! Cannot estimate initial extrinsics for %s", what);
+            MSG("solvePnP() failed! Cannot estimate initial extrinsics");
             return false;
         }
         if(tvec->z <= 0)
@@ -326,7 +323,7 @@ _estimate_camera_pose_from_fixed_point_observations(// out
                             camera_matrix,
                             true))
             {
-                MSG("Retried solvePnP() failed! Cannot estimate initial extrinsics for %s", what);
+                MSG("Retried solvePnP() failed! Cannot estimate initial extrinsics");
                 return false;
             }
             if(tvec->z <= 0)
@@ -336,8 +333,7 @@ _estimate_camera_pose_from_fixed_point_observations(// out
                     scale = 1.5;
                     continue;
                 }
-                MSG("Retried solvePnP() insists that tvec->z <= 0 (i.e. the chessboard is behind us). Cannot estimate initial extrinsics for %s",
-                    what);
+                MSG("Retried solvePnP() insists that tvec->z <= 0 (i.e. the chessboard is behind us). Cannot estimate initial extrinsics");
                 return false;
             }
         }
@@ -392,13 +388,12 @@ static bool fit_Rt_camera_board(// out
     mrcal_point3_t points_ref[N];
     ref_calibration_object(points_ref, object_height_n, object_width_n, object_spacing);
 
-    if(!_estimate_camera_pose_from_fixed_point_observations( Rt_camera_board,
+    if(!clc_estimate_camera_pose_from_fixed_point_observations( Rt_camera_board,
                                                              &model->lensmodel,
                                                              model->intrinsics,
                                                              observations,
                                                              points_ref,
-                                                             N,
-                                                             "fit_seed" ))
+                                                             N))
         return false;
     if(Rt_camera_board[3*3 + 2] <= 0)
     {
