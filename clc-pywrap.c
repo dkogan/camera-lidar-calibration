@@ -986,16 +986,6 @@ static PyObject* py_post_solve_statistics(PyObject* NPY_UNUSED(self),
     }
 
     if(! (PyArray_IS_C_CONTIGUOUS(rt_vehicle_lidar0) &&
- Nsensors-1 &&
-          PyArray_DIMS(Var_rt_lidar0_sensor)[3] == 6          &&
-          PyArray_TYPE(Var_rt_lidar0_sensor)    == NPY_FLOAT64) )
-    {
-        BARF("Var_rt_lidar0_sensor should have shape (Nsensors-1,6,Nsensors-1,6) where Nsensors=%d, have dtype=float64 and be contiguous",
-             Nsensors);
-        goto done;
-    }
-
-    if(! (PyArray_IS_C_CONTIGUOUS(rt_vehicle_lidar0) &&
           PyArray_NDIM(rt_vehicle_lidar0)    == 1 &&
           PyArray_DIMS(rt_vehicle_lidar0)[0] == 6 &&
           PyArray_TYPE(rt_vehicle_lidar0)    == NPY_FLOAT64) )
