@@ -745,34 +745,34 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
         static_assert(offsetof(mrcal_pose_t,r) == 0 && offsetof(mrcal_pose_t,t) == sizeof(double)*3,
                       "mrcal_pose_t should be a dense rt transform");
 
-        if(!clc_unsorted(// out
-                         (mrcal_pose_t*)PyArray_DATA(rt_ref_lidar),
-                         (mrcal_pose_t*)PyArray_DATA(rt_ref_camera),
-                         seed != NULL,
-                         (double      *)PyArray_DATA(Var_rt_lidar0_sensor),
-                         (uint16_t    *)PyArray_DATA(observations_per_sector),
-                         Nsectors,
-                         do_dump_inputs ? &buf_inputs_dump  : NULL,
-                         do_dump_inputs ? &size_inputs_dump : NULL,
+        if(!clc(// out
+                (mrcal_pose_t*)PyArray_DATA(rt_ref_lidar),
+                (mrcal_pose_t*)PyArray_DATA(rt_ref_camera),
+                seed != NULL,
+                (double      *)PyArray_DATA(Var_rt_lidar0_sensor),
+                (uint16_t    *)PyArray_DATA(observations_per_sector),
+                Nsectors,
+                do_dump_inputs ? &buf_inputs_dump  : NULL,
+                do_dump_inputs ? &size_inputs_dump : NULL,
 
-                         // in
-                         sensor_snapshots,
-                         Nsensor_snapshots,
-                         lidar_packet_stride,
-                         Nlidars,
-                         Ncameras,
-                         (const mrcal_cameramodel_t*const*)models,
-                         object_height_n,
-                         object_width_n,
-                         object_spacing,
-                         is_bgr_mask,
-                         &ctx,
-                         rt_vehicle_lidar0 == NULL ? NULL : (mrcal_pose_t*)PyArray_DATA(rt_vehicle_lidar0),
-                         fit_seed_position_err_threshold,
-                         fit_seed_cos_angle_err_threshold,
-                         check_gradient__use_distance_to_plane,
-                         check_gradient,
-                         verbose))
+                // in
+                sensor_snapshots,NULL,NULL,NULL,
+                Nsensor_snapshots,
+                lidar_packet_stride,
+                Nlidars,
+                Ncameras,
+                (const mrcal_cameramodel_t*const*)models,
+                object_height_n,
+                object_width_n,
+                object_spacing,
+                is_bgr_mask,
+                &ctx,
+                rt_vehicle_lidar0 == NULL ? NULL : (mrcal_pose_t*)PyArray_DATA(rt_vehicle_lidar0),
+                fit_seed_position_err_threshold,
+                fit_seed_cos_angle_err_threshold,
+                check_gradient__use_distance_to_plane,
+                check_gradient,
+                verbose))
         {
             BARF("clc_unsorted() failed");
             goto done;

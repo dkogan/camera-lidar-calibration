@@ -254,15 +254,15 @@ clc_camera_chessboard_detection(// out
 // On output, the rt_ref_lidar[] and rt_ref_camera[] arrays will be filled-in.
 // If solving for ALL the sensor geometry wasn't possible, we return false. On
 // success, we return true
-bool clc_unsorted(// in/out
-                  // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
+bool clc(// in/out
+         // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
          bool          use_given_seed_geometry,
 
          // Covariance of the output. Symmetric matrix of shape
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
-         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
+         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6; may be NULL
          double*       Var_rt_lidar0_sensor,
          // dense array of shape (Nsectors,); may be NULL
          uint16_t* observations_per_sector,
@@ -275,10 +275,16 @@ bool clc_unsorted(// in/out
          size_t* size_inputs_dump,
 
          // in
-         const clc_sensor_snapshot_unsorted_t* sensor_snapshots,
-         const unsigned int                    Nsensor_snapshots,
+
+         // Exactly one of these should be non-NULL
+         const clc_sensor_snapshot_unsorted_t*        sensor_snapshots_unsorted,
+         const clc_sensor_snapshot_sorted_t*          sensor_snapshots_sorted,
+         const clc_sensor_snapshot_segmented_t*       sensor_snapshots_segmented,
+         const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots_segmented_dense,
+
+         const unsigned int                    Nsnapshots,
          // The stride, in bytes, between each successive points or rings value
-         // in clc_lidar_scan_unsorted_t
+         // in sensor_snapshots_unsorted; unused if sensor_snapshots_unsorted==NULL
          const unsigned int           lidar_packet_stride,
 
          const unsigned int Nlidars,
@@ -289,10 +295,13 @@ bool clc_unsorted(// in/out
          const int object_width_n,
          const double object_spacing,
 
-         // bits indicating whether a camera in
-         // sensor_snapshots.images[] is color or not
+         // bits indicating whether a camera in sensor_snapshots.images[] is
+         // color or not
+         // unused if sensor_snapshots_unsorted==NULL &&
+         // sensor_snapshots_sorted==NULL
          const clc_is_bgr_mask_t is_bgr_mask,
-
+         // unused if sensor_snapshots_unsorted==NULL &&
+         // sensor_snapshots_sorted==NULL
          const clc_lidar_segmentation_context_t* ctx,
 
          const mrcal_pose_t* rt_vehicle_lidar0,
@@ -303,133 +312,6 @@ bool clc_unsorted(// in/out
          bool check_gradient,
          bool verbose);
 
-
-bool clc_sorted(// in/out
-                // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
-         mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
-         mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
-         bool          use_given_seed_geometry,
-
-         // Covariance of the output. Symmetric matrix of shape
-         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
-         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
-         double*       Var_rt_lidar0_sensor,
-         // dense array of shape (Nsectors,); may be NULL
-         uint16_t* observations_per_sector,
-         const int Nsectors,
-
-         // Pass non-NULL to get the fit-inputs dump. These encode the data
-         // buffer. The caller must free(*buf_inputs_dump) when done. Even when
-         // this call fails
-         char**  buf_inputs_dump,
-         size_t* size_inputs_dump,
-
-         // in
-         const clc_sensor_snapshot_sorted_t* sensor_snapshots,
-         const unsigned int                  Nsensor_snapshots,
-
-         const unsigned int Nlidars,
-         const unsigned int Ncameras,
-         const mrcal_cameramodel_t*const* models, // Ncameras of these
-         // The dimensions of the chessboard grid being detected in the images
-         const int object_height_n,
-         const int object_width_n,
-         const double object_spacing,
-
-         // bits indicating whether a camera in
-         // sensor_snapshots.images[] is color or not
-         const clc_is_bgr_mask_t is_bgr_mask,
-
-         const clc_lidar_segmentation_context_t* ctx,
-
-         const mrcal_pose_t* rt_vehicle_lidar0,
-
-         const double fit_seed_position_err_threshold,
-         const double fit_seed_cos_angle_err_threshold,
-         bool check_gradient__use_distance_to_plane,
-         bool check_gradient,
-         bool verbose);
-
-
-bool clc_lidar_segmented(// in/out
-                         // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
-         mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
-         mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
-         bool          use_given_seed_geometry,
-
-         // Covariance of the output. Symmetric matrix of shape
-         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
-         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
-         double*       Var_rt_lidar0_sensor,
-         // dense array of shape (Nsectors,); may be NULL
-         uint16_t* observations_per_sector,
-         const int Nsectors,
-
-         // Pass non-NULL to get the fit-inputs dump. These encode the data
-         // buffer. The caller must free(*buf_inputs_dump) when done. Even when
-         // this call fails
-         char**  buf_inputs_dump,
-         size_t* size_inputs_dump,
-
-         // in
-         const clc_sensor_snapshot_segmented_t* sensor_snapshots,
-         const unsigned int                     Nsensor_snapshots,
-
-         const unsigned int Nlidars,
-         const unsigned int Ncameras,
-         const mrcal_cameramodel_t*const* models, // Ncameras of these
-         // The dimensions of the chessboard grid being detected in the images
-         const int object_height_n,
-         const int object_width_n,
-         const double object_spacing,
-
-         const mrcal_pose_t* rt_vehicle_lidar0,
-
-         const double fit_seed_position_err_threshold,
-         const double fit_seed_cos_angle_err_threshold,
-         bool check_gradient__use_distance_to_plane,
-         bool check_gradient,
-         bool verbose);
-
-bool clc_lidar_segmented_dense(// in/out
-                               // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
-         mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
-         mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
-         bool          use_given_seed_geometry,
-
-         // Covariance of the output. Symmetric matrix of shape
-         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
-         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
-         double*       Var_rt_lidar0_sensor,
-         // dense array of shape (Nsectors,); may be NULL
-         uint16_t* observations_per_sector,
-         const int Nsectors,
-
-         // Pass non-NULL to get the fit-inputs dump. These encode the data
-         // buffer. The caller must free(*buf_inputs_dump) when done. Even when
-         // this call fails
-         char**  buf_inputs_dump,
-         size_t* size_inputs_dump,
-
-         // in
-         const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots,
-         const unsigned int                           Nsensor_snapshots,
-
-         const unsigned int Nlidars,
-         const unsigned int Ncameras,
-         const mrcal_cameramodel_t*const* models, // Ncameras of these
-         // The dimensions of the chessboard grid being detected in the images
-         const int object_height_n,
-         const int object_width_n,
-         const double object_spacing,
-
-         const mrcal_pose_t* rt_vehicle_lidar0,
-
-         const double fit_seed_position_err_threshold,
-         const double fit_seed_cos_angle_err_threshold,
-         bool check_gradient__use_distance_to_plane,
-         bool check_gradient,
-         bool verbose);
 
 bool clc_post_solve_statistics( // out
                                 // A dense array of shape (Nsensors,Nsectors)
