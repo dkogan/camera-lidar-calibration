@@ -4149,6 +4149,21 @@ static bool make_reprojected_plots( const double* Rt_lidar0_lidar,
     return true;
 }
 
+static int isector_from_pvehicle(const double* xy,
+                                 const int Nsectors)
+{
+    double yaw = atan2(xy[1], xy[0]); // yaw is in [-pi..pi]
+    if(yaw < 0.) yaw += 2.*M_PI;  // yaw is in [0..2pi]
+
+    const double sector_width_rad = 2.*M_PI/(double)Nsectors;
+    int isector = yaw / sector_width_rad;
+    // just in case; for round-off
+    if(     isector < 0        ) isector = 0;
+    else if(isector >= Nsectors) isector = Nsectors-1;
+
+    return isector;
+}
+
 static bool evaluate_lidar_visibility(// out
                                       // A dense array of shape (Nlidars,Nsectors)
                                       uint8_t* isvisible_per_lidar_per_sector,
@@ -4209,14 +4224,7 @@ static bool evaluate_lidar_visibility(// out
                                          Rt_vehicle_lidar,
                                          p.xyz);
 
-                double yaw = atan2(p.y, p.x); // yaw is in [-pi..pi]
-                if(yaw < 0.) yaw += 2.*M_PI;  // yaw is in [0..2pi]
-
-                const double sector_width_rad = 2.*M_PI/(double)Nsectors;
-                int isector = yaw / sector_width_rad;
-                // just in case; for round-off
-                if(     isector < 0        ) isector = 0;
-                else if(isector >= Nsectors) isector = Nsectors-1;
+                const int isector = isector_from_pvehicle(p.xyz, Nsectors);
                 Nobservations_per_sector[isector]++;
             }
         }
