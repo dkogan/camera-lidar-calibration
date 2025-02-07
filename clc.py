@@ -5,9 +5,9 @@ import numpy as np
 import numpysane as nps
 import os
 
+import _clc
 import mrcal
 import bag_interface
-import _clc
 
 def lidar_segmentation(*,
                        bag, lidar_topic,

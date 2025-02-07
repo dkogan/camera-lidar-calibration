@@ -142,8 +142,8 @@ import numpysane as nps
 import gnuplotlib as gp
 import io
 import pickle
-import mrcal
 import clc
+import mrcal
 
 
 if args.rt_vehicle_lidar0 is None:
