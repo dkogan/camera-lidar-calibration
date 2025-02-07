@@ -275,16 +275,17 @@ data_tuples_sensor_forward_vectors = \
 # shape (Nsensors, Nsectors)
 isvisible_per_sensor_per_sector = statistics['isvisible_per_sensor_per_sector']
 
+angular_width_ratio = 0.9
 Nsensors = isvisible_per_sensor_per_sector.shape[0]
 dth = np.pi*2./args.Nsectors
-th = np.arange(args.Nsectors)*dth + dth/2.
+th = np.arange(args.Nsectors)*dth + dth/2 * (1.-angular_width_ratio)
 plotradius = nps.transpose(np.arange(Nsensors) + 10)
 ones = np.ones( (args.Nsectors,) )
 
 filename = '/tmp/observability.pdf'
 gp.plot( (th,                 # angle
           plotradius*ones,    # radius
-          ones*dth*0.9,       # angular width of slice
+          ones*dth*angular_width_ratio, # angular width of slice
           ones*0.9,           # depth of slice
           isvisible_per_sensor_per_sector,
           dict(_with = 'sectors palette fill solid',
