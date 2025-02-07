@@ -205,6 +205,7 @@ kwargs_calibrate = dict(bags            = args.bag,
                         models          = args.models,
                         check_gradient  = False,
                         verbose         = args.verbose,
+                        Nsectors        = args.Nsectors,
                         Npoints_per_segment                = 15,
                         threshold_min_Nsegments_in_cluster = 4,
                         **kwargs_calibration_object)
@@ -318,3 +319,22 @@ gp.plot( (th[i],                 # angle
          hardcopy = filename,
         )
 print(f"Wrote '{filename}'")
+
+observations_per_sector = result['observations_per_sector']
+filename = '/tmp/observations_per_sector.pdf'
+gp.plot( (th,                 # angle
+          10.*ones,           # radius
+          ones*dth*0.9,       # angular width of slice
+          ones*0.9,           # depth of slice
+          observations_per_sector,
+          dict(tuplesize = 5,
+               _with = 'sectors palette fill solid')),
+         *data_tuples_sensor_forward_vectors,
+         _xrange = (-11,11),
+         _yrange = (-11,11),
+         square = True,
+         title = 'Observations per sector',
+         hardcopy = filename,
+        )
+print(f"Wrote '{filename}'")
+

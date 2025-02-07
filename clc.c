@@ -5010,6 +5010,9 @@ bool _clc_internal(// in/out
          // output. May be NULL to not compute this. Nstate_sensor_poses =
          // (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
+         // dense array of shape (Nsectors,); may be NULL
+         uint16_t* observations_per_sector,
+         const int Nsectors,
 
          // Pass non-NULL to get the fit-inputs dump. These encode the data
          // buffer. The caller must free(*buf_inputs_dump) when done. Even when
@@ -5042,6 +5045,8 @@ bool _clc_internal(// in/out
          const clc_is_bgr_mask_t is_bgr_mask,
 
          const clc_lidar_segmentation_context_t* ctx,
+
+         const mrcal_pose_t* rt_vehicle_lidar0,
 
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
@@ -5574,6 +5579,44 @@ bool _clc_internal(// in/out
                                 object_height_n,
                                 object_width_n,
                                 verbose);
+
+
+        if(observations_per_sector != NULL)
+        {
+            double Rt_vehicle_ref[4*3];
+            if(rt_vehicle_lidar0 != NULL)
+                mrcal_Rt_from_rt(Rt_vehicle_ref, NULL,
+                                 (const double*)rt_vehicle_lidar0);
+            else
+                mrcal_identity_Rt(Rt_vehicle_ref);
+
+            // The estimate of the center of the board, in board coords. We
+            // compute_board_poses()
+            mrcal_point3_t pboardcenter_board;
+            get_pboardcenter_board(// out
+                                   pboardcenter_board.xyz,
+                                   // in
+                                   object_height_n,
+                                   object_width_n,
+                                   object_spacing,
+                                   Ncameras);
+            memset(observations_per_sector, 0, Nsectors*sizeof(observations_per_sector[0]));
+
+            LOOP_SNAPSHOT()
+            {
+                LOOP_SNAPSHOT_HEADER(,const);
+
+                // This snapshot was used in the solve, so it has at least 2
+                // observing sensors; LOOP_SNAPSHOT_HEADER() skipped the ones that
+                // didn't
+                mrcal_point3_t p;
+                mrcal_transform_point_Rt(p.xyz, NULL, NULL,
+                                         &Rt_lidar0_board_solve[isnapshot*4*3], pboardcenter_board.xyz);
+                mrcal_transform_point_Rt(p.xyz,NULL,NULL,
+                                         Rt_vehicle_ref, p.xyz);
+                observations_per_sector[ isector_from_pvehicle(p.xyz, Nsectors) ]++;
+            }
+        }
     }
 
     result = true;
@@ -5715,6 +5758,9 @@ bool clc_unsorted(// in/out
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
+         // dense array of shape (Nsectors,); may be NULL
+         uint16_t* observations_per_sector,
+         const int Nsectors,
 
          // Pass non-NULL to get the fit-inputs dump. These encode the data
          // buffer. The caller must free(*buf_inputs_dump) when done. Even when
@@ -5743,6 +5789,8 @@ bool clc_unsorted(// in/out
 
          const clc_lidar_segmentation_context_t* ctx,
 
+         const mrcal_pose_t* rt_vehicle_lidar0,
+
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
@@ -5754,6 +5802,8 @@ bool clc_unsorted(// in/out
                          rt_ref_camera,
                          use_given_seed_geometry,
                          Var_rt_lidar0_sensor,
+                         observations_per_sector,
+                         Nsectors,
                          buf_inputs_dump,
                          size_inputs_dump,
 
@@ -5767,6 +5817,7 @@ bool clc_unsorted(// in/out
                          object_height_n, object_width_n, object_spacing,
                          is_bgr_mask,
                          ctx,
+                         rt_vehicle_lidar0,
                          fit_seed_position_err_threshold,
                          fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
@@ -5784,6 +5835,9 @@ bool clc_sorted(// in/out
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
+         // dense array of shape (Nsectors,); may be NULL
+         uint16_t* observations_per_sector,
+         const int Nsectors,
 
          // Pass non-NULL to get the fit-inputs dump. These encode the data
          // buffer. The caller must free(*buf_inputs_dump) when done. Even when
@@ -5809,6 +5863,8 @@ bool clc_sorted(// in/out
 
          const clc_lidar_segmentation_context_t* ctx,
 
+         const mrcal_pose_t* rt_vehicle_lidar0,
+
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
@@ -5820,6 +5876,8 @@ bool clc_sorted(// in/out
                          rt_ref_camera,
                          use_given_seed_geometry,
                          Var_rt_lidar0_sensor,
+                         observations_per_sector,
+                         Nsectors,
                          buf_inputs_dump,
                          size_inputs_dump,
 
@@ -5833,6 +5891,7 @@ bool clc_sorted(// in/out
                          object_height_n, object_width_n, object_spacing,
                          is_bgr_mask,
                          ctx,
+                         rt_vehicle_lidar0,
                          fit_seed_position_err_threshold,
                          fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
@@ -5850,6 +5909,9 @@ bool clc_lidar_segmented(// in/out
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
+         // dense array of shape (Nsectors,); may be NULL
+         uint16_t* observations_per_sector,
+         const int Nsectors,
 
          // Pass non-NULL to get the fit-inputs dump. These encode the data
          // buffer. The caller must free(*buf_inputs_dump) when done. Even when
@@ -5869,6 +5931,8 @@ bool clc_lidar_segmented(// in/out
          const int object_width_n,
          const double object_spacing,
 
+         const mrcal_pose_t* rt_vehicle_lidar0,
+
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
@@ -5880,6 +5944,8 @@ bool clc_lidar_segmented(// in/out
                          rt_ref_camera,
                          use_given_seed_geometry,
                          Var_rt_lidar0_sensor,
+                         observations_per_sector,
+                         Nsectors,
                          buf_inputs_dump,
                          size_inputs_dump,
 
@@ -5893,6 +5959,7 @@ bool clc_lidar_segmented(// in/out
                          object_height_n, object_width_n, object_spacing,
                          (clc_is_bgr_mask_t){},
                          NULL,
+                         rt_vehicle_lidar0,
                          fit_seed_position_err_threshold,
                          fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
@@ -5910,6 +5977,9 @@ bool clc_lidar_segmented_dense(// in/out
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
          double*       Var_rt_lidar0_sensor,
+         // dense array of shape (Nsectors,); may be NULL
+         uint16_t* observations_per_sector,
+         const int Nsectors,
 
          // Pass non-NULL to get the fit-inputs dump. These encode the data
          // buffer. The caller must free(*buf_inputs_dump) when done. Even when
@@ -5929,6 +5999,8 @@ bool clc_lidar_segmented_dense(// in/out
          const int object_width_n,
          const double object_spacing,
 
+         const mrcal_pose_t* rt_vehicle_lidar0,
+
          const double fit_seed_position_err_threshold,
          const double fit_seed_cos_angle_err_threshold,
          bool check_gradient__use_distance_to_plane,
@@ -5940,6 +6012,8 @@ bool clc_lidar_segmented_dense(// in/out
                          rt_ref_camera,
                          use_given_seed_geometry,
                          Var_rt_lidar0_sensor,
+                         observations_per_sector,
+                         Nsectors,
                          buf_inputs_dump,
                          size_inputs_dump,
 
@@ -5953,6 +6027,7 @@ bool clc_lidar_segmented_dense(// in/out
                          object_height_n, object_width_n, object_spacing,
                          (clc_is_bgr_mask_t){},
                          NULL,
+                         rt_vehicle_lidar0,
                          fit_seed_position_err_threshold,
                          fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,

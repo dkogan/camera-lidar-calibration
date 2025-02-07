@@ -449,8 +449,10 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     PyArrayObject* rt_ref_lidar__seed                 = NULL;
     PyArrayObject* rt_ref_camera__seed                = NULL;
     PyArrayObject* Var_rt_lidar0_sensor               = NULL;
+    PyArrayObject* observations_per_sector            = NULL;
     PyObject*      inputs_dump                        = NULL;
     PyObject*      seed                               = NULL;
+    PyArrayObject* rt_vehicle_lidar0                  = NULL;
 
     // used if(do_dump_inputs)
     char*  buf_inputs_dump  = NULL;
@@ -474,6 +476,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
 
     double fit_seed_position_err_threshold  = 0.5;
     double fit_seed_cos_angle_err_threshold = cos(10.*M_PI/180.);
+
+    int Nsectors = 36;
 
     int verbose                               = 0;
     int check_gradient__use_distance_to_plane = 0;
@@ -499,12 +503,14 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
 #define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_ADDRESS_CTX(type,name,default,pyparse,...) &ctx.name,
     char* keywords[] = { "sensor_snapshots",
                          "models",
+                         "Nsectors",
                          "seed",
                          "object_height_n",
                          "object_width_n",
                          "object_spacing",
                          "fit_seed_position_err_threshold",
                          "fit_seed_cos_angle_err_threshold",
+                         "rt_vehicle_lidar0",
                          "verbose",
                          "check_gradient__use_distance_to_plane",
                          "check_gradient",
@@ -512,17 +518,19 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_KEYWORDS)
                          NULL };
     if(!PyArg_ParseTupleAndKeywords( args, kwargs,
-                                     "O" "|$" "OOiiddpppp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
+                                     "O" "|$" "OiOiiddO&pppp" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYPARSE)
                                      ,
                                      keywords,
                                      (PyTupleObject*)&py_sensor_snapshots,
                                      &py_models,
+                                     &Nsectors,
                                      &seed,
                                      &object_height_n,
                                      &object_width_n,
                                      &object_spacing,
                                      &fit_seed_position_err_threshold,
                                      &fit_seed_cos_angle_err_threshold,
+                                     PyArray_Converter, &rt_vehicle_lidar0,
                                      &verbose,
                                      &check_gradient__use_distance_to_plane,
                                      &check_gradient,
@@ -545,6 +553,16 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
         BARF("Couldn't get len(sensor_snapshots)");
         goto done;
     }
+
+    if(rt_vehicle_lidar0 != NULL)
+        if(! (PyArray_IS_C_CONTIGUOUS(rt_vehicle_lidar0) &&
+              PyArray_NDIM(rt_vehicle_lidar0)    == 1 &&
+              PyArray_DIMS(rt_vehicle_lidar0)[0] == 6 &&
+              PyArray_TYPE(rt_vehicle_lidar0)    == NPY_FLOAT64) )
+        {
+            BARF("rt_vehicle_lidar0 should have shape (6,), have dtype=float64 and be contiguous");
+            goto done;
+        }
 
     if(seed != NULL)
     {
@@ -719,6 +737,11 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                                                                  NPY_FLOAT64);
         if(Var_rt_lidar0_sensor == NULL) goto done;
 
+        observations_per_sector = (PyArrayObject*)PyArray_SimpleNew(1,
+                                                                    ((npy_intp[]){Nsectors}),
+                                                                    NPY_UINT16);
+        if(observations_per_sector == NULL) goto done;
+
         static_assert(offsetof(mrcal_pose_t,r) == 0 && offsetof(mrcal_pose_t,t) == sizeof(double)*3,
                       "mrcal_pose_t should be a dense rt transform");
 
@@ -727,6 +750,8 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          (mrcal_pose_t*)PyArray_DATA(rt_ref_camera),
                          seed != NULL,
                          (double      *)PyArray_DATA(Var_rt_lidar0_sensor),
+                         (uint16_t    *)PyArray_DATA(observations_per_sector),
+                         Nsectors,
                          do_dump_inputs ? &buf_inputs_dump  : NULL,
                          do_dump_inputs ? &size_inputs_dump : NULL,
 
@@ -742,6 +767,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                          object_spacing,
                          is_bgr_mask,
                          &ctx,
+                         rt_vehicle_lidar0 == NULL ? NULL : (mrcal_pose_t*)PyArray_DATA(rt_vehicle_lidar0),
                          fit_seed_position_err_threshold,
                          fit_seed_cos_angle_err_threshold,
                          check_gradient__use_distance_to_plane,
@@ -754,10 +780,11 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     }
 
     if(buf_inputs_dump == NULL)
-        result = Py_BuildValue("{sOsOsO}",
+        result = Py_BuildValue("{sOsOsOsO}",
                                "rt_ref_lidar",  rt_ref_lidar,
                                "rt_ref_camera", rt_ref_camera,
-                               "Var",           Var_rt_lidar0_sensor);
+                               "Var",           Var_rt_lidar0_sensor,
+                               "observations_per_sector", observations_per_sector);
     else
     {
         inputs_dump =
@@ -767,10 +794,11 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
             BARF("PyBytes_FromStringAndSize(buf_inputs_dump) failed");
             goto done;
         }
-        result = Py_BuildValue("{sOsOsOsO}",
+        result = Py_BuildValue("{sOsOsOsOsO}",
                                "rt_ref_lidar",  rt_ref_lidar,
                                "rt_ref_camera", rt_ref_camera,
                                "Var",           Var_rt_lidar0_sensor,
+                               "observations_per_sector", observations_per_sector,
                                "inputs_dump",   inputs_dump);
     }
 
@@ -778,12 +806,14 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     Py_XDECREF(rt_ref_lidar);
     Py_XDECREF(rt_ref_camera);
     Py_XDECREF(Var_rt_lidar0_sensor);
+    Py_XDECREF(observations_per_sector);
     Py_XDECREF(py_model);
     for(int i=0; i<Ncameras; i++)
         mrcal_free_cameramodel(&models[i]);
     if(buf_inputs_dump != NULL)
         free(buf_inputs_dump);
     Py_XDECREF(inputs_dump);
+    Py_XDECREF(rt_vehicle_lidar0);
     RESET_SIGINT();
 
     return result;

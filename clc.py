@@ -138,6 +138,7 @@ def post_solve_statistics(*,
 
     kwargs = dict(kwargs)
     del kwargs['inputs_dump']
+    del kwargs['observations_per_sector']
     return _clc.post_solve_statistics(lidar_scans = tuple(lidar_points(msg) for msg in messages),
                                       **kwargs)
 
