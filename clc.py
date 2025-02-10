@@ -109,12 +109,8 @@ def sorted_sensor_snapshots(bags, topics):
 
 def calibrate(*,
               bags, topics,
-              check_gradient__use_distance_to_plane = False,
-              check_gradient                        = False,
               **kwargs):
     return _clc.calibrate( sorted_sensor_snapshots(bags, topics),
-                           check_gradient__use_distance_to_plane = check_gradient__use_distance_to_plane,
-                           check_gradient                        = check_gradient,
                            **kwargs)
 
 
