@@ -84,28 +84,35 @@ import testutils
 with open(args.context, "rb") as f:
     context = pickle.load(f)
 
-rt_lidar0_lidar  = context['result']['rt_ref_lidar' ]
-rt_lidar0_camera = context['result']['rt_ref_camera']
+try:
+    rt_ref_lidar  = context['result']['rt_vehicle_lidar' ]
+    rt_ref_camera = context['result']['rt_vehicle_camera']
+except KeyError:
+    rt_ref_lidar  = context['result']['rt_lidar0_lidar' ]
+    rt_ref_camera = context['result']['rt_lidar0_camera']
 
-Nlidars  = len(rt_lidar0_lidar)
-Ncameras = len(rt_lidar0_camera)
+Nlidars  = len(rt_ref_lidar)
+Ncameras = len(rt_ref_camera)
 
 
 
 
-def get__rt_ref_sensor(i, rt_lidar0_lidar, rt_lidar0_camera):
-    if i < Nlidars: return rt_lidar0_lidar [i]
-    else:           return rt_lidar0_camera[i-Nlidars]
+def get__rt_ref_sensor(i, rt_ref_lidar, rt_ref_camera):
+    if i < Nlidars: return rt_ref_lidar [i]
+    else:           return rt_ref_camera[i-Nlidars]
 
 
 def get_pref(isector):
     # sample point, in the vehicle coord system
-    th = (isector + 0.5) * 2.*np.pi/context['Nsectors']
-    pvehicle = np.array((np.cos(th), np.sin(th), 0 )) * context['uncertainty_quantification_range']
+    th = (isector + 0.5) * 2.*np.pi/context['kwargs_calibrate']['Nsectors']
+    pvehicle = np.array((np.cos(th), np.sin(th), 0 )) * context['kwargs_calibrate']['uncertainty_quantification_range']
 
-    pref = \
-        mrcal.transform_point_rt( context['rt_vehicle_lidar0'], np.array(pvehicle),
-                                  inverted = True)
+    if context['kwargs_calibrate']['rt_vehicle_lidar0'] is not None:
+        pref = \
+            mrcal.transform_point_rt( context['kwargs_calibrate']['rt_vehicle_lidar0'], np.array(pvehicle),
+                                      inverted = True)
+    else:
+        pref = np.array(pvehicle)
 
     return pref
 
@@ -114,7 +121,7 @@ def get_Var_predicted(isensor, isector):
 
     pref = get_pref(isector)
 
-    rt_ref_sensor = [get__rt_ref_sensor(i, rt_lidar0_lidar, rt_lidar0_camera) for i in isensor]
+    rt_ref_sensor = [get__rt_ref_sensor(i, rt_ref_lidar, rt_ref_camera) for i in isensor]
 
     p0 = mrcal.transform_point_rt(rt_ref_sensor[0], pref, inverted=True)
 
@@ -138,8 +145,8 @@ def get_Var_predicted(isensor, isector):
     if isensor[0] == 0:
         # only sensor1 is probabilistic
         # shape (6,6)
-        Var_rt_ref_sensor1 = context['result']['Var'][isensor[1]-1,:,
-                                                      isensor[1]-1,:]
+        Var_rt_ref_sensor1 = context['result']['Var_rt_lidar0_sensor'][isensor[1]-1,:,
+                                                                       isensor[1]-1,:]
 
         return \
             nps.matmult(dp1__drt_ref_sensor1,
@@ -148,8 +155,8 @@ def get_Var_predicted(isensor, isector):
     if isensor[1] == 0:
         # only sensor0 is probabilistic
         # shape (6,6)
-        Var_rt_ref_sensor0 = context['result']['Var'][isensor[0]-1,:,
-                                                      isensor[0]-1,:]
+        Var_rt_ref_sensor0 = context['result']['Var_rt_lidar0_sensor'][isensor[0]-1,:,
+                                                                       isensor[0]-1,:]
 
         return \
             nps.matmult(dp1__drt_ref_sensor0,
@@ -158,12 +165,12 @@ def get_Var_predicted(isensor, isector):
 
     # both sensors are probabilistic
     # Each has shape (6,6)
-    A = context['result']['Var'][isensor[0]-1,:,
-                                 isensor[0]-1,:]
-    B = context['result']['Var'][isensor[1]-1,:,
-                                 isensor[0]-1,:]
-    C = context['result']['Var'][isensor[1]-1,:,
-                                 isensor[1]-1,:]
+    A = context['result']['Var_rt_lidar0_sensor'][isensor[0]-1,:,
+                                                  isensor[0]-1,:]
+    B = context['result']['Var_rt_lidar0_sensor'][isensor[1]-1,:,
+                                                  isensor[0]-1,:]
+    C = context['result']['Var_rt_lidar0_sensor'][isensor[1]-1,:,
+                                                  isensor[1]-1,:]
 
     # shape (12,12)
     Var_rt_ref_sensor01 = nps.glue( nps.glue(A, nps.transpose(B), axis=-1),
@@ -201,7 +208,7 @@ def get_Var_observed(isensor, isector, samples):
 
     pref = get_pref(isector)
 
-    rt_ref_sensor = [get__rt_ref_sensor(i, rt_lidar0_lidar, rt_lidar0_camera) for i in isensor]
+    rt_ref_sensor = [get__rt_ref_sensor(i, rt_ref_lidar, rt_ref_camera) for i in isensor]
 
     p0 = mrcal.transform_point_rt(rt_ref_sensor[0], pref, inverted=True)
 
@@ -210,9 +217,9 @@ def get_Var_observed(isensor, isector, samples):
 
     p1_sampled = np.zeros((args.Nsamples,3), dtype=float)
     for isample in range(args.Nsamples):
-        (rt_ref_lidar, rt_ref_camera) = samples[isample]
+        (rt_ref_lidar__sampled, rt_ref_camera__sampled) = samples[isample]
 
-        rt_ref_sensor__sampled = [get__rt_ref_sensor(i, rt_ref_lidar, rt_ref_camera) \
+        rt_ref_sensor__sampled = [get__rt_ref_sensor(i, rt_ref_lidar__sampled, rt_ref_camera__sampled) \
                                   for i in isensor]
 
         p1_sampled[isample] = \
@@ -245,20 +252,10 @@ def topic_index(l,t):
 ################## bags[10]
 
 kwargs_calibrate = context['kwargs_calibrate']
-kwargs = dict(bag                              = kwargs_calibrate['bags'][args.ibag],
-              topics                           = kwargs_calibrate['topics'],
-              Nsectors                         = context         ['Nsectors'],
-              threshold_valid_lidar_range      = context         ['threshold_valid_lidar_range'],
-              threshold_valid_lidar_Npoints    = context         ['threshold_valid_lidar_Npoints'],
-              uncertainty_quantification_range = context         ['uncertainty_quantification_range'],
-              rt_vehicle_lidar0                = context         ['rt_vehicle_lidar0'],
-              models                           = kwargs_calibrate['models'],
-              **context['result'])
-statistics = clc.post_solve_statistics(**kwargs)
 
-for isector in range(context['Nsectors']):
+for isector in range(kwargs_calibrate['Nsectors']):
 
-    isensor = statistics['isensors_pair_stdev_worst'][isector]
+    isensor = context['result']['isensors_pair_stdev_worst'][isector]
     if not np.any(isensor):
         # both isensor are 0: this stdev_worst isn't valid because this sector
         # wasn't observed by any pair of sensor
@@ -266,7 +263,7 @@ for isector in range(context['Nsectors']):
     stdev_worst_observed = \
         np.sqrt( np.max( np.linalg.eig(get_Var_predicted(isensor, isector))[0] ))
 
-    stdev_worst_predicted = statistics['stdev_worst'][isector]
+    stdev_worst_predicted = context['result']['stdev_worst_per_sector'][isector]
 
     testutils.confirm_equal(stdev_worst_predicted,
                             stdev_worst_observed ,

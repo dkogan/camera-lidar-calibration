@@ -120,6 +120,13 @@ def get_psphere(scale = 1.):
 with open(args.context, "rb") as f:
     context = pickle.load(f)
 
+try:
+    rt_ref_lidar  = context['result']['rt_vehicle_lidar' ]
+    rt_ref_camera = context['result']['rt_vehicle_camera']
+except KeyError:
+    rt_ref_lidar  = context['result']['rt_lidar0_lidar' ]
+    rt_ref_camera = context['result']['rt_lidar0_camera']
+
 
 isensor_solve_from_isensor_requested = [None] * len(args.topic)
 for isensor_requested,topic_requested in enumerate(args.topic):
@@ -153,7 +160,7 @@ if args.ellipsoids:
     psphere = get_psphere(scale = 10.) # 10x ellipses to improve legibility
     data_tuples = \
         clc.get_pointcloud_plot_tuples(args.bag, args.topic, args.threshold,
-                                       context['result']['rt_ref_lidar'],
+                                       rt_ref_lidar,
                                        isensor_solve_from_isensor_requested = None,
                                        Rt_vehicle_lidar0 = args.Rt_vehicle_lidar0)
 
@@ -164,10 +171,10 @@ if args.ellipsoids:
 
         l,v = \
             clc.transformation_covariance_decomposed(p0,
-                                                     context['result']['rt_ref_lidar' ],
-                                                     context['result']['rt_ref_camera'],
+                                                     rt_ref_lidar,
+                                                     rt_ref_camera,
                                                      isensor_solve,
-                                                     context['result']['Var'])
+                                                     context['result']['Var_rt_lidar0_sensor'])
         stdev = np.sqrt(l)
 
         # v stored each eigenvector in COLUMNS. I transpose to store them in
@@ -208,18 +215,18 @@ for isensor_requested,topic_requested in enumerate(args.topic):
 
     # These apply to ALL the sensors, not just the ones being requested
     data_tuples_sensor_forward_vectors = \
-        clc.get_data_tuples_sensor_forward_vectors(context['result']['rt_ref_lidar' ],
-                                                   context['result']['rt_ref_camera'],
+        clc.get_data_tuples_sensor_forward_vectors(rt_ref_lidar,
+                                                   rt_ref_camera,
                                                    context['topics'],
                                                    isensor = isensor_solve)
 
 
     l,v = \
         clc.transformation_covariance_decomposed(p0,
-                                                 context['result']['rt_ref_lidar' ],
-                                                 context['result']['rt_ref_camera'],
+                                                 rt_ref_lidar,
+                                                 rt_ref_camera,
                                                  isensor_solve,
-                                                 context['result']['Var'])
+                                                 context['result']['Var_rt_lidar0_sensor'])
     stdev = np.sqrt(l)
 
     # v stored each eigenvector in COLUMNS. I transpose to store them in

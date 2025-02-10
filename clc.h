@@ -255,7 +255,13 @@ clc_camera_chessboard_detection(// out
 // If solving for ALL the sensor geometry wasn't possible, we return false. On
 // success, we return true
 bool clc(// in/out
-         // if(use_given_seed_geometry): these are the geometry on input. rt_ref_lidar[0] MUST be the identity
+         // if(use_given_seed_geometry): these are the geometry on input
+         //
+         // The solution is stored here on output. If rt_vehicle_lidar0!=NULL,
+         // these variables use the vehicle coord system as the reference in
+         // both input and output; else rt_vehicle_lidar0 is assumed to be the
+         // identity, and we use lidar0 as the reference. In any case,
+         // if(use_given_seed_geometry) { rt_lidar0_lidar[0] MUST be the identity }
          mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
          mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
          bool          use_given_seed_geometry,
@@ -266,7 +272,23 @@ bool clc(// in/out
          double*       Var_rt_lidar0_sensor,
          // dense array of shape (Nsectors,); may be NULL
          uint16_t* observations_per_sector,
+
+         // A dense array of shape (Nsensors,Nsectors); may be NULL
+         // Needs lidar_scans_for_isvisible!=NULL
+         uint8_t* isvisible_per_sensor_per_sector,
+
+         // array of shape (Nsectors,); may be NULL
+         // if not NULL, requires that
+         //   isvisible_per_sensor_per_sector!=NULL && Var_rt_lidar0_sensor!=NULL
+         double* stdev_worst_per_sector,
+         // dense array of shape (Nsectors,2); may be NULL
+         uint16_t* isensors_pair_stdev_worst,
          const int Nsectors,
+         // used for isvisible_per_sensor_per_sector
+         const double threshold_valid_lidar_range,
+         const int    threshold_valid_lidar_Npoints,
+         // used for isvisible_per_sensor_per_sector and stdev_worst_per_sector
+         const double uncertainty_quantification_range,
 
          // Pass non-NULL to get the fit-inputs dump. These encode the data
          // buffer. The caller must free(*buf_inputs_dump) when done. Even when
@@ -284,8 +306,12 @@ bool clc(// in/out
 
          const unsigned int                    Nsnapshots,
          // The stride, in bytes, between each successive points or rings value
-         // in sensor_snapshots_unsorted; unused if sensor_snapshots_unsorted==NULL
+         // in sensor_snapshots_unsorted and lidar_scans_for_isvisible; unused
+         // if either of those is NULL
          const unsigned int           lidar_packet_stride,
+
+         // Nlidars of these. Required if isvisible_per_sensor_per_sector!=NULL
+         const clc_lidar_scan_unsorted_t* lidar_scans_for_isvisible,
 
          const unsigned int Nlidars,
          const unsigned int Ncameras,
@@ -311,40 +337,6 @@ bool clc(// in/out
          bool check_gradient__use_distance_to_plane,
          bool check_gradient,
          bool verbose);
-
-
-bool clc_post_solve_statistics( // out
-                                // A dense array of shape (Nsensors,Nsectors)
-                                uint8_t* isvisible_per_sensor_per_sector,
-                                // array of shape (Nsectors,)
-                                double* stdev_worst,
-                                // dense array of shape (Nsectors,2); corresponds to stdev_worst
-                                uint16_t* isensors_pair_stdev_worst,
-                                const int Nsectors,
-                                const double threshold_valid_lidar_range,
-                                const int    threshold_valid_lidar_Npoints,
-                                const double uncertainty_quantification_range,
-
-                                // out,in
-                                // On input:  the ref frame is lidar-0
-                                // On output: the ref frame is the vehicle frame, as defined in rt_vehicle_lidar0
-                                mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
-                                mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
-
-                                // in
-                                // Covariance of the output. Symmetric matrix of shape
-                                // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written
-                                // on output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6
-                                const double*       Var_rt_lidar0_sensor,
-                                const mrcal_pose_t* rt_vehicle_lidar0,
-                                const clc_lidar_scan_unsorted_t* lidar_scans, // Nlidars of these
-                                // The stride, in bytes, between each successive points or rings value
-                                // in clc_lidar_scan_unsorted_t
-                                const unsigned int           lidar_packet_stride,
-                                const int Nlidars,
-                                const int Ncameras,
-                                const mrcal_cameramodel_t*const* models // Ncameras of these
-                                );
 
 bool clc_fit_from_inputs_dump(// out
                               int* Nlidars,

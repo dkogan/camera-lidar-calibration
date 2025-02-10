@@ -146,9 +146,8 @@ import clc
 import mrcal
 
 
-if args.rt_vehicle_lidar0 is None:
-    args.rt_vehicle_lidar0 = mrcal.identity_rt()
-else: args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0)
+if args.rt_vehicle_lidar0 is not None:
+    args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0)
 
 
 
@@ -200,27 +199,40 @@ if len(args.models) > 0:
 else:
     kwargs_calibration_object = dict()
 
-kwargs_calibrate = dict(bags            = args.bag,
-                        topics          = args.topics,
-                        models          = args.models,
-                        check_gradient  = False,
-                        verbose         = args.verbose,
-                        Nsectors        = args.Nsectors,
+kwargs_calibrate = dict(bags                               = args.bag,
+                        topics                             = args.topics,
+                        models                             = args.models,
+                        check_gradient                     = False,
+                        verbose                            = args.verbose,
+                        Nsectors                           = args.Nsectors,
+                        threshold_valid_lidar_range        = args.threshold_valid_lidar_range,
+                        threshold_valid_lidar_Npoints      = args.threshold_valid_lidar_Npoints,
+                        uncertainty_quantification_range   = args.uncertainty_quantification_range,
+                        rt_vehicle_lidar0                  = args.rt_vehicle_lidar0,
                         Npoints_per_segment                = 15,
                         threshold_min_Nsegments_in_cluster = 4,
+
                         **kwargs_calibration_object)
+
 result = clc.calibrate(do_dump_inputs = args.dump is not None,
                        **kwargs_calibrate)
 
+if args.rt_vehicle_lidar0 is not None:
+    rt_ref_lidar_name  = "rt_vehicle_lidar"
+    rt_ref_camera_name = "rt_vehicle_camera"
+else:
+    rt_ref_lidar_name  = "rt_lidar0_lidar"
+    rt_ref_camera_name = "rt_lidar0_camera"
+
 
 for imodel in range(len(args.models)):
-    models[imodel].extrinsics_rt_toref(result['rt_ref_camera'][imodel])
+    models[imodel].extrinsics_rt_toref(result[rt_ref_camera_name][imodel])
     root,extension = os.path.splitext(args.models[imodel])
     filename = f"{root}-mounted{extension}"
     models[imodel].write(filename)
     print(f"Wrote '{filename}'")
 
-for ilidar,rt_ref_lidar in enumerate(result['rt_ref_lidar']):
+for ilidar,rt_ref_lidar in enumerate(result[rt_ref_lidar_name]):
     # dummy lidar "cameramodel". The intrinsics are made-up, but the extrinsics
     # are true, and can be visualized with the usual tools
     filename = f"/tmp/lidar{ilidar}-mounted.cameramodel"
@@ -235,14 +247,9 @@ for ilidar,rt_ref_lidar in enumerate(result['rt_ref_lidar']):
 
 
 context = \
-    dict(result                           = result,
-         topics                           = args.topics,
-         Nsectors                         = args.Nsectors,
-         threshold_valid_lidar_range      = args.threshold_valid_lidar_range,
-         threshold_valid_lidar_Npoints    = args.threshold_valid_lidar_Npoints,
-         uncertainty_quantification_range = args.uncertainty_quantification_range,
-         rt_vehicle_lidar0                = args.rt_vehicle_lidar0,
-         kwargs_calibrate                 = kwargs_calibrate)
+    dict(result           = result,
+         topics           = args.topics,
+         kwargs_calibrate = kwargs_calibrate)
 if args.dump is not None:
     with open(args.dump, 'wb') as f:
         pickle.dump( context,
@@ -251,29 +258,15 @@ if args.dump is not None:
 
 
 
-
-statistics = clc.post_solve_statistics(bag                              = args.bag[0],
-                                       topics                           = args.topics,
-                                       Nsectors                         = args.Nsectors,
-                                       threshold_valid_lidar_range      = args.threshold_valid_lidar_range,
-                                       threshold_valid_lidar_Npoints    = args.threshold_valid_lidar_Npoints,
-                                       uncertainty_quantification_range = args.uncertainty_quantification_range,
-                                       rt_vehicle_lidar0                = args.rt_vehicle_lidar0,
-                                       models                           = args.models,
-                                       **result)
-
-
-
-
 data_tuples_sensor_forward_vectors = \
-    clc.get_data_tuples_sensor_forward_vectors(context['result']['rt_ref_lidar' ],
-                                               context['result']['rt_ref_camera'],
+    clc.get_data_tuples_sensor_forward_vectors(context['result'][rt_ref_lidar_name ],
+                                               context['result'][rt_ref_camera_name],
                                                context['topics'])
 
 
 
 # shape (Nsensors, Nsectors)
-isvisible_per_sensor_per_sector = statistics['isvisible_per_sensor_per_sector']
+isvisible_per_sensor_per_sector = result['isvisible_per_sensor_per_sector']
 
 angular_width_ratio = 0.9
 Nsensors = isvisible_per_sensor_per_sector.shape[0]
@@ -302,14 +295,14 @@ gp.plot( (th,                 # angle
         )
 print(f"Wrote '{filename}'")
 
-stdev_worst = statistics['stdev_worst']
-i = stdev_worst != 0
+stdev_worst_per_sector = result['stdev_worst_per_sector']
+i = stdev_worst_per_sector != 0
 filename = '/tmp/uncertainty.pdf'
 gp.plot( (th[i],                 # angle
           10.*ones[i],           # radius
           ones[i]*dth*0.9,       # angular width of slice
           ones[i]*0.9,           # depth of slice
-          stdev_worst[i],
+          stdev_worst_per_sector[i],
           dict(tuplesize = 5,
                _with = 'sectors palette fill solid')),
          *data_tuples_sensor_forward_vectors,

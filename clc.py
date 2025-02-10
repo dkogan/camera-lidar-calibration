@@ -112,35 +112,10 @@ def calibrate(*,
               check_gradient__use_distance_to_plane = False,
               check_gradient                        = False,
               **kwargs):
-
     return _clc.calibrate( sorted_sensor_snapshots(bags, topics),
                            check_gradient__use_distance_to_plane = check_gradient__use_distance_to_plane,
                            check_gradient                        = check_gradient,
                            **kwargs)
-
-
-def post_solve_statistics(*,
-                          bag,
-                          topics, # all the topics; I only use the LIDAR ones
-                          **kwargs):
-
-    if not os.path.exists(bag):
-        raise Exception(f"Bag path '{bag}' does not exist")
-
-    messages = \
-        bag_interface. \
-        first_message_from_each_topic(bag, topics)
-
-    # Grab the LIDAR messages. Any missing messages are reported as NOT lidar
-    # messages, since I can't tell what it's supposed to be from looking at the
-    # data
-    messages = [msg for msg in messages if is_message_pointcloud(msg)]
-
-    kwargs = dict(kwargs)
-    del kwargs['inputs_dump']
-    del kwargs['observations_per_sector']
-    return _clc.post_solve_statistics(lidar_scans = tuple(lidar_points(msg) for msg in messages),
-                                      **kwargs)
 
 
 
