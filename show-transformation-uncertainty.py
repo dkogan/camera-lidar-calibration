@@ -38,14 +38,6 @@ def parse_args():
                         default = 20,
                         help='''How far we should sample the space. We use a
                         square grid, 2*radius m per side. By default radius=20''')
-    parser.add_argument('--rt-vehicle-lidar0',
-                        type=argparse_helpers.comma_separated_list_of_floats,
-                        help='''The vehicle-lidar0 transform. The solve is
-                        always done in lidar0 coordinates, but we may want to
-                        operate in a different "vehicle" frame. This argument
-                        specifies the relationship between those frames. If
-                        omitted, we assume an identity transform: the vehicle
-                        frame is the lidar0 frame''')
     parser.add_argument('--ellipsoids',
                         action='store_true',
                         help = '''By default we plot the transformation
@@ -88,12 +80,6 @@ import numpy as np
 import clc
 
 
-if args.rt_vehicle_lidar0 is not None:
-    args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0, dtype=float)
-    args.Rt_vehicle_lidar0 = mrcal.Rt_from_rt(args.rt_vehicle_lidar0)
-else:
-    args.Rt_vehicle_lidar0 = None
-
 
 
 
@@ -120,12 +106,12 @@ def get_psphere(scale = 1.):
 with open(args.context, "rb") as f:
     context = pickle.load(f)
 
-try:
-    rt_ref_lidar  = context['result']['rt_vehicle_lidar' ]
-    rt_ref_camera = context['result']['rt_vehicle_camera']
-except KeyError:
-    rt_ref_lidar  = context['result']['rt_lidar0_lidar' ]
-    rt_ref_camera = context['result']['rt_lidar0_camera']
+rt_vehicle_lidar0 = context['kwargs_calibrate'].get('rt_vehicle_lidar0')
+if rt_vehicle_lidar0 is not None:
+    Rt_vehicle_lidar0 = mrcal.Rt_from_rt(rt_vehicle_lidar0)
+else:
+    rt_vehicle_lidar0 = mrcal.identity_rt()
+    Rt_vehicle_lidar0 = mrcal.identity_Rt()
 
 
 isensor_solve_from_isensor_requested = [None] * len(args.topic)
@@ -149,10 +135,8 @@ p0_vehicle = \
                     z_sample * np.ones((args.gridn,args.gridn), dtype=float) ),
            0,-1)
 
-# I want p0 in the lidar0 frame, so I transform
-if args.Rt_vehicle_lidar0 is not None:
-    p0 = mrcal.transform_point_Rt(args.Rt_vehicle_lidar0, p0_vehicle,
-                                  inverted = True)
+p0_lidar0 = mrcal.transform_point_Rt(Rt_vehicle_lidar0, p0_vehicle,
+                                     inverted = True)
 
 
 
@@ -160,29 +144,28 @@ if args.ellipsoids:
     psphere = get_psphere(scale = 10.) # 10x ellipses to improve legibility
     data_tuples = \
         clc.get_pointcloud_plot_tuples(args.bag, args.topic, args.threshold,
-                                       rt_ref_lidar,
+                                       context['result']['rt_lidar0_lidar'],
                                        isensor_solve_from_isensor_requested = None,
-                                       Rt_vehicle_lidar0 = args.Rt_vehicle_lidar0)
+                                       Rt_vehicle_lidar0 = Rt_vehicle_lidar0)
 
 
     for isensor_requested,topic_requested in enumerate(args.topic):
         isensor_solve = isensor_solve_from_isensor_requested[isensor_requested]
         if isensor_solve == 0: continue # reference coord system
 
-        l,v = \
-            clc.transformation_covariance_decomposed(p0,
-                                                     rt_ref_lidar,
-                                                     rt_ref_camera,
+        l,v_lidar0 = \
+            clc.transformation_covariance_decomposed(p0_lidar0,
+                                                     context['result']['rt_lidar0_lidar'],
+                                                     context['result']['rt_lidar0_camera'],
                                                      isensor_solve,
                                                      context['result']['Var_rt_lidar0_sensor'])
         stdev = np.sqrt(l)
 
-        # v stored each eigenvector in COLUMNS. I transpose to store them in
+        # v_lidar0 stored each eigenvector in COLUMNS. I transpose to store them in
         # rows instead, to follow numpy's broadcasting rules
-        v = nps.transpose(v)
-        # v is in the lidar0 system. Transform to the vehicle system
-        v_vehicle = mrcal.rotate_point_R(args.Rt_vehicle_lidar0[:3,:],
-                                         v)
+        v_lidar0 = nps.transpose(v_lidar0)
+        v_vehicle = mrcal.rotate_point_R(Rt_vehicle_lidar0[:3,:],
+                                         v_lidar0)
 
         # shape (Nspherepoints,Nysample,Nxsample,3)
         pellipsoid_vehicle = \
@@ -215,26 +198,25 @@ for isensor_requested,topic_requested in enumerate(args.topic):
 
     # These apply to ALL the sensors, not just the ones being requested
     data_tuples_sensor_forward_vectors = \
-        clc.get_data_tuples_sensor_forward_vectors(rt_ref_lidar,
-                                                   rt_ref_camera,
+        clc.get_data_tuples_sensor_forward_vectors(mrcal.compose_rt(rt_vehicle_lidar0, context['result']['rt_lidar0_lidar']),
+                                                   mrcal.compose_rt(rt_vehicle_lidar0, context['result']['rt_lidar0_camera']),
                                                    context['topics'],
                                                    isensor = isensor_solve)
 
 
-    l,v = \
-        clc.transformation_covariance_decomposed(p0,
-                                                 rt_ref_lidar,
-                                                 rt_ref_camera,
+    l,v_lidar0 = \
+        clc.transformation_covariance_decomposed(p0_lidar0,
+                                                 context['result']['rt_lidar0_lidar'],
+                                                 context['result']['rt_lidar0_camera'],
                                                  isensor_solve,
                                                  context['result']['Var_rt_lidar0_sensor'])
     stdev = np.sqrt(l)
 
-    # v stored each eigenvector in COLUMNS. I transpose to store them in
+    # v_lidar0 stored each eigenvector in COLUMNS. I transpose to store them in
     # rows instead, to follow numpy's broadcasting rules
-    v = nps.transpose(v)
-    # v is in the lidar0 system. Transform to the vehicle system
-    v_vehicle = mrcal.rotate_point_R(args.Rt_vehicle_lidar0[:3,:],
-                                     v)
+    v_lidar0 = nps.transpose(v_lidar0)
+    v_vehicle = mrcal.rotate_point_R(Rt_vehicle_lidar0[:3,:],
+                                     v_lidar0)
 
     # The eigenvalues/vectors are sorted. The worst-case one is biggest, and
     # stored last

@@ -3147,6 +3147,11 @@ fit(// out
     // always create a new one
     dogleg_solverContext_t** solver_context,
 
+    // Optimal state on output
+    double* rt_lidar0_board,
+    double* rt_lidar0_lidar,
+    double* rt_lidar0_camera,
+
     // in,out
     // seed state on input
     double* Rt_lidar0_board,  // Nsnapshots poses ( (4,3) Rt arrays ) of these to fill
@@ -3175,11 +3180,6 @@ fit(// out
 
 {
     bool result = false;
-
-
-    double rt_lidar0_board [6*Nsnapshots];
-    double rt_lidar0_lidar [6*(Nlidars-1)];
-    double rt_lidar0_camera[6*Ncameras];
 
     LOOP_SNAPSHOT()
     {
@@ -3465,8 +3465,8 @@ bool clc_fit_from_inputs_dump(// out
                               // Allocated by the function on success.
                               // It's the caller's responsibility to
                               // free() these
-                              mrcal_pose_t** rt_ref_lidar,
-                              mrcal_pose_t** rt_ref_camera,
+                              mrcal_pose_t** rt_lidar0_lidar,
+                              mrcal_pose_t** rt_lidar0_camera,
                               // in
                               const char* buf_inputs_dump,
                               size_t      size_inputs_dump,
@@ -3487,8 +3487,8 @@ bool clc_fit_from_inputs_dump(// out
 {
     bool result = false;
 
-    *rt_ref_lidar  = NULL;
-    *rt_ref_camera = NULL;
+    *rt_lidar0_lidar  = NULL;
+    *rt_lidar0_camera = NULL;
 
     FILE* fp = fmemopen((char*)buf_inputs_dump, size_inputs_dump, "r");
     if(fp == NULL)
@@ -3518,11 +3518,11 @@ bool clc_fit_from_inputs_dump(// out
     if(0 >= getline(&lineptr, &nline, fp)) goto done;
     if(1 != sscanf(lineptr, "object_spacing             = %lf\n", &object_spacing)) goto done;
 
-    *rt_ref_lidar  = malloc(*Nlidars  * sizeof(mrcal_pose_t));
-    if(*rt_ref_lidar == NULL)
+    *rt_lidar0_lidar  = malloc(*Nlidars  * sizeof(mrcal_pose_t));
+    if(*rt_lidar0_lidar == NULL)
         goto done;
-    *rt_ref_camera = malloc(*Ncameras * sizeof(mrcal_pose_t));
-    if(*rt_ref_camera == NULL)
+    *rt_lidar0_camera = malloc(*Ncameras * sizeof(mrcal_pose_t));
+    if(*rt_lidar0_camera == NULL)
         goto done;
 
 
@@ -3533,6 +3533,10 @@ bool clc_fit_from_inputs_dump(// out
         double Rt_lidar0_board_solve [Nsnapshots *4*3];
         double Rt_lidar0_lidar_solve [(*Nlidars-1)               *4*3];
         double Rt_lidar0_camera_solve[*Ncameras                  *4*3];
+
+        double rt_lidar0_board__optimization [6*Nsnapshots];
+        double rt_lidar0_lidar__optimization [6*(*Nlidars-1)];
+        double rt_lidar0_camera__optimization[6*(*Ncameras)];
 
         sensor_snapshot_segmented_t snapshots[Nsnapshots];
         memset(snapshots, 0, Nsnapshots*sizeof(snapshots[0]));
@@ -3860,6 +3864,9 @@ bool clc_fit_from_inputs_dump(// out
         result =
             result &&
             fit(NULL,
+                rt_lidar0_board__optimization,
+                rt_lidar0_lidar__optimization,
+                rt_lidar0_camera__optimization,
 
                 // in,out
                 // seed state on input
@@ -3919,12 +3926,12 @@ bool clc_fit_from_inputs_dump(// out
                               true,
                               verbose);
             }
-            (*rt_ref_lidar)[0] = (mrcal_pose_t){};
+            (*rt_lidar0_lidar)[0] = (mrcal_pose_t){};
             for(int i=1; i<*Nlidars; i++)
-                mrcal_rt_from_Rt( (double*)&(*rt_ref_lidar)[i], NULL,
+                mrcal_rt_from_Rt( (double*)&(*rt_lidar0_lidar)[i], NULL,
                                   &Rt_lidar0_lidar[(i-1)*4*3] );
             for(int i=0; i<*Ncameras; i++)
-                mrcal_rt_from_Rt( (double*)&(*rt_ref_camera)[i], NULL,
+                mrcal_rt_from_Rt( (double*)&(*rt_lidar0_camera)[i], NULL,
                                   &Rt_lidar0_camera[i*4*3] );
         }
     done_inner:
@@ -3946,10 +3953,10 @@ bool clc_fit_from_inputs_dump(// out
 
     if(!result)
     {
-        free(*rt_ref_lidar);
-        *rt_ref_lidar = NULL;
-        free(*rt_ref_camera);
-        *rt_ref_camera = NULL;
+        free(*rt_lidar0_lidar);
+        *rt_lidar0_lidar = NULL;
+        free(*rt_lidar0_camera);
+        *rt_lidar0_camera = NULL;
     }
     return result;
 }
@@ -4168,11 +4175,11 @@ static bool evaluate_lidar_visibility(// out
                                       // A dense array of shape (Nlidars,Nsectors)
                                       uint8_t* isvisible_per_lidar_per_sector,
                                       // in
-                                      const double*                      rt_vehicle_lidar0, // may be NULL
+                                      const double*                      Rt_vehicle_lidar0, // may be NULL
                                       const int                          Nsectors,
                                       const int                          Nrings,
 
-                                      const double*                      rt_lidar0_lidar,
+                                      const double*                      Rt_lidar0_lidar_notfirst,
                                       const double                       threshold_valid_lidar_range,
                                       const double                       threshold_valid_lidar_Npoints,
                                       const clc_lidar_scan_unsorted_t* lidar_scans, // Nlidars of these
@@ -4189,17 +4196,25 @@ static bool evaluate_lidar_visibility(// out
     for(int ilidar=0; ilidar<Nlidars; ilidar++)
     {
         double Rt_vehicle_lidar[4*3];
-        if(rt_vehicle_lidar0 != NULL)
+        if(Rt_vehicle_lidar0 != NULL)
         {
-            double rt_vehicle_lidar[6];
-            mrcal_compose_rt(rt_vehicle_lidar,NULL,NULL,NULL,NULL,
-                             rt_vehicle_lidar0, &rt_lidar0_lidar[6*ilidar]);
-            mrcal_Rt_from_rt(Rt_vehicle_lidar, NULL,
-                             rt_vehicle_lidar);
+            if(ilidar == 0)
+                memcpy(Rt_vehicle_lidar,
+                       Rt_vehicle_lidar0,
+                       sizeof(Rt_vehicle_lidar));
+            else
+                mrcal_compose_Rt(Rt_vehicle_lidar,
+                                 Rt_vehicle_lidar0, &Rt_lidar0_lidar_notfirst[4*3*(ilidar-1)]);
         }
         else
-            mrcal_Rt_from_rt(Rt_vehicle_lidar, NULL,
-                             &rt_lidar0_lidar[6*ilidar]);
+        {
+            if(ilidar == 0)
+                mrcal_identity_Rt(Rt_vehicle_lidar);
+            else
+                memcpy(Rt_vehicle_lidar,
+                       &Rt_lidar0_lidar_notfirst[4*3*(ilidar-1)],
+                       sizeof(Rt_vehicle_lidar));
+        }
 
         int Nobservations_per_sector[Nsectors];
         memset(Nobservations_per_sector, 0, Nsectors*sizeof(Nobservations_per_sector[0]));
@@ -4638,46 +4653,51 @@ static void accumulate_covariance_pairwise(// out
                                            // (3,3) symmetric matrix; upper-triangle only stored; 6 values
                                            double*               Var_p1,
                                            // in
-                                           const mrcal_point3_t* pquery_ref_recomputed,
-                                           const double*         dpref__drt_ref_sensor0,
-                                           const double*         rt_ref_sensor1,
+                                           const mrcal_point3_t* pquery_lidar0_recomputed,
+                                           // uninitialized if isensor0==0; same as istate_sensor0<0
+                                           const double*         dpref__drt_lidar0_sensor0,
+                                           // guaranteed != NULL
+                                           const double*         rt_lidar0_sensor1,
                                            const double*         Var_rt_sensor0_sensor,
                                            const int             Nstate_sensor_poses,
+                                           // may be <0
                                            const int             istate_sensor0,
+                                           // guaranteed >= 0
                                            const int             istate_sensor1)
 {
     memset(Var_p1, 0, 6*sizeof(double));
 
-    double dp1__drt_ref_sensor1[3*6];
-    double dp1__dpref          [3*3];
-    mrcal_point3_t p1; // probably don't need to store this; I just want the gradient
-    mrcal_transform_point_rt_inverted(p1.xyz,dp1__drt_ref_sensor1,dp1__dpref,
-                                      rt_ref_sensor1, pquery_ref_recomputed->xyz);
+    double dp1__drt_lidar0_sensor1[3*6];
+    double dp1__dpref             [3*3];
+    mrcal_point3_t p1; // don't need to store this; I just want the gradient
+    // rt_lidar0_sensor1!=NULL is guaranteed here
+    mrcal_transform_point_rt_inverted(p1.xyz,dp1__drt_lidar0_sensor1,dp1__dpref,
+                                      rt_lidar0_sensor1, pquery_lidar0_recomputed->xyz);
 
     // I have a point from the sensor0 frame expressed in
     // sensor1 coords. The covariance of this quantity is the
     // uncertainty between these two sensors in this
     // location.
     //
-    // p1 = f( rt_ref_sensor1, pref )
-    //    = f( rt_ref_sensor1, g( rt_ref_sensor0, p0 ) )
-    // dp1 ~ dp1/drt_ref_sensor1 drt_ref_sensor1 + dp1/dpref dpref/drt_ref_sensor0 drt_ref_sensor0
+    // p1 = f( rt_lidar0_sensor1, pref )
+    //    = f( rt_lidar0_sensor1, g( rt_lidar0_sensor0, p0 ) )
+    // dp1 ~ dp1/drt_lidar0_sensor1 drt_lidar0_sensor1 + dp1/dpref dpref/drt_lidar0_sensor0 drt_lidar0_sensor0
     //
     // Var(dp1) = M Var(b) Mt
     //
     // where M is dp1/db where b is the solver state. This
     // solver state contains the scaled quantities
-    // rt_ref_sensor0 and rt_ref_sensor1. So we have
+    // rt_lidar0_sensor0 and rt_lidar0_sensor1. So we have
     //
-    //   (dp1/db)[:,istate_rt_ref_sensor0] = dp1/dpref dpref/drt_ref_sensor0
-    //   (dp1/db)[:,istate_rt_ref_sensor1] = dp1/drt_ref_sensor1
+    //   (dp1/db)[:,istate_rt_lidar0_sensor0] = dp1/dpref dpref/drt_lidar0_sensor0
+    //   (dp1/db)[:,istate_rt_lidar0_sensor1] = dp1/drt_lidar0_sensor1
     //
 
     // I really should use the factorization here instead of
     // the precomputed Var=inv(JtJ).
 
     // I need M Var Mt; M has two non-zero blocks: one for
-    // drt_ref_sensor0 and another for drt_ref_sensor1. So I
+    // drt_lidar0_sensor0 and another for drt_lidar0_sensor1. So I
     // only need to look at those blocks of M:
     //
     // M Var Mt = d0 Var00 d0t + d0 Var01 d1t + d1 Var10 d0t + d1 Var11 d1t
@@ -4685,12 +4705,12 @@ static void accumulate_covariance_pairwise(// out
     // Var is symmetric so (d0 Var01 d1t)t = d1 Var10 d0t
     if(istate_sensor0 >= 0)
     {
-        double dp1__drt_ref_sensor0[3*6];
+        double dp1__drt_lidar0_sensor0[3*6];
         multiply_matrix_matrix(// out
-                               dp1__drt_ref_sensor0, 6, 1,
+                               dp1__drt_lidar0_sensor0, 6, 1,
                                // in
                                dp1__dpref, 3, 1,
-                               dpref__drt_ref_sensor0, 6, 1,
+                               dpref__drt_lidar0_sensor0, 6, 1,
                                3,3,6,
                                false);
 
@@ -4699,22 +4719,22 @@ static void accumulate_covariance_pairwise(// out
                                     // in
                                     Var_rt_sensor0_sensor,
                                     Nstate_sensor_poses,
-                                    dp1__drt_ref_sensor0, istate_sensor0,
-                                    dp1__drt_ref_sensor1, istate_sensor1);
+                                    dp1__drt_lidar0_sensor0, istate_sensor0,
+                                    dp1__drt_lidar0_sensor1, istate_sensor1);
 
         M_Var_Mt_block_accumulate(// out
                                   Var_p1,
                                   // in
                                   Var_rt_sensor0_sensor,
                                   Nstate_sensor_poses,
-                                  dp1__drt_ref_sensor0, istate_sensor0);
+                                  dp1__drt_lidar0_sensor0, istate_sensor0);
     }
     M_Var_Mt_block_accumulate(// out
                               Var_p1,
                               // in
                               Var_rt_sensor0_sensor,
                               Nstate_sensor_poses,
-                              dp1__drt_ref_sensor1, istate_sensor1);
+                              dp1__drt_lidar0_sensor1, istate_sensor1);
 }
 
 // returns true if isector is observed by isensor
@@ -4722,12 +4742,11 @@ static void
 lidar_camera_indices_from_sensor(// out
                                  // <0 if we're at the reference
                                  int* istate_sensor,
-                                 const double** rt_ref_sensor,
+                                 const double** rt_lidar0_sensor,
                                  // in
                                  const int isensor,
-
-                                 const mrcal_pose_t* rt_ref_lidar,
-                                 const mrcal_pose_t* rt_ref_camera,
+                                 const double* rt_lidar0_lidar__optimization,
+                                 const double* rt_lidar0_camera__optimization,
                                  const unsigned int Nlidars,
                                  const callback_context_t* ctx)
 {
@@ -4735,15 +4754,21 @@ lidar_camera_indices_from_sensor(// out
     if(isensor < Nlidars)
     {
         const int ilidar = isensor;
-
-        *rt_ref_sensor = (double*)&rt_ref_lidar[ilidar];
-        *istate_sensor = state_index_lidar(ilidar, ctx);
+        if(ilidar == 0)
+        {
+            *rt_lidar0_sensor = NULL;
+            *istate_sensor    = -1;
+        }
+        else
+        {
+            *rt_lidar0_sensor = &rt_lidar0_lidar__optimization[(ilidar-1)*6];
+            *istate_sensor = state_index_lidar(ilidar, ctx);
+        }
     }
     else
     {
         const int icamera = isensor-Nlidars;
-
-        *rt_ref_sensor = (double*)&rt_ref_camera[icamera];
+        *rt_lidar0_sensor = &rt_lidar0_camera__optimization[icamera*6];
         *istate_sensor = state_index_camera(icamera, ctx);
     }
 }
@@ -4758,8 +4783,8 @@ transformation_uncertainty_in_sector(// out
                                    uint16_t* isensors_pair_stdev_worst,
                                    // in
                                    const mrcal_point3_t* pquery_lidar0,
-                                   const mrcal_pose_t* rt_lidar0_lidar,
-                                   const mrcal_pose_t* rt_lidar0_camera,
+                                   const double* rt_lidar0_lidar__optimization,
+                                   const double* rt_lidar0_camera__optimization,
                                    const int isector,
                                    const int Nsectors,
                                    // A dense array of shape (Nsensors,Nsectors)
@@ -4802,19 +4827,25 @@ transformation_uncertainty_in_sector(// out
                                          &rt_lidar0_sensor0,
                                          // in
                                          isensor0,
-                                         rt_lidar0_lidar,
-                                         rt_lidar0_camera,
+                                         rt_lidar0_lidar__optimization,
+                                         rt_lidar0_camera__optimization,
                                          Nlidars,
                                          &ctx);
 
         mrcal_point3_t p0;
-        mrcal_transform_point_rt_inverted(p0.xyz,NULL,NULL,
-                                          rt_lidar0_sensor0, pquery_lidar0->xyz);
+        if(rt_lidar0_sensor0 != NULL)
+            mrcal_transform_point_rt_inverted(p0.xyz,NULL,NULL,
+                                              rt_lidar0_sensor0, pquery_lidar0->xyz);
+        else
+            p0 = *pquery_lidar0;
 
         double dpref__drt_lidar0_sensor0[3*6];
         mrcal_point3_t pquery_lidar0_recomputed; // will be pquery_lidar0 again. I probably don't NEED to store it
-        mrcal_transform_point_rt(pquery_lidar0_recomputed.xyz,dpref__drt_lidar0_sensor0,NULL,
-                                 rt_lidar0_sensor0, p0.xyz);
+        if(rt_lidar0_sensor0 != NULL)
+            mrcal_transform_point_rt(pquery_lidar0_recomputed.xyz,dpref__drt_lidar0_sensor0,NULL,
+                                     rt_lidar0_sensor0, p0.xyz);
+        else
+            pquery_lidar0_recomputed = p0;
 
         for(int isensor1=isensor0+1; isensor1<Nsensors; isensor1++)
         {
@@ -4830,8 +4861,8 @@ transformation_uncertainty_in_sector(// out
                                              &rt_lidar0_sensor1,
                                              // in
                                              isensor1,
-                                             rt_lidar0_lidar,
-                                             rt_lidar0_camera,
+                                             rt_lidar0_lidar__optimization,
+                                             rt_lidar0_camera__optimization,
                                              Nlidars,
                                              &ctx);
 
@@ -4843,11 +4874,15 @@ transformation_uncertainty_in_sector(// out
                                            Var_p1,
                                            // in
                                            &pquery_lidar0_recomputed,
+                                           // uninitialized if isensor0==0; same as istate_sensor0<0
                                            dpref__drt_lidar0_sensor0,
+                                           // guaranteed != NULL
                                            rt_lidar0_sensor1,
                                            Var_rt_lidar0_sensor,
                                            Nstate_sensor_poses,
+                                           // may be <0
                                            istate_sensor0,
+                                           // guaranteed >= 0
                                            istate_sensor1);
 
             double l[3]; // ALL the eigenvalues, in ascending order
@@ -4925,11 +4960,11 @@ static void evaluate_camera_visibility(// out
                                        // dense array of shape (Ncameras,Nsectors)
                                        uint8_t* isvisible_per_camera_per_sector,
                                        // in
-                                       const double* rt_vehicle_lidar0, // may be NULL
+                                       const double* Rt_vehicle_lidar0, // may be NULL
                                        const double uncertainty_quantification_range,
                                        const int Nsectors,
                                        const int Ncameras,
-                                       const double* rt_lidar0_camera,
+                                       const double* Rt_lidar0_camera,
                                        const mrcal_cameramodel_t*const* models)
 {
     const double sector_width_rad = 2.*M_PI/(double)Nsectors;
@@ -4943,9 +4978,9 @@ static void evaluate_camera_visibility(// out
          .z = 0};
 
     mrcal_point3_t pquery_lidar0_left;
-    if(rt_vehicle_lidar0 != NULL)
-        mrcal_transform_point_rt_inverted(pquery_lidar0_left.xyz,NULL,NULL,
-                                          rt_vehicle_lidar0, pquery_vehicle_left.xyz);
+    if(Rt_vehicle_lidar0 != NULL)
+        mrcal_transform_point_Rt_inverted(pquery_lidar0_left.xyz,NULL,NULL,
+                                          Rt_vehicle_lidar0, pquery_vehicle_left.xyz);
     else
         pquery_lidar0_left = pquery_vehicle_left;
 
@@ -4955,8 +4990,8 @@ static void evaluate_camera_visibility(// out
     for(int icamera=0; icamera<Ncameras; icamera++)
     {
         mrcal_point3_t pquery_cam_left;
-        mrcal_transform_point_rt_inverted(pquery_cam_left.xyz,NULL,NULL,
-                                          &rt_lidar0_camera[6*icamera], pquery_lidar0_left.xyz);
+        mrcal_transform_point_Rt_inverted(pquery_cam_left.xyz,NULL,NULL,
+                                          &Rt_lidar0_camera[4*3*icamera], pquery_lidar0_left.xyz);
         if(is_point_in_view_of_camera(&pquery_cam_left, models[icamera]))
             bitarray64_set(  bitarray_isvisible_left_per_camera, icamera);
         else
@@ -4975,9 +5010,9 @@ static void evaluate_camera_visibility(// out
              .z = 0};
 
         mrcal_point3_t pquery_lidar0_right;
-        if(rt_vehicle_lidar0 != NULL)
-            mrcal_transform_point_rt_inverted(pquery_lidar0_right.xyz,NULL,NULL,
-                                              rt_vehicle_lidar0, pquery_vehicle_right.xyz);
+        if(Rt_vehicle_lidar0 != NULL)
+            mrcal_transform_point_Rt_inverted(pquery_lidar0_right.xyz,NULL,NULL,
+                                              Rt_vehicle_lidar0, pquery_vehicle_right.xyz);
         else
             pquery_lidar0_right = pquery_vehicle_right;
 
@@ -4985,8 +5020,8 @@ static void evaluate_camera_visibility(// out
         for(int icamera=0; icamera<Ncameras; icamera++)
         {
             mrcal_point3_t pquery_cam_right;
-            mrcal_transform_point_rt_inverted(pquery_cam_right.xyz,NULL,NULL,
-                                              &rt_lidar0_camera[6*icamera], pquery_lidar0_right.xyz);
+            mrcal_transform_point_Rt_inverted(pquery_cam_right.xyz,NULL,NULL,
+                                              &Rt_lidar0_camera[4*3*icamera], pquery_lidar0_right.xyz);
 
             if(is_point_in_view_of_camera(&pquery_cam_right, models[icamera]))
                 bitarray64_set(  bitarray_isvisible_right_per_camera, icamera);
@@ -5010,17 +5045,36 @@ static void evaluate_camera_visibility(// out
     }
 }
 
+// Each sensor is uniquely identified by its position in the
+// sensor_snapshots[].lidar_scans[] or .images[] arrays. An unobserved sensor in
+// some sensor snapshot should be indicated by lidar_scans[] = {} or images[] =
+// {}
+//
+// The rt_lidar0|vehicle_lidar|camera arrays are the input/output. Some (but not
+// all) may be NULL
+//
+// We return true on success
 bool clc(// in/out
-         // if(use_given_seed_geometry): these are the geometry on input
+         // On input:
+         //   if(     use_given_seed_geometry_lidar0):  rt_lidar0_...  are used as a seed
+         //   else if(use_given_seed_geometry_vehicle): rt_vehicle_... are used as a seed
+         //   else: neither is used as the seed, and we COMPUTE the initial geometry
          //
-         // The solution is stored here on output. If rt_vehicle_lidar0!=NULL,
-         // these variables use the vehicle coord system as the reference in
-         // both input and output; else rt_vehicle_lidar0 is assumed to be the
-         // identity, and we use lidar0 as the reference. In any case,
-         // if(use_given_seed_geometry) { rt_lidar0_lidar[0] MUST be the identity }
-         mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
-         mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
-         bool          use_given_seed_geometry,
+         //   if a seed is given, rt_lidar0_lidar[0] MUST be the identity transform
+         //
+         // On output:
+         //   we store the solution into all of these that are != NULL. If
+         //   possible, both rt_lidar0_... and rt_vehicle_... are populated
+         //
+         // If rt_vehicle_... are given (for input or output), then
+         // rt_vehicle_lidar0 MUST be non-NULL
+         mrcal_pose_t* rt_lidar0_lidar,   // Nlidars  of these; some may be NULL
+         mrcal_pose_t* rt_lidar0_camera,  // Ncameras of these; some may be NULL
+         mrcal_pose_t* rt_vehicle_lidar,  // Nlidars  of these; some may be NULL
+         mrcal_pose_t* rt_vehicle_camera, // Ncameras of these; some may be NULL
+         // at most one of these should be true
+         bool          use_given_seed_geometry_lidar0,
+         bool          use_given_seed_geometry_vehicle,
 
          // Covariance of the output. Symmetric matrix of shape
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
@@ -5104,6 +5158,33 @@ bool clc(// in/out
         return false;
     }
 
+    if( (!!use_given_seed_geometry_lidar0) +
+        (!!use_given_seed_geometry_vehicle) > 1)
+    {
+        MSG("At most one of (use_given_seed_geometry_lidar0,use_given_seed_geometry_vehicle) may be true");
+        return false;
+    }
+
+    if(rt_vehicle_lidar0 == NULL &&
+       !(rt_vehicle_lidar == NULL && rt_vehicle_camera == NULL))
+    {
+        MSG("rt_vehicle_lidar0 is NULL, so both of (rt_vehicle_lidar,rt_vehicle_camera) MUST be NULL");
+        return false;
+    }
+
+    if(use_given_seed_geometry_lidar0 &&
+       !(rt_lidar0_lidar != NULL && rt_lidar0_camera != NULL))
+    {
+        MSG("use_given_seed_geometry_lidar0 is true, so both of (rt_lidar0_lidar,rt_lidar0_camera) MUST be non-NULL");
+        return false;
+    }
+    if(use_given_seed_geometry_vehicle &&
+       !(rt_vehicle_lidar != NULL && rt_vehicle_camera != NULL && rt_vehicle_lidar0 != NULL))
+    {
+        MSG("use_given_seed_geometry_vehicle is true, so all of (rt_vehicle_lidar,rt_vehicle_camera,rt_vehicle_lidar0) MUST be non-NULL");
+        return false;
+    }
+
     if(stdev_worst_per_sector != NULL &&
        !(isvisible_per_sensor_per_sector!=NULL && Var_rt_lidar0_sensor!=NULL))
     {
@@ -5116,34 +5197,6 @@ bool clc(// in/out
     {
         MSG("isvisible_per_sensor_per_sector!=NULL so lidar_scans_for_isvisible MUST be !=NULL as well");
         return false;
-    }
-
-    if(use_given_seed_geometry)
-    {
-        if(rt_vehicle_lidar0 != NULL)
-        {
-            // Transform poses. The were referenced from the vehicle,
-            // re-reference them from lidar0
-            for(int i=0; i<Nlidars; i++)
-                mrcal_compose_rt_inverted0((double*)&rt_ref_lidar[i], NULL,NULL,NULL,NULL,NULL,NULL,
-                                 (double*)rt_vehicle_lidar0,(double*)&rt_ref_lidar[i]);
-            for(int i=0; i<Ncameras; i++)
-                mrcal_compose_rt_inverted0((double*)&rt_ref_camera[i], NULL,NULL,NULL,NULL,NULL,NULL,
-                                 (double*)rt_vehicle_lidar0,(double*)&rt_ref_camera[i]);
-        }
-
-        for(int i=0; i<3; i++)
-            if(fabs(rt_ref_lidar[0].r.xyz[i]) > 1e-8)
-            {
-                MSG("use_given_seed_geometry is true, so rt_lidar0_lidar[0] MUST be the identity transformation");
-                return false;
-            }
-        for(int i=0; i<3; i++)
-            if(fabs(rt_ref_lidar[0].t.xyz[i]) > 1e-8)
-            {
-                MSG("use_given_seed_geometry is true, so rt_lidar0_lidar[0] MUST be the identity transformation");
-                return false;
-            }
     }
 
     bool result = false;
@@ -5402,6 +5455,12 @@ bool clc(// in/out
         }
     }
 
+
+    double Rt_vehicle_lidar0[4*3];
+    if(rt_vehicle_lidar0 != NULL)
+        mrcal_Rt_from_rt(Rt_vehicle_lidar0, NULL,
+                         (const double*)rt_vehicle_lidar0);
+
     {
         double Rt_lidar0_board_seed  [Nsnapshots                     * 4*3];
         double Rt_lidar0_lidar_seed  [(Nlidars-1)                    * 4*3];
@@ -5416,21 +5475,65 @@ bool clc(// in/out
         memset(Rt_lidar0_lidar_solve,  0, sizeof(double)*(Nlidars-1) * 4*3);
         memset(Rt_lidar0_camera_solve, 0, sizeof(double)*Ncameras    * 4*3);
 
-        if(use_given_seed_geometry)
+        if(use_given_seed_geometry_lidar0)
         {
+            for(int i=0; i<3; i++)
+                if(fabs(rt_lidar0_lidar[0].r.xyz[i]) > 1e-8)
+                {
+                    MSG("use_given_seed_geometry_lidar0 is true, so rt_lidar0_lidar[0] MUST be the identity transformation");
+                    return false;
+                }
+            for(int i=0; i<3; i++)
+                if(fabs(rt_lidar0_lidar[0].t.xyz[i]) > 1e-8)
+                {
+                    MSG("use_given_seed_geometry_lidar0 is true, so rt_lidar0_lidar[0] MUST be the identity transformation");
+                    return false;
+                }
             for(int i=1; i<Nlidars; i++)
                 mrcal_Rt_from_rt(&Rt_lidar0_lidar_seed[4*3*(i-1)], NULL,
-                                 (const double*)&rt_ref_lidar[i]);
+                                 (const double*)&rt_lidar0_lidar[i]);
             for(int i=0; i<Ncameras; i++)
                 mrcal_Rt_from_rt(&Rt_lidar0_camera_seed[4*3*i], NULL,
-                                 (const double*)&rt_ref_camera[i]);
+                                 (const double*)&rt_lidar0_camera[i]);
+        }
+        else if(use_given_seed_geometry_vehicle)
+        {
+            // temporary storage, in case rt_lidar0_lidar or rt_lidar0_camera are NUL
+            mrcal_pose_t _rt_lidar0_lidar [Nlidars];
+            mrcal_pose_t _rt_lidar0_camera[Ncameras];
+
+            for(int i=0; i<Nlidars; i++)
+                mrcal_compose_rt_inverted0((double*)&_rt_lidar0_lidar[i], NULL,NULL,NULL,NULL,NULL,NULL,
+                                           (double*)rt_vehicle_lidar0,(double*)&rt_vehicle_lidar[i]);
+            for(int i=0; i<Ncameras; i++)
+                mrcal_compose_rt_inverted0((double*)&_rt_lidar0_camera[i], NULL,NULL,NULL,NULL,NULL,NULL,
+                                           (double*)rt_vehicle_lidar0,(double*)&rt_vehicle_camera[i]);
+
+            for(int i=0; i<3; i++)
+                if(fabs(_rt_lidar0_lidar[0].r.xyz[i]) > 1e-8)
+                {
+                    MSG("use_given_seed_geometry_vehicle is true, so rt_lidar0_lidar[0] MUST be the identity transformation");
+                    return false;
+                }
+            for(int i=0; i<3; i++)
+                if(fabs(_rt_lidar0_lidar[0].t.xyz[i]) > 1e-8)
+                {
+                    MSG("use_given_seed_geometry_vehicle is true, so rt_lidar0_lidar[0] MUST be the identity transformation");
+                    return false;
+                }
+            for(int i=1; i<Nlidars; i++)
+                mrcal_Rt_from_rt(&Rt_lidar0_lidar_seed[4*3*(i-1)], NULL,
+                                 (const double*)&_rt_lidar0_lidar[i]);
+            for(int i=0; i<Ncameras; i++)
+                mrcal_Rt_from_rt(&Rt_lidar0_camera_seed[4*3*i], NULL,
+                                 (const double*)&_rt_lidar0_camera[i]);
         }
 
         if(!fit_seed(// in/out
                      Rt_lidar0_board_seed,
                      Rt_lidar0_lidar_seed,
                      Rt_lidar0_camera_seed,
-                     use_given_seed_geometry,
+                     use_given_seed_geometry_lidar0 || use_given_seed_geometry_vehicle,
 
                      // in
                      snapshots,
@@ -5512,8 +5615,14 @@ bool clc(// in/out
                       verbose);
 
         dogleg_solverContext_t* solver_context;
+        double rt_lidar0_board__optimization [6*Nsnapshots];
+        double rt_lidar0_lidar__optimization [6*(Nlidars-1)];
+        double rt_lidar0_camera__optimization[6*Ncameras];
         bool fit_result =
             fit(&solver_context,
+                rt_lidar0_board__optimization,
+                rt_lidar0_lidar__optimization,
+                rt_lidar0_camera__optimization,
                 // in,out
                 // seed state on input
                 Rt_lidar0_board_solve,
@@ -5625,15 +5734,6 @@ bool clc(// in/out
                       true,
                       verbose);
 
-
-        for(unsigned int i=0; i<Ncameras; i++)
-            mrcal_rt_from_Rt(rt_ref_camera[i].r.xyz, NULL,
-                             &Rt_lidar0_camera_solve[i*4*3]);
-        memset(rt_ref_lidar, 0, sizeof(*rt_ref_lidar)); // lidar0 has the reference transform
-        for(unsigned int i=0; i<Nlidars-1; i++)
-            mrcal_rt_from_Rt(rt_ref_lidar[i+1].r.xyz, NULL,
-                             &Rt_lidar0_lidar_solve[i*4*3]);
-
         make_reprojected_plots( Rt_lidar0_lidar_solve,
                                 Rt_lidar0_camera_solve,
                                 snapshots,
@@ -5649,11 +5749,6 @@ bool clc(// in/out
 
         if(observations_per_sector != NULL)
         {
-            double Rt_vehicle_ref[4*3];
-            if(rt_vehicle_lidar0 != NULL)
-                mrcal_Rt_from_rt(Rt_vehicle_ref, NULL,
-                                 (const double*)rt_vehicle_lidar0);
-
             // The estimate of the center of the board, in board coords. We
             // compute_board_poses()
             mrcal_point3_t pboardcenter_board;
@@ -5678,107 +5773,133 @@ bool clc(// in/out
                                          &Rt_lidar0_board_solve[isnapshot*4*3], pboardcenter_board.xyz);
                 if(rt_vehicle_lidar0 != NULL)
                     mrcal_transform_point_Rt(p.xyz,NULL,NULL,
-                                             Rt_vehicle_ref, p.xyz);
+                                             Rt_vehicle_lidar0, p.xyz);
                 observations_per_sector[ isector_from_pvehicle(p.xyz, Nsectors) ]++;
             }
         }
-    }
-
-    if(isvisible_per_sensor_per_sector != NULL)
-    {
-        // It is more numerically stable to not compute Var=inv(JtJ) and
-        // then compute M Var Mt, but instead to use the factorization of
-        // JtJ to compute M Var Mt directly. But using the covariance code I
-        // already wrote is easier, so I do that for now
 
 
-        // vehicle coords are
-        // x: forward
-        // y: left
-        // z: up
-        if(!evaluate_lidar_visibility(// out
-                                      isvisible_per_sensor_per_sector,
-                                      // in
-                                      (const double*)rt_vehicle_lidar0,
-                                      Nsectors,
-                                      _Nrings,
-                                      (const double*)rt_ref_lidar,
-                                      threshold_valid_lidar_range,
-                                      threshold_valid_lidar_Npoints,
-
-                                      lidar_scans_for_isvisible,
-                                      lidar_packet_stride,
-                                      Nlidars))
-            return false;
-
-        const int Nsensors = Nlidars + Ncameras;
-
-        evaluate_camera_visibility(// out
-                                   &isvisible_per_sensor_per_sector[Nlidars * Nsectors],
-                                   // in
-                                   (const double*)rt_vehicle_lidar0,
-                                   uncertainty_quantification_range,
-                                   Nsectors,
-                                   Ncameras,
-                                   (const double*)rt_ref_camera,
-                                   models);
-    }
-
-    if(stdev_worst_per_sector != NULL)
-    {
-        const double sector_width_rad = 2.*M_PI/(double)Nsectors;
-        const double c = cos(sector_width_rad);
-        const double s = sin(sector_width_rad);
-
-        // I will rotate this by sector_width_rad with each step
-        mrcal_point3_t pquery_vehicle =
-            {.x = uncertainty_quantification_range * cos(0.5 * sector_width_rad),
-             .y = uncertainty_quantification_range * sin(0.5 * sector_width_rad),
-             .z = 0};
-        for(int isector=0; isector<Nsectors; isector++)
+        // write the output
+        if(rt_lidar0_lidar != NULL)
         {
-            // point at the center of the sector
-            mrcal_point3_t pquery_ref;
-            if(rt_vehicle_lidar0 != NULL)
-                mrcal_transform_point_rt_inverted(pquery_ref.xyz,NULL,NULL,
-                                                  (const double*)rt_vehicle_lidar0, pquery_vehicle.xyz);
-            else
-                pquery_ref = pquery_vehicle;
-
-            if(!transformation_uncertainty_in_sector(// out
-                                                     &stdev_worst_per_sector[isector],
-                                                     &isensors_pair_stdev_worst[2*isector],
-                                                     // in
-                                                     &pquery_ref,
-                                                     rt_ref_lidar,
-                                                     rt_ref_camera,
-                                                     isector,
-                                                     Nsectors,
-                                                     isvisible_per_sensor_per_sector,
-
-                                                     Var_rt_lidar0_sensor,
-                                                     Nlidars,
-                                                     Ncameras))
-                return false;
-
-            const double x = pquery_vehicle.x;
-            const double y = pquery_vehicle.y;
-            pquery_vehicle.x = x*c - y*s;
-            pquery_vehicle.y = y*c + x*s;
+            rt_lidar0_lidar[0] = (mrcal_pose_t){}; // lidar0 has the reference transform
+            for(unsigned int i=0; i<Nlidars-1; i++)
+                mrcal_rt_from_Rt(rt_lidar0_lidar[i+1].r.xyz, NULL,
+                                 &Rt_lidar0_lidar_solve[i*4*3]);
+        }
+        if(rt_lidar0_camera != NULL)
+            for(unsigned int i=0; i<Ncameras; i++)
+                mrcal_rt_from_Rt(rt_lidar0_camera[i].r.xyz, NULL,
+                                 &Rt_lidar0_camera_solve[i*4*3]);
+        if(rt_vehicle_lidar != NULL)
+        {
+            rt_vehicle_lidar[0] = *rt_vehicle_lidar0;
+            for(unsigned int i=0; i<Nlidars-1; i++)
+            {
+                double Rt_vehicle_lidar[4*3];
+                mrcal_compose_Rt(Rt_vehicle_lidar,
+                                 Rt_vehicle_lidar0, &Rt_lidar0_lidar_solve[i*4*3]);
+                mrcal_rt_from_Rt(rt_vehicle_lidar[i+1].r.xyz, NULL,
+                                 Rt_vehicle_lidar);
+            }
+        }
+        if(rt_vehicle_camera != NULL)
+        {
+            for(unsigned int i=0; i<Ncameras; i++)
+            {
+                double Rt_vehicle_camera[4*3];
+                mrcal_compose_Rt(Rt_vehicle_camera,
+                                 Rt_vehicle_lidar0, &Rt_lidar0_camera_solve[i*4*3]);
+                mrcal_rt_from_Rt(rt_vehicle_camera[i].r.xyz, NULL,
+                                 Rt_vehicle_camera);
+            }
         }
 
-    }
 
-    if(rt_vehicle_lidar0 != NULL)
-    {
-        // Transform poses. The were referenced from lidar0,
-        // re-reference them from the vehicle
-        for(int i=0; i<Nlidars; i++)
-            mrcal_compose_rt((double*)&rt_ref_lidar[i], NULL,NULL,NULL,NULL,
-                             (double*)rt_vehicle_lidar0,(double*)&rt_ref_lidar[i]);
-        for(int i=0; i<Ncameras; i++)
-            mrcal_compose_rt((double*)&rt_ref_camera[i], NULL,NULL,NULL,NULL,
-                             (double*)rt_vehicle_lidar0,(double*)&rt_ref_camera[i]);
+        if(isvisible_per_sensor_per_sector != NULL)
+        {
+            // It is more numerically stable to not compute Var=inv(JtJ) and
+            // then compute M Var Mt, but instead to use the factorization of
+            // JtJ to compute M Var Mt directly. But using the covariance code I
+            // already wrote is easier, so I do that for now
+
+
+            // vehicle coords are
+            // x: forward
+            // y: left
+            // z: up
+            if(!evaluate_lidar_visibility(// out
+                                          isvisible_per_sensor_per_sector,
+                                          // in
+                                          (rt_vehicle_lidar0 != NULL) ? Rt_vehicle_lidar0 : NULL,
+                                          Nsectors,
+                                          _Nrings,
+                                          Rt_lidar0_lidar_solve,
+                                          threshold_valid_lidar_range,
+                                          threshold_valid_lidar_Npoints,
+
+                                          lidar_scans_for_isvisible,
+                                          lidar_packet_stride,
+                                          Nlidars))
+                return false;
+
+            const int Nsensors = Nlidars + Ncameras;
+
+            evaluate_camera_visibility(// out
+                                       &isvisible_per_sensor_per_sector[Nlidars * Nsectors],
+                                       // in
+                                       (rt_vehicle_lidar0 != NULL) ? Rt_vehicle_lidar0 : NULL,
+                                       uncertainty_quantification_range,
+                                       Nsectors,
+                                       Ncameras,
+                                       Rt_lidar0_camera_solve,
+                                       models);
+        }
+
+        if(stdev_worst_per_sector != NULL)
+        {
+            const double sector_width_rad = 2.*M_PI/(double)Nsectors;
+            const double c = cos(sector_width_rad);
+            const double s = sin(sector_width_rad);
+
+            // I will rotate this by sector_width_rad with each step
+            mrcal_point3_t pquery_vehicle =
+                {.x = uncertainty_quantification_range * cos(0.5 * sector_width_rad),
+                 .y = uncertainty_quantification_range * sin(0.5 * sector_width_rad),
+                 .z = 0};
+            for(int isector=0; isector<Nsectors; isector++)
+            {
+                // point at the center of the sector
+                mrcal_point3_t pquery_lidar0;
+                if(rt_vehicle_lidar0 != NULL)
+                    mrcal_transform_point_Rt_inverted(pquery_lidar0.xyz,NULL,NULL,
+                                                      Rt_vehicle_lidar0, pquery_vehicle.xyz);
+                else
+                    pquery_lidar0 = pquery_vehicle;
+
+                if(!transformation_uncertainty_in_sector(// out
+                                                         &stdev_worst_per_sector[isector],
+                                                         &isensors_pair_stdev_worst[2*isector],
+                                                         // in
+                                                         &pquery_lidar0,
+                                                         rt_lidar0_lidar__optimization,
+                                                         rt_lidar0_camera__optimization,
+                                                         isector,
+                                                         Nsectors,
+                                                         isvisible_per_sensor_per_sector,
+
+                                                         Var_rt_lidar0_sensor,
+                                                         Nlidars,
+                                                         Ncameras))
+                    return false;
+
+                const double x = pquery_vehicle.x;
+                const double y = pquery_vehicle.y;
+                pquery_vehicle.x = x*c - y*s;
+                pquery_vehicle.y = y*c + x*s;
+            }
+
+        }
     }
 
     result = true;

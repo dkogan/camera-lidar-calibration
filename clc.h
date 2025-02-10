@@ -251,20 +251,31 @@ clc_camera_chessboard_detection(// out
 // some sensor snapshot should be indicated by lidar_scans[] = {} or images[] =
 // {}
 //
-// On output, the rt_ref_lidar[] and rt_ref_camera[] arrays will be filled-in.
-// If solving for ALL the sensor geometry wasn't possible, we return false. On
-// success, we return true
+// The rt_lidar0|vehicle_lidar|camera arrays are the input/output. Some (but not
+// all) may be NULL
+//
+// We return true on success
 bool clc(// in/out
-         // if(use_given_seed_geometry): these are the geometry on input
+         // On input:
+         //   if(     use_given_seed_geometry_lidar0):  rt_lidar0_...  are used as a seed
+         //   else if(use_given_seed_geometry_vehicle): rt_vehicle_... are used as a seed
+         //   else: neither is used as the seed, and we COMPUTE the initial geometry
          //
-         // The solution is stored here on output. If rt_vehicle_lidar0!=NULL,
-         // these variables use the vehicle coord system as the reference in
-         // both input and output; else rt_vehicle_lidar0 is assumed to be the
-         // identity, and we use lidar0 as the reference. In any case,
-         // if(use_given_seed_geometry) { rt_lidar0_lidar[0] MUST be the identity }
-         mrcal_pose_t* rt_ref_lidar,  // Nlidars  of these to fill
-         mrcal_pose_t* rt_ref_camera, // Ncameras of these to fill
-         bool          use_given_seed_geometry,
+         //   if a seed is given, rt_lidar0_lidar[0] MUST be the identity transform
+         //
+         // On output:
+         //   we store the solution into all of these that are != NULL. If
+         //   possible, both rt_lidar0_... and rt_vehicle_... are populated
+         //
+         // If rt_vehicle_... are given (for input or output), then
+         // rt_vehicle_lidar0 MUST be non-NULL
+         mrcal_pose_t* rt_lidar0_lidar,   // Nlidars  of these; some may be NULL
+         mrcal_pose_t* rt_lidar0_camera,  // Ncameras of these; some may be NULL
+         mrcal_pose_t* rt_vehicle_lidar,  // Nlidars  of these; some may be NULL
+         mrcal_pose_t* rt_vehicle_camera, // Ncameras of these; some may be NULL
+         // at most one of these should be true
+         bool          use_given_seed_geometry_lidar0,
+         bool          use_given_seed_geometry_vehicle,
 
          // Covariance of the output. Symmetric matrix of shape
          // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
@@ -344,8 +355,8 @@ bool clc_fit_from_inputs_dump(// out
                               // Allocated by the function on success.
                               // It's the caller's responsibility to
                               // free() these
-                              mrcal_pose_t** rt_ref_lidar,
-                              mrcal_pose_t** rt_ref_camera,
+                              mrcal_pose_t** rt_lidar0_lidar,
+                              mrcal_pose_t** rt_lidar0_camera,
                               // in
                               const char* buf_inputs_dump,
                               size_t      size_inputs_dump,

@@ -9,7 +9,7 @@ SYNOPSIS
       /tmp/lidar[01]-mounted.cameramodel
     [plot pops up to show the aligned points]
 
-Displays the point clouds in a common vehicle coordinate system
+Displays the point clouds in the lidar0 coord system
 
 '''
 
@@ -26,14 +26,6 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('--rt-vehicle-lidar0',
-                        type=argparse_helpers.comma_separated_list_of_floats,
-                        help='''The vehicle-lidar0 transform. The solve is
-                        always done in lidar0 coordinates, but we may want to
-                        operate in a different "vehicle" frame. This argument
-                        specifies the relationship between those frames. If
-                        omitted, we assume an identity transform: the vehicle
-                        frame is the lidar0 frame''')
     parser.add_argument('--topic',
                         type=str,
                         required = True,
@@ -73,25 +65,15 @@ import mrcal
 import clc
 
 
-
-if args.rt_vehicle_lidar0 is not None:
-    args.rt_vehicle_lidar0 = np.array(args.rt_vehicle_lidar0, dtype=float)
-    args.Rt_vehicle_lidar0 = mrcal.Rt_from_rt(args.rt_vehicle_lidar0)
-else:
-    args.Rt_vehicle_lidar0 = None
-
-
-
 rt_lidar0_lidar = [mrcal.cameramodel(f).extrinsics_rt_toref() for f in args.lidar_models]
 
 data_tuples = \
     clc.get_pointcloud_plot_tuples(args.bag, args.topic, args.threshold,
-                                   rt_lidar0_lidar,
-                                   Rt_vehicle_lidar0 = args.Rt_vehicle_lidar0)
+                                   rt_lidar0_lidar)
 clc.plot(*data_tuples,
          _3d = True,
          square = True,
-         xlabel = 'x (vehicle)',
-         ylabel = 'y (vehicle)',
-         zlabel = 'z (vehicle)',
+         xlabel = 'x (lidar0)',
+         ylabel = 'y (lidar0)',
+         zlabel = 'z (lidar0)',
          wait = True)

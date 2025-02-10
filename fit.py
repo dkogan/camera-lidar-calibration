@@ -217,29 +217,28 @@ kwargs_calibrate = dict(bags                               = args.bag,
 result = clc.calibrate(do_dump_inputs = args.dump is not None,
                        **kwargs_calibrate)
 
-if args.rt_vehicle_lidar0 is not None:
-    rt_ref_lidar_name  = "rt_vehicle_lidar"
-    rt_ref_camera_name = "rt_vehicle_camera"
+if 'rt_vehicle_lidar' in result:
+    rt_ref_lidar  = result['rt_vehicle_lidar']
+    rt_ref_camera = result['rt_vehicle_camera']
 else:
-    rt_ref_lidar_name  = "rt_lidar0_lidar"
-    rt_ref_camera_name = "rt_lidar0_camera"
-
+    rt_ref_lidar  = result['rt_lidar0_lidar']
+    rt_ref_camera = result['rt_lidar0_camera']
 
 for imodel in range(len(args.models)):
-    models[imodel].extrinsics_rt_toref(result[rt_ref_camera_name][imodel])
+    models[imodel].extrinsics_rt_toref(rt_ref_camera[imodel])
     root,extension = os.path.splitext(args.models[imodel])
     filename = f"{root}-mounted{extension}"
     models[imodel].write(filename)
     print(f"Wrote '{filename}'")
 
-for ilidar,rt_ref_lidar in enumerate(result[rt_ref_lidar_name]):
+for ilidar in range(len(rt_ref_lidar)):
     # dummy lidar "cameramodel". The intrinsics are made-up, but the extrinsics
     # are true, and can be visualized with the usual tools
     filename = f"/tmp/lidar{ilidar}-mounted.cameramodel"
     model = mrcal.cameramodel( intrinsics = ('LENSMODEL_PINHOLE',
                                              np.array((1.,1.,0.,0.))),
                                imagersize = (1,1),
-                               extrinsics_rt_toref = rt_ref_lidar )
+                               extrinsics_rt_toref = rt_ref_lidar[ilidar] )
     model.write(filename,
                 note = "Intrinsics are made-up and nonsensical")
     print(f"Wrote '{filename}'")
@@ -259,8 +258,8 @@ if args.dump is not None:
 
 
 data_tuples_sensor_forward_vectors = \
-    clc.get_data_tuples_sensor_forward_vectors(context['result'][rt_ref_lidar_name ],
-                                               context['result'][rt_ref_camera_name],
+    clc.get_data_tuples_sensor_forward_vectors(rt_ref_lidar,
+                                               rt_ref_camera,
                                                context['topics'])
 
 
