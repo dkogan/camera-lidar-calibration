@@ -117,6 +117,7 @@ def calibrate(*,
 
 
 # from "gnuplot -e 'show linetype'"
+# Named colors are defined in gnuplot/src/tables.c
 color_sequence_rgb = (
     "#9400d3",
     "#009e73",
