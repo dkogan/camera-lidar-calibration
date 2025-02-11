@@ -50,7 +50,6 @@ args = parse_args()
 
 
 
-import bag_interface
 import numpy as np
 import numpysane as nps
 import clc
