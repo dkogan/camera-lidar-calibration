@@ -104,7 +104,12 @@ def parse_args():
                         help = '''The topic we're visualizing. Can select LIDAR
                         or camera data. If omitted, we report the topics present
                         in the bag, and we exit''')
-
+    parser.add_argument('--after',
+                        type=str,
+                        help = '''If given, start reading the bags at this time.
+                        Could be an integer (s since epoch or ns since epoch), a
+                        float (s since the epoch) or a string, to be parsed with
+                        dateutil.parser.parse()''')
     parser.add_argument('bags',
                         type=str,
                         nargs='+',
@@ -239,10 +244,16 @@ def show_image(bag, p):
 
 for bag in bags():
     try:
-        p = next(bag_interface.messages(bag, (args.topic,) ))['array']
+        msg = next(bag_interface.messages(bag, (args.topic,),
+                                          start = args.after))
+        p = msg['array']
     except StopIteration:
-        print(f"No messages with {args.topic=} in {bag=}. Continuing to next bag, if any",
-              file = sys.stderr)
+        if args.after is None:
+            print(f"No messages with {args.topic=} in {bag=}. Continuing to next bag, if any",
+                  file = sys.stderr)
+        else:
+            print(f"No messages with {args.topic=} in {bag=} after '{args.after}'. Continuing to next bag, if any",
+                  file = sys.stderr)
         continue
 
 
