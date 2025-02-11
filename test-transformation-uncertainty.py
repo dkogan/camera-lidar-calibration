@@ -108,12 +108,12 @@ def get_plidar0(isector):
                                   inverted = True)
 
 
-def get_Var_predicted(isensor, isector):
+def get_Var_predicted(isensors, isector):
 
     plidar0 = get_plidar0(isector)
     rt_lidar0_sensor = [get__rt_ref_sensor(i,
                                            rt_lidar0_lidar,
-                                           rt_lidar0_camera) for i in isensor]
+                                           rt_lidar0_camera) for i in isensors]
     p0 = mrcal.transform_point_rt(rt_lidar0_sensor[0], plidar0, inverted=True)
 
 
@@ -134,21 +134,21 @@ def get_Var_predicted(isensor, isector):
     dp1__drt_lidar0_sensor0 = nps.matmult(dp1__dplidar0, dplidar0__drt_lidar0_sensor0)
 
 
-    if isensor[0] == 0:
+    if isensors[0] == 0:
         # only sensor1 is probabilistic
         # shape (6,6)
-        Var_rt_lidar0_sensor1 = Var_rt_lidar0_sensor[isensor[1]-1,:,
-                                                     isensor[1]-1,:]
+        Var_rt_lidar0_sensor1 = Var_rt_lidar0_sensor[isensors[1]-1,:,
+                                                     isensors[1]-1,:]
 
         return \
             nps.matmult(dp1__drt_lidar0_sensor1,
                         Var_rt_lidar0_sensor1,
                         nps.transpose(dp1__drt_lidar0_sensor1))
-    if isensor[1] == 0:
+    if isensors[1] == 0:
         # only sensor0 is probabilistic
         # shape (6,6)
-        Var_rt_lidar0_sensor0 = Var_rt_lidar0_sensor[isensor[0]-1,:,
-                                                     isensor[0]-1,:]
+        Var_rt_lidar0_sensor0 = Var_rt_lidar0_sensor[isensors[0]-1,:,
+                                                     isensors[0]-1,:]
 
         return \
             nps.matmult(dp1__drt_lidar0_sensor0,
@@ -157,12 +157,12 @@ def get_Var_predicted(isensor, isector):
 
     # both sensors are probabilistic
     # Each has shape (6,6)
-    A = Var_rt_lidar0_sensor[isensor[0]-1,:,
-                             isensor[0]-1,:]
-    B = Var_rt_lidar0_sensor[isensor[1]-1,:,
-                             isensor[0]-1,:]
-    C = Var_rt_lidar0_sensor[isensor[1]-1,:,
-                             isensor[1]-1,:]
+    A = Var_rt_lidar0_sensor[isensors[0]-1,:,
+                             isensors[0]-1,:]
+    B = Var_rt_lidar0_sensor[isensors[1]-1,:,
+                             isensors[0]-1,:]
+    C = Var_rt_lidar0_sensor[isensors[1]-1,:,
+                             isensors[1]-1,:]
 
     # shape (12,12)
     Var_rt_lidar0_sensor01 = nps.glue( nps.glue(A, nps.transpose(B), axis=-1),
@@ -198,12 +198,12 @@ def get_sampled_results():
     return samples
 
 
-def get_Var_observed(isensor, isector, samples):
+def get_Var_observed(isensors, isector, samples):
 
     plidar0 = get_plidar0(isector)
     rt_lidar0_sensor = [get__rt_ref_sensor(i,
                                            rt_lidar0_lidar,
-                                           rt_lidar0_camera) for i in isensor]
+                                           rt_lidar0_camera) for i in isensors]
     p0 = mrcal.transform_point_rt(rt_lidar0_sensor[0], plidar0, inverted=True)
 
 
@@ -215,7 +215,7 @@ def get_Var_observed(isensor, isector, samples):
 
         rt_lidar0_sensor__sampled = \
             [get__rt_ref_sensor(i, rt_lidar0_lidar__sampled, rt_lidar0_camera__sampled) \
-             for i in isensor]
+             for i in isensors]
 
         p1_sampled[isample] = \
             mrcal.transform_point_rt(rt_lidar0_sensor__sampled[1],
@@ -246,13 +246,13 @@ def topic_index(l,t):
 
 for isector in range(kwargs_calibrate['Nsectors']):
 
-    isensor = result['isensors_pair_stdev_worst'][isector]
-    if not np.any(isensor):
-        # both isensor are 0: this stdev_worst isn't valid because this sector
+    isensors = result['isensors_pair_stdev_worst'][isector]
+    if not np.any(isensors):
+        # both isensors are 0: this stdev_worst isn't valid because this sector
         # wasn't observed by any pair of sensor
         continue
     stdev_worst_observed = \
-        np.sqrt( np.max( np.linalg.eig(get_Var_predicted(isensor, isector))[0] ))
+        np.sqrt( np.max( np.linalg.eig(get_Var_predicted(isensors, isector))[0] ))
 
     stdev_worst_predicted = result['stdev_worst_per_sector'][isector]
 
@@ -275,16 +275,17 @@ if args.topics is not None:
                       file = sys.stderr)
                 sys.exit(1)
 
-            isensor = (isensor[0],0)
+            isensors = (isensor[0],0)
         else:
             if isensor[0] == 0 and isensor[1] == 0:
                 print("Validating two sensors; both arelidar0, which is at the reference coordinate system. Nothing to do",
                       file = sys.stderr)
                 sys.exit(1)
+            isensors = isensor
 
         for isector in args.isector:
-            Var_predicted = get_Var_predicted(isensor, isector)
-            Var_observed  = get_Var_observed (isensor, isector, samples)
+            Var_predicted = get_Var_predicted(isensors, isector)
+            Var_observed  = get_Var_observed (isensors, isector, samples)
 
             testutils.confirm_covariances_equal(Var_predicted,
                                                 Var_observed ,
