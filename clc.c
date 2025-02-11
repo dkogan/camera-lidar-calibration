@@ -5843,8 +5843,6 @@ bool clc(// in/out
                                           Nlidars))
                 return false;
 
-            const int Nsensors = Nlidars + Ncameras;
-
             evaluate_camera_visibility(// out
                                        &isvisible_per_sensor_per_sector[Nlidars * Nsectors],
                                        // in
