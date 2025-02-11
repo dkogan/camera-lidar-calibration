@@ -7,9 +7,30 @@ import pathlib
 import rosbags.highlevel.anyreader
 import rosbags.typesys
 import re
+import dateutil
 
 
-def messages(bag, topics):
+def messages(bag, topics,
+             *,
+             # if integer: s since epoch or ns since epoch
+             # if float:   s since epoch
+             # if str:     try to parse with dateutil.parser.parse()
+             start = None):
+
+    if start is not None:
+        if isinstance(start, int):
+            if start < 0x80000000:
+                # in range; assume this is in seconds
+                start_ns_since_epoch = int(start * 1e9)
+            else:
+                start_ns_since_epoch = start
+        if isinstance(start, float):
+            start_ns_since_epoch = int(start * 1e9)
+        else:
+            start_ns_since_epoch = int(dateutil.parser.parse(start).timestamp() * 1e9)
+    else:
+        start_ns_since_epoch = None
+
 
     dtype_cache = dict()
 
@@ -134,7 +155,8 @@ def messages(bag, topics):
         if len(connections) == 0: return
 
         for connection, time_ns, rawdata in \
-                reader.messages( connections = connections ):
+                reader.messages( connections = connections,
+                                 start       = start_ns_since_epoch):
 
             try:
                 qos = connection.ext.offered_qos_profiles

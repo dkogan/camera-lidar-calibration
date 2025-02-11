@@ -34,6 +34,12 @@ def parse_args():
                         type=float,
                         nargs=5,
                         help = '''debug_iring debug_xmin debug_ymin debug_xmax debug_ymax''')
+    parser.add_argument('--after',
+                        type=str,
+                        help = '''If given, start reading the bag at this time.
+                        Could be an integer (s since epoch or ns since epoch), a
+                        float (s since the epoch) or a string, to be parsed with
+                        dateutil.parser.parse()''')
     parser.add_argument('lidar-topic',
                         type=str,
                         help = '''The LIDAR topic we're looking at''')
@@ -43,6 +49,11 @@ def parse_args():
 
 
     args = parser.parse_args()
+    if args.after is not None:
+        if re.match(r"[0-9]+$", args.after):
+            args.after = int(args.after)
+        elif re.match(r"-?[0-9.eE]+$", args.after):
+            args.after = float(args.after)
     return args
 
 
@@ -68,6 +79,7 @@ kwargs['threshold_min_Nsegments_in_cluster']       = 4
 segmentation = \
     clc.lidar_segmentation(bag         = args.bag,
                            lidar_topic = getattr(args, 'lidar-topic'),
+                           start       = args.after,
                            **kwargs)
 if args.dump or args.debug is not None:
     # Write the planes out to stdout, in a way that can be cut/pasted into

@@ -14,13 +14,18 @@ def lidar_segmentation(*,
                        # used if bag,lidar_topic are None
                        points = None,
                        rings  = None,
+                       # if integer: s since epoch or ns since epoch
+                       # if float:   s since epoch
+                       # if str:     try to parse with dateutil.parser.parse()
+                       start  = None,
                        **kwargs):
 
     if bag is not None:
         if not os.path.exists(bag):
             raise Exception(f"Bag path '{bag}' does not exist")
 
-        array = next(bag_interface.messages(bag, (lidar_topic,) ))['array']
+        array = next(bag_interface.messages(bag, (lidar_topic,),
+                                            start = start))['array']
 
         points = array['xyz']
         rings  = array['ring']
