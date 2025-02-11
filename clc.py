@@ -16,7 +16,7 @@ def lidar_segmentation(*,
                        rings  = None,
                        # if integer: s since epoch or ns since epoch
                        # if float:   s since epoch
-                       # if str:     try to parse with dateutil.parser.parse()
+                       # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
                        start  = None,
                        **kwargs):
 

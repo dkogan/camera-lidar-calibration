@@ -49,11 +49,6 @@ def parse_args():
 
 
     args = parser.parse_args()
-    if args.after is not None:
-        if re.match(r"[0-9]+$", args.after):
-            args.after = int(args.after)
-        elif re.match(r"-?[0-9.eE]+$", args.after):
-            args.after = float(args.after)
     return args
 
 

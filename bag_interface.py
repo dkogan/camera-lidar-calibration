@@ -14,10 +14,17 @@ def messages(bag, topics,
              *,
              # if integer: s since epoch or ns since epoch
              # if float:   s since epoch
-             # if str:     try to parse with dateutil.parser.parse()
+             # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
              start = None):
 
     if start is not None:
+        if isinstance(start, str):
+            # parse the string numerically, if possible
+            if re.match(r"[0-9]+$", start):
+                start = int(start)
+            elif re.match(r"-?[0-9.eE]+$", start):
+                start = float(start)
+
         if isinstance(start, int):
             if start < 0x80000000:
                 # in range; assume this is in seconds
