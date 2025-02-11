@@ -220,14 +220,20 @@ def messages(bag, topics,
                         qos            = qos )
 
 
-def first_message_from_each_topic(bag, topics):
+def first_message_from_each_topic(bag, topics,
+             *,
+             # if integer: s since epoch or ns since epoch
+             # if float:   s since epoch
+             # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
+             start = None):
 
     out = [None] * len(topics)
     idx = dict()
     for i,t in enumerate(topics): idx[t] = i
     Nstored = 0
 
-    for msg in messages(bag, topics):
+    for msg in messages(bag, topics,
+                        start = start):
         i = idx[msg['topic']]
         if out[i] is None:
             out[i] = msg
