@@ -16,6 +16,7 @@ dump=/tmp/clc-context.pickle
 bag_glob="$DIR/2024-calibration/images-and-lidar-*.bag"
 
 ./fit.py \
+  --rt-vehicle-lidar0 0.01,0.02,0.03,-5.1,0.2,0.3 \
   --dump $dump \
   --topic  /vl_points_0,/vl_points_1,/vl_points_2,/multisense/left/image_mono,/multisense/right/image_mono,/multisense/aux/image_color \
   --bag $bag_glob \
@@ -23,7 +24,7 @@ bag_glob="$DIR/2024-calibration/images-and-lidar-*.bag"
 ./test-transformation-uncertainty.py \
   --topic /vl_points_1,/multisense/right/image_mono \
   --isector 3 \
-  --Nsamples 20 \
+  --Nsamples 40 \
   --context $dump \
 || Nfailed=$((Nfailed+1))
 
