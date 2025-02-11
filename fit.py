@@ -282,9 +282,7 @@ gp.plot( (th,                 # angle
           isvisible_per_sensor_per_sector,
           dict(_with = 'sectors palette fill solid',
                tuplesize = 5)),
-
          *data_tuples_sensor_forward_vectors,
-
          _xrange = (-10-Nsensors,10+Nsensors),
          _yrange = (-10-Nsensors,10+Nsensors),
          square = True,
