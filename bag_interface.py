@@ -24,7 +24,7 @@ def messages(bag, topics,
                 start_ns_since_epoch = int(start * 1e9)
             else:
                 start_ns_since_epoch = start
-        if isinstance(start, float):
+        elif isinstance(start, float):
             start_ns_since_epoch = int(start * 1e9)
         else:
             start_ns_since_epoch = int(dateutil.parser.parse(start).timestamp() * 1e9)
