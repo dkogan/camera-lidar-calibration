@@ -188,29 +188,25 @@ def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
 
 def transformation_covariance_decomposed( # shape (...,3)
                                           p0,
-                                          rt_ref_lidar,
-                                          rt_ref_camera,
+                                          rt_lidar0_lidar,
+                                          rt_lidar0_camera,
                                           isensor,
-                                          Var
-
-# add Rt_vehicle_lidar0           = None
-
-):
+                                          Var):
 
     if isensor <= 0:
         raise Exception("Must have isensor>0 because isensor==0 is the reference frame, and has no covariance")
 
-    Nlidars = len(rt_ref_lidar)
-    if isensor < Nlidars: rt_ref_sensor = rt_ref_lidar [isensor]
-    else:                 rt_ref_sensor = rt_ref_camera[isensor-Nlidars]
+    Nlidars = len(rt_lidar0_lidar)
+    if isensor < Nlidars: rt_lidar0_sensor = rt_lidar0_lidar [isensor]
+    else:                 rt_lidar0_sensor = rt_lidar0_camera[isensor-Nlidars]
 
     # shape (...,3)
     p1 = \
-        mrcal.transform_point_rt(rt_ref_sensor, p0, inverted=True)
+        mrcal.transform_point_rt(rt_lidar0_sensor, p0, inverted=True)
 
     # shape (...,3,6)
     _,dp0__drt_lidar01,_ = \
-        mrcal.transform_point_rt(rt_ref_sensor, p1,
+        mrcal.transform_point_rt(rt_lidar0_sensor, p1,
                                  get_gradients = True)
 
     # shape (6,6)
