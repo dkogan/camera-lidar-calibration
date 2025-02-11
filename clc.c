@@ -2523,7 +2523,7 @@ static void cost(const double*   b,
 
 
     /////// Regularization
-    // The regularization lightly pulls every element of rt_ref_board towards
+    // The regularization lightly pulls every element of rt_lidar0_board towards
     // zero. This is necessary because LIDAR-only observations of the board have
     // only 3 DOF: the board is free to translate and yaw in its plane. I can
     // accomplish the same thing with a different T_ref_board representation for
@@ -2840,7 +2840,7 @@ _plot_geometry(FILE* fp,
             write_axes(fp, "lidar0", NULL, axis_scale);
         else
         {
-            const double* Rt_ref_sensor = &Rt_lidar0_lidar[4*3*(i-1)];
+            const double* Rt_lidar0_sensor = &Rt_lidar0_lidar[4*3*(i-1)];
 
             char curveid[16];
             if( (int)sizeof(curveid) <= snprintf(curveid, sizeof(curveid),
@@ -2851,14 +2851,14 @@ _plot_geometry(FILE* fp,
                 return false;
             }
 
-            write_axes(fp, curveid, Rt_ref_sensor, axis_scale);
+            write_axes(fp, curveid, Rt_lidar0_sensor, axis_scale);
 
         }
     }
 
     for(unsigned int i=0; i<Ncameras; i++)
     {
-        const double* Rt_ref_sensor = &Rt_lidar0_camera[4*3*i];
+        const double* Rt_lidar0_sensor = &Rt_lidar0_camera[4*3*i];
 
         char curveid[16];
         if( (int)sizeof(curveid) <= snprintf(curveid, sizeof(curveid),
@@ -2869,7 +2869,7 @@ _plot_geometry(FILE* fp,
             return false;
         }
 
-        write_axes(fp, curveid, Rt_ref_sensor, axis_scale);
+        write_axes(fp, curveid, Rt_lidar0_sensor, axis_scale);
     }
 
     if(!only_axes)
@@ -2897,9 +2897,9 @@ _plot_geometry(FILE* fp,
                 if(lidar_scan->points == NULL)
                     continue;
 
-                const double* Rt_ref_sensor = NULL;
+                const double* Rt_lidar0_sensor = NULL;
                 if(ilidar > 0)
-                    Rt_ref_sensor = &Rt_lidar0_lidar[4*3*(ilidar-1)];
+                    Rt_lidar0_sensor = &Rt_lidar0_lidar[4*3*(ilidar-1)];
 
                 for(unsigned int iipoint=0; iipoint<lidar_scan->n; iipoint++)
                 {
@@ -2910,9 +2910,9 @@ _plot_geometry(FILE* fp,
                     mrcal_point3_from_clc_point3f(&p,
                                                   &lidar_scan->points[ipoint]);
 
-                    if(Rt_ref_sensor != NULL)
+                    if(Rt_lidar0_sensor != NULL)
                         mrcal_transform_point_Rt(p.xyz, NULL, NULL,
-                                                 Rt_ref_sensor, p.xyz);
+                                                 Rt_lidar0_sensor, p.xyz);
 
                     fprintf(fp, "%f %f %s %f\n",
                             p.x, p.y, curveid[ilidar], p.z);
@@ -4566,8 +4566,8 @@ Ma_Var_Mbt_block_accumulate(// out
                             const int Nstate_sensor_poses,
 
                             // each is 3x6 matrix, starting at the given row/col of Var_rt_lidar0_sensor
-                            const double* dp1__drt_ref_lidar0, const int istate_lidar0,
-                            const double* dp1__drt_ref_lidar1, const int istate_lidar1)
+                            const double* dp1__drt_lidar0_lidar0, const int istate_lidar0,
+                            const double* dp1__drt_lidar0_lidar1, const int istate_lidar1)
 {
     const double* V0 = &Var_rt_lidar0_sensor[Nstate_sensor_poses*istate_lidar0 + istate_lidar1];
 
@@ -4576,7 +4576,7 @@ Ma_Var_Mbt_block_accumulate(// out
                            V0M1t, 3, 1,
                            // in
                            V0, Nstate_sensor_poses, 1,
-                           dp1__drt_ref_lidar1, 1, 6,
+                           dp1__drt_lidar0_lidar1, 1, 6,
                            6,6,3,
                            false);
 
@@ -4585,7 +4585,7 @@ Ma_Var_Mbt_block_accumulate(// out
     multiply_matrix_matrix(// out
                            Ma_Var_Mbt, 3, 1,
                            // in
-                           dp1__drt_ref_lidar0, 6, 1,
+                           dp1__drt_lidar0_lidar0, 6, 1,
                            V0M1t, 3, 1,
                            3,6,3,
                            false);
