@@ -141,9 +141,7 @@ import bag_interface
 
 if args.topic is None:
     for bag in bags():
-        print(f"Bag '{bag}':")
-        for topic in bag_interface.topics(bag):
-            print(f"  {topic}")
+        bag_interface.print_info(bag)
     sys.exit()
 
 

@@ -251,3 +251,16 @@ def first_message_from_each_topic(bag, topics,
 def topics(bag):
     with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
         return [c.topic for c in reader.connections]
+
+def print_info(bag):
+
+    print(f"Bag '{bag}':")
+
+    with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
+        topics = [c.topic for c in reader.connections]
+        t0     = reader.start_time
+        t1     = reader.end_time
+
+    print(f"  {t0=} {t1=} duration={(t1-t0)/1e9:.1f} seconds")
+    for topic in topics:
+        print(f"  {topic}")
