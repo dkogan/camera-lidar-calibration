@@ -204,12 +204,15 @@ if args.timeline is not None:
 
     ytics = ','.join( [ f'"{t}" {i}' for i,t in enumerate(topics)])
     timestamps = np.array(timestamps)
+    t0 = timestamps[0,0]
+    timestamps[:,0] -= t0
     gp.plot( timestamps,
              tuplesize = -2,
              _with     = 'points',
              ymin = -0.5,
              ymax = len(topics) - 0.5,
              _set = f'ytics ({ytics})',
+             xlabel = f'Time relative to {t0=:.3f}; in seconds',
              wait = True)
 
     sys.exit(0)
