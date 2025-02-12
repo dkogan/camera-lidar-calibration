@@ -110,6 +110,12 @@ def parse_args():
                         Could be an integer (s since epoch or ns since epoch), a
                         float (s since the epoch) or a string, to be parsed with
                         dateutil.parser.parse()''')
+    parser.add_argument('--before',
+                        type=str,
+                        help = '''If given, stop reading the bags at this time.
+                        Could be an integer (s since epoch or ns since epoch), a
+                        float (s since the epoch) or a string, to be parsed with
+                        dateutil.parser.parse()''')
     parser.add_argument('--timeline',
                         type = float,
                         help = '''If given, we plot time message timeline from
@@ -184,6 +190,7 @@ if args.timeline is not None:
     duration = args.timeline
     messages = bag_interface.messages(bag, topics,
                                       start = args.after,
+                                      stop  = args.before,
                                       ignore_unknown_message_types = True)
     while True:
         try:
@@ -311,15 +318,12 @@ def show_image(bag, p):
 for bag in bags():
     try:
         msg = next(bag_interface.messages(bag, (args.topic,),
-                                          start = args.after))
+                                          start = args.after,
+                                          stop  = args.before))
         p = msg['array']
     except StopIteration:
-        if args.after is None:
-            print(f"No messages with {args.topic=} in {bag=}. Continuing to next bag, if any",
-                  file = sys.stderr)
-        else:
-            print(f"No messages with {args.topic=} in {bag=} after '{args.after}'. Continuing to next bag, if any",
-                  file = sys.stderr)
+        print(f"No messages with {args.topic=} in {bag=} in the requested time span. Continuing to next bag, if any",
+              file = sys.stderr)
         continue
 
 

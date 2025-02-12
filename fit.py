@@ -71,6 +71,12 @@ def parse_args():
                         Could be an integer (s since epoch or ns since epoch), a
                         float (s since the epoch) or a string, to be parsed with
                         dateutil.parser.parse()''')
+    parser.add_argument('--before',
+                        type=str,
+                        help = '''If given, stop reading the bags at this time.
+                        Could be an integer (s since epoch or ns since epoch), a
+                        float (s since the epoch) or a string, to be parsed with
+                        dateutil.parser.parse()''')
     parser.add_argument('--dump',
                         type=str,
                         help = '''Write solver diagnostics into the given
@@ -219,6 +225,7 @@ kwargs_calibrate = dict(bags                               = args.bag,
                         topics                             = args.topics,
                         decimation_period                  = args.decimation_period,
                         start                              = args.after,
+                        stop                               = args.before,
                         models                             = args.models,
                         check_gradient                     = False,
                         verbose                            = args.verbose,

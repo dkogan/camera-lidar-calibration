@@ -71,7 +71,8 @@ def is_message_pointcloud(msg):
 def _sorted_sensor_snapshots(bags, topics,
                              *,
                              decimation_period = None,
-                             start             = None):
+                             start             = None,
+                             stop              = None,):
     for bag in bags:
         if not os.path.exists(bag):
             raise Exception(f"Bag path '{bag}' does not exist")
@@ -82,6 +83,7 @@ def _sorted_sensor_snapshots(bags, topics,
         messages_bags = \
             [bag_interface.first_message_from_each_topic(bag, topics,
                                                          start = start,
+                                                         stop  = stop,
                                                          require_at_least_N_topics = 2) \
              for bag in bags]
     else:
@@ -95,6 +97,7 @@ def _sorted_sensor_snapshots(bags, topics,
             bag_interface. \
             first_message_from_each_topic_in_time_segments(bag, topics,
                                                            start    = start,
+                                                           stop     = stop,
                                                            period_s = decimation_period,
                                                            require_at_least_N_topics = 2)
 
@@ -137,10 +140,12 @@ def calibrate(*,
               bags, topics,
               decimation_period = None,
               start             = None,
+              stop              = None,
               **kwargs):
     return _clc.calibrate( _sorted_sensor_snapshots(bags, topics,
                                                     decimation_period = decimation_period,
-                                                    start             = start),
+                                                    start             = start,
+                                                    stop              = stop),
                            **kwargs)
 
 
