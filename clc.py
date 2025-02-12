@@ -68,15 +68,34 @@ def is_message_pointcloud(msg):
     return 'xyz' in dtype_names
 
 
-def sorted_sensor_snapshots(bags, topics):
-
+def _sorted_sensor_snapshots(bags, topics,
+                             *,
+                             decimation_period = None,
+                             start             = None):
     for bag in bags:
         if not os.path.exists(bag):
             raise Exception(f"Bag path '{bag}' does not exist")
 
-    messages_bags = \
-        [bag_interface.first_message_from_each_topic(bag, topics) \
-         for bag in bags]
+    if decimation_period is None:
+        # Each bag is a snapshot in time. We take the first set of messages (one
+        # per topic) from each bag
+        messages_bags = \
+            [bag_interface.first_message_from_each_topic(bag, topics,
+                                                         start = start) \
+             for bag in bags]
+    else:
+        # We have one long bag. I look at each time segment decimation_period
+        # long, and take the first set of messages (one per topic) from such
+        # segment
+        if len(bags) != 1:
+            raise Exception("decimation_period is not None, so I expect exactly one bag to have been given")
+        bag = bags[0]
+        messages_bags = \
+            bag_interface. \
+            first_message_from_each_topic_in_time_segments(bag, topics,
+                                                           start    = start,
+                                                           period_s = decimation_period)
+
 
     # I need to figure out which topic corresponds to a lidar and which to a
     # camera. I can get this information from the data, but if any bag is
@@ -114,8 +133,12 @@ def sorted_sensor_snapshots(bags, topics):
 
 def calibrate(*,
               bags, topics,
+              decimation_period = None,
+              start             = None,
               **kwargs):
-    return _clc.calibrate( sorted_sensor_snapshots(bags, topics),
+    return _clc.calibrate( _sorted_sensor_snapshots(bags, topics,
+                                                    decimation_period = decimation_period,
+                                                    start             = start),
                            **kwargs)
 
 

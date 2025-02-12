@@ -10,35 +10,35 @@ import re
 import dateutil
 
 
+def parse_timestamp_to_ns_since_epoch(t):
+    if t is None: return None
+
+    if isinstance(t, str):
+        # parse the string numerically, if possible
+        if re.match(r"[0-9]+$", t):
+            t = int(t)
+        elif re.match(r"-?[0-9.eE]+$", t):
+            t = float(t)
+
+    if isinstance(t, int):
+        if t < 0x80000000:
+            # in range; assume this is in seconds
+            return int(t * 1e9)
+        return t
+    if isinstance(t, float):
+        return int(t * 1e9)
+
+    return int(dateutil.parser.parse(t).timestamp() * 1e9)
+
+
 def messages(bag, topics,
              *,
              # if integer: s since epoch or ns since epoch
              # if float:   s since epoch
              # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
              start = None,
+             stop  = None,
              ignore_unknown_message_types = False):
-
-    if start is not None:
-        if isinstance(start, str):
-            # parse the string numerically, if possible
-            if re.match(r"[0-9]+$", start):
-                start = int(start)
-            elif re.match(r"-?[0-9.eE]+$", start):
-                start = float(start)
-
-        if isinstance(start, int):
-            if start < 0x80000000:
-                # in range; assume this is in seconds
-                start_ns_since_epoch = int(start * 1e9)
-            else:
-                start_ns_since_epoch = start
-        elif isinstance(start, float):
-            start_ns_since_epoch = int(start * 1e9)
-        else:
-            start_ns_since_epoch = int(dateutil.parser.parse(start).timestamp() * 1e9)
-    else:
-        start_ns_since_epoch = None
-
 
     dtype_cache = dict()
 
@@ -164,7 +164,8 @@ def messages(bag, topics,
 
         for connection, time_ns, rawdata in \
                 reader.messages( connections = connections,
-                                 start       = start_ns_since_epoch):
+                                 start = parse_timestamp_to_ns_since_epoch(start),
+                                 stop  = parse_timestamp_to_ns_since_epoch(stop)):
 
             try:
                 qos = connection.ext.offered_qos_profiles
@@ -223,47 +224,128 @@ def messages(bag, topics,
                         qos            = qos )
 
 
-def first_message_from_each_topic(bag, topics,
-             *,
-             # if integer: s since epoch or ns since epoch
-             # if float:   s since epoch
-             # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
-             start = None):
+# Returns None if we reached the end, and no data is available
+# Returns [None,None,....] if no data is available, but there's more data in the
+# bag/iterator
+def first_message_from_each_topic(bag, # the bag file OR an existing message iterator
+                                  topics,
+                                  *,
+                                  # if integer: s since epoch or ns since epoch
+                                  # if float:   s since epoch
+                                  # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
+                                  start            = None,
+                                  stop             = None,
+                                  raise_if_any_invalid_output = True,
+                                  require_at_least_N_topics   = 1):
 
     out = [None] * len(topics)
     idx = dict()
     for i,t in enumerate(topics): idx[t] = i
     Nstored = 0
 
-    for msg in messages(bag, topics,
-                        start = start):
+    if isinstance(bag, str):
+        message_iterator = messages(bag, topics,
+                                    start = start,
+                                    stop  = stop)
+    else:
+        message_iterator = bag
+    start = parse_timestamp_to_ns_since_epoch(start)
+    stop  = parse_timestamp_to_ns_since_epoch(stop)
+    end_of_file = False
+    for msg in message_iterator:
+        if start is not None and msg['time_header_ns'] < start:
+            continue
+        if stop is not None and msg['time_header_ns'] >= stop:
+            break
+
         i = idx[msg['topic']]
         if out[i] is None:
             out[i] = msg
             Nstored += 1
             if Nstored == len(topics):
                 return out
+    else:
+        end_of_file = True
 
-    if not any(out):
-        raise Exception(f"{bag=} doesn't contain ANY messages from any of {topics=}")
+    if Nstored >= require_at_least_N_topics:
+        # Didn't get data for ALL the topics I wanted, but got some. That's
+        # good-enough
+        return out
 
-    # we have messages from SOME topics. Missing ones are None
-    return out
+    if raise_if_any_invalid_output:
+        raise Exception(f"{bag=} doesn't contain at least {require_at_least_N_topics} messages from any of {topics=} in the given time range")
+
+    if end_of_file:
+        return None
+
+    return out # [None, None, ....]
+
+
+def first_message_from_each_topic_in_time_segments(bag, topics,
+                                                   *,
+                                                   period_s, # in seconds
+                                                   # if integer: s since epoch or ns since epoch
+                                                   # if float:   s since epoch
+                                                   # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
+                                                   start = None,
+                                                   stop  = None,
+                                                   require_at_least_N_topics = 1):
+
+    message_iterator = messages(bag, topics,
+                                start = start)
+
+    start = parse_timestamp_to_ns_since_epoch(start)
+    stop  = parse_timestamp_to_ns_since_epoch(stop)
+    d     = info(bag)
+
+    t0 = start if start is not None else d['t0']
+
+    msgs = []
+    while True:
+        if stop is not None and t0 > stop:
+            break
+
+        t1 = t0 + int(period_s*1e9)
+        msgs_now = \
+            first_message_from_each_topic(message_iterator, topics,
+                                          start = t0,
+                                          stop  = t1,
+                                          raise_if_any_invalid_output = False,
+                                          require_at_least_N_topics   = require_at_least_N_topics)
+        if msgs_now is None:
+            # End of file
+            break
+
+        Nstored = sum(0 if msg is None else 1 for msg in msgs_now)
+        if Nstored < require_at_least_N_topics:
+            # There's more data available in the file, but THIS time segment
+            # doesn't have enough
+            continue
+
+        msgs.append(msgs_now)
+        t0 = t1
+
+    return msgs
 
 
 def topics(bag):
     with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
         return [c.topic for c in reader.connections]
 
+def info(bag):
+    with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
+        return dict( topics = [c.topic for c in reader.connections],
+                     t0     = reader.start_time,
+                     t1     = reader.end_time )
+
 def print_info(bag):
+
+    d = info(bag)
+    t0 = d['t0']
+    t1 = d['t1']
 
     print(f"Bag '{bag}':")
 
-    with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
-        topics = [c.topic for c in reader.connections]
-        t0     = reader.start_time
-        t1     = reader.end_time
-
     print(f"  {t0=} {t1=} duration={(t1-t0)/1e9:.1f} seconds")
-    for topic in topics:
+    for topic in d['topics']:
         print(f"  {topic}")

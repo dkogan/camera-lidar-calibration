@@ -59,6 +59,18 @@ def parse_args():
                         action = 'append',
                         help = '''Bags to exclude from the processing. These are
                         a regex match against the bag paths''')
+    parser.add_argument('--decimation-period',
+                        type=float,
+                        help = '''If given, we expect ONE bag, and rather than
+                        taking the first message from each bag, we take all the
+                        messages from THIS bag, spaced out with a period given
+                        by this argument, in seconds''')
+    parser.add_argument('--after',
+                        type=str,
+                        help = '''If given, start reading the bags at this time.
+                        Could be an integer (s since epoch or ns since epoch), a
+                        float (s since the epoch) or a string, to be parsed with
+                        dateutil.parser.parse()''')
     parser.add_argument('--dump',
                         type=str,
                         help = '''Write solver diagnostics into the given
@@ -122,13 +134,17 @@ def parse_args():
         for ex in args.exclude_bag:
             bags = [b for b in bags if not re.search(ex, b)]
 
-    if len(bags) < 3:
-        print(f"--bag '{args.bag}' must match at least 3 files. Instead this matched {len(bags)} files",
-              file=sys.stderr)
-        sys.exit(1)
     args.bag = bags
 
     args.topics = args.topics.split(',')
+
+    if args.decimation_period is not None:
+        if args.decimation_period <= 0:
+            print("--decimation-period given, and it must some >0 number of seconds", file=sys.stderr)
+            sys.exit(1)
+        if len(args.bag) > 1:
+            print("--decimation-period given, so we MUST have gotten exactly one bag", file=sys.stderr)
+            sys.exit(1)
 
     return args
 
@@ -201,6 +217,8 @@ else:
 
 kwargs_calibrate = dict(bags                               = args.bag,
                         topics                             = args.topics,
+                        decimation_period                  = args.decimation_period,
+                        start                              = args.after,
                         models                             = args.models,
                         check_gradient                     = False,
                         verbose                            = args.verbose,
