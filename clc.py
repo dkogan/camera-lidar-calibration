@@ -81,7 +81,8 @@ def _sorted_sensor_snapshots(bags, topics,
         # per topic) from each bag
         messages_bags = \
             [bag_interface.first_message_from_each_topic(bag, topics,
-                                                         start = start) \
+                                                         start = start,
+                                                         require_at_least_N_topics = 2) \
              for bag in bags]
     else:
         # We have one long bag. I look at each time segment decimation_period
@@ -94,7 +95,8 @@ def _sorted_sensor_snapshots(bags, topics,
             bag_interface. \
             first_message_from_each_topic_in_time_segments(bag, topics,
                                                            start    = start,
-                                                           period_s = decimation_period)
+                                                           period_s = decimation_period,
+                                                           require_at_least_N_topics = 2)
 
 
     # I need to figure out which topic corresponds to a lidar and which to a
