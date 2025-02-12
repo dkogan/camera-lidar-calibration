@@ -175,8 +175,6 @@ if args.timeline is not None:
         topics = (args.topic,)
 
     timestamps = []
-    for i in range(len(topics)):
-        timestamps.append([])
 
     index = dict()
     for i,t in enumerate(topics):
@@ -202,15 +200,16 @@ if args.timeline is not None:
             if duration > 0 and t - t0 > duration:
                 break
 
-        timestamps[index[topic]].append(t)
+        timestamps.append( (t,index[topic]) )
 
-    gp.plot( *[ (np.array(t),
-                 i*np.ones( (len(t),) ),
-                 dict(_with = 'points',
-                      legend=topics[i])) \
-                for i,t in enumerate(timestamps)],
+    ytics = ','.join( [ f'"{t}" {i}' for i,t in enumerate(topics)])
+    timestamps = np.array(timestamps)
+    gp.plot( timestamps,
+             tuplesize = -2,
+             _with     = 'points',
              ymin = -0.5,
              ymax = len(topics) - 0.5,
+             _set = f'ytics ({ytics})',
              wait = True)
 
     sys.exit(0)
