@@ -15,7 +15,8 @@ def messages(bag, topics,
              # if integer: s since epoch or ns since epoch
              # if float:   s since epoch
              # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
-             start = None):
+             start = None,
+             ignore_unknown_message_types = False):
 
     if start is not None:
         if isinstance(start, str):
@@ -206,6 +207,8 @@ def messages(bag, topics,
                 else:
                     raise Exception(f"Unknown {msg.encoding=}")
             else:
+                if ignore_unknown_message_types:
+                    continue
                 raise Exception(f"Unknown message type {type(msg)=}")
 
             time_header_ns = msg.header.stamp.sec*1000000000 + msg.header.stamp.nanosec

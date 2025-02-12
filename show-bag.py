@@ -110,6 +110,13 @@ def parse_args():
                         Could be an integer (s since epoch or ns since epoch), a
                         float (s since the epoch) or a string, to be parsed with
                         dateutil.parser.parse()''')
+    parser.add_argument('--timeline',
+                        type = float,
+                        help = '''If given, we plot time message timeline from
+                        the ONE give bag. Multiple bags not allowed. If no
+                        --topics, we report ALL the topics. Takes one argument:
+                        the duration (in seconds) of the requested plot. If <=
+                        0, we plot the whole bag''')
     parser.add_argument('bags',
                         type=str,
                         nargs='+',
@@ -118,6 +125,12 @@ def parse_args():
 
 
     args = parser.parse_args()
+
+    if args.timeline is not None:
+        if len(args.bags) > 1:
+            print("--timeline works only with ONE bag", file=sys.stderr)
+            sys.exit(1)
+
     return args
 
 
@@ -139,7 +152,7 @@ def bags():
 
 import bag_interface
 
-if args.topic is None:
+if args.timeline is None and args.topic is None:
     for bag in bags():
         bag_interface.print_info(bag)
     sys.exit()
@@ -150,6 +163,59 @@ import numpy as np
 import numpysane as nps
 import gnuplotlib as gp
 import time
+
+
+
+if args.timeline is not None:
+    bag = args.bags[0]
+
+    if args.topic is None:
+        topics = bag_interface.topics(bag)
+    else:
+        topics = (args.topic,)
+
+    timestamps = []
+    for i in range(len(topics)):
+        timestamps.append([])
+
+    index = dict()
+    for i,t in enumerate(topics):
+        index[t] = i
+
+    t0       = None
+    duration = args.timeline
+    messages = bag_interface.messages(bag, topics,
+                                      start = args.after,
+                                      ignore_unknown_message_types = True)
+    while True:
+        try:
+            msg = next(messages)
+            time_ns = msg['time_header_ns']
+            topic   = msg['topic']
+        except StopIteration:
+            break
+
+        t = time_ns/1e9
+        if t0 is None:
+            t0 = t
+        else:
+            if duration > 0 and t - t0 > duration:
+                break
+
+        timestamps[index[topic]].append(t)
+
+    gp.plot( *[ (np.array(t),
+                 i*np.ones( (len(t),) ),
+                 dict(_with = 'points',
+                      legend=topics[i])) \
+                for i,t in enumerate(timestamps)],
+             ymin = -0.5,
+             ymax = len(topics) - 0.5,
+             wait = True)
+
+    sys.exit(0)
+
+
 
 
 def show_lidar(bag, p,
