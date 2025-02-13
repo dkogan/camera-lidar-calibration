@@ -212,7 +212,7 @@ if args.timeline is not None:
 
     ytics = ','.join( [ f'"{t}" {i}' for i,t in enumerate(topics)])
     timestamps = np.array(timestamps)
-    t0 = timestamps[0,0]
+    t0 = bag_interface.info(bag)['t0']/1e9
     timestamps[:,0] -= t0
     gp.plot( timestamps,
              tuplesize = -2,
