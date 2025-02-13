@@ -103,7 +103,8 @@ def parse_args():
                         type=str,
                         help = '''The topic we're visualizing. Can select LIDAR
                         or camera data. If omitted, we report the topics present
-                        in the bag, and we exit''')
+                        in the bag, and we exit. If --timeline, this is a
+                        ,-separated list of topics to visualize''')
     parser.add_argument('--after',
                         type=str,
                         help = '''If given, start reading the bags at this time.
@@ -178,7 +179,7 @@ if args.timeline is not None:
     if args.topic is None:
         topics = bag_interface.topics(bag)
     else:
-        topics = (args.topic,)
+        topics = args.topic.split(',')
 
     timestamps = []
 
