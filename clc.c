@@ -1664,7 +1664,7 @@ static int measurement_index_lidar(const unsigned int _isnapshot,
         LOOP_SNAPSHOT_HEADER(ctx->,const);
         for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
         {
-            if(_isnapshot == isnapshot && _ilidar == ilidar)
+            if(_isnapshot <= isnapshot && _ilidar == ilidar)
                 return imeasurement;
 
             const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
@@ -1712,7 +1712,7 @@ static int measurement_index_camera(const unsigned int _isnapshot,
                 snapshot->chessboard_corners[_icamera];
             if(chessboard_corners == NULL) continue;
 
-            if(_isnapshot == isnapshot && (int)icamera == _icamera)
+            if(_isnapshot <= isnapshot && (int)icamera == _icamera)
                 return
                     num_measurements_lidars(ctx) +
                     imeasurement;
