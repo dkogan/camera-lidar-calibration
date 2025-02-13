@@ -235,8 +235,7 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
                                   # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
                                   start            = None,
                                   stop             = None,
-                                  raise_if_any_invalid_output = True,
-                                  require_at_least_N_topics   = 1):
+                                  ):
 
     out = [None] * len(topics)
     idx = dict()
@@ -272,18 +271,10 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
     else:
         end_of_file = True
 
-    if Nstored >= require_at_least_N_topics:
-        # Didn't get data for ALL the topics I wanted, but got some. That's
-        # good-enough
-        return out
-
-    if raise_if_any_invalid_output:
-        raise Exception(f"{bag=} doesn't contain at least {require_at_least_N_topics} messages from any of {topics=} in the given time range")
-
-    if end_of_file:
+    if end_of_file and Nstored == 0:
         return None
 
-    return out # [None, None, ....]
+    return out
 
 
 def first_message_from_each_topic_in_time_segments(bag, topics,
@@ -294,7 +285,8 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
                                                    # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
                                                    start = None,
                                                    stop  = None,
-                                                   require_at_least_N_topics = 1):
+                                                   require_at_least_N_topics = 1,
+                                                   verbose = False):
 
     message_iterator = messages(bag, topics,
                                 start = start)
@@ -303,21 +295,19 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
     stop  = parse_timestamp_to_ns_since_epoch(stop)
     d     = info(bag)
 
-    t0 = start if start is not None else d['t0']
+    t1 = start if start is not None else d['t0']
 
     msgs = []
     while True:
+        t0 = t1
+        t1 = t0 + int(period_s*1e9)
         if stop is not None and t0 > stop:
             break
 
-        t1 = t0 + int(period_s*1e9)
         msgs_now = \
             first_message_from_each_topic(message_iterator, topics,
                                           start = t0,
-                                          stop  = t1,
-                                          raise_if_any_invalid_output = False,
-                                          require_at_least_N_topics   = require_at_least_N_topics)
-        t0 = t1
+                                          stop  = t1)
 
         if msgs_now is None:
             # End of file
@@ -330,6 +320,10 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
             continue
 
         msgs.append(msgs_now)
+
+        if verbose:
+            isnapshot = len(msgs)-1
+            print(f"{isnapshot=}: --after {t0} '{bag}'")
 
     return msgs
 

@@ -72,7 +72,8 @@ def _sorted_sensor_snapshots(bags, topics,
                              *,
                              decimation_period = None,
                              start             = None,
-                             stop              = None,):
+                             stop              = None,
+                             verbose           = False):
     for bag in bags:
         if not os.path.exists(bag):
             raise Exception(f"Bag path '{bag}' does not exist")
@@ -83,9 +84,26 @@ def _sorted_sensor_snapshots(bags, topics,
         messages_bags = \
             [bag_interface.first_message_from_each_topic(bag, topics,
                                                          start = start,
-                                                         stop  = stop,
-                                                         require_at_least_N_topics = 2) \
+                                                         stop  = stop) \
              for bag in bags]
+
+        # each snapshot in messages_bags maybe None (if no usable data in a bag
+        # at all) or [x,x,x,x] where each x is the data for each topic. Too many
+        # of the x may be None
+        require_at_least_N_topics = 2
+        def is_snapshot_usable(msgs):
+            if msgs is None: return False
+            Nstored = sum(0 if msg is None else 1 for msg in msgs)
+            return Nstored >= require_at_least_N_topics
+
+        mask          = [is_snapshot_usable(m) for m in messages_bags]
+        messages_bags = [m for i,m in enumerate(messages_bags) \
+                         if mask[i]]
+        bags_selected = [b for i,b in enumerate(bags) \
+                         if mask[i]]
+        if verbose:
+            for isnapshot,bag in enumerate(bags_selected):
+                print(f"{isnapshot=}: {bag=}")
     else:
         # We have one long bag. I look at each time segment decimation_period
         # long, and take the first set of messages (one per topic) from such
@@ -99,8 +117,8 @@ def _sorted_sensor_snapshots(bags, topics,
                                                            start    = start,
                                                            stop     = stop,
                                                            period_s = decimation_period,
-                                                           require_at_least_N_topics = 2)
-
+                                                           require_at_least_N_topics = 2,
+                                                           verbose = verbose)
 
     # I need to figure out which topic corresponds to a lidar and which to a
     # camera. I can get this information from the data, but if any bag is
@@ -141,11 +159,14 @@ def calibrate(*,
               decimation_period = None,
               start             = None,
               stop              = None,
+              verbose           = False,
               **kwargs):
     return _clc.calibrate( _sorted_sensor_snapshots(bags, topics,
                                                     decimation_period = decimation_period,
                                                     start             = start,
-                                                    stop              = stop),
+                                                    stop              = stop,
+                                                    verbose           = verbose),
+                           verbose = verbose,
                            **kwargs)
 
 
