@@ -180,14 +180,16 @@ def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
                                rt_lidar0_lidar,
                                *,
                                isensor_solve_from_isensor_requested = None,
-                               Rt_vehicle_lidar0                    = None):
+                               Rt_vehicle_lidar0                    = None,
+                               start                                = None):
 
     try:
         pointcloud_msgs = \
-            [ next(bag_interface.messages(bag, (topic,))) \
+            [ next(bag_interface.messages(bag, (topic,),
+                                          start = start)) \
               for topic in lidar_topic ]
     except:
-        raise Exception(f"Bag '{bag}' doesn't have at least one message for each of {lidar_topic}")
+        raise Exception(f"Bag '{bag}' doesn't have at least one message for each of {lidar_topic} in the requested time span")
 
     for i,msg in enumerate(pointcloud_msgs):
         if not is_message_pointcloud(msg):

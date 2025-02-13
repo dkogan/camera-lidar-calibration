@@ -34,6 +34,12 @@ def parse_args():
     parser.add_argument('--bag',
                         required = True,
                         help = '''The one bag we're visualizing''')
+    parser.add_argument('--after',
+                        type=str,
+                        help = '''If given, start reading the bags at this time.
+                        Could be an integer (s since epoch or ns since epoch), a
+                        float (s since the epoch) or a string, to be parsed with
+                        dateutil.parser.parse()''')
     parser.add_argument('--threshold',
                         type=float,
                         default = 20.,
@@ -69,7 +75,8 @@ rt_lidar0_lidar = [mrcal.cameramodel(f).extrinsics_rt_toref() for f in args.lida
 
 data_tuples = \
     clc.get_pointcloud_plot_tuples(args.bag, args.topic, args.threshold,
-                                   rt_lidar0_lidar)
+                                   rt_lidar0_lidar,
+                                   start = args.after)
 clc.plot(*data_tuples,
          _3d = True,
          square = True,

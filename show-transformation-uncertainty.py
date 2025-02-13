@@ -53,6 +53,12 @@ def parse_args():
     parser.add_argument('--bag',
                         required = True,
                         help = '''The one bag we're visualizing''')
+    parser.add_argument('--after',
+                        type=str,
+                        help = '''If given, start reading the bags at this time.
+                        Could be an integer (s since epoch or ns since epoch), a
+                        float (s since the epoch) or a string, to be parsed with
+                        dateutil.parser.parse()''')
     parser.add_argument('--context',
                         required = True,
                         help = '''.pickle file from fit.py''')
@@ -146,7 +152,8 @@ if args.ellipsoids:
         clc.get_pointcloud_plot_tuples(args.bag, args.topic, args.threshold,
                                        context['result']['rt_lidar0_lidar'],
                                        isensor_solve_from_isensor_requested = None,
-                                       Rt_vehicle_lidar0 = Rt_vehicle_lidar0)
+                                       Rt_vehicle_lidar0 = Rt_vehicle_lidar0,
+                                       start = args.after)
 
 
     for isensor_requested,topic_requested in enumerate(args.topic):
