@@ -317,6 +317,8 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
                                           stop  = t1,
                                           raise_if_any_invalid_output = False,
                                           require_at_least_N_topics   = require_at_least_N_topics)
+        t0 = t1
+
         if msgs_now is None:
             # End of file
             break
@@ -328,7 +330,6 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
             continue
 
         msgs.append(msgs_now)
-        t0 = t1
 
     return msgs
 
