@@ -124,6 +124,12 @@ def parse_args():
                         --topics, we report ALL the topics. Takes one argument:
                         the duration (in seconds) of the requested plot. If <=
                         0, we plot the whole bag''')
+    parser.add_argument('--time-header-ns',
+                        action = 'store_true',
+                        help = '''If given, we use the time_header_ns for
+                        --timeline. This is the time the data was SENT, not the
+                        time it was recorded. All the log replay code uses
+                        time_ns''')
     parser.add_argument('bags',
                         type=str,
                         nargs='+',
@@ -193,10 +199,13 @@ if args.timeline is not None:
                                       start = args.after,
                                       stop  = args.before,
                                       ignore_unknown_message_types = True)
+
+    time_key = 'time_header_ns' if args.time_header_ns else 'time_ns'
+
     while True:
         try:
             msg = next(messages)
-            time_ns = msg['time_header_ns']
+            time_ns = msg[time_key]
             topic   = msg['topic']
         except StopIteration:
             break
