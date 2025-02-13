@@ -253,9 +253,9 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
     stop  = parse_timestamp_to_ns_since_epoch(stop)
     end_of_file = False
     for msg in message_iterator:
-        if start is not None and msg['time_header_ns'] < start:
+        if start is not None and msg['time_ns'] < start:
             continue
-        if stop is not None and msg['time_header_ns'] >= stop:
+        if stop is not None and msg['time_ns'] >= stop:
             # This message is past the stop time, so we're done. We throw this
             # message away, even if we're going to look for messages in the next
             # time segment. Using this message there would be good, but requires
