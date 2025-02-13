@@ -151,6 +151,8 @@ def messages(bag, topics,
             raise Exception(f"Multiple connections for topic '{topic}' found in '{bag}'; I expect exactly one")
         return connections[0]
 
+    messages.re_report_message = None
+
     # High-level structure from the "rosbag2" sample:
     #   https://ternaris.gitlab.io/rosbags/topics/rosbag2.html
     with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
@@ -166,6 +168,13 @@ def messages(bag, topics,
                 reader.messages( connections = connections,
                                  start = parse_timestamp_to_ns_since_epoch(start),
                                  stop  = parse_timestamp_to_ns_since_epoch(stop)):
+
+            # This is GLOBAL, and WILL BREAK if I have multiple such iterators
+            # going at the same time. It's not clear how to fix that
+            while messages.re_report_message is not None:
+                _msg = messages.re_report_message
+                messages.re_report_message = None
+                yield _msg
 
             try:
                 qos = connection.ext.offered_qos_profiles
@@ -255,11 +264,15 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
         if start is not None and msg['time_ns'] < start:
             continue
         if stop is not None and msg['time_ns'] >= stop:
-            # This message is past the stop time, so we're done. We throw this
-            # message away, even if we're going to look for messages in the next
-            # time segment. Using this message there would be good, but requires
-            # more typing, and for now I'm going to assume that there's enough
-            # data, and I can afford to lose this
+            # This message is past the stop time, so we're done. If we reuse
+            # this iterator with the current stop time being the new start time,
+            # then I want to return this message then. I save it in the iterator
+            # for that purpose
+
+            # This is GLOBAL, and WILL BREAK if I have iterators going at the
+            # same time. It's not clear how to fix that
+            if not isinstance(bag, str):
+                messages.re_report_message = msg
             break
 
         i = idx[msg['topic']]
