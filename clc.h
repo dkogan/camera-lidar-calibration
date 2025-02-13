@@ -161,7 +161,7 @@ typedef struct
   _(float, threshold_min_rms_point_cloud_2nd_dimension,  0.1f,              "f","f") \
   /* found empirically in dump-lidar-scan.py */                         \
   _(int,   Npoints_per_rotation,                         1809,              "i","i") \
-  _(int,   Npoints_per_segment,                          20,                "i","i") \
+  _(int,   Npoints_per_segment,                          15,                "i","i") \
   _(int,   threshold_max_Ngap,                           2,                 "i","i") \
   _(float, threshold_max_deviation_off_segment_line,     0.05f,             "f","f") \
                                                                         \
@@ -176,7 +176,7 @@ typedef struct
   _(float, threshold_max_plane_point_error_stage3,       0.05,              "f","f") \
   _(float, threshold_min_plane_point_error_isolation,    0.3,               "f","f") \
   _(int,   threshold_max_Nsegments_in_cluster,           150,               "i","i") \
-  _(int,   threshold_min_Nsegments_in_cluster,           5,                 "i","i") \
+  _(int,   threshold_min_Nsegments_in_cluster,           4,                 "i","i") \
   _(int,   threshold_min_Nrings_in_cluster,              3,                 "i","i") \
   /* used in refinement */                                              \
   _(float, threshold_max_gap_th_rad,                     0.5f * M_PI/180.f, "f","f")

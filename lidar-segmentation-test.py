@@ -68,9 +68,6 @@ if args.debug is not None:
     kwargs['debug_xmax']  = args.debug[3]
     kwargs['debug_ymax']  = args.debug[4]
 
-kwargs['Npoints_per_segment']                      = 15
-kwargs['threshold_min_Nsegments_in_cluster']       = 4
-
 segmentation = \
     clc.lidar_segmentation(bag         = args.bag,
                            lidar_topic = getattr(args, 'lidar-topic'),

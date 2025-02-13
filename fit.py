@@ -234,9 +234,6 @@ kwargs_calibrate = dict(bags                               = args.bag,
                         threshold_valid_lidar_Npoints      = args.threshold_valid_lidar_Npoints,
                         uncertainty_quantification_range   = args.uncertainty_quantification_range,
                         rt_vehicle_lidar0                  = args.rt_vehicle_lidar0,
-                        Npoints_per_segment                = 15,
-                        threshold_min_Nsegments_in_cluster = 4,
-
                         **kwargs_calibration_object)
 
 result = clc.calibrate(do_dump_inputs = args.dump is not None,
