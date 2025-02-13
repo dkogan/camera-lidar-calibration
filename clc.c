@@ -1319,7 +1319,7 @@ fit_seed(// in/out
          // in
          const sensor_snapshot_segmented_t* snapshots,
          const int                          Nsnapshots,
-         const uint64_t*                    bitarray_snapshots_selected,
+         uint64_t*                          bitarray_snapshots_selected,
 
          const unsigned int Nlidars,
          const unsigned int Ncameras,
@@ -1437,9 +1437,8 @@ fit_seed(// in/out
     // And now I confirm to make sure the seed is reasonable. At each instant in
     // time I make sure that all sensors are observing the board at roughly the
     // same location, orientation. It will be rough, since here we're checking a
-    // seed solve
-    bool validation_failed = false;
-
+    // seed solve. Nevertheless, anything that fails is flagged an an outlier,
+    // and the whole snapshot is thrown away
     LOOP_SNAPSHOT()
     {
         LOOP_SNAPSHOT_HEADER(,const);
@@ -1501,15 +1500,23 @@ fit_seed(// in/out
                 p0_err_mag > fit_seed_position_err_threshold ||
                 cos_err    < fit_seed_cos_angle_err_threshold;
 
-            if(validation_failed_here) validation_failed = true;
-
             MSG_IF_VERBOSE("%sisnapshot=%d ilidar=%d th_err_deg=%.2f p0_err_mag=%.2f",
                            validation_failed_here ? "FAILED: " : "",
                            isnapshot, ilidar, acos(cos_err) * 180. / M_PI, p0_err_mag);
+            if(validation_failed_here)
+            {
+                MSG_IF_VERBOSE("Throwing out this snapshot as an outlier");
+                bitarray64_clear(bitarray_snapshots_selected, isnapshot);
+                break;
+            }
         }
 
         for(unsigned int icamera=0; icamera<Ncameras; icamera++)
         {
+            if(!bitarray64_check(bitarray_snapshots_selected, isnapshot))
+                // just threw this out as an outlier
+                break;
+
             if(snapshot->chessboard_corners[icamera] == NULL)
                 continue;
 
@@ -1540,19 +1547,21 @@ fit_seed(// in/out
 
                     if(validation_failed_here)
                     {
-                        validation_failed = true;
                         MSG("FAILED: isnapshot=%d icamera=%d i=%d j=%d reprojection error too high: %.1f pixels",
                             isnapshot, icamera, i,j, sqrt(errsq));
 
                         // move on to the next camera
                         i = INT_MAX-1;
                         j = INT_MAX-1;
+
+                        MSG_IF_VERBOSE("Throwing out this snapshot as an outlier");
+                        bitarray64_clear(bitarray_snapshots_selected, isnapshot);
                     }
                 }
         }
     }
 
-    return !validation_failed;
+    return true;
 }
 
 
