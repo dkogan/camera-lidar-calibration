@@ -31,6 +31,15 @@ def parse_timestamp_to_ns_since_epoch(t):
     return int(dateutil.parser.parse(t).timestamp() * 1e9)
 
 
+def _time_spread_s(msgs):
+    try:
+        tmin = min(m['time_header_ns'] for m in msgs if m is not None)
+        tmax = max(m['time_header_ns'] for m in msgs if m is not None)
+    except:
+        return None
+    return (tmax-tmin)/1e9
+
+
 def messages(bag, topics,
              *,
              # if integer: s since epoch or ns since epoch
@@ -254,13 +263,12 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
 
         # Here I look at the data-acquisition time, since that most
         # closely describes the data being consistent
-        tmin = min(m['time_header_ns'] for m in out if m is not None)
-        tmax = max(m['time_header_ns'] for m in out if m is not None)
-        if (tmax-tmin)/1e9 > max_time_spread_s:
+        dt = _time_spread_s(out)
+        if dt > max_time_spread_s:
 
             timestamps = ['-' if m is None else m['time_header_ns'] for m in out]
             if verbose:
-                print(f"Not reporting snapshot in time interval {[start,stop]} because the time_header_ns is too spread-out. {tmax-tmin=}. {timestamps=}")
+                print(f"Not reporting snapshot in time interval {[start,stop]} because the time_header_ns is too spread-out. {dt=:.2f}s. {timestamps=}")
             return [None] * len(topics)
         return out
 
@@ -359,7 +367,7 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
 
         if verbose:
             isnapshot = len(msgs)-1
-            print(f"{isnapshot=}: at time_ns = {['-' if m is None else m['time_ns'] for m in msgs_now]} '{bag}'")
+            print(f"{isnapshot=}: at time_ns = {['-' if m is None else m['time_ns'] for m in msgs_now]} (spread={_time_spread_s(msgs_now):.2f}s) '{bag}'")
 
     return msgs
 
