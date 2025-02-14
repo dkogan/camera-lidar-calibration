@@ -110,6 +110,9 @@ gp.plot(segmentation['points'][i],
         tuplesize=-3,
         _with='points',
         title = "First reported plane",
+        xlabel = 'x',
+        ylabel = 'y',
+        zlabel = 'z',
         equation = f"{nps.inner(plane_n,plane_p) / plane_n[2]} - {plane_n[0]/plane_n[2]}*x - {plane_n[1]/plane_n[2]}*y")
 
 
