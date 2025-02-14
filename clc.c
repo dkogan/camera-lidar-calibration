@@ -4107,6 +4107,9 @@ static bool make_reprojected_plots( const double* Rt_lidar0_lidar,
                 if(chessboard_corners == NULL)
                     continue;
 
+                // these plots ultimately aren't all that useful, so I disable
+                // them
+#if 0
                 PLOT_MAKE_FILENAME("/tmp/reprojected-snapshot%d-camera%d-lidar%d.gp",
                                    isnapshot, icamera, ilidar);
                 PLOT( {{
@@ -4159,6 +4162,7 @@ static bool make_reprojected_plots( const double* Rt_lidar0_lidar,
                     "--style  lidar  'with points' "
                     "--square --set 'yrange [:] reverse' "
                     );
+#endif
             }
         }
     }
