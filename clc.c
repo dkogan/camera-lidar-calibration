@@ -1086,12 +1086,12 @@ bool align_point_clouds(// out
         // 2x the error. th -> 2th. costh ~ 1 - th^2/2 -> cos(2th) ~ costh*costh
         // - sinth*sinth ~ costh*costh
         if(cos_err < fit_seed_cos_angle_err_threshold*fit_seed_cos_angle_err_threshold)
-            MSG("WARNING: inconsistent seed rotation for isnapshot=%d: th=%.1f deg. Most likely this is wrong, and we're about to fail the fit_seed() validation",
-                isnapshot,
+            MSG("WARNING: inconsistent seed rotation aligning sensors (%d,%d), for isnapshot=%d: th=%.1f deg. Most likely this is wrong, and we're about to fail the fit_seed() validation",
+                isensor0, isensor1, isnapshot,
                 acos(cos_err) * 180./M_PI);
         else
-            MSG_IF_VERBOSE("Seed rotation for isnapshot=%d: th=%.1f deg",
-                           isnapshot,
+            MSG_IF_VERBOSE("Seed rotation aligning sensors (%d,%d), for isnapshot=%d: th=%.1f deg",
+                           isensor0, isensor1, isnapshot,
                            acos(cos_err) * 180./M_PI);
     }
 
@@ -1137,12 +1137,12 @@ bool align_point_clouds(// out
         // HERE only if the errors are really large. I want the threshold to be
         // 2x the error.
         if(norm2_t01_err > 4.*fit_seed_position_err_threshold*fit_seed_position_err_threshold)
-            MSG("WARNING: inconsistent seed translation for isnapshot=%d: mag(t01_err)=%.1f. Most likely this is wrong, and we're about to fail the fit_seed() validation",
-                isnapshot,
+            MSG("WARNING: inconsistent seed translation for aligning sensors (%d,%d), isnapshot=%d: mag(t01_err)=%.1f. Most likely this is wrong, and we're about to fail the fit_seed() validation",
+                isensor0, isensor1, isnapshot,
                 sqrt(norm2_t01_err));
         else
-            MSG_IF_VERBOSE("Seed translation for isnapshot=%d: mag(t01_err)=%.1f",
-                isnapshot,
+            MSG_IF_VERBOSE("Seed translation for aligning sensors (%d,%d), isnapshot=%d: mag(t01_err)=%.1f",
+                           isensor0, isensor1, isnapshot,
                 sqrt(norm2_t01_err));
     }
 
@@ -1528,7 +1528,10 @@ fit_seed(// in/out
             {
                 MSG_IF_VERBOSE("Throwing out this snapshot as an outlier");
                 bitarray64_clear(bitarray_snapshots_selected, isnapshot);
-                break;
+
+                // I don't NEED to continue here, and a "break" would be fine.
+                // But the extra diagnostics I get without the "break" are
+                // valuable, so I keep going
             }
         }
 
