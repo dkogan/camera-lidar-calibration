@@ -621,8 +621,8 @@ static
 bool boardcenter_normal__camera(// out
                            mrcal_point3_t*            pboardcenter_camera,
                            mrcal_point3_t*            boardnormal_camera,
-                           double*                    Rt_camera_board,
                            // in
+                           const double*              Rt_camera_board,
                            const mrcal_cameramodel_t* model,
                            const mrcal_point2_t*      observations,
                            const int                  object_height_n,
@@ -630,16 +630,6 @@ bool boardcenter_normal__camera(// out
                            const double               object_spacing,
                            bool verbose)
 {
-    if(!clc_fit_Rt_camera_board(// out
-                            Rt_camera_board,
-                            // in
-                            model,
-                            observations,
-                            object_height_n,
-                            object_width_n,
-                            object_spacing))
-        return false;
-
     // diagnostics
     if(false)
     {
@@ -752,17 +742,24 @@ bool boardcenter_normal__sensor(// out
             return false;
 
         double* Rt_camera_board = &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
-        if(!Rt_uninitialized(Rt_camera_board))
+        if(Rt_uninitialized(Rt_camera_board))
         {
-            MSG("THIS IS A BUG: Rt_camera_board_cache[isnapshot=%d, icamera=%d] has already been computed",
-                isnapshot, icamera);
-            return false;
+            if(!clc_fit_Rt_camera_board(// out
+                                        Rt_camera_board,
+                                        // in
+                                        models[icamera],
+                                        chessboard_corners,
+                                        object_height_n,
+                                        object_width_n,
+                                        object_spacing))
+                return false;
         }
+
         if(!boardcenter_normal__camera(// out
                                   pboardcenter_sensor,
                                   boardnormal_sensor,
-                                  Rt_camera_board,
                                   // in
+                                  Rt_camera_board,
                                   models[icamera],
                                   chessboard_corners,
                                   object_height_n,
