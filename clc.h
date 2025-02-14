@@ -142,44 +142,96 @@ typedef struct
 
 
 
-#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(_)                                                 \
+#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(_)                          \
   /* bool, but PyArg_ParseTupleAndKeywords("p") wants an int */         \
-  _(int,   dump,                                         (int)false,        "p","i") \
-  _(int,   debug_iring,                                  -1,                "i","i") \
-  _(float, debug_xmin,                                   FLT_MAX,           "f","f") \
-  _(float, debug_xmax,                                   -FLT_MAX,          "f","f") \
-  _(float, debug_ymin,                                   FLT_MAX,           "f","f") \
-  _(float, debug_ymax,                                   -FLT_MAX,          "f","f") \
-  _(int,   threshold_min_Npoints_in_segment,             10,                "i","i") \
-  _(int,   threshold_max_Npoints_invalid_segment,        5,                 "i","i") \
-  _(float, threshold_max_range,                          9.f,               "f","f") \
+  _(int,   dump,                                         (int)false,        "p","i", \
+      "if true, diagnostic detector data meant for plotting is output on stdout. The intended use is\n" \
+      "  ./lidar-segmentation-test.py --dump TOPIC BAG |\n"             \
+      "  | feedgnuplot \\\n"                                            \
+      "      --style label 'with labels' \\\n"                          \
+      "      --tuplesize label 4 \\\n"                                  \
+      "      --style all 'with points pt 7 ps 0.5' \\\n"                \
+      "      --style stage1-segment 'with vectors' \\\n"                \
+      "      --tuplesize stage1-segment 6 \\\n"                         \
+      "      --3d \\\n"                                                 \
+      "      --domain \\\n"                                             \
+      "      --dataid \\\n"                                             \
+      "      --square \\\n"                                             \
+      "      --points \\\n"                                             \
+      "      --tuplesizeall 3 \\\n"                                     \
+      "      --autolegend \\\n"                                         \
+      "      --xlabel x \\\n"                                           \
+      "      --ylabel y \\\n"                                           \
+      "      --zlabel z\\n")                                            \
+  _(int,   debug_iring,                                  -1,                "i","i", \
+      "stage1: report diagnostic information on stderr, ONLY for this ring" ) \
+  _(float, debug_xmin,                                   FLT_MAX,           "f","f", \
+      "report diagnostic information on stderr, ONLY for the region within the given xy bounds" ) \
+  _(float, debug_xmax,                                   -FLT_MAX,          "f","f", \
+      "report diagnostic information on stderr, ONLY for the region within the given xy bounds" ) \
+  _(float, debug_ymin,                                   FLT_MAX,           "f","f", \
+      "report diagnostic information on stderr, ONLY for the region within the given xy bounds" ) \
+  _(float, debug_ymax,                                   -FLT_MAX,          "f","f", \
+      "report diagnostic information on stderr, ONLY for the region within the given xy bounds" ) \
+  _(int,   threshold_min_Npoints_in_segment,             10,                "i","i", \
+      "stage1: segments are accepted only if they contain at least this many points" ) \
+  _(int,   threshold_max_Npoints_invalid_segment,        5,                 "i","i", \
+      "stage1: segments are accepted only if they contain at most this many invalid points" ) \
+  _(float, threshold_max_range,                          9.f,               "f","f", \
+      "stage2: discard all segment clusters that lie COMPLETELY past the given range" ) \
                                                                         \
   /* This is unnaturally high. I'm comparing it to p-mean(p), but if the points aren't */ \
-  /* distributed evenly, mean(p) won't be at the center */ \
-  _(float, threshold_max_plane_size,                     1.9f,              "f","f") \
-  _(float, threshold_max_rms_fit_error,                  0.02f,            "f","f") \
-  _(float, threshold_min_rms_point_cloud_2nd_dimension,  0.1f,              "f","f") \
+  /* distributed evenly, mean(p) won't be at the center */              \
+  _(float, threshold_max_plane_size,                     1.9f,              "f","f", \
+      "Post-processing: high limit on the linear size of the reported plane.\n" \
+      "In a square board this is roughly compared to the side length") \
+  _(float, threshold_max_rms_fit_error,                  0.02f,            "f","f", \
+      "Post-processing: high limit on the RMS plane fit residual. Lower values will demand flatter planes" ) \
+  _(float, threshold_min_rms_point_cloud_2nd_dimension,  0.1f,              "f","f", \
+      "Post-processing: low limit on the short length of the found plane. Too-skinny planes are rejected" ) \
   /* found empirically in dump-lidar-scan.py */                         \
-  _(int,   Npoints_per_rotation,                         1809,              "i","i") \
-  _(int,   Npoints_per_segment,                          15,                "i","i") \
-  _(int,   threshold_max_Ngap,                           2,                 "i","i") \
-  _(float, threshold_max_deviation_off_segment_line,     0.05f,             "f","f") \
+  _(int,   Npoints_per_rotation,                         1809,              "i","i", \
+      "How many points are reported by the LIDAR in a rotation.\n" \
+      "This is hardware-dependent, and needs to be revisited for different LIDAR units" ) \
+  _(int,   Npoints_per_segment,                          15,                "i","i", \
+      "stage1: length of segments we're looking for" ) \
+  _(int,   threshold_max_Ngap,                           2,                 "i","i", \
+      "The maximum number of consecutive missing points in a ring" ) \
+  _(float, threshold_max_deviation_off_segment_line,     0.05f,             "f","f", \
+      "stage1: maximum allowed deviation off a segment line fit.\n" \
+      "If any points violate this, the entire segment is rejected" ) \
                                                                         \
   /* should be a factor of threshold_max_plane_size */                  \
-  _(float, threshold_max_distance_across_rings,          0.4f,              "f","f") \
-  _(int,   Nrings,                                       32,                "i","i") \
+  _(float, threshold_max_distance_across_rings,          0.4f,              "f","f", \
+      "stage2: max ring-ring distance allowed to join two segments into a cluster" ) \
+  _(int,   Nrings,                                       32,                "i","i", \
+      "How many rings are present in the LIDARdata.\n" \
+      "This is hardware-dependent, and needs to be revisited for different LIDAR units" ) \
   /* cos(90-5deg) */                                                    \
-  _(float, threshold_max_cos_angle_error_normal,         0.15,   "f","f") \
+  _(float, threshold_max_cos_angle_error_normal,         0.15,   "f","f", \
+      "stage2: cos(v,n) threshold to accept a segment (and its direction v) into an existing cluster (and its normal n)" ) \
   /* cos(5deg) */                                                       \
-  _(float, threshold_min_cos_angle_error_same_direction, 0.996194698092f,   "f","f") \
-  _(float, threshold_max_plane_point_error_stage2,       0.3,               "f","f") \
-  _(float, threshold_max_plane_point_error_stage3,       0.05,              "f","f") \
-  _(float, threshold_min_plane_point_error_isolation,    0.3,               "f","f") \
-  _(int,   threshold_max_Nsegments_in_cluster,           150,               "i","i") \
-  _(int,   threshold_min_Nsegments_in_cluster,           4,                 "i","i") \
-  _(int,   threshold_min_Nrings_in_cluster,              3,                 "i","i") \
+  _(float, threshold_min_cos_angle_error_same_direction, 0.996194698092f,   "f","f", \
+      "stage2: cos threshold used to construct a cluster from two cross-ring segments.\n" \
+      "Non fitting pairs are not used to create a new cluster" ) \
+  _(float, threshold_max_plane_point_error_stage2,       0.3,               "f","f", \
+      "stage2: distance threshold to make sure each segment center lies in plane\n" \
+      "Non-fitting segments are not added to the cluster") \
+  _(float, threshold_max_plane_point_error_stage3,       0.05,              "f","f", \
+      "stage3: distance threshold to make sure each point lies in the plane\n" \
+      "Non-fitting points are culled from the reported plane") \
+  _(float, threshold_min_plane_point_error_isolation,    0.3,               "f","f", \
+      "stage3: points just off the edge of the detected board must fit AT LEAST this badly" ) \
+  _(int,   threshold_max_Nsegments_in_cluster,           150,               "i","i", \
+      "stage2: clusters with more than this many segments are rejected" ) \
+  _(int,   threshold_min_Nsegments_in_cluster,           4,                 "i","i", \
+      "stage2: clusters with fewer than this many segments are rejected" ) \
+  _(int,   threshold_min_Nrings_in_cluster,              3,                 "i","i", \
+      "stage2: clusters with date from fewer than this many rings are rejected" ) \
   /* used in refinement */                                              \
-  _(float, threshold_max_gap_th_rad,                     0.5f * M_PI/180.f, "f","f")
+  _(float, threshold_max_gap_th_rad,                     0.5f * M_PI/180.f, "f","f", \
+      "stage3: moving from the center, we stop accumulating points when we encounter\n" \
+      "an angular gap of this many radians" )
 
 
 

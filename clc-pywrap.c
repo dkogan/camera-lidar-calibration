@@ -1113,8 +1113,8 @@ static PyObject* py_lidar_segmentation_default_context(PyObject* NPY_UNUSED(self
     clc_lidar_segmentation_default_context(&ctx);
 
 
-#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_PATTERN( type,name,default,pyparse,pybuild) "s" pybuild
-#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_KEYVALUE(type,name,default,pyparse,pybuild) ,#name, ctx.name
+#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_PATTERN( type,name,default,pyparse,pybuild,...) "s" pybuild
+#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_KEYVALUE(type,name,default,pyparse,pybuild,...) ,#name, ctx.name
     result = Py_BuildValue("{" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_PATTERN) "}"
                            CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_KEYVALUE));
 #undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_PATTERN
