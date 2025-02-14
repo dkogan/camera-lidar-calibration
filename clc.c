@@ -924,7 +924,11 @@ bool align_point_clouds(// out
                                            normals0[0].xyz,
                                            normals1[0].xyz,
                                            NULL))
+    {
+        MSG("mrcal_align_procrustes_vectors_R01() failed: couldn't align sensors %d and %d: available data is likely insufficient",
+            isensor0, isensor1);
         return false;
+    }
 
     // diagnostics
     if(false)
