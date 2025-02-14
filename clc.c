@@ -1345,7 +1345,8 @@ fit_seed(// in/out
         // compute Rt_lidar0_lidar and Rt_lidar0_camera
 
         const int Nsensors = Ncameras + Nlidars;
-        uint16_t shared_observation_counts[pairwise_N(Nsensors)];
+        const int Nshared_observation_counts = pairwise_N(Nsensors);
+        uint16_t shared_observation_counts[Nshared_observation_counts];
         connectivity_matrix(// out
                             shared_observation_counts,
                             // in
@@ -1359,6 +1360,24 @@ fit_seed(// in/out
         {
             MSG("Sensor shared-observations matrix for Nlidars=%d followed by Ncameras=%d:",
                 Nlidars, Ncameras);
+            print_full_symmetric_matrix_from_upper_triangle(shared_observation_counts,
+                                                            Nsensors);
+        }
+
+        // For the purposes of seeding I ignore any links with too-few
+        // connections. At least 3 is a hard requirement: the procrustes solve
+        // will otherwise not converge, and mrcal_traverse_sensor_links() will
+        // fail. And I ask for a few more for redundancy. I ignore links by
+        // setting them to 0; mrcal_traverse_sensor_links() will not try to use
+        // those connections at all then, and opt for multi-hopping
+        const int Nlinks_min = 4;
+        for(int i=0; i<Nshared_observation_counts; i++)
+            if(shared_observation_counts[i] < Nlinks_min)
+                shared_observation_counts[i] = 0;
+        if(verbose)
+        {
+            MSG("Sensor shared-observations matrix for Nlidars=%d followed by Ncameras=%d, after removing connections worse than Nlinks_min=%d:",
+                Nlidars, Ncameras, Nlinks_min);
             print_full_symmetric_matrix_from_upper_triangle(shared_observation_counts,
                                                             Nsensors);
         }
