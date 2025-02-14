@@ -5056,6 +5056,57 @@ static void evaluate_camera_visibility(// out
     }
 }
 
+static bool check_sufficient_observations(const sensor_snapshot_segmented_t* snapshots,
+                                          const int                          Nsnapshots,
+                                          const uint64_t*                    bitarray_snapshots_selected,
+                                          const int                          Ncameras,
+                                          const int                          Nlidars)
+{
+    int NlidarObservations [Nlidars ];
+    int NcameraObservations[Ncameras];
+
+    // I pass through the observations again, to make sure that I count the
+    // FILTERED snapshots, not the original ones
+    for(unsigned int i=0; i<Ncameras; i++) NcameraObservations[i] = 0;
+    for(unsigned int i=0; i<Nlidars;  i++) NlidarObservations [i] = 0;
+
+    LOOP_SNAPSHOT()
+    {
+        LOOP_SNAPSHOT_HEADER(,const);
+        for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
+            if(snapshot->lidar_scans[ilidar].points != NULL)
+                NlidarObservations[ilidar]++;
+
+        for(unsigned int icamera=0; icamera<Ncameras; icamera++)
+            if(snapshot->chessboard_corners[icamera] != NULL)
+                NcameraObservations[icamera]++;
+
+    }
+    for(unsigned int i=0; i<Ncameras; i++)
+    {
+        const int NcameraObservations_this = NcameraObservations[i];
+        if (NcameraObservations_this == 0)
+        {
+            MSG("I need at least 1 observation of each camera. Got only %d for camera %d",
+                NcameraObservations_this, i);
+            return false;
+        }
+    }
+
+    for(unsigned int i=0; i<Nlidars; i++)
+    {
+        const int NlidarObservations_this = NlidarObservations[i];
+        if (NlidarObservations_this < 3)
+        {
+            MSG("I need at least 3 observations of each lidar to unambiguously set the translation (the set of all plane normals must span R^3). Got only %d for lidar %d",
+                NlidarObservations_this, i);
+            return false;
+        }
+    }
+    return true;
+}
+
+
 // Each sensor is uniquely identified by its position in the
 // sensor_snapshots[].lidar_scans[] or .images[] arrays. An unobserved sensor in
 // some sensor snapshot should be indicated by lidar_scans[] = {} or images[] =
@@ -5423,50 +5474,12 @@ bool clc(// in/out
 
     MSG_IF_VERBOSE("Have %d joint observations", Nsnapshots_selected);
 
-    {
-        int NlidarObservations [Nlidars ];
-        int NcameraObservations[Ncameras];
-
-        // I pass through the observations again, to make sure that I count the
-        // FILTERED snapshots, not the original ones
-        for(unsigned int i=0; i<Ncameras; i++) NcameraObservations[i] = 0;
-        for(unsigned int i=0; i<Nlidars;  i++) NlidarObservations [i] = 0;
-
-        LOOP_SNAPSHOT()
-        {
-            LOOP_SNAPSHOT_HEADER(,const);
-            for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
-                if(snapshot->lidar_scans[ilidar].points != NULL)
-                    NlidarObservations[ilidar]++;
-
-            for(unsigned int icamera=0; icamera<Ncameras; icamera++)
-                if(snapshot->chessboard_corners[icamera] != NULL)
-                    NcameraObservations[icamera]++;
-
-        }
-        for(unsigned int i=0; i<Ncameras; i++)
-        {
-            const int NcameraObservations_this = NcameraObservations[i];
-            if (NcameraObservations_this == 0)
-            {
-                MSG("I need at least 1 observation of each camera. Got only %d for camera %d",
-                    NcameraObservations_this, i);
-                goto done;
-            }
-        }
-
-        for(unsigned int i=0; i<Nlidars; i++)
-        {
-            const int NlidarObservations_this = NlidarObservations[i];
-            if (NlidarObservations_this < 3)
-            {
-                MSG("I need at least 3 observations of each lidar to unambiguously set the translation (the set of all plane normals must span R^3). Got only %d for lidar %d",
-                    NlidarObservations_this, i);
-                goto done;
-            }
-        }
-    }
-
+    if(!check_sufficient_observations(snapshots,
+                                      Nsnapshots,
+                                      bitarray_snapshots_selected,
+                                      Ncameras,
+                                      Nlidars))
+        goto done;
 
     double Rt_vehicle_lidar0[4*3];
     if(rt_vehicle_lidar0 != NULL)
@@ -5592,6 +5605,15 @@ bool clc(// in/out
 
             goto done;
         }
+
+        // We tossed some outliers. Make sure we have enough observations still
+        if(!check_sufficient_observations(snapshots,
+                                          Nsnapshots,
+                                          bitarray_snapshots_selected,
+                                          Ncameras,
+                                          Nlidars))
+            goto done;
+
 
         memcpy(Rt_lidar0_board_solve,  Rt_lidar0_board_seed,  sizeof(double)*Nsnapshots  * 4*3);
         memcpy(Rt_lidar0_lidar_solve,  Rt_lidar0_lidar_seed,  sizeof(double)*(Nlidars-1) * 4*3);
