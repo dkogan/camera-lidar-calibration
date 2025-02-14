@@ -110,6 +110,12 @@ def parse_args():
                         vehicle origin. In each sector we look at a point this
                         distance away from the origin. If omitted, we look 10m
                         ahead''')
+    parser.add_argument('--max-time-spread-s',
+                        type=float,
+                        help='''The maximum time spread of observations in a
+                        snapshot. Any snapshot that contains sensor observations
+                        with a bigger time differences than this are thrown out;
+                        the WHOLE snapshot''')
     parser.add_argument('--rt-vehicle-lidar0',
                         type=argparse_helpers.comma_separated_list_of_floats,
                         help='''Used in the uncertainty quantification. The
@@ -224,6 +230,7 @@ else:
 kwargs_calibrate = dict(bags                               = args.bag,
                         topics                             = args.topics,
                         decimation_period                  = args.decimation_period,
+                        max_time_spread_s                  = args.max_time_spread_s,
                         start                              = args.after,
                         stop                               = args.before,
                         models                             = args.models,

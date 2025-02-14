@@ -242,9 +242,29 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
                                   # if integer: s since epoch or ns since epoch
                                   # if float:   s since epoch
                                   # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
-                                  start            = None,
-                                  stop             = None,
-                                  ):
+                                  start             = None,
+                                  stop              = None,
+                                  max_time_spread_s = None,
+                                  verbose           = False):
+
+    def out_culled_if_too_spread(out, max_time_spread_s):
+        if max_time_spread_s is None or \
+           not any(out):
+            return out
+
+        # Here I look at the data-acquisition time, since that most
+        # closely describes the data being consistent
+        tmin = min(m['time_header_ns'] for m in out if m is not None)
+        tmax = max(m['time_header_ns'] for m in out if m is not None)
+        if (tmax-tmin)/1e9 > max_time_spread_s:
+
+            timestamps = ['-' if m is None else m['time_header_ns'] for m in out]
+            if verbose:
+                print(f"Not reporting snapshot in time interval {[start,stop]} because the time_header_ns is too spread-out. {tmax-tmin=}. {timestamps=}")
+            return [None] * len(topics)
+        return out
+
+
 
     out = [None] * len(topics)
     idx = dict()
@@ -280,14 +300,14 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
             out[i] = msg
             Nstored += 1
             if Nstored == len(topics):
-                return out
+                return out_culled_if_too_spread(out, max_time_spread_s)
     else:
         end_of_file = True
 
     if end_of_file and Nstored == 0:
         return None
 
-    return out
+    return out_culled_if_too_spread(out, max_time_spread_s)
 
 
 def first_message_from_each_topic_in_time_segments(bag, topics,
@@ -299,7 +319,8 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
                                                    start = None,
                                                    stop  = None,
                                                    require_at_least_N_topics = 1,
-                                                   verbose = False):
+                                                   verbose = False,
+                                                   max_time_spread_s = None):
 
     message_iterator = messages(bag, topics,
                                 start = start)
@@ -320,7 +341,9 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
         msgs_now = \
             first_message_from_each_topic(message_iterator, topics,
                                           start = t0,
-                                          stop  = t1)
+                                          stop  = t1,
+                                          max_time_spread_s = max_time_spread_s,
+                                          verbose = verbose)
 
         if msgs_now is None:
             # End of file

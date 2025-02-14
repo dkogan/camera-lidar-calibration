@@ -73,6 +73,7 @@ def _sorted_sensor_snapshots(bags, topics,
                              decimation_period = None,
                              start             = None,
                              stop              = None,
+                             max_time_spread_s = None,
                              verbose           = False):
     for bag in bags:
         if not os.path.exists(bag):
@@ -84,7 +85,9 @@ def _sorted_sensor_snapshots(bags, topics,
         messages_bags = \
             [bag_interface.first_message_from_each_topic(bag, topics,
                                                          start = start,
-                                                         stop  = stop) \
+                                                         stop  = stop,
+                                                         max_time_spread_s = max_time_spread_s,
+                                                         verbose = verbose) \
              for bag in bags]
 
         # each snapshot in messages_bags maybe None (if no usable data in a bag
@@ -118,6 +121,7 @@ def _sorted_sensor_snapshots(bags, topics,
                                                            stop     = stop,
                                                            period_s = decimation_period,
                                                            require_at_least_N_topics = 2,
+                                                           max_time_spread_s = max_time_spread_s,
                                                            verbose = verbose)
 
     # I need to figure out which topic corresponds to a lidar and which to a
@@ -159,12 +163,14 @@ def calibrate(*,
               decimation_period = None,
               start             = None,
               stop              = None,
+              max_time_spread_s = None,
               verbose           = False,
               **kwargs):
     return _clc.calibrate( _sorted_sensor_snapshots(bags, topics,
                                                     decimation_period = decimation_period,
                                                     start             = start,
                                                     stop              = stop,
+                                                    max_time_spread_s = max_time_spread_s,
                                                     verbose           = verbose),
                            verbose = verbose,
                            **kwargs)
