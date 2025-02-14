@@ -336,7 +336,7 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
 
         if verbose:
             isnapshot = len(msgs)-1
-            print(f"{isnapshot=}: --after {t0} '{bag}'")
+            print(f"{isnapshot=}: at time_ns = {['-' if m is None else m['time_ns'] for m in msgs_now]} '{bag}'")
 
     return msgs
 
