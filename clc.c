@@ -398,6 +398,7 @@ bool clc_fit_Rt_camera_board(// out
     if(Rt_camera_board[3*3 + 2] <= 0)
     {
         MSG("Chessboard is behind the camera");
+        memset(Rt_camera_board, 0, 4*3*sizeof(Rt_camera_board[0]));
         return false;
     }
     return true;
