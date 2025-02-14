@@ -5186,15 +5186,16 @@ bool clc(// in/out
     }
 
     if(use_given_seed_geometry_lidar0 &&
-       !(rt_lidar0_lidar != NULL && rt_lidar0_camera != NULL))
+       !(rt_lidar0_lidar != NULL &&
+         (Ncameras==0 || rt_lidar0_camera != NULL)))
     {
-        MSG("use_given_seed_geometry_lidar0 is true, so both of (rt_lidar0_lidar,rt_lidar0_camera) MUST be non-NULL");
+        MSG("use_given_seed_geometry_lidar0 is true, so both of (rt_lidar0_lidar,rt_lidar0_camera) MUST be non-NULL; rt_lidar0_camera may be NULL if Ncameras==0");
         return false;
     }
     if(use_given_seed_geometry_vehicle &&
-       !(rt_vehicle_lidar != NULL && rt_vehicle_camera != NULL && rt_vehicle_lidar0 != NULL))
+       !(rt_vehicle_lidar != NULL && (Ncameras==0 || rt_vehicle_camera != NULL) && rt_vehicle_lidar0 != NULL))
     {
-        MSG("use_given_seed_geometry_vehicle is true, so all of (rt_vehicle_lidar,rt_vehicle_camera,rt_vehicle_lidar0) MUST be non-NULL");
+        MSG("use_given_seed_geometry_vehicle is true, so all of (rt_vehicle_lidar,rt_vehicle_camera,rt_vehicle_lidar0) MUST be non-NULL; ; rt_vehicle_camera may be NULL if Ncameras==0");
         return false;
     }
 
