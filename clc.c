@@ -3030,6 +3030,7 @@ plot_geometry(const char* filename,
         "--style axes \"with vectors\"  --tuplesize axes   6 "
         "--style labels \"with labels\" --tuplesize labels 4 "
         "--style boards-ref \"with lines\"  --tuplesize boards 3 "
+        "--maxcurves 300 "
         "--with points --tuplesizeall 3 ");
 
     return result;
