@@ -74,6 +74,7 @@ def _sorted_sensor_snapshots(bags, topics,
                              start             = None,
                              stop              = None,
                              max_time_spread_s = None,
+                             exclude_time_periods = [],
                              verbose           = False):
     for bag in bags:
         if not os.path.exists(bag):
@@ -122,6 +123,7 @@ def _sorted_sensor_snapshots(bags, topics,
                                                            period_s = decimation_period,
                                                            require_at_least_N_topics = 2,
                                                            max_time_spread_s = max_time_spread_s,
+                                                           exclude_time_periods = exclude_time_periods,
                                                            verbose = verbose)
 
     # I need to figure out which topic corresponds to a lidar and which to a
@@ -165,12 +167,14 @@ def calibrate(*,
               stop              = None,
               max_time_spread_s = None,
               verbose           = False,
+              exclude_time_periods = [],
               **kwargs):
     return _clc.calibrate( _sorted_sensor_snapshots(bags, topics,
                                                     decimation_period = decimation_period,
                                                     start             = start,
                                                     stop              = stop,
                                                     max_time_spread_s = max_time_spread_s,
+                                                    exclude_time_periods = exclude_time_periods,
                                                     verbose           = verbose),
                            verbose = verbose,
                            **kwargs)

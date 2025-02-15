@@ -77,6 +77,14 @@ def parse_args():
                         Could be an integer (s since epoch or ns since epoch), a
                         float (s since the epoch) or a string, to be parsed with
                         dateutil.parser.parse()''')
+    parser.add_argument('--exclude-time-period',
+                        type=str,
+                        action='append',
+                        help = '''If given, a comma-separated pair of time
+                        periods to be excluded from the data. Each could be an
+                        integer (s since epoch or ns since epoch), a float (s
+                        since the epoch) or a string, to be parsed with
+                        dateutil.parser.parse(). May be given multiple times''')
     parser.add_argument('--dump',
                         type=str,
                         help = '''Write solver diagnostics into the given
@@ -158,6 +166,15 @@ def parse_args():
             print("--decimation-period given, so we MUST have gotten exactly one bag", file=sys.stderr)
             sys.exit(1)
 
+    if args.exclude_time_period is None:
+        args.exclude_time_period = []
+    else:
+        try:
+            args.exclude_time_period = [ t0t1.split(',') for t0t1 in args.exclude_time_period]
+        except:
+            print("each --exclude-time-period should be a comma-separated timestamp", file=sys.stderr)
+            sys.exit(1)
+
     return args
 
 
@@ -231,6 +248,7 @@ kwargs_calibrate = dict(bags                               = args.bag,
                         topics                             = args.topics,
                         decimation_period                  = args.decimation_period,
                         max_time_spread_s                  = args.max_time_spread_s,
+                        exclude_time_periods               = args.exclude_time_period,
                         start                              = args.after,
                         stop                               = args.before,
                         models                             = args.models,

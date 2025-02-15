@@ -328,6 +328,7 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
                                                    stop  = None,
                                                    require_at_least_N_topics = 1,
                                                    verbose = False,
+                                                   exclude_time_periods = [],
                                                    max_time_spread_s = None):
 
     message_iterator = messages(bag, topics,
@@ -337,12 +338,27 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
     stop  = parse_timestamp_to_ns_since_epoch(stop)
     d     = info(bag)
 
+    exclude_time_periods = [ (parse_timestamp_to_ns_since_epoch(t0),
+                              parse_timestamp_to_ns_since_epoch(t1)) \
+                            for t0,t1 in exclude_time_periods ]
+
     t1 = start if start is not None else d['t0']
+
+    def excluded(t0,t1, exclude_time_periods ):
+        for t0_excluded,t1_excluded in exclude_time_periods:
+            if t0_excluded > t0 and t0_excluded < t1 or \
+               t0 > t0_excluded and t0 < t1_excluded:
+                return True
+        return False
 
     msgs = []
     while True:
         t0 = t1
         t1 = t0 + int(period_s*1e9)
+
+        if excluded( t0,t1, exclude_time_periods):
+            continue
+
         if stop is not None and t0 > stop:
             break
 
@@ -352,7 +368,6 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
                                           stop  = t1,
                                           max_time_spread_s = max_time_spread_s,
                                           verbose = verbose)
-
         if msgs_now is None:
             # End of file
             break
