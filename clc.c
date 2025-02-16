@@ -575,7 +575,7 @@ compute_board_poses(// out
         }
 
 #define PLOT(block, fmt, ...) {                                         \
-        char cmd[16384];                                                \
+        char cmd[65536];                                                \
         FILE* fp;                                                       \
                                                                         \
         if( (int)sizeof(cmd) <= snprintf(cmd, sizeof(cmd),              \
