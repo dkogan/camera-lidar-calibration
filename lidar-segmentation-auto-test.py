@@ -258,10 +258,14 @@ for test in tests + tests_private:
 
     bag = f"{args.root}/{test['bag']}"
     topic = test['topic']
-
+    if 'after' in test:
+        after = f"--after {test['after']}"
+    else:
+        after = ''
     vizcmd = fr'''
   x0y0x1y1=(-{max_range} -{max_range} {max_range} {max_range});
   ./lidar-segmentation-test.py --dump \
+    {after} \
     {topic} \
     {bag} \
   | awk " $x0y0x1y1[1] < \$1 && \$1 < $x0y0x1y1[3] && $x0y0x1y1[2] < \$2 && \$2 < $x0y0x1y1[4]" \
