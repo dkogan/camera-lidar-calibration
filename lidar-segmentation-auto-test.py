@@ -34,6 +34,7 @@ import testutils
 try:
     from tests_private import tests as tests_private
 except:
+    print("No private tests found. Not running those")
     tests_private = ()
 
 ctx = clc.lidar_segmentation_default_context()
