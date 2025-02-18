@@ -5134,6 +5134,53 @@ static bool check_sufficient_observations(const sensor_snapshot_segmented_t* sna
 }
 
 
+static void
+get_observations_per_sector(// out
+                            // dense array of shape (Nsectors,)
+                            uint16_t* observations_per_sector,
+                            // in
+                            const sensor_snapshot_segmented_t* snapshots,
+                            const uint64_t* bitarray_snapshots_selected,
+                            const int Nsnapshots,
+                            const int Ncameras,
+                            const int Nsectors,
+                            const int object_height_n,
+                            const int object_width_n,
+                            const double object_spacing,
+                            // Nsnapshots (4,3) arrays
+                            const double* Rt_lidar0_board,
+                            // may be NULL,
+                            const double* Rt_vehicle_lidar0)
+{
+    // The estimate of the center of the board, in board coords. We
+    // compute_board_poses()
+    mrcal_point3_t pboardcenter_board;
+    get_pboardcenter_board(// out
+                           pboardcenter_board.xyz,
+                           // in
+                           object_height_n,
+                           object_width_n,
+                           object_spacing,
+                           Ncameras);
+    memset(observations_per_sector, 0, Nsectors*sizeof(observations_per_sector[0]));
+
+    LOOP_SNAPSHOT()
+    {
+        LOOP_SNAPSHOT_HEADER(,const);
+
+        // This snapshot was used in the solve, so it has at least 2
+        // observing sensors; LOOP_SNAPSHOT_HEADER() skipped the ones that
+        // didn't
+        mrcal_point3_t p;
+        mrcal_transform_point_Rt(p.xyz, NULL, NULL,
+                                 &Rt_lidar0_board[isnapshot*4*3], pboardcenter_board.xyz);
+        if(Rt_vehicle_lidar0 != NULL)
+            mrcal_transform_point_Rt(p.xyz,NULL,NULL,
+                                     Rt_vehicle_lidar0, p.xyz);
+        observations_per_sector[ isector_from_pvehicle(p.xyz, Nsectors) ]++;
+    }
+}
+
 // Each sensor is uniquely identified by its position in the
 // sensor_snapshots[].lidar_scans[] or .images[] arrays. An unobserved sensor in
 // some sensor snapshot should be indicated by lidar_scans[] = {} or images[] =
@@ -5807,36 +5854,24 @@ bool clc(// in/out
                                 object_width_n,
                                 verbose);
 
-
         if(observations_per_sector != NULL)
         {
-            // The estimate of the center of the board, in board coords. We
-            // compute_board_poses()
-            mrcal_point3_t pboardcenter_board;
-            get_pboardcenter_board(// out
-                                   pboardcenter_board.xyz,
-                                   // in
-                                   object_height_n,
-                                   object_width_n,
-                                   object_spacing,
-                                   Ncameras);
-            memset(observations_per_sector, 0, Nsectors*sizeof(observations_per_sector[0]));
-
-            LOOP_SNAPSHOT()
-            {
-                LOOP_SNAPSHOT_HEADER(,const);
-
-                // This snapshot was used in the solve, so it has at least 2
-                // observing sensors; LOOP_SNAPSHOT_HEADER() skipped the ones that
-                // didn't
-                mrcal_point3_t p;
-                mrcal_transform_point_Rt(p.xyz, NULL, NULL,
-                                         &Rt_lidar0_board_solve[isnapshot*4*3], pboardcenter_board.xyz);
-                if(rt_vehicle_lidar0 != NULL)
-                    mrcal_transform_point_Rt(p.xyz,NULL,NULL,
-                                             Rt_vehicle_lidar0, p.xyz);
-                observations_per_sector[ isector_from_pvehicle(p.xyz, Nsectors) ]++;
-            }
+            get_observations_per_sector(// out
+                                        // dense array of shape (Nsectors,); may be NULL
+                                        observations_per_sector,
+                                        // in
+                                        snapshots,
+                                        bitarray_snapshots_selected,
+                                        Nsnapshots,
+                                        Ncameras,
+                                        Nsectors,
+                                        object_height_n,
+                                        object_width_n,
+                                        object_spacing,
+                                        // Nsnapshots (4,3) arrays
+                                        Rt_lidar0_board_solve,
+                                        // may be NULL,
+                                        rt_vehicle_lidar0 == NULL ? NULL : Rt_vehicle_lidar0);
         }
 
 
