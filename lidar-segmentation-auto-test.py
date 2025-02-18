@@ -13,12 +13,20 @@ SYNOPSIS
 
 import sys
 import os
+import re
 import argparse
 
 def parse_args():
     parser = \
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--onlybag',
+                        help = '''If given, only run those tests where the bag
+                        string matches THIS regex''')
+    parser.add_argument('--onlyafter',
+                        type=int,
+                        help = '''If given, only run those tests where the
+                        'after' key matches this value exactly''')
     parser.add_argument('root',
                         help = '''The root path to the test data''')
     args = parser.parse_args()
@@ -255,6 +263,12 @@ tests = (
 
 
 for test in tests + tests_private:
+
+    if args.onlybag is not None and not re.search(args.onlybag, test['bag']):
+        continue
+    if args.onlyafter is not None and \
+       ('after' not in test or test['after'] != args.onlyafter):
+        continue
 
     bag = f"{args.root}/{test['bag']}"
     topic = test['topic']
