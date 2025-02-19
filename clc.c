@@ -5935,7 +5935,6 @@ bool clc(// in/out
                                 verbose);
 
         if(observations_per_sector != NULL)
-        {
             get_observations_per_sector(// out
                                         // dense array of shape (Nsectors,); may be NULL
                                         observations_per_sector,
@@ -5952,7 +5951,6 @@ bool clc(// in/out
                                         Rt_lidar0_board_solve,
                                         // may be NULL,
                                         rt_vehicle_lidar0 == NULL ? NULL : Rt_vehicle_lidar0);
-        }
 
 
         // write the output
