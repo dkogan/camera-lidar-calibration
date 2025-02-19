@@ -5154,7 +5154,7 @@ static bool check_sufficient_observations(const sensor_snapshot_segmented_t* sna
 }
 
 
-static void
+static bool
 get_observations_per_sector(// out
                             // dense array of shape (Nsectors,)
                             uint16_t* observations_per_sector,
@@ -5200,7 +5200,7 @@ get_observations_per_sector(// out
         // This snapshot was used in the solve, so it has at least 2
         // observing sensors; LOOP_SNAPSHOT_HEADER() skipped the ones that
         // didn't
-        mrcal_point3_t pboardcenter_ref;
+        mrcal_point3_t pboardcenter_ref = {};
 
         if(Rt_lidar0_board != NULL)
             mrcal_transform_point_Rt(pboardcenter_ref.xyz, NULL, NULL,
@@ -5211,13 +5211,13 @@ get_observations_per_sector(// out
             // approximate. I estimate the board center in ref coords (lidar0 or
             // vehicle) for each sensor, and I average them
 
-            mrcal_point3_t pboardcenter;
             int Naccumulated = 0;
             for(int ilidar=0; ilidar<Nlidars; ilidar++)
             {
                 if(snapshot->lidar_scans[ilidar].points == NULL)
                     continue;
 
+                mrcal_point3_t pboardcenter;
                 mrcal_point3_from_clc_point3f(&pboardcenter,
                                               &snapshot->lidar_scans[ilidar].plane.p_mean);
 
@@ -5244,6 +5244,7 @@ get_observations_per_sector(// out
                                                   object_spacing))
                     return false;
 
+                mrcal_point3_t pboardcenter;
                 mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
                                          Rt_camera_board, pboardcenter_board.xyz);
                 mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
@@ -5260,6 +5261,7 @@ get_observations_per_sector(// out
                                      Rt_vehicle_lidar0, pboardcenter_ref.xyz);
         observations_per_sector[ isector_from_pvehicle(pboardcenter_ref.xyz, Nsectors) ]++;
     }
+    return true;
 }
 
 static bool
@@ -5800,28 +5802,29 @@ bool clc(// in/out
         if(use_given_seed_geometry_lidar0 || use_given_seed_geometry_vehicle)
         {
             if(observations_per_sector != NULL)
-                get_observations_per_sector(// out
-                                            // dense array of shape (Nsectors,); may be NULL
-                                            observations_per_sector,
-                                            // in
-                                            snapshots,
-                                            bitarray_snapshots_selected,
-                                            Nsnapshots,
-                                            Nlidars,
-                                            Ncameras,
-                                            Nsectors,
-                                            object_height_n,
-                                            object_width_n,
-                                            object_spacing,
-                                            models,
-                                            NULL,
-                                            // Nlidars-1 (4,3) arrays
-                                            Rt_lidar0_lidar_seed,
-                                            // Ncameras (4,3) arrays
-                                            Rt_lidar0_camera_seed,
-                                            // may be NULL,
-                                            rt_vehicle_lidar0 == NULL ? NULL : Rt_vehicle_lidar0,
-                                            Rt_camera_board_cache);
+                if(!get_observations_per_sector(// out
+                                                // dense array of shape (Nsectors,); may be NULL
+                                                observations_per_sector,
+                                                // in
+                                                snapshots,
+                                                bitarray_snapshots_selected,
+                                                Nsnapshots,
+                                                Nlidars,
+                                                Ncameras,
+                                                Nsectors,
+                                                object_height_n,
+                                                object_width_n,
+                                                object_spacing,
+                                                models,
+                                                NULL,
+                                                // Nlidars-1 (4,3) arrays
+                                                Rt_lidar0_lidar_seed,
+                                                // Ncameras (4,3) arrays
+                                                Rt_lidar0_camera_seed,
+                                                // may be NULL,
+                                                rt_vehicle_lidar0 == NULL ? NULL : Rt_vehicle_lidar0,
+                                                Rt_camera_board_cache))
+                    return false;
 
             if(isvisible_per_sensor_per_sector != NULL)
                 if(!get_isvisible_per_sensor_per_sector(// out
@@ -6076,26 +6079,27 @@ bool clc(// in/out
                                 verbose);
 
         if(observations_per_sector != NULL)
-            get_observations_per_sector(// out
-                                        // dense array of shape (Nsectors,); may be NULL
-                                        observations_per_sector,
-                                        // in
-                                        snapshots,
-                                        bitarray_snapshots_selected,
-                                        Nsnapshots,
-                                        Nlidars,
-                                        Ncameras,
-                                        Nsectors,
-                                        object_height_n,
-                                        object_width_n,
-                                        object_spacing,
-                                        models,
-                                        // Nsnapshots (4,3) arrays
-                                        Rt_lidar0_board_solve,
-                                        NULL,NULL,
-                                        // may be NULL,
-                                        rt_vehicle_lidar0 == NULL ? NULL : Rt_vehicle_lidar0,
-                                        NULL);
+            if(!get_observations_per_sector(// out
+                                            // dense array of shape (Nsectors,); may be NULL
+                                            observations_per_sector,
+                                            // in
+                                            snapshots,
+                                            bitarray_snapshots_selected,
+                                            Nsnapshots,
+                                            Nlidars,
+                                            Ncameras,
+                                            Nsectors,
+                                            object_height_n,
+                                            object_width_n,
+                                            object_spacing,
+                                            models,
+                                            // Nsnapshots (4,3) arrays
+                                            Rt_lidar0_board_solve,
+                                            NULL,NULL,
+                                            // may be NULL,
+                                            rt_vehicle_lidar0 == NULL ? NULL : Rt_vehicle_lidar0,
+                                            NULL))
+                return false;
 
 
         // write the output
