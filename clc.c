@@ -5677,7 +5677,7 @@ bool clc(// in/out
         }
         else if(use_given_seed_geometry_vehicle)
         {
-            // temporary storage, in case rt_lidar0_lidar or rt_lidar0_camera are NUL
+            // temporary storage, in case rt_lidar0_lidar or rt_lidar0_camera are NULL
             mrcal_pose_t _rt_lidar0_lidar [Nlidars];
             mrcal_pose_t _rt_lidar0_camera[Ncameras];
 
