@@ -285,6 +285,7 @@ for test in tests + tests_private:
   | awk " $x0y0x1y1[1] < \$1 && \$1 < $x0y0x1y1[3] && $x0y0x1y1[2] < \$2 && \$2 < $x0y0x1y1[4]" \
   | feedgnuplot \
       --style label "with labels" \
+      --style ACCEPTED "with points pt 2 ps 2 lw 2 lc \"red\"" \
       --tuplesize label 4 \
       --style all "with points pt 7 ps 0.5" \
       --style stage1-segment "with vectors" \

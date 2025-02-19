@@ -149,6 +149,7 @@ typedef struct
       "  ./lidar-segmentation-test.py --dump TOPIC BAG |\n"             \
       "  | feedgnuplot \\\n"                                            \
       "      --style label 'with labels' \\\n"                          \
+      "      --style ACCEPTED \"with points pt 2 ps 2 lw 2 lc \\\"red\\\"\"\\\n" \
       "      --tuplesize label 4 \\\n"                                  \
       "      --style all 'with points pt 7 ps 0.5' \\\n"                \
       "      --style stage1-segment 'with vectors' \\\n"                \

@@ -1638,6 +1638,7 @@ static bool stage3_refine_clusters(// out
     //   | awk " $x0y0x1y1[1] < \$1 && \$1 < $x0y0x1y1[3] && $x0y0x1y1[2] < \$2 && \$2 < $x0y0x1y1[4]" \
     //   | feedgnuplot \
     //       --style label "with labels" \
+    //       --style ACCEPTED "with points pt 2 ps 2 lw 2 lc \"red\"" \
     //       --tuplesize label 4 \
     //       --style all "with points pt 7 ps 0.5" \
     //       --style stage1-segment "with vectors" \
@@ -2039,18 +2040,21 @@ int8_t clc_lidar_segmentation_sorted(// out
                                 icluster,
                                 sqrtf(max_norm2_dp)*2., ctx->threshold_max_plane_size);
 
-        const char* annotation = rejected ? "-rejected" : "";
-
-
-        // We're past all the filters. I accept this plane
         if(ctx->dump)
+        {
             for(unsigned int i=0; i<points_and_plane[iplane_out].n; i++)
-                printf("%f %f stage3-refined-points-%d%s %f\n",
-                       scan->points[points_and_plane[iplane_out].ipoint[i]].x,
-                       scan->points[points_and_plane[iplane_out].ipoint[i]].y,
-                       icluster,
-                       annotation,
-                       scan->points[points_and_plane[iplane_out].ipoint[i]].z);
+                if(!rejected)
+                    printf("%f %f ACCEPTED %f\n",
+                           scan->points[points_and_plane[iplane_out].ipoint[i]].x,
+                           scan->points[points_and_plane[iplane_out].ipoint[i]].y,
+                           scan->points[points_and_plane[iplane_out].ipoint[i]].z);
+                else
+                    printf("%f %f stage3-refined-points-%d-rejected %f\n",
+                           scan->points[points_and_plane[iplane_out].ipoint[i]].x,
+                           scan->points[points_and_plane[iplane_out].ipoint[i]].y,
+                           icluster,
+                           scan->points[points_and_plane[iplane_out].ipoint[i]].z);
+        }
 
         if(rejected)
             continue;
