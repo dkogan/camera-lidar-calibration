@@ -34,7 +34,7 @@ clc-pywrap.o: CFLAGS += $(PY_MRBUILD_CFLAGS)
 clc-pywrap.o: $(addsuffix .h,$(wildcard *.docstring))
 
 _clc$(PY_EXT_SUFFIX): clc-pywrap.o libclc.so
-	$(PY_MRBUILD_LINKER) $(PY_MRBUILD_LDFLAGS) $^ -o $@
+	$(PY_MRBUILD_LINKER) $(PY_MRBUILD_LDFLAGS) $(LDFLAGS) $^ -o $@
 
 mrgingham-c-bridge.o: CXXFLAGS += -I/usr/include/mrgingham -I/usr/include/opencv4/
 opencv-c-bridge.o:    CXXFLAGS += -I/usr/include/opencv4/
