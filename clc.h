@@ -361,6 +361,10 @@ bool clc(// in/out
          // used for isvisible_per_sensor_per_sector and stdev_worst_per_sector
          const double uncertainty_quantification_range,
 
+         // may be NULL. Will attempt to report this even if clc() fails; -1
+         // means it could not be computed
+         int* isector_of_last_snapshot,
+
          // Pass non-NULL to get the fit-inputs dump. These encode the data
          // buffer. The caller must free(*buf_inputs_dump) when done. Even when
          // this call fails

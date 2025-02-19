@@ -897,6 +897,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                 threshold_valid_lidar_range,
                 threshold_valid_lidar_Npoints,
                 uncertainty_quantification_range,
+                NULL,
                 do_dump_inputs ? &buf_inputs_dump  : NULL,
                 do_dump_inputs ? &size_inputs_dump : NULL,
 

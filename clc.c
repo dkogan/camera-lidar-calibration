@@ -5157,6 +5157,87 @@ static bool check_sufficient_observations(const sensor_snapshot_segmented_t* sna
 }
 
 
+// -1 on error
+static int isector_from_observation(const sensor_snapshot_segmented_t* snapshot,
+                                    const mrcal_point3_t* pboardcenter_board,
+                                    const int Nlidars,
+                                    const int Ncameras,
+                                    const int Nsectors,
+                                    const int object_height_n,
+                                    const int object_width_n,
+                                    const double object_spacing,
+                                    const mrcal_cameramodel_t*const* models, // Ncameras of these
+                                    // Nlidars-1 (4,3) arrays
+                                    const double* Rt_lidar0_lidar,
+                                    // Ncameras (4,3) arrays
+                                    const double* Rt_lidar0_camera,
+                                    // may be NULL,
+                                    const double* Rt_vehicle_lidar0,
+                                    double* Rt_camera_board_cache)
+{
+    // This snapshot was used in the solve, so it has at least 2
+    // observing sensors; LOOP_SNAPSHOT_HEADER() skipped the ones that
+    // didn't
+    mrcal_point3_t pboardcenter_ref = {};
+
+    // Don't have the board poses, but I have the sensor poses, so I can
+    // approximate. I estimate the board center in ref coords (lidar0 or
+    // vehicle) for each sensor, and I average them
+
+    int Naccumulated = 0;
+    for(int ilidar=0; ilidar<Nlidars; ilidar++)
+    {
+        if(snapshot->lidar_scans[ilidar].points == NULL)
+            continue;
+
+        mrcal_point3_t pboardcenter;
+        mrcal_point3_from_clc_point3f(&pboardcenter,
+                                      &snapshot->lidar_scans[ilidar].plane.p_mean);
+
+        if(ilidar>0)
+            mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
+                                     &Rt_lidar0_lidar[(ilidar-1)*4*3], pboardcenter.xyz);
+        pboardcenter_ref = mrcal_point3_add(pboardcenter_ref,pboardcenter);
+        Naccumulated++;
+    }
+
+    for(int icamera=0; icamera<Ncameras; icamera++)
+    {
+        if(snapshot->chessboard_corners[icamera] == NULL)
+            continue;
+
+        double* Rt_camera_board = &Rt_camera_board_cache[ icamera *4*3];
+        if(!fit_Rt_camera_board_withcache(// out
+                                          Rt_camera_board,
+                                          // in
+                                          models[icamera],
+                                          snapshot->chessboard_corners[icamera],
+                                          object_height_n,
+                                          object_width_n,
+                                          object_spacing))
+            return -1;
+
+        mrcal_point3_t pboardcenter;
+        mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
+                                 Rt_camera_board, pboardcenter_board->xyz);
+        mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
+                                 &Rt_lidar0_camera[icamera*4*3], pboardcenter.xyz);
+        pboardcenter_ref = mrcal_point3_add(pboardcenter_ref,pboardcenter);
+        Naccumulated++;
+    }
+
+    if(Naccumulated == 0)
+        return -1;
+
+    pboardcenter_ref = mrcal_point3_scale(pboardcenter_ref, 1. / Naccumulated);
+    if(Rt_vehicle_lidar0 != NULL)
+        mrcal_transform_point_Rt(pboardcenter_ref.xyz,NULL,NULL,
+                                 Rt_vehicle_lidar0, pboardcenter_ref.xyz);
+    return
+        isector_from_pvehicle(pboardcenter_ref.xyz, Nsectors);
+}
+
+
 static bool
 get_observations_per_sector(// out
                             // dense array of shape (Nsectors,)
@@ -5180,8 +5261,9 @@ get_observations_per_sector(// out
                             const double* Rt_vehicle_lidar0,
                             double* Rt_camera_board_cache)
 {
-    // The estimate of the center of the board, in board coords. We
-    // compute_board_poses()
+    memset(observations_per_sector, 0, Nsectors*sizeof(observations_per_sector[0]));
+
+    // The estimate of the center of the board, in board coords
     mrcal_point3_t pboardcenter_board;
     get_pboardcenter_board(// out
                            pboardcenter_board.xyz,
@@ -5190,69 +5272,31 @@ get_observations_per_sector(// out
                            object_width_n,
                            object_spacing,
                            Ncameras);
-    memset(observations_per_sector, 0, Nsectors*sizeof(observations_per_sector[0]));
 
     LOOP_SNAPSHOT()
     {
         LOOP_SNAPSHOT_HEADER(,const);
 
-        // This snapshot was used in the solve, so it has at least 2
-        // observing sensors; LOOP_SNAPSHOT_HEADER() skipped the ones that
-        // didn't
-        mrcal_point3_t pboardcenter_ref = {};
+        const int isector =
+            isector_from_observation(snapshot,
+                                     &pboardcenter_board,
+                                     Nlidars,
+                                     Ncameras,
+                                     Nsectors,
+                                     object_height_n,
+                                     object_width_n,
+                                     object_spacing,
+                                     models, // Ncameras of these
+                                     // Nlidars-1 (4,3) arrays
+                                     Rt_lidar0_lidar,
+                                     // Ncameras (4,3) arrays
+                                     Rt_lidar0_camera,
+                                     // may be NULL,
+                                     Rt_vehicle_lidar0,
+                                     &Rt_camera_board_cache[ isnapshot*Ncameras *4*3]);
+        if(isector < 0) return false;
 
-        // Don't have the board poses, but I have the sensor poses, so I can
-        // approximate. I estimate the board center in ref coords (lidar0 or
-        // vehicle) for each sensor, and I average them
-
-        int Naccumulated = 0;
-        for(int ilidar=0; ilidar<Nlidars; ilidar++)
-        {
-            if(snapshot->lidar_scans[ilidar].points == NULL)
-                continue;
-
-            mrcal_point3_t pboardcenter;
-            mrcal_point3_from_clc_point3f(&pboardcenter,
-                                          &snapshot->lidar_scans[ilidar].plane.p_mean);
-
-            if(ilidar>0)
-                mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
-                                         &Rt_lidar0_lidar[(ilidar-1)*4*3], pboardcenter.xyz);
-            pboardcenter_ref = mrcal_point3_add(pboardcenter_ref,pboardcenter);
-            Naccumulated++;
-        }
-
-        for(int icamera=0; icamera<Ncameras; icamera++)
-        {
-            if(snapshot->chessboard_corners[icamera] == NULL)
-                continue;
-
-            double* Rt_camera_board = &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
-            if(!fit_Rt_camera_board_withcache(// out
-                                              Rt_camera_board,
-                                              // in
-                                              models[icamera],
-                                              snapshot->chessboard_corners[icamera],
-                                              object_height_n,
-                                              object_width_n,
-                                              object_spacing))
-                return false;
-
-            mrcal_point3_t pboardcenter;
-            mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
-                                     Rt_camera_board, pboardcenter_board.xyz);
-            mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
-                                     &Rt_lidar0_camera[icamera*4*3], pboardcenter.xyz);
-            pboardcenter_ref = mrcal_point3_add(pboardcenter_ref,pboardcenter);
-            Naccumulated++;
-        }
-
-        pboardcenter_ref = mrcal_point3_scale(pboardcenter_ref, 1. / Naccumulated);
-
-        if(Rt_vehicle_lidar0 != NULL)
-            mrcal_transform_point_Rt(pboardcenter_ref.xyz,NULL,NULL,
-                                     Rt_vehicle_lidar0, pboardcenter_ref.xyz);
-        observations_per_sector[ isector_from_pvehicle(pboardcenter_ref.xyz, Nsectors) ]++;
+        observations_per_sector[isector]++;
     }
     return true;
 }
@@ -5382,6 +5426,10 @@ bool clc(// in/out
          // used for isvisible_per_sensor_per_sector and stdev_worst_per_sector
          const double uncertainty_quantification_range,
 
+         // may be NULL. Will attempt to report this even if clc() fails; -1
+         // means it could not be computed
+         int* isector_of_last_snapshot,
+
          // Pass non-NULL to get the fit-inputs dump. These encode the data
          // buffer. The caller must free(*buf_inputs_dump) when done. Even when
          // this call fails
@@ -5439,7 +5487,8 @@ bool clc(// in/out
     if(observations_per_sector != NULL)
         memset(observations_per_sector, 0,
                Nsectors*sizeof(observations_per_sector[0]));
-
+    if(isector_of_last_snapshot != NULL)
+        *isector_of_last_snapshot = -1;
 
 
     if(1 !=
@@ -5818,6 +5867,38 @@ bool clc(// in/out
                                                 Rt_camera_board_cache))
                     return false;
 
+            if(isector_of_last_snapshot != NULL)
+            {
+                // The estimate of the center of the board, in board coords
+                mrcal_point3_t pboardcenter_board;
+                get_pboardcenter_board(// out
+                                       pboardcenter_board.xyz,
+                                       // in
+                                       object_height_n,
+                                       object_width_n,
+                                       object_spacing,
+                                       Ncameras);
+
+                const int isnapshot = Nsnapshots-1;
+                *isector_of_last_snapshot =
+                    isector_from_observation(&snapshots[isnapshot],
+                                             &pboardcenter_board,
+                                             Nlidars,
+                                             Ncameras,
+                                             Nsectors,
+                                             object_height_n,
+                                             object_width_n,
+                                             object_spacing,
+                                             models, // Ncameras of these
+                                             // Nlidars-1 (4,3) arrays
+                                             Rt_lidar0_lidar_seed,
+                                             // Ncameras (4,3) arrays
+                                             Rt_lidar0_camera_seed,
+                                             // may be NULL,
+                                             rt_vehicle_lidar0 == NULL ? NULL : Rt_vehicle_lidar0,
+                                             &Rt_camera_board_cache[ isnapshot*Ncameras *4*3]);
+            }
+
             if(isvisible_per_sensor_per_sector != NULL)
                 if(!get_isvisible_per_sensor_per_sector(// out
                                                         // A dense array of shape (Nsensors,Nsectors); may be NULL
@@ -6094,6 +6175,37 @@ bool clc(// in/out
                                             Rt_camera_board_cache))
                 return false;
 
+        if(isector_of_last_snapshot != NULL)
+        {
+            // The estimate of the center of the board, in board coords
+            mrcal_point3_t pboardcenter_board;
+            get_pboardcenter_board(// out
+                                   pboardcenter_board.xyz,
+                                   // in
+                                   object_height_n,
+                                   object_width_n,
+                                   object_spacing,
+                                   Ncameras);
+
+            const int isnapshot = Nsnapshots-1;
+            *isector_of_last_snapshot =
+                isector_from_observation(&snapshots[isnapshot],
+                                         &pboardcenter_board,
+                                         Nlidars,
+                                         Ncameras,
+                                         Nsectors,
+                                         object_height_n,
+                                         object_width_n,
+                                         object_spacing,
+                                         models, // Ncameras of these
+                                         // Nlidars-1 (4,3) arrays
+                                         Rt_lidar0_lidar_solve,
+                                         // Ncameras (4,3) arrays
+                                         Rt_lidar0_camera_solve,
+                                         // may be NULL,
+                                         rt_vehicle_lidar0 == NULL ? NULL : Rt_vehicle_lidar0,
+                                         &Rt_camera_board_cache[ isnapshot*Ncameras *4*3]);
+        }
 
         // write the output
         if(rt_lidar0_lidar != NULL)
