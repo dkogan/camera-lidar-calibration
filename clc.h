@@ -334,10 +334,18 @@ bool clc(// in/out
          // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6; may be NULL
          double*       Var_rt_lidar0_sensor,
          // dense array of shape (Nsectors,); may be NULL
+         // Will try to set this even if clc() failed: from
+         // rt_lidar0/vehicle_lidar_camera and use_given_seed_geometry_... If it
+         // really couldn't be computed from those either, all entries will be
+         // set to 0
          uint16_t* observations_per_sector,
 
          // A dense array of shape (Nsensors,Nsectors); may be NULL
          // Needs lidar_scans_for_isvisible!=NULL
+         // Will try to set this even if clc() failed: from
+         // rt_lidar0/vehicle_lidar_camera and use_given_seed_geometry_... If it
+         // really couldn't be computed from those either, all entries will be
+         // set to 0
          uint8_t* isvisible_per_sensor_per_sector,
 
          // array of shape (Nsectors,); may be NULL
