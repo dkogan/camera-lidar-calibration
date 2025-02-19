@@ -404,6 +404,29 @@ bool clc_fit_Rt_camera_board(// out
     return true;
 }
 
+static bool
+fit_Rt_camera_board_withcache(// out
+                              double*                    Rt_camera_board,
+                              // in
+                              const mrcal_cameramodel_t* model,
+                              const mrcal_point2_t*      observations,
+                              const int                  object_height_n,
+                              const int                  object_width_n,
+                              const double               object_spacing)
+{
+    if(Rt_uninitialized(Rt_camera_board))
+        if(!clc_fit_Rt_camera_board(// out
+                                    Rt_camera_board,
+                                    // in
+                                    model,
+                                    observations,
+                                    object_height_n,
+                                    object_width_n,
+                                    object_spacing))
+            return false;
+    return true;
+}
+
 static
 void get_pboardcenter_board(// out
                             double* p,
@@ -463,18 +486,15 @@ compute_board_poses(// out
                 continue;
 
             double* Rt_camera_board = &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
-            if(Rt_uninitialized(Rt_camera_board))
-            {
-                if(!clc_fit_Rt_camera_board(// out
-                                        Rt_camera_board,
-                                        // in
-                                        models[icamera],
-                                        snapshot->chessboard_corners[icamera],
-                                        object_height_n,
-                                        object_width_n,
-                                        object_spacing))
-                    return false;
-            }
+            if(!fit_Rt_camera_board_withcache(// out
+                                              Rt_camera_board,
+                                              // in
+                                              models[icamera],
+                                              snapshot->chessboard_corners[icamera],
+                                              object_height_n,
+                                              object_width_n,
+                                              object_spacing))
+                return false;
 
             mrcal_compose_Rt(// out
                              &Rt_lidar0_board[isnapshot*4*3],
@@ -742,18 +762,15 @@ bool boardcenter_normal__sensor(// out
             return false;
 
         double* Rt_camera_board = &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
-        if(Rt_uninitialized(Rt_camera_board))
-        {
-            if(!clc_fit_Rt_camera_board(// out
-                                        Rt_camera_board,
-                                        // in
-                                        models[icamera],
-                                        chessboard_corners,
-                                        object_height_n,
-                                        object_width_n,
-                                        object_spacing))
-                return false;
-        }
+        if(!fit_Rt_camera_board_withcache(// out
+                                          Rt_camera_board,
+                                          // in
+                                          models[icamera],
+                                          chessboard_corners,
+                                          object_height_n,
+                                          object_width_n,
+                                          object_spacing))
+            return false;
 
         if(!boardcenter_normal__camera(// out
                                   pboardcenter_sensor,
