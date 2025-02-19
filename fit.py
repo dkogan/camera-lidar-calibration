@@ -273,8 +273,9 @@ else:
 
 for imodel in range(len(args.models)):
     models[imodel].extrinsics_rt_toref(rt_ref_camera[imodel])
-    root,extension = os.path.splitext(args.models[imodel])
-    filename = f"{root}-mounted{extension}"
+    d,f = os.path.split(args.models[imodel])
+    r,e = os.path.splitext(f)
+    filename = f"/tmp/{r}-mounted{e}"
     models[imodel].write(filename)
     print(f"Wrote '{filename}'")
 
