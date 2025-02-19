@@ -459,6 +459,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     PyArrayObject* isvisible_per_sensor_per_sector = NULL;
     PyArrayObject* stdev_worst_per_sector          = NULL;
     PyArrayObject* isensors_pair_stdev_worst       = NULL;
+    int            isector_of_last_snapshot        = -1;
 
     // used if(do_dump_inputs)
     char*  buf_inputs_dump  = NULL;
@@ -897,7 +898,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                 threshold_valid_lidar_range,
                 threshold_valid_lidar_Npoints,
                 uncertainty_quantification_range,
-                NULL,
+                &isector_of_last_snapshot,
                 do_dump_inputs ? &buf_inputs_dump  : NULL,
                 do_dump_inputs ? &size_inputs_dump : NULL,
 
@@ -927,14 +928,15 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     }
 
 
-    result = Py_BuildValue("{sOsOsOsOsOsOsO}",
+    result = Py_BuildValue("{sOsOsOsOsOsOsOsi}",
                            "rt_lidar0_lidar",                 rt_lidar0_lidar,
                            "rt_lidar0_camera",                rt_lidar0_camera,
                            "Var_rt_lidar0_sensor",            Var_rt_lidar0_sensor,
                            "observations_per_sector",         observations_per_sector,
                            "isvisible_per_sensor_per_sector", isvisible_per_sensor_per_sector,
                            "stdev_worst_per_sector",          stdev_worst_per_sector,
-                           "isensors_pair_stdev_worst",       isensors_pair_stdev_worst);
+                           "isensors_pair_stdev_worst",       isensors_pair_stdev_worst,
+                           "isector_of_last_snapshot",        isector_of_last_snapshot);
     if(result == NULL)
         goto done;
 
