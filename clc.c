@@ -2862,9 +2862,12 @@ write_axes(FILE* fp,
 static bool
 _plot_geometry(FILE* fp,
 
-               const double* Rt_lidar0_board,  // Nsnapshots poses ( (4,3) Rt arrays ) of these to fill
-               const double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these to fill (lidar0 not included)
-               const double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these to fill
+               const double* Rt_lidar0_board,  // Nsnapshots poses ( (4,3) Rt
+                                               // arrays ) of these; used for
+                                               // cameras ONLY (not well-defined
+                                               // with lidar-only solves)
+               const double* Rt_lidar0_lidar,  // Nlidars-1 poses ( (4,3) Rt arrays ) of these (lidar0 not included)
+               const double* Rt_lidar0_camera, // Ncameras  poses ( (4,3) Rt arrays ) of these
 
                const sensor_snapshot_segmented_t* snapshots,
                const int                          Nsnapshots,
