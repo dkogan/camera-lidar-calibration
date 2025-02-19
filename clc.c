@@ -1339,6 +1339,8 @@ fit_seed(// in/out
          const sensor_snapshot_segmented_t* snapshots,
          const int                          Nsnapshots,
          uint64_t*                          bitarray_snapshots_selected,
+         // Nsnapshots*Ncameras arrays of shape (4,3)
+         double*                            Rt_camera_board_cache,
 
          const unsigned int Nlidars,
          const unsigned int Ncameras,
@@ -1351,12 +1353,6 @@ fit_seed(// in/out
          const double fit_seed_cos_angle_err_threshold,
          bool verbose)
 {
-    double Rt_camera_board_cache[Nsnapshots*Ncameras * 4*3];
-    memset(Rt_camera_board_cache,
-           0,
-           Nsnapshots*Ncameras * 4*3*sizeof(Rt_camera_board_cache[0]));
-    // The Rt_camera_board_cache[] entries are all 0, which means "invalid"
-
     if(!use_given_seed_geometry)
     {
         // compute Rt_lidar0_lidar and Rt_lidar0_camera
@@ -3855,6 +3851,12 @@ bool clc_fit_from_inputs_dump(// out
             Rt_lidar0_lidar  = Rt_lidar0_lidar_seed;
             Rt_lidar0_camera = Rt_lidar0_camera_seed;
 
+            double Rt_camera_board_cache[Nsnapshots*(*Ncameras) * 4*3];
+            memset(Rt_camera_board_cache,
+                   0,
+                   Nsnapshots*(*Ncameras) * 4*3*sizeof(Rt_camera_board_cache[0]));
+            // The Rt_camera_board_cache[] entries are all 0, which means "invalid"
+
             result =
                 fit_seed(// out
                          Rt_lidar0_board,  // Nsnapshots poses ( (4,3) Rt arrays ) of these to fill
@@ -3866,6 +3868,7 @@ bool clc_fit_from_inputs_dump(// out
                          snapshots,
                          Nsnapshots,
                          bitarray_snapshots_selected,
+                         Rt_camera_board_cache,
 
                          *Nlidars,
                          *Ncameras,
@@ -5708,6 +5711,11 @@ bool clc(// in/out
                                  (const double*)&_rt_lidar0_camera[i]);
         }
 
+        double Rt_camera_board_cache[Nsnapshots*Ncameras * 4*3];
+        memset(Rt_camera_board_cache,
+               0,
+               Nsnapshots*Ncameras * 4*3*sizeof(Rt_camera_board_cache[0]));
+        // The Rt_camera_board_cache[] entries are all 0, which means "invalid"
         if(!fit_seed(// in/out
                      Rt_lidar0_board_seed,
                      Rt_lidar0_lidar_seed,
@@ -5718,6 +5726,7 @@ bool clc(// in/out
                      snapshots,
                      Nsnapshots,
                      bitarray_snapshots_selected,
+                     Rt_camera_board_cache,
 
                      Nlidars,
                      Ncameras,
