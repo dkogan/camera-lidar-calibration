@@ -5172,16 +5172,12 @@ get_observations_per_sector(// out
                             const int object_width_n,
                             const double object_spacing,
                             const mrcal_cameramodel_t*const* models, // Ncameras of these
-                            // Nsnapshots (4,3) arrays
-                            const double* Rt_lidar0_board,
                             // Nlidars-1 (4,3) arrays
                             const double* Rt_lidar0_lidar,
                             // Ncameras (4,3) arrays
                             const double* Rt_lidar0_camera,
                             // may be NULL,
                             const double* Rt_vehicle_lidar0,
-                            // may be NULL; used only if we have
-                            // Rt_lidar0_lidar/camera; and NOT Rt_lidar0_board
                             double* Rt_camera_board_cache)
 {
     // The estimate of the center of the board, in board coords. We
@@ -5205,59 +5201,53 @@ get_observations_per_sector(// out
         // didn't
         mrcal_point3_t pboardcenter_ref = {};
 
-        if(Rt_lidar0_board != NULL)
-            mrcal_transform_point_Rt(pboardcenter_ref.xyz, NULL, NULL,
-                                     &Rt_lidar0_board[isnapshot*4*3], pboardcenter_board.xyz);
-        else
+        // Don't have the board poses, but I have the sensor poses, so I can
+        // approximate. I estimate the board center in ref coords (lidar0 or
+        // vehicle) for each sensor, and I average them
+
+        int Naccumulated = 0;
+        for(int ilidar=0; ilidar<Nlidars; ilidar++)
         {
-            // Don't have the board poses, but I have the sensor poses, so I can
-            // approximate. I estimate the board center in ref coords (lidar0 or
-            // vehicle) for each sensor, and I average them
+            if(snapshot->lidar_scans[ilidar].points == NULL)
+                continue;
 
-            int Naccumulated = 0;
-            for(int ilidar=0; ilidar<Nlidars; ilidar++)
-            {
-                if(snapshot->lidar_scans[ilidar].points == NULL)
-                    continue;
+            mrcal_point3_t pboardcenter;
+            mrcal_point3_from_clc_point3f(&pboardcenter,
+                                          &snapshot->lidar_scans[ilidar].plane.p_mean);
 
-                mrcal_point3_t pboardcenter;
-                mrcal_point3_from_clc_point3f(&pboardcenter,
-                                              &snapshot->lidar_scans[ilidar].plane.p_mean);
-
-                if(ilidar>0)
-                    mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
-                                             &Rt_lidar0_lidar[(ilidar-1)*4*3], pboardcenter.xyz);
-                pboardcenter_ref = mrcal_point3_add(pboardcenter_ref,pboardcenter);
-                Naccumulated++;
-            }
-
-            for(int icamera=0; icamera<Ncameras; icamera++)
-            {
-                if(snapshot->chessboard_corners[icamera] == NULL)
-                    continue;
-
-                double* Rt_camera_board = &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
-                if(!fit_Rt_camera_board_withcache(// out
-                                                  Rt_camera_board,
-                                                  // in
-                                                  models[icamera],
-                                                  snapshot->chessboard_corners[icamera],
-                                                  object_height_n,
-                                                  object_width_n,
-                                                  object_spacing))
-                    return false;
-
-                mrcal_point3_t pboardcenter;
+            if(ilidar>0)
                 mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
-                                         Rt_camera_board, pboardcenter_board.xyz);
-                mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
-                                         &Rt_lidar0_camera[icamera*4*3], pboardcenter.xyz);
-                pboardcenter_ref = mrcal_point3_add(pboardcenter_ref,pboardcenter);
-                Naccumulated++;
-            }
-
-            pboardcenter_ref = mrcal_point3_scale(pboardcenter_ref, 1. / Naccumulated);
+                                         &Rt_lidar0_lidar[(ilidar-1)*4*3], pboardcenter.xyz);
+            pboardcenter_ref = mrcal_point3_add(pboardcenter_ref,pboardcenter);
+            Naccumulated++;
         }
+
+        for(int icamera=0; icamera<Ncameras; icamera++)
+        {
+            if(snapshot->chessboard_corners[icamera] == NULL)
+                continue;
+
+            double* Rt_camera_board = &Rt_camera_board_cache[ (isnapshot*Ncameras + icamera) *4*3];
+            if(!fit_Rt_camera_board_withcache(// out
+                                              Rt_camera_board,
+                                              // in
+                                              models[icamera],
+                                              snapshot->chessboard_corners[icamera],
+                                              object_height_n,
+                                              object_width_n,
+                                              object_spacing))
+                return false;
+
+            mrcal_point3_t pboardcenter;
+            mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
+                                     Rt_camera_board, pboardcenter_board.xyz);
+            mrcal_transform_point_Rt(pboardcenter.xyz,NULL,NULL,
+                                     &Rt_lidar0_camera[icamera*4*3], pboardcenter.xyz);
+            pboardcenter_ref = mrcal_point3_add(pboardcenter_ref,pboardcenter);
+            Naccumulated++;
+        }
+
+        pboardcenter_ref = mrcal_point3_scale(pboardcenter_ref, 1. / Naccumulated);
 
         if(Rt_vehicle_lidar0 != NULL)
             mrcal_transform_point_Rt(pboardcenter_ref.xyz,NULL,NULL,
@@ -5819,7 +5809,6 @@ bool clc(// in/out
                                                 object_width_n,
                                                 object_spacing,
                                                 models,
-                                                NULL,
                                                 // Nlidars-1 (4,3) arrays
                                                 Rt_lidar0_lidar_seed,
                                                 // Ncameras (4,3) arrays
@@ -6096,12 +6085,13 @@ bool clc(// in/out
                                             object_width_n,
                                             object_spacing,
                                             models,
-                                            // Nsnapshots (4,3) arrays
-                                            Rt_lidar0_board_solve,
-                                            NULL,NULL,
+                                            // Nlidars-1 (4,3) arrays
+                                            Rt_lidar0_lidar_solve,
+                                            // Ncameras (4,3) arrays
+                                            Rt_lidar0_camera_solve,
                                             // may be NULL,
                                             rt_vehicle_lidar0 == NULL ? NULL : Rt_vehicle_lidar0,
-                                            NULL))
+                                            Rt_camera_board_cache))
                 return false;
 
 
