@@ -5171,15 +5171,78 @@ get_observations_per_sector(// out
         // This snapshot was used in the solve, so it has at least 2
         // observing sensors; LOOP_SNAPSHOT_HEADER() skipped the ones that
         // didn't
-        mrcal_point3_t p;
-        mrcal_transform_point_Rt(p.xyz, NULL, NULL,
+        mrcal_point3_t pboardcenter_ref;
+        mrcal_transform_point_Rt(pboardcenter_ref.xyz, NULL, NULL,
                                  &Rt_lidar0_board[isnapshot*4*3], pboardcenter_board.xyz);
+
         if(Rt_vehicle_lidar0 != NULL)
-            mrcal_transform_point_Rt(p.xyz,NULL,NULL,
-                                     Rt_vehicle_lidar0, p.xyz);
-        observations_per_sector[ isector_from_pvehicle(p.xyz, Nsectors) ]++;
+            mrcal_transform_point_Rt(pboardcenter_ref.xyz,NULL,NULL,
+                                     Rt_vehicle_lidar0, pboardcenter_ref.xyz);
+        observations_per_sector[ isector_from_pvehicle(pboardcenter_ref.xyz, Nsectors) ]++;
     }
 }
+
+static bool
+get_isvisible_per_sensor_per_sector(// out
+                                    // A dense array of shape (Nsensors,Nsectors); may be NULL
+                                    uint8_t* isvisible_per_sensor_per_sector,
+                                    // in
+                                    const int Nlidars,
+                                    const int Ncameras,
+                                    const int Nsectors,
+                                    // Nlidars-1 (4,3) arrays
+                                    const double* Rt_lidar0_lidar,
+                                    // Ncameras (4,3) arrays
+                                    const double* Rt_lidar0_camera,
+                                    // may be NULL,
+                                    const double* Rt_vehicle_lidar0,
+                                    // used for isvisible_per_sensor_per_sector
+                                    const double threshold_valid_lidar_range,
+                                    const int    threshold_valid_lidar_Npoints,
+                                    const double uncertainty_quantification_range,
+                                    const clc_lidar_scan_unsorted_t* lidar_scans_for_isvisible,
+                                    const unsigned int lidar_packet_stride,
+                                    // Ncameras of these
+                                    const mrcal_cameramodel_t*const* models)
+{
+    // It is more numerically stable to not compute Var=inv(JtJ) and
+    // then compute M Var Mt, but instead to use the factorization of
+    // JtJ to compute M Var Mt directly. But using the covariance code I
+    // already wrote is easier, so I do that for now
+
+
+    // vehicle coords are
+    // x: forward
+    // y: left
+    // z: up
+    if(!evaluate_lidar_visibility(// out
+                                  isvisible_per_sensor_per_sector,
+                                  // in
+                                  Rt_vehicle_lidar0,
+                                  Nsectors,
+                                  _Nrings,
+                                  Rt_lidar0_lidar,
+                                  threshold_valid_lidar_range,
+                                  threshold_valid_lidar_Npoints,
+
+                                  lidar_scans_for_isvisible,
+                                  lidar_packet_stride,
+                                  Nlidars))
+        return false;
+
+    evaluate_camera_visibility(// out
+                               &isvisible_per_sensor_per_sector[Nlidars * Nsectors],
+                               // in
+                               Rt_vehicle_lidar0,
+                               uncertainty_quantification_range,
+                               Nsectors,
+                               Ncameras,
+                               Rt_lidar0_camera,
+                               models);
+
+    return true;
+}
+
 
 // Each sensor is uniquely identified by its position in the
 // sensor_snapshots[].lidar_scans[] or .images[] arrays. An unobserved sensor in
@@ -5914,40 +5977,28 @@ bool clc(// in/out
 
         if(isvisible_per_sensor_per_sector != NULL)
         {
-            // It is more numerically stable to not compute Var=inv(JtJ) and
-            // then compute M Var Mt, but instead to use the factorization of
-            // JtJ to compute M Var Mt directly. But using the covariance code I
-            // already wrote is easier, so I do that for now
-
-
-            // vehicle coords are
-            // x: forward
-            // y: left
-            // z: up
-            if(!evaluate_lidar_visibility(// out
-                                          isvisible_per_sensor_per_sector,
-                                          // in
-                                          (rt_vehicle_lidar0 != NULL) ? Rt_vehicle_lidar0 : NULL,
-                                          Nsectors,
-                                          _Nrings,
-                                          Rt_lidar0_lidar_solve,
-                                          threshold_valid_lidar_range,
-                                          threshold_valid_lidar_Npoints,
-
-                                          lidar_scans_for_isvisible,
-                                          lidar_packet_stride,
-                                          Nlidars))
+            if(!get_isvisible_per_sensor_per_sector(// out
+                                                    // A dense array of shape (Nsensors,Nsectors); may be NULL
+                                                    isvisible_per_sensor_per_sector,
+                                                    // in
+                                                    Nlidars,
+                                                    Ncameras,
+                                                    Nsectors,
+                                                    // Nlidars-1 (4,3) arrays
+                                                    Rt_lidar0_lidar_solve,
+                                                    // Ncameras (4,3) arrays
+                                                    Rt_lidar0_camera_solve,
+                                                    // may be NULL,
+                                                    rt_vehicle_lidar0 == NULL ? NULL : Rt_vehicle_lidar0,
+                                                    // used for isvisible_per_sensor_per_sector
+                                                    threshold_valid_lidar_range,
+                                                    threshold_valid_lidar_Npoints,
+                                                    uncertainty_quantification_range,
+                                                    lidar_scans_for_isvisible,
+                                                    lidar_packet_stride,
+                                                    // Ncameras of these
+                                                    models))
                 return false;
-
-            evaluate_camera_visibility(// out
-                                       &isvisible_per_sensor_per_sector[Nlidars * Nsectors],
-                                       // in
-                                       (rt_vehicle_lidar0 != NULL) ? Rt_vehicle_lidar0 : NULL,
-                                       uncertainty_quantification_range,
-                                       Nsectors,
-                                       Ncameras,
-                                       Rt_lidar0_camera_solve,
-                                       models);
         }
 
         if(stdev_worst_per_sector != NULL)
