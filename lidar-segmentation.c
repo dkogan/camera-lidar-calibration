@@ -1641,8 +1641,9 @@ static bool stage3_refine_clusters(// out
     //       --style ACCEPTED "with points pt 2 ps 2 lw 2 lc \"red\"" \
     //       --tuplesize label 4 \
     //       --style all "with points pt 7 ps 0.5" \
-    //       --style stage1-segment "with vectors" \
-    //       --tuplesize stage1-segment 6 \
+    //       --style stage1-segment "with vectors lc \"green\"" \
+    //       --style plane-normal   "with vectors lc \"black\"" \
+    //       --tuplesize stage1-segment,plane-normal 6 \
     //       --3d \
     //       --domain \
     //       --dataid \
@@ -2054,6 +2055,14 @@ int8_t clc_lidar_segmentation_sorted(// out
                            scan->points[points_and_plane[iplane_out].ipoint[i]].y,
                            icluster,
                            scan->points[points_and_plane[iplane_out].ipoint[i]].z);
+
+            printf("%f %f plane-normal %f %f %f %f\n",
+                   points_and_plane[iplane_out].plane.p_mean.x,
+                   points_and_plane[iplane_out].plane.p_mean.y,
+                   points_and_plane[iplane_out].plane.p_mean.z,
+                   points_and_plane[iplane_out].plane.n.x * 0.2,
+                   points_and_plane[iplane_out].plane.n.y * 0.2,
+                   points_and_plane[iplane_out].plane.n.z * 0.2);
         }
 
         if(rejected)

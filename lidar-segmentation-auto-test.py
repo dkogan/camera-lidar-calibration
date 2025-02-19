@@ -288,8 +288,9 @@ for test in tests + tests_private:
       --style ACCEPTED "with points pt 2 ps 2 lw 2 lc \"red\"" \
       --tuplesize label 4 \
       --style all "with points pt 7 ps 0.5" \
-      --style stage1-segment "with vectors" \
-      --tuplesize stage1-segment 6 \
+      --style stage1-segment "with vectors lc \"green\"" \
+      --style plane-normal   "with vectors lc \"black\"" \
+      --tuplesize stage1-segment,plane-normal 6 \
       --3d \
       --domain \
       --dataid \

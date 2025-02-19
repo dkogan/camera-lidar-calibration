@@ -152,8 +152,9 @@ typedef struct
       "      --style ACCEPTED \"with points pt 2 ps 2 lw 2 lc \\\"red\\\"\"\\\n" \
       "      --tuplesize label 4 \\\n"                                  \
       "      --style all 'with points pt 7 ps 0.5' \\\n"                \
-      "      --style stage1-segment 'with vectors' \\\n"                \
-      "      --tuplesize stage1-segment 6 \\\n"                         \
+      "      --style stage1-segment \"with vectors lc \\\"green\\\"\"\\\n" \
+      "      --style plane-normal   \"with vectors lc \\\"black\\\"\"\\\n" \
+      "      --tuplesize stage1-segment,plane-normal 6\\\n"             \
       "      --3d \\\n"                                                 \
       "      --domain \\\n"                                             \
       "      --dataid \\\n"                                             \
