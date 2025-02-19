@@ -1606,18 +1606,18 @@ stage3_cull_bloom_and_count_non_isolated(// out
     return INT_MAX;
 }
 
-static bool stage3_refine_clusters(// out
-                                   clc_points_and_plane_t* points_and_plane,
-                                   float*              max_norm2_dp,
-                                   float*              eigenvalues_ascending, // 3 of these
-                                   // in
-                                   const int icluster,
-                                   const segment_cluster_t* segment_cluster,
-                                   const segment_t* segments,
-                                   const clc_point3f_t* points,
-                                   const int* ipoint0_in_ring,
-                                   const unsigned int* Npoints,
-                                   const clc_lidar_segmentation_context_t* ctx)
+static bool stage3_refine_cluster(// out
+                                  clc_points_and_plane_t* points_and_plane,
+                                  float*              max_norm2_dp,
+                                  float*              eigenvalues_ascending, // 3 of these
+                                  // in
+                                  const int icluster,
+                                  const segment_cluster_t* segment_cluster,
+                                  const segment_t* segments,
+                                  const clc_point3f_t* points,
+                                  const int* ipoint0_in_ring,
+                                  const unsigned int* Npoints,
+                                  const clc_lidar_segmentation_context_t* ctx)
 {
     /* I have an approximate plane estimate.
 
@@ -1997,14 +1997,14 @@ int8_t clc_lidar_segmentation_sorted(// out
         float max_norm2_dp;
         float eigenvalues_ascending[3];
         bool not_rejected =
-            stage3_refine_clusters(&points_and_plane[iplane_out],
-                                   &max_norm2_dp,
-                                   eigenvalues_ascending,
-                                   icluster,
-                                   segment_cluster,
-                                   segments,
-                                   scan->points, ipoint0_in_ring, scan->Npoints,
-                                   ctx);
+            stage3_refine_cluster(&points_and_plane[iplane_out],
+                                  &max_norm2_dp,
+                                  eigenvalues_ascending,
+                                  icluster,
+                                  segment_cluster,
+                                  segments,
+                                  scan->points, ipoint0_in_ring, scan->Npoints,
+                                  ctx);
 
         const int Npoints_in_plane = points_and_plane[iplane_out].n;
 
