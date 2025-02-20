@@ -776,13 +776,14 @@ static bool is_same_direction(const clc_point3f_t a,
 }
 
 static bool segment_segment_across_rings_close_enough(const clc_point3f_t* dp,
-                                                      const int iring, const int isegment,
                                                       const bool debug,
-                                                      const clc_lidar_segmentation_context_t* ctx)
+                                                      const clc_lidar_segmentation_context_t* ctx,
+                                                      // for diagnostics only
+                                                      const int iring1, const int isegment)
 {
     return
         !DEBUG_ON_TRUE_SEGMENT(norm2(*dp) > ctx->threshold_max_distance_across_rings*ctx->threshold_max_distance_across_rings,
-                               iring,isegment,
+                               iring1,isegment,
                                "cross-ring segments are too far apart: %f > %f",
                                mag(*dp), ctx->threshold_max_distance_across_rings);
 }
@@ -790,10 +791,11 @@ static bool segment_segment_across_rings_close_enough(const clc_point3f_t* dp,
 static bool plane_from_segment_segment(// out
                                        plane_unnormalized_t* plane_unnormalized,
                                        // in
-                                       const int iring, const int isegment,
                                        const segment_t* s0,
                                        const segment_t* s1,
-                                       const clc_lidar_segmentation_context_t* ctx)
+                                       const clc_lidar_segmentation_context_t* ctx,
+                                       // for diagnostics only
+                                       const int iring1, const int isegment)
 {
     // I want:
     //   inner(p1-p0, n=cross(v0,v1)) = 0
@@ -804,9 +806,9 @@ static bool plane_from_segment_segment(// out
         ctx->debug_ymin < s1->p.y && s1->p.y < ctx->debug_ymax;
 
     if(!segment_segment_across_rings_close_enough(&dp,
-                                                  iring,isegment,
                                                   debug,
-                                                  ctx))
+                                                  ctx,
+                                                  iring1,isegment))
         return false;
 
 
@@ -907,6 +909,7 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
                                             segment_cluster_t* cluster,
                                             const segment_t*   segment,
                                             const int          iring, const int isegment,
+                                            // for diagnostics only
                                             const int          icluster,
                                             const segment_t*   segments,
                                             const clc_point3f_t*   points,
@@ -989,7 +992,9 @@ static void try_visit(stack_t* stack,
                       // in,out
                       segment_cluster_t* cluster,
                       // what we're trying
-                      const int iring0, // ring we're traversing from
+                      const int iring0, // ring we're traversing FROM
+
+                      // what we're traversing TO
                       const int iring, const int isegment,
                       // context
                       const int icluster,
@@ -1022,9 +1027,10 @@ static void try_visit(stack_t* stack,
             ctx->debug_ymin < p->y && p->y < ctx->debug_ymax;
 
         if(!segment_segment_across_rings_close_enough(&dp,
-                                                      iring,isegment,
                                                       debug,
-                                                      ctx))
+                                                      ctx,
+                                                      // for diagnostics only
+                                                      iring,isegment))
             return;
     }
 
@@ -1035,6 +1041,7 @@ static void try_visit(stack_t* stack,
                                         cluster,
                                         segment,
                                         iring, isegment,
+                                        // for diagnostics only
                                         icluster,
                                         segments,
                                         points, ipoint0_in_ring,
@@ -1080,20 +1087,25 @@ static void stage2_cluster_segments(// out
 
     for(int iring = 0; iring < ctx->Nrings-1; iring++)
     {
+        const int iring1 = iring+1;
+
         for(int isegment = 0; isegment < Nsegments_per_rotation; isegment++)
         {
-            if(*Nclusters == Nclusters_max)
+            const int icluster = *Nclusters;
+
+            if(icluster == Nclusters_max)
             {
                 MSG("Too many flat objects in scene, exceeded Nclusters_max. Not reporting any more candidate planes. Bump Nclusters_max");
                 return;
             }
 
-            const int icluster = *Nclusters;
-
             segment_cluster_t* cluster = &clusters[icluster];
 
-            segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
-            if(!(segment_is_valid(segment) && !segment->visited))
+            segment_t* segment  = &segments[iring *Nsegments_per_rotation + isegment];
+            segment_t* segment1 = &segments[iring1*Nsegments_per_rotation + isegment];
+            if(!(segment_is_valid(segment ) && !segment ->visited))
+                continue;
+            if(!(segment_is_valid(segment1) && !segment1->visited))
                 continue;
 
             // A single segment has only a direction. To define a plane I need
@@ -1106,25 +1118,21 @@ static void stage2_cluster_segments(// out
             // control exactly what is pushed onto the stack, and minimize it
 
 
-            const int iring1 = iring+1;
-
             *cluster = (segment_cluster_t){.n = 2,
                                            .segments = {[0] = {.isegment = isegment,
                                                                .iring    = iring},
                                                         [1] = {.isegment = isegment,
                                                                .iring    = iring1}}};
 
-            segment_t* segment1 = &segments[iring1*Nsegments_per_rotation + isegment];
-            if(!(segment_is_valid(segment1) && !segment1->visited))
-                continue;
 
             const bool debug =
                 ctx->debug_xmin < segment->p.x && segment->p.x < ctx->debug_xmax &&
                 ctx->debug_ymin < segment->p.y && segment->p.y < ctx->debug_ymax;
             if(DEBUG_ON_TRUE_SEGMENT(!plane_from_segment_segment(&cluster->plane_unnormalized,
-                                                                 iring1, isegment,
                                                                  segment,segment1,
-                                                                 ctx),
+                                                                 ctx,
+                                                                 // for diagnostics only
+                                                                 iring1, isegment),
                                      iring,isegment,
                                      "icluster=%d: segment isn't plane-consistent with %d-%d",
                                      icluster,
@@ -1149,7 +1157,9 @@ static void stage2_cluster_segments(// out
                 segmentref_t* node = stack_pop(&stack);
                 try_visit(&stack,
                           cluster,
+                          // FROM
                           node->iring,
+                          // TO
                           node->iring-1, node->isegment,
                           icluster,
                           segments,
@@ -1157,7 +1167,9 @@ static void stage2_cluster_segments(// out
                           ctx);
                 try_visit(&stack,
                           cluster,
+                          // FROM
                           node->iring,
+                          // TO
                           node->iring+1, node->isegment,
                           icluster,
                           segments,
@@ -1165,7 +1177,9 @@ static void stage2_cluster_segments(// out
                           ctx);
                 try_visit(&stack,
                           cluster,
+                          // FROM
                           node->iring,
+                          // TO
                           node->iring, node->isegment-1,
                           icluster,
                           segments,
