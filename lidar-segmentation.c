@@ -1334,41 +1334,44 @@ static void stage3_accumulate_points(// out
         // constructing the candidate segments. So if we got this far, I assume it's
         // good
 
-        if( ctx->threshold_max_plane_point_error_stage3 >
+        if( ctx->threshold_max_plane_point_error_stage3 <
             fabsf(plane_point_error_stage3_normalized(plane,
                                                       &points[ipoint0_in_ring + ipoint])) )
-        {
-            // I will be fitting a plane to a set of points. The most accurate way
-            // to do this is to minimize the observation errors (ranges; what the
-            // fit ingesting this data will be doing). But that's a nonlinear solve,
-            // and I avoid that here. I simply minimize the norm2 off-plane error
-            // instead:
-            //
-            // - compute pmean
-            // - compute M = sum(outer(p[i]-pmean,p[i]-pmean))
-            // - n = eigenvector of M corresponding to the smallest eigenvalue
-            //
-            // So to accumulate a point I would need two passes over the data: to
-            // compute pmean and then M. I might be able to expand the sum() in M to
-            // make it work in one pass, but that's very likely to produce high
-            // floating point round-off errors. So I actually accumulate the full
-            // points for now, and might do something more efficient later
-            if(*n == max_num_ipoints)
-            {
-                MSG("clc_points_and_plane_t->ipoint overflow. Skipping the rest of the points");
-                break;
-            }
-            ipoints[(*n)++] = ipoint0_in_ring + ipoint;
-
-            bitarray64_set(bitarray_visited, ipoint);
-            th_rad_last = th_rad;
-        }
-        else
         {
             // Not accepting this point, but also not updating th_rad_last. So too
             // many successive invalid points will create a too-large gap, failing
             // the threshold_max_gap_th_rad check above
+            continue;
         }
+
+        // accept the point
+
+
+
+        // I will be fitting a plane to a set of points. The most accurate way
+        // to do this is to minimize the observation errors (ranges; what the
+        // fit ingesting this data will be doing). But that's a nonlinear solve,
+        // and I avoid that here. I simply minimize the norm2 off-plane error
+        // instead:
+        //
+        // - compute pmean
+        // - compute M = sum(outer(p[i]-pmean,p[i]-pmean))
+        // - n = eigenvector of M corresponding to the smallest eigenvalue
+        //
+        // So to accumulate a point I would need two passes over the data: to
+        // compute pmean and then M. I might be able to expand the sum() in M to
+        // make it work in one pass, but that's very likely to produce high
+        // floating point round-off errors. So I actually accumulate the full
+        // points for now, and might do something more efficient later
+        if(*n == max_num_ipoints)
+        {
+            MSG("clc_points_and_plane_t->ipoint overflow. Skipping the rest of the points");
+            break;
+        }
+        ipoints[(*n)++] = ipoint0_in_ring + ipoint;
+
+        bitarray64_set(bitarray_visited, ipoint);
+        th_rad_last = th_rad;
     }
 }
 
