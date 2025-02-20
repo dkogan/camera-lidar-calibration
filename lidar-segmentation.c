@@ -1297,6 +1297,9 @@ static void stage3_accumulate_points(// out
                                      const clc_point3f_t* points,
                                      const int ipoint0_in_ring, // start of this ring in the full points[] array
                                      const int ipoint_segment_limit,
+                                     // for diagnostics
+                                     const int icluster, const int iring, const int isegment,
+                                     const bool debug __attribute__((unused)),
                                      const clc_lidar_segmentation_context_t* ctx)
 {
 
@@ -1760,6 +1763,9 @@ static bool stage3_refine_cluster(// out
                                      points,
                                      ipoint0_in_ring[iring],
                                      segment->ipoint1,
+                                     // for diagnostics
+                                     icluster, iring, isegment,
+                                     debug,
                                      ctx);
 
             if(enable_bloom_culling && points_and_plane->n > ipoint_set_start_this_ring)
@@ -1813,6 +1819,9 @@ static bool stage3_refine_cluster(// out
                                      points,
                                      ipoint0_in_ring[iring],
                                      segment->ipoint0,
+                                     // for diagnostics
+                                     icluster, iring, isegment,
+                                     debug,
                                      ctx);
             if(enable_bloom_culling && points_and_plane->n > ipoint_set_start_this_ring)
             {
