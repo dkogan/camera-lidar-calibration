@@ -207,7 +207,7 @@ typedef struct
   _(float, threshold_max_distance_across_rings,          0.4f,              "f","f", \
       "stage2: max ring-ring distance allowed to join two segments into a cluster" ) \
   _(int,   Nrings,                                       32,                "i","i", \
-      "How many rings are present in the LIDARdata.\n" \
+      "How many rings are present in the LIDAR data.\n" \
       "This is hardware-dependent, and needs to be revisited for different LIDAR units" ) \
   /* cos(90-5deg) */                                                    \
   _(float, threshold_max_cos_angle_error_normal,         0.15,   "f","f", \
