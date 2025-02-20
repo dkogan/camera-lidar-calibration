@@ -1314,10 +1314,12 @@ static void stage3_accumulate_points(// out
             break;
 
         const float th_rad = th_from_point(&points[ipoint0_in_ring + ipoint]);
+        float abs_dth_rad = 0.0f;
         if(th_rad_last < FLT_MAX)
         {
             // we have a valid th_rad_last
-            if(fabsf(th_rad - th_rad_last) > ctx->threshold_max_gap_th_rad)
+            abs_dth_rad = fabsf(th_rad - th_rad_last);
+            if(abs_dth_rad > ctx->threshold_max_gap_th_rad)
                 break;
         }
         else
