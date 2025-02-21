@@ -1376,6 +1376,34 @@ static void stage3_accumulate_points(// out
 }
 
 
+// Not doing this yet. It's complex, and doesn't obviously work well to make
+// things better
+// I'm turning this off for now. It doesn't work right. I'm at ddc519d. This
+// fails:
+//
+//   ./lidar-segmentation-test.py --dump --debug -1 ${^x0y0x1y1} \
+//     /vl_points_1 \
+//     2023-11-01/images-and-lidar-24.bag \
+//   | awk " $x0y0x1y1[1] < \$1 && \$1 < $x0y0x1y1[3] && $x0y0x1y1[2] < \$2 && \$2 < $x0y0x1y1[4]" \
+//   | feedgnuplot \
+//       --style label "with labels" \
+//       --style ACCEPTED "with points pt 2 ps 2 lw 2 lc \"red\"" \
+//       --tuplesize label 4 \
+//       --style all "with points pt 7 ps 0.5" \
+//       --style stage1-segment "with vectors lc \"green\"" \
+//       --style plane-normal   "with vectors lc \"black\"" \
+//       --tuplesize stage1-segment,plane-normal 6 \
+//       --3d \
+//       --domain \
+//       --dataid \
+//       --square \
+//       --points \
+//       --tuplesizeall 3 \
+//       --autolegend \
+//       --xlabel x \
+//       --ylabel y \
+//       --zlabel z
+#if 0
 static int
 stage3_cull_bloom_and_count_non_isolated(// out
                                          unsigned int* n, // in,out
@@ -1625,6 +1653,7 @@ stage3_cull_bloom_and_count_non_isolated(// out
             iring, ipoint_increment);
     return INT_MAX;
 }
+#endif
 
 static bool stage3_refine_cluster(// out
                                   clc_points_and_plane_t* points_and_plane,
@@ -1647,35 +1676,6 @@ static bool stage3_refine_cluster(// out
          update plane estimate using this set of points
        }
      */
-
-
-    // I'm turning this off for now. It doesn't work right. I'm at ddc519d. This
-    // fails:
-    //
-    //   ./lidar-segmentation-test.py --dump --debug -1 ${^x0y0x1y1} \
-    //     /vl_points_1 \
-    //     2023-11-01/images-and-lidar-24.bag \
-    //   | awk " $x0y0x1y1[1] < \$1 && \$1 < $x0y0x1y1[3] && $x0y0x1y1[2] < \$2 && \$2 < $x0y0x1y1[4]" \
-    //   | feedgnuplot \
-    //       --style label "with labels" \
-    //       --style ACCEPTED "with points pt 2 ps 2 lw 2 lc \"red\"" \
-    //       --tuplesize label 4 \
-    //       --style all "with points pt 7 ps 0.5" \
-    //       --style stage1-segment "with vectors lc \"green\"" \
-    //       --style plane-normal   "with vectors lc \"black\"" \
-    //       --tuplesize stage1-segment,plane-normal 6 \
-    //       --3d \
-    //       --domain \
-    //       --dataid \
-    //       --square \
-    //       --points \
-    //       --tuplesizeall 3 \
-    //       --autolegend \
-    //       --xlabel x \
-    //       --ylabel y \
-    //       --zlabel z
-    const bool enable_bloom_culling = false;
-
 
 
     int iring0,iring1;
@@ -1751,8 +1751,7 @@ static bool stage3_refine_cluster(// out
             // capture all the matching points
             const int ipoint0 = (segment->ipoint0 + segment->ipoint1) / 2;
 
-            unsigned int ipoint_set_start_this_ring;
-
+            unsigned int ipoint_set_start_this_ring __attribute__((unused)); // for the currently-disabled bloom_cull logic
 
             ipoint_set_start_this_ring = points_and_plane->n;
             stage3_accumulate_points(// out
@@ -1771,7 +1770,9 @@ static bool stage3_refine_cluster(// out
                                      debug,
                                      ctx);
 
-            if(enable_bloom_culling && points_and_plane->n > ipoint_set_start_this_ring)
+            // disabling this for now; see comment at stage3_cull_bloom_and_count_non_isolated() above
+#if 0
+            if(points_and_plane->n > ipoint_set_start_this_ring)
             {
                 // some points were added
 
@@ -1808,6 +1809,7 @@ static bool stage3_refine_cluster(// out
                 else
                     Npoints_non_isolated += Npoints_non_isolated_here;
             }
+#endif
 
 
             ipoint_set_start_this_ring = points_and_plane->n;
@@ -1826,7 +1828,9 @@ static bool stage3_refine_cluster(// out
                                      icluster, iring, isegment,
                                      debug,
                                      ctx);
-            if(enable_bloom_culling && points_and_plane->n > ipoint_set_start_this_ring)
+            // disabling this for now; see comment at stage3_cull_bloom_and_count_non_isolated() above
+#if 0
+            if(points_and_plane->n > ipoint_set_start_this_ring)
             {
                 // This will be non-zero ONLY if final_iteration
                 int Npoints_non_isolated_here =
@@ -1848,6 +1852,7 @@ static bool stage3_refine_cluster(// out
                 else
                     Npoints_non_isolated += Npoints_non_isolated_here;
             }
+#endif
 
             // I don't bother to look in rings that don't appear in the
             // segment_cluster. This will by contain not very much data (because
