@@ -126,27 +126,17 @@ typedef struct
 
 typedef struct
 {
-    uint16_t iring, isegment;
-} segmentref_t;
-
-typedef struct
-{
-    segmentref_t nodes[255];
-    int n;
-} stack_t;
-
-typedef struct
-{
     union
     {
         clc_plane_t              plane;
         plane_unnormalized_t plane_unnormalized;
     };
 
-    segmentref_t segments[1024-7];
-    int n;
+    int16_t irings[2]; // first and last ring
+    // first and last segment in each successive ring, starting with irings[0]
+    int16_t isegments[32][2];
+
 } segment_cluster_t;
-_Static_assert(sizeof(segment_cluster_t) == 1024*4, "segment_cluster_t has expected size");
 
 
 static void eigenvector(// out
@@ -708,42 +698,6 @@ stage1_segment_from_ring(// out
                           ctx);
 }
 
-static void ring_minmax_from_segment_cluster(// out
-                                             int* iring0,
-                                             int* iring1,
-                                             // int
-                                             const segment_cluster_t* segment_cluster)
-{
-    *iring0 = INT_MAX;
-    *iring1 = INT_MIN;
-    for(int isegment=0; isegment<segment_cluster->n; isegment++)
-    {
-        const segmentref_t* segmentref = &segment_cluster->segments[isegment];
-        const int           iring      = segmentref->iring;
-        if(iring < *iring0) *iring0 = iring;
-        if(iring > *iring1) *iring1 = iring;
-    }
-}
-
-static bool stack_empty(stack_t* stack)
-{
-    return (stack->n == 0);
-}
-// returns the node to fill in, or NULL if full
-static segmentref_t* stack_push(stack_t* stack)
-{
-    if(stack->n == (int)(sizeof(stack->nodes)/sizeof(stack->nodes[0])))
-        return NULL;
-    return &stack->nodes[stack->n++];
-}
-// returns the node, or NULL if empty
-static segmentref_t* stack_pop(stack_t* stack)
-{
-    if(stack->n == 0)
-        return NULL;
-    return &stack->nodes[--stack->n];
-}
-
 static bool is_normal(const clc_point3f_t v,
                       const clc_point3f_t n,
                       const clc_lidar_segmentation_context_t* ctx)
@@ -851,6 +805,22 @@ static bool plane_point_compatible_stage2_unnormalized(const plane_unnormalized_
     return ctx->threshold_max_plane_point_error_stage2*norm2(plane_unnormalized->n_unnormalized) > proj*proj;
 }
 
+
+static int
+count_segments_in_cluster(const segment_cluster_t* cluster)
+{
+    const int Nrings = cluster->irings[1] - cluster->irings[0] + 1;
+    int N = 0;
+    for(int i=0; i<Nrings; i++)
+    {
+        N +=
+            cluster->isegments[i][1] -
+            cluster->isegments[i][0] + 1;
+    }
+    return N;
+}
+
+
 static bool fit_plane_into_cluster(// out
                                    plane_unnormalized_t* plane_unnormalized,
                                    // in
@@ -865,32 +835,42 @@ static bool fit_plane_into_cluster(// out
                                    const int*         ipoint0_in_ring,
                                    const clc_lidar_segmentation_context_t*   ctx)
 {
-    // Storing the left/right ends of the existing segments (cluster->n of them)
-    // and the one candidate new segment
-    const int Nsegments = cluster->n + (segment0 != NULL ? 1 : 0);
+    // Storing the left/right ends of the existing segments and the one
+    // candidate new segment
+    const int Nsegments_max =
+        ctx->threshold_max_Nsegments_in_cluster +
+        1; // because of segment0
 
+    const int       ipoint_size = 2*Nsegments_max;
+    uint32_t        ipoint[ipoint_size];
 
-    unsigned int n = 2*Nsegments;
-    uint32_t ipoint[n];
-    int ipoint0 = 0;
+    int npoints = 0;
     if(segment0 != NULL)
     {
-        ipoint[0] = ipoint0_in_ring[iring0] + segment0->ipoint0;
-        ipoint[1] = ipoint0_in_ring[iring0] + segment0->ipoint1;
-        ipoint0 = 2;
+        ipoint[npoints++] = ipoint0_in_ring[iring0] + segment0->ipoint0;
+        ipoint[npoints++] = ipoint0_in_ring[iring0] + segment0->ipoint1;
     }
 
-    for(int i=0; i<cluster->n; i++)
+    for(int iring = cluster->irings[0];
+        iring    <= cluster->irings[1];
+        iring++)
     {
-        const int iring    = cluster->segments[i].iring;
-        const int isegment = cluster->segments[i].isegment;
-        const segment_t* segment =
-            &segments[iring*Nsegments_per_rotation + isegment];
+        for(int isegment = cluster->isegments[iring-cluster->irings[0]][0];
+            isegment    <= cluster->isegments[iring-cluster->irings[0]][1];
+            isegment++)
+        {
+            const segment_t* segment =
+                &segments[iring*Nsegments_per_rotation + isegment];
 
-        ipoint[ipoint0 + 2*i + 0] = ipoint0_in_ring[iring] + segment->ipoint0;
-        ipoint[ipoint0 + 2*i + 1] = ipoint0_in_ring[iring] + segment->ipoint1;
+            // Cluster is too big; it doesn't matter if it fits into the plane;
+            // I return false
+            if(npoints == ipoint_size)
+                return false;
+
+            ipoint[npoints++] = ipoint0_in_ring[iring] + segment->ipoint0;
+            ipoint[npoints++] = ipoint0_in_ring[iring] + segment->ipoint1;
+        }
     }
-
 
     float max_norm2_dp;
     float eigenvalues_ascending[3];
@@ -899,7 +879,7 @@ static bool fit_plane_into_cluster(// out
                                          &max_norm2_dp,
                                          eigenvalues_ascending, // 3 of these
                                          // in
-                                         points, n,ipoint);
+                                         points, npoints,ipoint);
     return true;
 }
 
@@ -907,15 +887,16 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
                                             // cluster->plane_unnormalized may be updated by
                                             // this call, if we return true
                                             segment_cluster_t* cluster,
-                                            const segment_t*   segment,
                                             const int          iring, const int isegment,
+                                            const segment_t*   segments,
                                             // for diagnostics only
                                             const int          icluster,
-                                            const segment_t*   segments,
                                             const clc_point3f_t*   points,
                                             const int*         ipoint0_in_ring,
                                             const clc_lidar_segmentation_context_t*   ctx)
 {
+    const segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
+
     // both segment->p and segment->v must lie in the plane
 
     // I want:
@@ -964,23 +945,30 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
                               icluster))
         return false;
 
-    for(int i=0; i<cluster->n; i++)
-    {
-        const int iring_here    = cluster->segments[i].iring;
-        const int isegment_here = cluster->segments[i].isegment;
-        const segment_t* segment_here =
-            &segments[iring_here*Nsegments_per_rotation + isegment_here];
 
-        if(DEBUG_ON_TRUE_SEGMENT(!is_normal(segment_here->v, plane_unnormalized.n_unnormalized, ctx),
-                                 iring_here,isegment_here,
-                                 "icluster=%d: segment isn't plane-consistent during the re-fit check: the direction isn't in-plane",
-                                 icluster) ||
-           DEBUG_ON_TRUE_SEGMENT(!plane_point_compatible_stage2_unnormalized(&plane_unnormalized, &segment_here->p, ctx),
-                                 iring_here,isegment_here,
-                                 "icluster=%d: segment isn't plane-consistent during the re-fit check: the isn't in-plane",
-                                 icluster))
-            return false;
+    for(int iring_here = cluster->irings[0];
+        iring_here    <= cluster->irings[1];
+        iring_here++)
+    {
+        for(int isegment_here = cluster->isegments[iring_here-cluster->irings[0]][0];
+            isegment_here    <= cluster->isegments[iring_here-cluster->irings[0]][1];
+            isegment_here++)
+        {
+            const segment_t* segment_here =
+                &segments[iring_here*Nsegments_per_rotation + isegment_here];
+
+            if(DEBUG_ON_TRUE_SEGMENT(!is_normal(segment_here->v, plane_unnormalized.n_unnormalized, ctx),
+                                     iring_here,isegment_here,
+                                     "icluster=%d: segment isn't plane-consistent during the re-fit check: the direction isn't in-plane",
+                                     icluster) ||
+               DEBUG_ON_TRUE_SEGMENT(!plane_point_compatible_stage2_unnormalized(&plane_unnormalized, &segment_here->p, ctx),
+                                     iring_here,isegment_here,
+                                     "icluster=%d: segment isn't plane-consistent during the re-fit check: the isn't in-plane",
+                                     icluster))
+                return false;
+        }
     }
+
 
     // new plane fits well-enough
     cluster->plane_unnormalized = plane_unnormalized;
@@ -988,89 +976,222 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
 }
 
 
-static void try_visit(stack_t* stack,
-                      // in,out
-                      segment_cluster_t* cluster,
-                      // what we're trying
-                      const int iring0, // ring we're traversing FROM
-
-                      // what we're traversing TO
-                      const int iring, const int isegment,
-                      // context
-                      const int icluster,
-                      segment_t* segments, // non-const to be able to set "visited"
-                      const clc_point3f_t*   points,
-                      const int*         ipoint0_in_ring,
-                      const clc_lidar_segmentation_context_t* ctx)
+static void stage2_accumulate_segments_samering( // out
+                                                int16_t*                                isegment,
+                                                // in
+                                                const int16_t                           isegment_increment,
+                                                const int16_t                           isegment_limit, // first invalid
+                                                segment_cluster_t*                      cluster,
+                                                const int                               iring,
+                                                segment_t*                              segments, // not const to set visited
+                                                const int                               icluster,
+                                                const clc_point3f_t*                    points,
+                                                const int*                              ipoint0_in_ring,
+                                                const clc_lidar_segmentation_context_t* ctx)
 {
-    if(iring    < 0 || iring    >= ctx->Nrings           ) return;
-    if(isegment < 0 || isegment >= Nsegments_per_rotation) return;
-
-    segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
-
-    if(segment->visited)
-        return;
-
-    if(!segment_is_valid(segment))
-        return;
-
-    if(iring0 != iring)
+    while(true)
     {
-        const clc_point3f_t* p  = &segments[iring *Nsegments_per_rotation + isegment].p;
-        const clc_point3f_t* p0 = &segments[iring0*Nsegments_per_rotation + isegment].p;
-
-        const clc_point3f_t dp = sub(*p,*p0);
-
-
-        const bool debug =
-            ctx->debug_xmin < p->x && p->x < ctx->debug_xmax &&
-            ctx->debug_ymin < p->y && p->y < ctx->debug_ymax;
-
-        if(!segment_segment_across_rings_close_enough(&dp,
-                                                      debug,
-                                                      ctx,
-                                                      // for diagnostics only
-                                                      iring,isegment))
+        if(*isegment == isegment_limit)
             return;
+
+        int16_t isegment_next = *isegment + isegment_increment;
+
+        segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment_next];
+
+        if(segment->visited)
+            return;
+
+        if(!segment_is_valid(segment))
+            return;
+
+        if(!stage2_plane_segment_compatible(// The initial plane estimate in
+                                            // cluster->plane_unnormalized may be updated by
+                                            // this call, if we return true
+                                            cluster,
+                                            iring, isegment_next,
+                                            segments,
+                                            // for diagnostics only
+                                            icluster, points, ipoint0_in_ring, ctx))
+            return;
+
+        segment->visited = true;
+        *isegment = isegment_next;
     }
+}
 
+static
+bool stage2_next_ring_segment_compatible(// The initial plane estimate in
+                                         // cluster->plane_unnormalized may be
+                                         // updated by this call, if we return
+                                         // true
+                                         segment_cluster_t*                      cluster,
+                                         const int                               iring1,
+                                         const int                               isegment,
+                                         // context
+                                         const segment_t*                        segments,
+                                         const int                               icluster,
+                                         const clc_point3f_t*                    points,
+                                         const int*                              ipoint0_in_ring,
+                                         const clc_lidar_segmentation_context_t* ctx)
+{
+    const segment_t*     segment  = &segments[iring1    *Nsegments_per_rotation + isegment];
+    const segment_t*     segment0 = &segments[(iring1-1)*Nsegments_per_rotation + isegment];
+    const clc_point3f_t* p0       = &segment0->p;
+    const clc_point3f_t* p        = &segment->p;
+    const clc_point3f_t  dp       = sub(*p0, *p);
+    const bool debug              =
+        ctx->debug_xmin < p->x && p->x < ctx->debug_xmax &&
+        ctx->debug_ymin < p->y && p->y < ctx->debug_ymax;
 
-    if(!stage2_plane_segment_compatible(// The initial plane estimate in
+    return
+        !segment->visited &&
+        segment_is_valid(segment) &&
+        segment_segment_across_rings_close_enough(&dp,
+                                                  debug,
+                                                  ctx,
+                                                  // for diagnostics only
+                                                  iring1,isegment) &&
+        stage2_plane_segment_compatible(// The initial plane estimate in
                                         // cluster->plane_unnormalized may be updated by
                                         // this call, if we return true
                                         cluster,
-                                        segment,
-                                        iring, isegment,
+                                        iring1, isegment,
+                                        segments,
                                         // for diagnostics only
                                         icluster,
-                                        segments,
                                         points, ipoint0_in_ring,
-                                        ctx))
-        return;
+                                        ctx);
 
-
-    segmentref_t* node = stack_push(stack);
-
-    // Do this before the error checking; otherwise the error conditions may
-    // go into an infinite loop
-    segment->visited = true;
-
-    if(node == NULL)
-    {
-        MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of 'stack_t.nodes'");
-        return;
-    }
-    if(cluster->n == (int)(sizeof(cluster->segments)/sizeof(cluster->segments[0])))
-    {
-        MSG("Connected component too large. Ignoring the rest of it. Please bump up the size of 'cluster_t.segments'");
-        return;
-    }
-
-    node->isegment = isegment;
-    node->iring    = iring;
-
-    cluster->segments[cluster->n++] = *node;
 }
+
+static void
+stage2_grow_cluster(// out
+                    segment_cluster_t* cluster,
+                    // in
+                    const int        icluster,
+                    // start from here
+                    const int iring0, const int isegment,
+                    segment_t*       segments, // non-const to be able to set "visited"
+                    const clc_point3f_t* points,
+                    const int*       ipoint0_in_ring,
+                    const clc_lidar_segmentation_context_t* ctx)
+{
+    *cluster = (segment_cluster_t){.irings       = {iring0,iring0},
+                                   .isegments    =
+                                   { [0] = {isegment,isegment} }};
+
+    int iring = iring0;
+    while(true)
+    {
+        stage2_accumulate_segments_samering( // out
+                                             &cluster->isegments[iring-iring0][0],
+                                             // in
+                                             -1,
+                                             -1,
+                                             cluster,
+                                             iring,
+                                             segments,
+                                             icluster,
+                                             points,
+                                             ipoint0_in_ring,
+                                             ctx);
+        stage2_accumulate_segments_samering( // out
+                                             &cluster->isegments[iring-iring0][1],
+                                             // in
+                                             1,
+                                             Nsegments_per_rotation,
+                                             cluster,
+                                             iring,
+                                             segments,
+                                             icluster,
+                                             points,
+                                             ipoint0_in_ring,
+                                             ctx);
+
+        // We have the expanded set of segments in iring. I try to find a
+        // matching segment in the next ring, and propagate that
+        const int isegment0 = cluster->isegments[iring-iring0][0];
+        const int isegment1 = cluster->isegments[iring-iring0][1];
+
+        iring++;
+
+        if(iring-iring0 >= sizeof(cluster->isegments)/sizeof(cluster->isegments[0]))
+        {
+            MSG("Ring overflow. Increase sizeof(cluster->isegments)");
+            return;
+        }
+
+        if(iring >= ctx->Nrings)
+            return;
+
+        int isegment_nextring_offcenter0 = -1;
+        int isegment_nextring_offcenter1 = -1;
+        const int isegment_center = (isegment0 + isegment1)/2;
+        // I start searching in the middle of the previous ring
+        for( int i = 0;
+             isegment_center-i >= isegment0;
+             i++ )
+        {
+            if(stage2_next_ring_segment_compatible(cluster,
+                                                   iring,
+                                                   isegment_center-i,
+                                                   // context
+                                                   segments, icluster, points, ipoint0_in_ring, ctx))
+            {
+                isegment_nextring_offcenter0 = i;
+                break;
+            }
+        }
+        for( int i = 1;
+             isegment_center+i <= isegment1;
+             i++ )
+        {
+            if(stage2_next_ring_segment_compatible(cluster,
+                                                   iring,
+                                                   isegment_center+i,
+                                                   // context
+                                                   segments, icluster, points, ipoint0_in_ring, ctx))
+            {
+                isegment_nextring_offcenter1 = i;
+                break;
+            }
+        }
+
+        // The nearest (to the center) matching segments in the next ring are
+        // isegment_nextring_offcenter0,1. >=0 if defined
+        int isegment_nextring;
+        if(isegment_nextring_offcenter0 < 0 &&
+           isegment_nextring_offcenter1 < 0)
+        {
+            // No matching segments in the next ring. We're done
+            return;
+        }
+        if(isegment_nextring_offcenter0 < 0)
+            // The matching segment appears on only one side. Take it
+            isegment_nextring = isegment_center+isegment_nextring_offcenter1;
+        else if(isegment_nextring_offcenter1 < 0)
+            // The matching segment appears on only one side. Take it
+            isegment_nextring = isegment_center-isegment_nextring_offcenter0;
+        else
+        {
+            // The matching segment appears on both sides. Take the one closer
+            // to the center
+            if(isegment_nextring_offcenter0 < isegment_nextring_offcenter1)
+                isegment_nextring = isegment_center-isegment_nextring_offcenter0;
+            else
+                isegment_nextring = isegment_center+isegment_nextring_offcenter1;
+        }
+
+        // I have the next-ring segment. Add it to the cluster, and expand it
+        cluster->irings[1] = iring;
+        cluster->isegments[iring-iring0][0] = isegment_nextring;
+        cluster->isegments[iring-iring0][1] = isegment_nextring;
+
+        segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment_nextring];
+        segment->visited = true;
+    }
+}
+
 
 static void stage2_cluster_segments(// out
                                     segment_cluster_t* clusters,
@@ -1085,9 +1206,9 @@ static void stage2_cluster_segments(// out
 {
     *Nclusters = 0;
 
-    for(int iring = 0; iring < ctx->Nrings-1; iring++)
+    for(int iring0 = 0; iring0 < ctx->Nrings-1; iring0++)
     {
-        const int iring1 = iring+1;
+        const int iring1 = iring0+1;
 
         for(int isegment = 0; isegment < Nsegments_per_rotation; isegment++)
         {
@@ -1099,104 +1220,50 @@ static void stage2_cluster_segments(// out
                 return;
             }
 
-            segment_cluster_t* cluster = &clusters[icluster];
-
-            segment_t* segment  = &segments[iring *Nsegments_per_rotation + isegment];
+            segment_t* segment0 = &segments[iring0*Nsegments_per_rotation + isegment];
             segment_t* segment1 = &segments[iring1*Nsegments_per_rotation + isegment];
-            if(!(segment_is_valid(segment ) && !segment ->visited))
+            if(!(segment_is_valid(segment0) && !segment0->visited))
                 continue;
             if(!(segment_is_valid(segment1) && !segment1->visited))
                 continue;
+
 
             // A single segment has only a direction. To define a plane I need
             // another non-colinear segment, and I can get it from one of the
             // two adjacent rings. Once I get a plane I find the biggest
             // connected component of plane-consistent segments around this one
-            //
-            // The biggest-connected-component routine is traditionally done
-            // with recursion, but setting it up manually allows me to better
-            // control exactly what is pushed onto the stack, and minimize it
-
-
-            *cluster = (segment_cluster_t){.n = 2,
-                                           .segments = {[0] = {.isegment = isegment,
-                                                               .iring    = iring},
-                                                        [1] = {.isegment = isegment,
-                                                               .iring    = iring1}}};
-
-
+            segment_cluster_t* cluster = &clusters[icluster];
             const bool debug =
-                ctx->debug_xmin < segment->p.x && segment->p.x < ctx->debug_xmax &&
-                ctx->debug_ymin < segment->p.y && segment->p.y < ctx->debug_ymax;
+                ctx->debug_xmin < segment0->p.x && segment0->p.x < ctx->debug_xmax &&
+                ctx->debug_ymin < segment0->p.y && segment0->p.y < ctx->debug_ymax;
             if(DEBUG_ON_TRUE_SEGMENT(!plane_from_segment_segment(&cluster->plane_unnormalized,
-                                                                 segment,segment1,
+                                                                 segment0,segment1,
                                                                  ctx,
                                                                  // for diagnostics only
                                                                  iring1, isegment),
-                                     iring,isegment,
+                                     iring0,isegment,
                                      "icluster=%d: segment isn't plane-consistent with %d-%d",
                                      icluster,
                                      iring1,isegment))
                 continue;
 
-            stack_t stack = {};
+            segment0->visited = true;
 
-            segmentref_t* node0 = stack_push(&stack);
-            node0->iring    = iring;
-            node0->isegment = isegment;
+            stage2_grow_cluster(// out
+                                cluster,
 
-            segmentref_t* node1 = stack_push(&stack);
-            node1->iring    = iring1;
-            node1->isegment = isegment;
+                                // in
+                                icluster,
+                                iring0, isegment,
+                                segments,
+                                points,
+                                ipoint0_in_ring,
+                                ctx);
 
-            segment ->visited = true;
-            segment1->visited = true;
+            const int Nsegments_in_cluster = count_segments_in_cluster(cluster);
 
-            while(!stack_empty(&stack))
-            {
-                segmentref_t* node = stack_pop(&stack);
-                try_visit(&stack,
-                          cluster,
-                          // FROM
-                          node->iring,
-                          // TO
-                          node->iring-1, node->isegment,
-                          icluster,
-                          segments,
-                          points, ipoint0_in_ring,
-                          ctx);
-                try_visit(&stack,
-                          cluster,
-                          // FROM
-                          node->iring,
-                          // TO
-                          node->iring+1, node->isegment,
-                          icluster,
-                          segments,
-                          points, ipoint0_in_ring,
-                          ctx);
-                try_visit(&stack,
-                          cluster,
-                          // FROM
-                          node->iring,
-                          // TO
-                          node->iring, node->isegment-1,
-                          icluster,
-                          segments,
-                          points, ipoint0_in_ring,
-                          ctx);
-                try_visit(&stack,
-                          cluster,
-                          node->iring,
-                          node->iring, node->isegment+1,
-                          icluster,
-                          segments,
-                          points, ipoint0_in_ring,
-                          ctx);
-            }
-
-            if(DEBUG_ON_TRUE_SEGMENT(cluster->n == 2,
-                                     iring,isegment,
+            if(DEBUG_ON_TRUE_SEGMENT(Nsegments_in_cluster == 2,
+                                     iring0,isegment,
                                      "icluster=%d only contains the seed segments",
                                      icluster))
             {
@@ -1207,29 +1274,29 @@ static void stage2_cluster_segments(// out
                 continue;
             }
 
-            if(DEBUG_ON_TRUE_SEGMENT(cluster->n < ctx->threshold_min_Nsegments_in_cluster,
-                                     iring,isegment,
+            if(DEBUG_ON_TRUE_SEGMENT(Nsegments_in_cluster < ctx->threshold_min_Nsegments_in_cluster,
+                                     iring0,isegment,
                                      "icluster=%d too small: %d < %d",
                                      icluster,
-                                     cluster->n, ctx->threshold_min_Nsegments_in_cluster))
+                                     Nsegments_in_cluster, ctx->threshold_min_Nsegments_in_cluster))
             {
                 continue;
             }
 
-            if(DEBUG_ON_TRUE_SEGMENT(cluster->n > ctx->threshold_max_Nsegments_in_cluster,
-                                     iring,isegment,
+            if(DEBUG_ON_TRUE_SEGMENT(Nsegments_in_cluster > ctx->threshold_max_Nsegments_in_cluster,
+                                     iring0,isegment,
                                      "icluster=%d too big: %d > %d",
                                      icluster,
-                                     cluster->n, ctx->threshold_max_Nsegments_in_cluster))
+                                     Nsegments_in_cluster, ctx->threshold_max_Nsegments_in_cluster))
             {
                 continue;
             }
 
             {
-                int iring0,iring1;
-                ring_minmax_from_segment_cluster(&iring0, &iring1, cluster);
+                const int iring0 = cluster->irings[0];
+                const int iring1 = cluster->irings[1];
                 if(DEBUG_ON_TRUE_SEGMENT(iring1-iring0+1 < ctx->threshold_min_Nrings_in_cluster,
-                                         iring,isegment,
+                                         iring0,isegment,
                                          "icluster=%d contains too-few rings: %d < %d",
                                          icluster,
                                          iring1-iring0+1, ctx->threshold_min_Nrings_in_cluster))
@@ -1241,19 +1308,26 @@ static void stage2_cluster_segments(// out
             // partially too far (walls, ground), and I want to detect this
             // far-too-large-ness, and throw them out
             bool keep = false;
-            for(int i=0; i<cluster->n; i++)
+            for(int iring = cluster->irings[0];
+                iring    <= cluster->irings[1];
+                iring++)
             {
-                const segmentref_t* node = &cluster->segments[i];
-                const segment_t* segment = &segments[node->iring*Nsegments_per_rotation + node->isegment];
-
-                if( norm2(segment->p) < ctx->threshold_max_range*ctx->threshold_max_range )
+                for(int isegment = cluster->isegments[iring-cluster->irings[0]][0];
+                    isegment    <= cluster->isegments[iring-cluster->irings[0]][1];
+                    isegment++)
                 {
-                    keep = true;
-                    break;
+                    const segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
+
+                    if( norm2(segment->p) < ctx->threshold_max_range*ctx->threshold_max_range )
+                    {
+                        keep = true;
+                        break;
+                    }
                 }
+                if(keep) break;
             }
             if(DEBUG_ON_TRUE_SEGMENT(!keep,
-                                     iring,isegment,
+                                     iring0,isegment,
                                      "icluster=%d is completely past the threshold_max_range=%f",
                                      icluster, ctx->threshold_max_range))
                 continue;
@@ -1677,9 +1751,8 @@ static bool stage3_refine_cluster(// out
        }
      */
 
-
-    int iring0,iring1;
-    ring_minmax_from_segment_cluster(&iring0, &iring1, segment_cluster);
+    const int iring0 = segment_cluster->irings[0];
+    const int iring1 = segment_cluster->irings[1];
 
     const int Nrings_considered = iring1-iring0+1;
 
@@ -1725,145 +1798,144 @@ static bool stage3_refine_cluster(// out
 
 
 
-        for(int isegment_in_cluster=0; isegment_in_cluster<segment_cluster->n; isegment_in_cluster++)
+        for(int iring = segment_cluster->irings[0];
+            iring    <= segment_cluster->irings[1];
+            iring++)
         {
-            const segmentref_t* segmentref = &segment_cluster->segments[isegment_in_cluster];
-
-            const int iring    = segmentref->iring;
-            const int isegment = segmentref->isegment;
-
-
-
-
-            /////////// This is temporary, until I reimplement the way data is
-            /////////// passed to this function. It should just be a list of
-            /////////// rings and a single seed point for each
-            if(bitarray_ring_visited & (1U << (iring-iring0)))
-                continue;
-            bitarray_ring_visited |= 1U << (iring-iring0);
-
-
-
-            const segment_t* segment =
-                &segments[iring*Nsegments_per_rotation + isegment];
-
-            // I start in the center of each segment, and expand outwards to
-            // capture all the matching points
-            const int ipoint0 = (segment->ipoint0 + segment->ipoint1) / 2;
-
-            unsigned int ipoint_set_start_this_ring __attribute__((unused)); // for the currently-disabled bloom_cull logic
-
-            ipoint_set_start_this_ring = points_and_plane->n;
-            stage3_accumulate_points(// out
-                                     &points_and_plane->n,
-                                     points_and_plane->ipoint,
-                                     (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
-                                     bitarray_visited[iring-iring0],
-                                     // in
-                                     ipoint0, +1, Npoints[iring],
-                                     &plane_out,
-                                     points,
-                                     ipoint0_in_ring[iring],
-                                     segment->ipoint1,
-                                     // for diagnostics
-                                     icluster, iring, isegment,
-                                     debug,
-                                     ctx);
-
-            // disabling this for now; see comment at stage3_cull_bloom_and_count_non_isolated() above
-#if 0
-            if(points_and_plane->n > ipoint_set_start_this_ring)
+            for(int isegment = segment_cluster->isegments[iring-segment_cluster->irings[0]][0];
+                isegment    <= segment_cluster->isegments[iring-segment_cluster->irings[0]][1];
+                isegment++)
             {
-                // some points were added
+                /////////// This is temporary, until I reimplement the way data is
+                /////////// passed to this function. It should just be a list of
+                /////////// rings and a single seed point for each
+                if(bitarray_ring_visited & (1U << (iring-iring0)))
+                    continue;
+                bitarray_ring_visited |= 1U << (iring-iring0);
 
-                // I cull the bloom points at the edges. This will need to
-                // un-accumulate some points. stage3_accumulate_points() does:
-                //
-                //   points_and_plane->ipoint[points_and_plane->n++] = ipoint0_in_ring + ipoint;
-                //   bitarray64_set(bitarray_visited, ipoint);
-                //
-                // I can easily update the ipoint_set: I pull some points off the
-                // end. The bitarray_visited doesn't matter, since I will never
-                // process this ring again
-                //
-                // After we get a final-ish fit. I check to see if this board
-                // isn't isolated in space. And if it isn't, I reject it
 
-                // This will be non-zero ONLY if final_iteration
-                int Npoints_non_isolated_here =
-                    stage3_cull_bloom_and_count_non_isolated(// out
-                                                             &points_and_plane->n,
-                                                             points_and_plane->ipoint,
-                                                             // in
-                                                             +1, Npoints[iring],
-                                                             &plane_out,
-                                                             points,
-                                                             ipoint_set_start_this_ring,
-                                                             ipoint0_in_ring[iring],
-                                                             icluster, iring,
-                                                             final_iteration,
-                                                             debug,
-                                                             ctx);
-                if(Npoints_non_isolated_here == INT_MAX)
-                    Npoints_non_isolated = Npoints_non_isolated_here;
-                else
-                    Npoints_non_isolated += Npoints_non_isolated_here;
-            }
+
+                const segment_t* segment =
+                    &segments[iring*Nsegments_per_rotation + isegment];
+
+                // I start in the center of each segment, and expand outwards to
+                // capture all the matching points
+                const int ipoint0 = (segment->ipoint0 + segment->ipoint1) / 2;
+
+                unsigned int ipoint_set_start_this_ring __attribute__((unused)); // for the currently-disabled bloom_cull logic
+
+                ipoint_set_start_this_ring = points_and_plane->n;
+                stage3_accumulate_points(// out
+                                         &points_and_plane->n,
+                                         points_and_plane->ipoint,
+                                         (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
+                                         bitarray_visited[iring-iring0],
+                                         // in
+                                         ipoint0, +1, Npoints[iring],
+                                         &plane_out,
+                                         points,
+                                         ipoint0_in_ring[iring],
+                                         segment->ipoint1,
+                                         // for diagnostics
+                                         icluster, iring, isegment,
+                                         debug,
+                                         ctx);
+
+                // disabling this for now; see comment at stage3_cull_bloom_and_count_non_isolated() above
+#if 0
+                if(points_and_plane->n > ipoint_set_start_this_ring)
+                {
+                    // some points were added
+
+                    // I cull the bloom points at the edges. This will need to
+                    // un-accumulate some points. stage3_accumulate_points() does:
+                    //
+                    //   points_and_plane->ipoint[points_and_plane->n++] = ipoint0_in_ring + ipoint;
+                    //   bitarray64_set(bitarray_visited, ipoint);
+                    //
+                    // I can easily update the ipoint_set: I pull some points off the
+                    // end. The bitarray_visited doesn't matter, since I will never
+                    // process this ring again
+                    //
+                    // After we get a final-ish fit. I check to see if this board
+                    // isn't isolated in space. And if it isn't, I reject it
+
+                    // This will be non-zero ONLY if final_iteration
+                    int Npoints_non_isolated_here =
+                        stage3_cull_bloom_and_count_non_isolated(// out
+                                                                 &points_and_plane->n,
+                                                                 points_and_plane->ipoint,
+                                                                 // in
+                                                                 +1, Npoints[iring],
+                                                                 &plane_out,
+                                                                 points,
+                                                                 ipoint_set_start_this_ring,
+                                                                 ipoint0_in_ring[iring],
+                                                                 icluster, iring,
+                                                                 final_iteration,
+                                                                 debug,
+                                                                 ctx);
+                    if(Npoints_non_isolated_here == INT_MAX)
+                        Npoints_non_isolated = Npoints_non_isolated_here;
+                    else
+                        Npoints_non_isolated += Npoints_non_isolated_here;
+                }
 #endif
 
 
-            ipoint_set_start_this_ring = points_and_plane->n;
-            stage3_accumulate_points(// out
-                                     &points_and_plane->n,
-                                     points_and_plane->ipoint,
-                                     (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
-                                     bitarray_visited[iring-iring0],
-                                     // in
-                                     ipoint0-1, -1, -1,
-                                     &plane_out,
-                                     points,
-                                     ipoint0_in_ring[iring],
-                                     segment->ipoint0,
-                                     // for diagnostics
-                                     icluster, iring, isegment,
-                                     debug,
-                                     ctx);
-            // disabling this for now; see comment at stage3_cull_bloom_and_count_non_isolated() above
+                ipoint_set_start_this_ring = points_and_plane->n;
+                stage3_accumulate_points(// out
+                                         &points_and_plane->n,
+                                         points_and_plane->ipoint,
+                                         (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
+                                         bitarray_visited[iring-iring0],
+                                         // in
+                                         ipoint0-1, -1, -1,
+                                         &plane_out,
+                                         points,
+                                         ipoint0_in_ring[iring],
+                                         segment->ipoint0,
+                                         // for diagnostics
+                                         icluster, iring, isegment,
+                                         debug,
+                                         ctx);
+                // disabling this for now; see comment at stage3_cull_bloom_and_count_non_isolated() above
 #if 0
-            if(points_and_plane->n > ipoint_set_start_this_ring)
-            {
-                // This will be non-zero ONLY if final_iteration
-                int Npoints_non_isolated_here =
-                    stage3_cull_bloom_and_count_non_isolated(// out
-                                                             &points_and_plane->n,
-                                                             points_and_plane->ipoint,
-                                                             // in
-                                                             -1, -1,
-                                                             &plane_out,
-                                                             points,
-                                                             ipoint_set_start_this_ring,
-                                                             ipoint0_in_ring[iring],
-                                                             icluster, iring,
-                                                             final_iteration,
-                                                             debug,
-                                                             ctx);
-                if(Npoints_non_isolated_here == INT_MAX)
-                    Npoints_non_isolated = Npoints_non_isolated_here;
-                else
-                    Npoints_non_isolated += Npoints_non_isolated_here;
-            }
+                if(points_and_plane->n > ipoint_set_start_this_ring)
+                {
+                    // This will be non-zero ONLY if final_iteration
+                    int Npoints_non_isolated_here =
+                        stage3_cull_bloom_and_count_non_isolated(// out
+                                                                 &points_and_plane->n,
+                                                                 points_and_plane->ipoint,
+                                                                 // in
+                                                                 -1, -1,
+                                                                 &plane_out,
+                                                                 points,
+                                                                 ipoint_set_start_this_ring,
+                                                                 ipoint0_in_ring[iring],
+                                                                 icluster, iring,
+                                                                 final_iteration,
+                                                                 debug,
+                                                                 ctx);
+                    if(Npoints_non_isolated_here == INT_MAX)
+                        Npoints_non_isolated = Npoints_non_isolated_here;
+                    else
+                        Npoints_non_isolated += Npoints_non_isolated_here;
+                }
 #endif
 
-            // I don't bother to look in rings that don't appear in the
-            // segment_cluster. This will by contain not very much data (because
-            // the pre-solve didn't find it), and won't be of much value
-            if(debug)
-            {
-                MSG("%d-%d at icluster=%d: refinement gathered %d points",
-                    iring, isegment,
-                    icluster,
-                    points_and_plane->n - ipoint_set_n_prev);
-                ipoint_set_n_prev = points_and_plane->n;
+                // I don't bother to look in rings that don't appear in the
+                // segment_cluster. This will by contain not very much data (because
+                // the pre-solve didn't find it), and won't be of much value
+                if(debug)
+                {
+                    MSG("%d-%d at icluster=%d: refinement gathered %d points",
+                        iring, isegment,
+                        icluster,
+                        points_and_plane->n - ipoint_set_n_prev);
+                    ipoint_set_n_prev = points_and_plane->n;
+                }
             }
         }
 
@@ -1986,28 +2058,34 @@ int8_t clc_lidar_segmentation_sorted(// out
         for(int icluster=0; icluster<Nclusters; icluster++)
         {
             segment_cluster_t* segment_cluster = &segment_clusters[icluster];
-            for(int i=0; i<segment_cluster->n; i++)
+            for(int iring = segment_cluster->irings[0];
+                iring    <= segment_cluster->irings[1];
+                iring++)
             {
-                const int iring    = segment_cluster->segments[i].iring;
-                const int isegment = segment_cluster->segments[i].isegment;
-                segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
-
-                printf("%f %f stage2-cluster-kernels-%d %f\n",
-                       segment->p.x,
-                       segment->p.y,
-                       icluster,
-                       segment->p.z);
-
-
-                for(int ipoint=segment->ipoint0;
-                    ipoint <= segment->ipoint1;
-                    ipoint++)
+                for(int isegment = segment_cluster->isegments[iring-segment_cluster->irings[0]][0];
+                    isegment    <= segment_cluster->isegments[iring-segment_cluster->irings[0]][1];
+                    isegment++)
                 {
-                    printf("%f %f stage2-cluster-points-%d %f\n",
-                           scan->points[ipoint0_in_ring[iring] + ipoint].x,
-                           scan->points[ipoint0_in_ring[iring] + ipoint].y,
+
+                    segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
+
+                    printf("%f %f stage2-cluster-kernels-%d %f\n",
+                           segment->p.x,
+                           segment->p.y,
                            icluster,
-                           scan->points[ipoint0_in_ring[iring] + ipoint].z);
+                           segment->p.z);
+
+
+                    for(int ipoint=segment->ipoint0;
+                        ipoint <= segment->ipoint1;
+                        ipoint++)
+                    {
+                        printf("%f %f stage2-cluster-points-%d %f\n",
+                               scan->points[ipoint0_in_ring[iring] + ipoint].x,
+                               scan->points[ipoint0_in_ring[iring] + ipoint].y,
+                               icluster,
+                               scan->points[ipoint0_in_ring[iring] + ipoint].z);
+                    }
                 }
             }
         }
