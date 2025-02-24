@@ -181,6 +181,11 @@ typedef struct
       "stage1: segments are accepted only if they contain at most this many invalid points" ) \
   _(float, threshold_max_range,                          9.f,               "f","f", \
       "stage2: discard all segment clusters that lie COMPLETELY past the given range" ) \
+  _(float, threshold_distance_adjacent_points_cross_segment,                          .1f,               "f","f", \
+      "stage2: adjacent cross-segment points in the same ring must be at most this far apart" ) \
+  /* cos(10deg) */                                                       \
+  _(float, threshold_min_cos_angle_error_same_direction_intra_ring,                          0.984807753012f,               "f","f", \
+      "stage2: cos threshold used to accumulate a segment to an adjacent one in the same ring" ) \
                                                                         \
   /* This is unnaturally high. I'm comparing it to p-mean(p), but if the points aren't */ \
   /* distributed evenly, mean(p) won't be at the center */              \
@@ -213,7 +218,7 @@ typedef struct
   _(float, threshold_max_cos_angle_error_normal,         0.15,   "f","f", \
       "stage2: cos(v,n) threshold to accept a segment (and its direction v) into an existing cluster (and its normal n)" ) \
   /* cos(5deg) */                                                       \
-  _(float, threshold_min_cos_angle_error_same_direction, 0.996194698092f,   "f","f", \
+  _(float, threshold_min_cos_angle_error_same_direction_cross_ring, 0.996194698092f,   "f","f", \
       "stage2: cos threshold used to construct a cluster from two cross-ring segments.\n" \
       "Non fitting pairs are not used to create a new cluster" ) \
   _(float, threshold_max_plane_point_error_stage2,       0.3,               "f","f", \

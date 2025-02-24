@@ -726,7 +726,9 @@ static bool is_same_direction(const clc_point3f_t a,
     return
         cos_mag_mag > 0.0f &&
         cos_mag_mag*cos_mag_mag >
-        ctx->threshold_min_cos_angle_error_same_direction*ctx->threshold_min_cos_angle_error_same_direction*norm2(a)*norm2(b);
+        ctx->threshold_min_cos_angle_error_same_direction_cross_ring*
+        ctx->threshold_min_cos_angle_error_same_direction_cross_ring*
+        norm2(a)*norm2(b);
 }
 
 static bool segment_segment_across_rings_close_enough(const clc_point3f_t* dp,
@@ -998,28 +1000,78 @@ static void stage2_accumulate_segments_samering( // out
         if(*isegment == isegment_limit)
             return;
 
-        int16_t isegment_next = *isegment + isegment_increment;
+        const int16_t isegment0 = *isegment;
+        const int16_t isegment1 = *isegment + isegment_increment;
 
-        segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment_next];
+        const segment_t* segment0 = &segments[iring*Nsegments_per_rotation + isegment0];
+        segment_t*       segment1 = &segments[iring*Nsegments_per_rotation + isegment1];
 
-        if(segment->visited)
+#warning "stage2_plane_segment_compatible() will be called many times, since if it's false we won't set visited; need separate tried_visit array I can reset at once"
+
+        if(segment1->visited)
             return;
 
-        if(!segment_is_valid(segment))
+        if(!segment_is_valid(segment1))
             return;
+
+        const bool debug =
+            ctx->debug_xmin < segment1->p.x && segment1->p.x < ctx->debug_xmax &&
+            ctx->debug_ymin < segment1->p.y && segment1->p.y < ctx->debug_ymax;
+
+
+        // Before I make sure that this next segment works with the so-far found
+        // plane, I want to make sure that it makes sense with the previous,
+        // adjacent segment: the two endpoints should be close together, and the
+        // orientations should be similar
+        clc_point3f_t dp;
+        if(isegment_increment > 0)
+        {
+            // Moving forward; should compare the LAST point of segment0 with
+            // the FIRST point of segment1
+            dp =
+                sub( points[ipoint0_in_ring[iring] + segment1->ipoint0],
+                     points[ipoint0_in_ring[iring] + segment0->ipoint1] );
+        }
+        else
+        {
+            // Moving backward; should compare the FIRST point of segment0 with
+            // the LAST point of segment1
+            dp =
+                sub( points[ipoint0_in_ring[iring] + segment1->ipoint1],
+                     points[ipoint0_in_ring[iring] + segment0->ipoint0] );
+        }
+        if(DEBUG_ON_TRUE_SEGMENT(norm2(dp) >
+                                 ctx->threshold_distance_adjacent_points_cross_segment*ctx->threshold_distance_adjacent_points_cross_segment,
+                                 iring,isegment1,
+                                 "icluster=%d: next segment in the same ring is too far to lie in this cluster. Have %f > %f",
+                                 icluster,
+                                 mag(dp), ctx->threshold_distance_adjacent_points_cross_segment))
+            return;
+        const float inner01 = inner(segment0->v,segment1->v);
+        if(DEBUG_ON_TRUE_SEGMENT(inner01*inner01 <
+                                 ctx->threshold_min_cos_angle_error_same_direction_intra_ring*
+                                 ctx->threshold_min_cos_angle_error_same_direction_intra_ring*
+                                 norm2(segment0->v)*norm2(segment1->v),
+                                 iring,isegment1,
+                                 "icluster=%d: next segment in the same ring has a too-inconsistent direction vector. Have %fdeg > %fdeg",
+                                 icluster,
+                                 acos(inner01/(mag(segment0->v)*mag(segment1->v))) * 180./M_PI,
+                                 acos(ctx->threshold_min_cos_angle_error_same_direction_intra_ring) * 180./M_PI))
+            return;
+
 
         if(!stage2_plane_segment_compatible(// The initial plane estimate in
                                             // cluster->plane_unnormalized may be updated by
                                             // this call, if we return true
                                             cluster,
-                                            iring, isegment_next,
+                                            iring, isegment1,
                                             segments,
                                             // for diagnostics only
                                             icluster, points, ipoint0_in_ring, ctx))
             return;
 
-        segment->visited = true;
-        *isegment = isegment_next;
+        segment1->visited = true;
+        *isegment = isegment1;
     }
 }
 
