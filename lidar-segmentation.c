@@ -905,14 +905,20 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
     const bool debug =
         ctx->debug_xmin < segment->p.x && segment->p.x < ctx->debug_xmax &&
         ctx->debug_ymin < segment->p.y && segment->p.y < ctx->debug_ymax;
-    if(!( DEBUG_ON_TRUE_SEGMENT( !is_normal(segment->v, cluster->plane_unnormalized.n_unnormalized, ctx),
-                                 iring,isegment,
-                                 "icluster=%d: segment isn't plane-consistent during accumulation: the direction isn't in-plane",
-                                 icluster) ||
-          DEBUG_ON_TRUE_SEGMENT( !plane_point_compatible_stage2_unnormalized(&cluster->plane_unnormalized, &segment->p, ctx),
-                                 iring,isegment,
-                                 "icluster=%d: segment isn't plane-consistent during accumulation: the point isn't in-plane",
-                                 icluster)))
+    if(DEBUG_ON_TRUE_SEGMENT(!is_normal(segment->v, cluster->plane_unnormalized.n_unnormalized, ctx),
+                             iring,isegment,
+                             "icluster=%d: segment isn't plane-consistent during accumulation: the direction isn't in-plane",
+                             icluster) ||
+       DEBUG_ON_TRUE_SEGMENT( !plane_point_compatible_stage2_unnormalized(&cluster->plane_unnormalized, &segment->p, ctx),
+                              iring,isegment,
+                              "icluster=%d: segment isn't plane-consistent during accumulation: the point isn't in-plane",
+                              icluster))
+    {
+        // This new segment does not fit the plane found so far in this cluster.
+        // I don't reject it just yet. I will try to fit a new plane to see if
+        // that works; the current plane estimate might just not be good-enough
+    }
+    else
         return true;
 
 
@@ -932,9 +938,7 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
         return false;
 
 
-    // same check as above, but for all the extant segments and a with a new,
-    // fitted plane. If the new plane doesn't fit any of the current segments, I
-    // fail the test
+    // same check as above, but with a new, fitted plane
     if(DEBUG_ON_TRUE_SEGMENT(!is_normal(segment->v, plane_unnormalized.n_unnormalized, ctx),
                              iring,isegment,
                              "icluster=%d: segment isn't plane-consistent during the re-fit check: the direction isn't in-plane",
@@ -945,7 +949,7 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
                               icluster))
         return false;
 
-
+    // I make sure the refitted plane fits all the segments in the cluster
     for(int iring_here = cluster->irings[0];
         iring_here    <= cluster->irings[1];
         iring_here++)
@@ -1083,7 +1087,7 @@ stage2_grow_cluster(// out
     int iring = iring0;
     while(true)
     {
-        stage2_accumulate_segments_samering( // out
+        stage2_accumulate_segments_samering( // out,in
                                              &cluster->isegments[iring-iring0][0],
                                              // in
                                              -1,
@@ -1095,7 +1099,7 @@ stage2_grow_cluster(// out
                                              points,
                                              ipoint0_in_ring,
                                              ctx);
-        stage2_accumulate_segments_samering( // out
+        stage2_accumulate_segments_samering( // out,in
                                              &cluster->isegments[iring-iring0][1],
                                              // in
                                              1,
