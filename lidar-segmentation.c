@@ -2063,11 +2063,11 @@ int8_t clc_lidar_segmentation_sorted(// out
     // plane_clusters_from_segments() will return only clusters of an acceptable size,
     // so there will not be a huge number of candidates
     const int Nmax_planes = 20;
-    segment_cluster_t segment_clusters[Nmax_planes];
+    segment_cluster_t clusters[Nmax_planes];
     int Nclusters;
-    stage2_cluster_segments(segment_clusters,
+    stage2_cluster_segments(clusters,
                             &Nclusters,
-                            (int)(sizeof(segment_clusters)/sizeof(segment_clusters[0])),
+                            (int)(sizeof(clusters)/sizeof(clusters[0])),
                             segments,
                             scan->points, ipoint0_in_ring,
                             ctx);
@@ -2075,7 +2075,7 @@ int8_t clc_lidar_segmentation_sorted(// out
     if(ctx->dump)
         for(int icluster=0; icluster<Nclusters; icluster++)
         {
-            const segment_cluster_t* cluster = &segment_clusters[icluster];
+            const segment_cluster_t* cluster = &clusters[icluster];
             for(int iring = cluster->irings[0];
                 iring    <= cluster->irings[1];
                 iring++)
@@ -2119,7 +2119,7 @@ int8_t clc_lidar_segmentation_sorted(// out
             return Nplanes_max;
         }
 
-        const segment_cluster_t* cluster = &segment_clusters[icluster];
+        const segment_cluster_t* cluster = &clusters[icluster];
 
         float max_norm2_dp;
         float eigenvalues_ascending[3];
