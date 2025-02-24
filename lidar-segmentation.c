@@ -1753,7 +1753,7 @@ static bool stage3_refine_cluster(// out
                                   float*              eigenvalues_ascending, // 3 of these
                                   // in
                                   const int icluster,
-                                  const segment_cluster_t* segment_cluster,
+                                  const segment_cluster_t* cluster,
                                   const segment_t* segments,
                                   const clc_point3f_t* points,
                                   const int* ipoint0_in_ring,
@@ -1769,8 +1769,8 @@ static bool stage3_refine_cluster(// out
        }
      */
 
-    const int iring0 = segment_cluster->irings[0];
-    const int iring1 = segment_cluster->irings[1];
+    const int iring0 = cluster->irings[0];
+    const int iring1 = cluster->irings[1];
 
     const int Nrings_considered = iring1-iring0+1;
 
@@ -1780,12 +1780,12 @@ static bool stage3_refine_cluster(// out
 
     // Start with the best-available plane estimate. This should be pretty good
     // already.
-    clc_plane_t plane_out = segment_cluster->plane;
+    clc_plane_t plane_out = cluster->plane;
 
 
     const bool debug =
-        ctx->debug_xmin < segment_cluster->plane.p_mean.x && segment_cluster->plane.p_mean.x < ctx->debug_xmax &&
-        ctx->debug_ymin < segment_cluster->plane.p_mean.y && segment_cluster->plane.p_mean.y < ctx->debug_ymax;
+        ctx->debug_xmin < cluster->plane.p_mean.x && cluster->plane.p_mean.x < ctx->debug_xmax &&
+        ctx->debug_ymin < cluster->plane.p_mean.y && cluster->plane.p_mean.y < ctx->debug_ymax;
 
     // will only be modified on the final iteration
     int Npoints_non_isolated = 0;
@@ -1816,12 +1816,12 @@ static bool stage3_refine_cluster(// out
 
 
 
-        for(int iring = segment_cluster->irings[0];
-            iring    <= segment_cluster->irings[1];
+        for(int iring = cluster->irings[0];
+            iring    <= cluster->irings[1];
             iring++)
         {
-            for(int isegment = segment_cluster->isegments[iring-segment_cluster->irings[0]][0];
-                isegment    <= segment_cluster->isegments[iring-segment_cluster->irings[0]][1];
+            for(int isegment = cluster->isegments[iring-cluster->irings[0]][0];
+                isegment    <= cluster->isegments[iring-cluster->irings[0]][1];
                 isegment++)
             {
                 /////////// This is temporary, until I reimplement the way data is
@@ -1944,7 +1944,7 @@ static bool stage3_refine_cluster(// out
 #endif
 
                 // I don't bother to look in rings that don't appear in the
-                // segment_cluster. This will by contain not very much data (because
+                // cluster. This will by contain not very much data (because
                 // the pre-solve didn't find it), and won't be of much value
                 if(debug)
                 {
@@ -1958,7 +1958,7 @@ static bool stage3_refine_cluster(// out
         }
 
         if(DEBUG_ON_TRUE_POINT(points_and_plane->n == 0,
-                                &segment_cluster->plane.p_mean,
+                                &cluster->plane.p_mean,
                                "All points thrown out during refinement"))
             return false;
 
@@ -1983,7 +1983,7 @@ static bool stage3_refine_cluster(// out
     const int threshold_non_isolated = 25;
 
     return !DEBUG_ON_TRUE_POINT(Npoints_non_isolated >= threshold_non_isolated,
-                                &segment_cluster->plane.p_mean,
+                                &cluster->plane.p_mean,
                                 "Too many non-isolated points around the plane: %d >= %d",
                                 Npoints_non_isolated, threshold_non_isolated);
 }
@@ -2075,13 +2075,13 @@ int8_t clc_lidar_segmentation_sorted(// out
     if(ctx->dump)
         for(int icluster=0; icluster<Nclusters; icluster++)
         {
-            segment_cluster_t* segment_cluster = &segment_clusters[icluster];
-            for(int iring = segment_cluster->irings[0];
-                iring    <= segment_cluster->irings[1];
+            segment_cluster_t* cluster = &segment_clusters[icluster];
+            for(int iring = cluster->irings[0];
+                iring    <= cluster->irings[1];
                 iring++)
             {
-                for(int isegment = segment_cluster->isegments[iring-segment_cluster->irings[0]][0];
-                    isegment    <= segment_cluster->isegments[iring-segment_cluster->irings[0]][1];
+                for(int isegment = cluster->isegments[iring-cluster->irings[0]][0];
+                    isegment    <= cluster->isegments[iring-cluster->irings[0]][1];
                     isegment++)
                 {
 
@@ -2119,7 +2119,7 @@ int8_t clc_lidar_segmentation_sorted(// out
             return Nplanes_max;
         }
 
-        segment_cluster_t* segment_cluster = &segment_clusters[icluster];
+        segment_cluster_t* cluster = &segment_clusters[icluster];
 
         float max_norm2_dp;
         float eigenvalues_ascending[3];
@@ -2128,7 +2128,7 @@ int8_t clc_lidar_segmentation_sorted(// out
                                   &max_norm2_dp,
                                   eigenvalues_ascending,
                                   icluster,
-                                  segment_cluster,
+                                  cluster,
                                   segments,
                                   scan->points, ipoint0_in_ring, scan->Npoints,
                                   ctx);
