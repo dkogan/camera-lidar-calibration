@@ -111,7 +111,7 @@ typedef struct
 
     // point indices inside each ring
     int ipoint0;
-    int ipoint1  : sizeof(int)*8-1; // leave one bit for "visited"
+    int ipoint1 /* last point */ : sizeof(int)*8-1; // leave one bit for "visited"
     bool visited : 1;
 } segment_t;
 
