@@ -1381,11 +1381,16 @@ static void stage3_accumulate_points(// out
         ipoint != ipoint_limit;
         ipoint += ipoint_increment)
     {
-        if(bitarray64_check(bitarray_visited, ipoint))
+        if( DEBUG_ON_TRUE_POINT( bitarray64_check(bitarray_visited, ipoint),
+                                 &points[ipoint0_in_ring + ipoint],
+                                 "%d-%d: we already processed this point; accumulation stopped",
+                                 iring,isegment))
+        {
             // We already processed this point, presumably from the other side.
             // There's no reason to keep going, since we already approached from the
             // other side
             break;
+        }
 
         const float th_rad = th_from_point(&points[ipoint0_in_ring + ipoint]);
         float abs_dth_rad = 0.0f;
@@ -1393,24 +1398,37 @@ static void stage3_accumulate_points(// out
         {
             // we have a valid th_rad_last
             abs_dth_rad = fabsf(th_rad - th_rad_last);
-            if(abs_dth_rad > ctx->threshold_max_gap_th_rad)
+            if( DEBUG_ON_TRUE_POINT( abs_dth_rad > ctx->threshold_max_gap_th_rad,
+                                     &points[ipoint0_in_ring + ipoint],
+                                     "%d-%d: gap too large; accumulation stopped. Have ~ %f > %f",
+                                     iring,isegment,
+                                     abs_dth_rad, ctx->threshold_max_gap_th_rad))
                 break;
         }
         else
         {
             // we do not have a valid th_rad_last. Stop when we reach the segment
             // limit
-            if(ipoint == ipoint_segment_limit)
+            if( DEBUG_ON_TRUE_POINT( ipoint == ipoint_segment_limit,
+                                     &points[ipoint0_in_ring + ipoint],
+                                     "%d-%d: reached end of point sequence; accumulation stopped. Have %d == %d",
+                                     iring,isegment,
+                                     ipoint, ipoint_segment_limit))
                 break;
         }
 
         // no threshold_max_range check here. This was already checked when
         // constructing the candidate segments. So if we got this far, I assume it's
         // good
-
-        if( ctx->threshold_max_plane_point_error_stage3 <
-            fabsf(plane_point_error_stage3_normalized(plane,
-                                                      &points[ipoint0_in_ring + ipoint])) )
+        if( DEBUG_ON_TRUE_POINT( ctx->threshold_max_plane_point_error_stage3 <
+                                 fabsf(plane_point_error_stage3_normalized(plane,
+                                                                           &points[ipoint0_in_ring + ipoint])),
+                                 &points[ipoint0_in_ring + ipoint],
+                                 "%d-%d: point too far off-plane; skipping point, but continuing. Have %f < fabsf(%f)",
+                                 iring,isegment,
+                                 ctx->threshold_max_plane_point_error_stage3,
+                                 plane_point_error_stage3_normalized(plane,
+                                                                     &points[ipoint0_in_ring + ipoint])))
         {
             // Not accepting this point, but also not updating th_rad_last. So too
             // many successive invalid points will create a too-large gap, failing
