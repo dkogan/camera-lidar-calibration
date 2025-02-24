@@ -2075,7 +2075,7 @@ int8_t clc_lidar_segmentation_sorted(// out
     if(ctx->dump)
         for(int icluster=0; icluster<Nclusters; icluster++)
         {
-            segment_cluster_t* cluster = &segment_clusters[icluster];
+            const segment_cluster_t* cluster = &segment_clusters[icluster];
             for(int iring = cluster->irings[0];
                 iring    <= cluster->irings[1];
                 iring++)
@@ -2119,7 +2119,7 @@ int8_t clc_lidar_segmentation_sorted(// out
             return Nplanes_max;
         }
 
-        segment_cluster_t* cluster = &segment_clusters[icluster];
+        const segment_cluster_t* cluster = &segment_clusters[icluster];
 
         float max_norm2_dp;
         float eigenvalues_ascending[3];
