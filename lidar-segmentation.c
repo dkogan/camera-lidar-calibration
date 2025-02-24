@@ -1867,34 +1867,23 @@ static bool stage3_refine_cluster(// out
             MSG("Too many rings");
             return false;
         }
-        // all the rings fit into one uint64_t word
-        uint64_t bitarray_ring_visited = 0;
-
-
 
         for(int iring = cluster->irings[0];
             iring    <= cluster->irings[1];
             iring++)
         {
-            for(int isegment = cluster->isegments[iring-cluster->irings[0]][0];
-                isegment    <= cluster->isegments[iring-cluster->irings[0]][1];
-                isegment++)
+            const int isegment0 = cluster->isegments[iring-cluster->irings[0]] [0];
+            const int isegment1 = cluster->isegments[iring-cluster->irings[0]] [1];
+
+            const segment_t* segment0 = &segments[iring*Nsegments_per_rotation + isegment0];
+            const segment_t* segment1 = &segments[iring*Nsegments_per_rotation + isegment1];
+
+            const int isegment_mid = (isegment0 + isegment1) / 2;
+
             {
-                /////////// This is temporary, until I reimplement the way data is
-                /////////// passed to this function. It should just be a list of
-                /////////// rings and a single seed point for each
-                if(bitarray_ring_visited & (1U << (iring-iring0)))
-                    continue;
-                bitarray_ring_visited |= 1U << (iring-iring0);
-
-
-
-                const segment_t* segment =
-                    &segments[iring*Nsegments_per_rotation + isegment];
-
-                // I start in the center of each segment, and expand outwards to
-                // capture all the matching points
-                const int ipoint0 = (segment->ipoint0 + segment->ipoint1) / 2;
+                // I start in the center, and expand outwards to capture all the
+                // matching points
+                const int ipoint0 = (segment0->ipoint0 + segment1->ipoint1) / 2;
 
                 unsigned int ipoint_set_start_this_ring __attribute__((unused)); // for the currently-disabled bloom_cull logic
 
@@ -1909,9 +1898,9 @@ static bool stage3_refine_cluster(// out
                                          &plane_out,
                                          points,
                                          ipoint0_in_ring[iring],
-                                         segment->ipoint1,
+                                         segment1->ipoint1,
                                          // for diagnostics
-                                         icluster, iring, isegment,
+                                         icluster, iring, isegment_mid,
                                          debug,
                                          ctx);
 
@@ -1968,9 +1957,9 @@ static bool stage3_refine_cluster(// out
                                          &plane_out,
                                          points,
                                          ipoint0_in_ring[iring],
-                                         segment->ipoint0,
+                                         segment0->ipoint0,
                                          // for diagnostics
-                                         icluster, iring, isegment,
+                                         icluster, iring, isegment_mid,
                                          debug,
                                          ctx);
                 // disabling this for now; see comment at stage3_cull_bloom_and_count_non_isolated() above
@@ -2005,7 +1994,7 @@ static bool stage3_refine_cluster(// out
                 if(debug)
                 {
                     MSG("%d-%d at icluster=%d: refinement gathered %d points",
-                        iring, isegment,
+                        iring, isegment_mid,
                         icluster,
                         points_and_plane->n - ipoint_set_n_prev);
                     ipoint_set_n_prev = points_and_plane->n;
