@@ -1433,6 +1433,9 @@ static void stage3_accumulate_points(// out
 
     float th_rad_last = FLT_MAX; // indicate an invalid value initially
 
+    clc_point3f_t dp_last = {}; // init to pacify compiler
+    float norm2_dp_last = FLT_MAX; // indicate an invalid value initially
+
     for(int ipoint=ipoint0;
         ipoint != ipoint_limit;
         ipoint += ipoint_increment)
@@ -1492,6 +1495,63 @@ static void stage3_accumulate_points(// out
             continue;
         }
 
+        // The local direction of the points in the ring being accumulated here
+        // should be constant, or at worst, changing slowly. It can only change
+        // quickly if we hit a corner. I compute the local direction by looking
+        // at the difference between two points N points apart; where larger N
+        // serve to reduce sensitivity to noise.
+
+        const int npoints_check_direction_step = 6;
+
+        int ipoint_lagging = ipoint - npoints_check_direction_step*ipoint_increment;
+        if((ipoint_lagging - ipoint0)*ipoint_increment >= 0 &&
+           bitarray64_check(bitarray_visited, ipoint_lagging))
+        {
+            // This lagging point is in range and was accepted, so I check the
+            // direction consistency
+
+            clc_point3f_t dp =
+                sub( points[ipoint0_in_ring + ipoint],
+                     points[ipoint0_in_ring + ipoint_lagging] );
+
+            // I compare directions. I want threshold < cos(th) =
+            // inner(dp,dp_last) / sqrt( norm2(dp) * norm2(dp_last))
+            // -> I want
+            //    threshold^2* norm2(dp) * norm2(dp_last) < inner(dp,dp_last)^2
+            float norm2_dp    = norm2(dp);
+            if(norm2_dp_last < FLT_MAX)
+            {
+                // have dp_last, norm2_dp_last
+                const int Ngap =
+                    (int)( 0.5f + abs_dth_rad * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
+                const float cos_threshold_baseline = cosf(10.0f*M_PI/180.f);
+
+                // the cos_threshold_baseline is intended for a single gap. For
+                // bigger gaps I want to allow bigger errors
+                // cos(x) ~ 1 - x^2/2. -> cos(x*N) ~ 1 - (x*N)^2/2.
+                // -> cos(x*N) ~ 1 - (1-cos(x))*N^2
+                //             = 1-N^2 + N^2 cos(x)
+                //             = 1 + N^2 (cos(x) - 1.)
+                const float cos_threshold = 1.f + (float)(Ngap*Ngap)*(cos_threshold_baseline - 1.f);
+
+                const float inner_dp_dp = inner(dp,dp_last);
+
+
+                if(DEBUG_ON_TRUE_POINT(cos_threshold*cos_threshold*norm2_dp*norm2_dp_last > inner_dp_dp*inner_dp_dp,
+                                       &(points[ipoint0_in_ring + ipoint]),
+                                       "angle changed too quickly in %d-%d (icluster=%d); culling last %d points; cos_threshold_baseline=%f; I see threshold > inner(dp,dp_last) / (mag(dp) mag(dp_last)) ~ %f > %f/(%f * %f)",
+                                       iring, isegment, icluster,
+                                       npoints_check_direction_step+1,
+                                       cos_threshold_baseline,
+                                       cos_threshold, inner_dp_dp, sqrtf(norm2_dp), sqrtf(norm2_dp_last)))
+                {
+                    continue;
+                }
+            }
+
+            dp_last       = dp;
+            norm2_dp_last = norm2_dp;
+        }
         // accept the point
 
 
