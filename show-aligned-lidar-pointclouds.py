@@ -44,6 +44,26 @@ def parse_args():
                         type=float,
                         default = 20.,
                         help = '''Max distance where we cut the plot''')
+    parser.add_argument('--title',
+                        type=str,
+                        default = None,
+                        help='''Title string for the plot. Overrides the default
+                        title''')
+    parser.add_argument('--hardcopy',
+                        type=str,
+                        help='''Write the output to disk, instead of an interactive plot''')
+    parser.add_argument('--terminal',
+                        type=str,
+                        help=r'''gnuplotlib terminal. The default is good almost always, so most people don't
+                        need this option''')
+    parser.add_argument('--set',
+                        type=str,
+                        action='append',
+                        help='''Extra 'set' directives to gnuplotlib. Can be given multiple times''')
+    parser.add_argument('--unset',
+                        type=str,
+                        action='append',
+                        help='''Extra 'unset' directives to gnuplotlib. Can be given multiple times''')
     parser.add_argument('lidar-models',
                         nargs   = '+',
                         help = '''The .cameramodel for the lidars in question.
@@ -77,10 +97,22 @@ data_tuples = \
     clc.get_pointcloud_plot_tuples(args.bag, args.topic, args.threshold,
                                    rt_lidar0_lidar,
                                    start = args.after)
+
+
+plotkwargs = dict(hardcopy = args.hardcopy,
+                  terminal = args.terminal)
+if args.set is not None:
+    plotkwargs['set'] = args.set
+if args.unset is not None:
+    plotkwargs['unset'] = args.unset
+if args.title is not None:
+    plotkwargs['title'] = args.title
+
 clc.plot(*data_tuples,
          _3d = True,
          square = True,
          xlabel = 'x (lidar0)',
          ylabel = 'y (lidar0)',
          zlabel = 'z (lidar0)',
-         wait = True)
+         wait = True,
+         **plotkwargs)
