@@ -928,15 +928,20 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     }
 
 
-    result = Py_BuildValue("{sOsOsOsOsOsOsOsi}",
-                           "rt_lidar0_lidar",                 rt_lidar0_lidar,
-                           "rt_lidar0_camera",                rt_lidar0_camera,
-                           "Var_rt_lidar0_sensor",            Var_rt_lidar0_sensor,
-                           "observations_per_sector",         observations_per_sector,
-                           "isvisible_per_sensor_per_sector", isvisible_per_sensor_per_sector,
-                           "stdev_worst_per_sector",          stdev_worst_per_sector,
-                           "isensors_pair_stdev_worst",       isensors_pair_stdev_worst,
-                           "isector_of_last_snapshot",        isector_of_last_snapshot);
+    result = Py_BuildValue("{sOsOsOsOsOsOsOsisisdsisd}",
+                           "rt_lidar0_lidar",                  rt_lidar0_lidar,
+                           "rt_lidar0_camera",                 rt_lidar0_camera,
+                           "Var_rt_lidar0_sensor",             Var_rt_lidar0_sensor,
+                           "observations_per_sector",          observations_per_sector,
+                           "isvisible_per_sensor_per_sector",  isvisible_per_sensor_per_sector,
+                           "stdev_worst_per_sector",           stdev_worst_per_sector,
+                           "isensors_pair_stdev_worst",        isensors_pair_stdev_worst,
+                           "isector_of_last_snapshot",         isector_of_last_snapshot,
+                           // input parameters; could be the defaults
+                           "Nsectors",                         Nsectors,
+                           "threshold_valid_lidar_range",      threshold_valid_lidar_range,
+                           "threshold_valid_lidar_Npoints",    threshold_valid_lidar_Npoints,
+                           "uncertainty_quantification_range", uncertainty_quantification_range);
     if(result == NULL)
         goto done;
 
