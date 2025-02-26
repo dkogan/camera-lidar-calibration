@@ -354,7 +354,7 @@ gp.plot( (th[i],                 # angle
          _xrange = (-11,11),
          _yrange = (-11,11),
          square = True,
-         title = 'Worst-case uncertainty. Put the board in high-uncertainty regions',
+         title = f'Worst-case uncertainty at {result["uncertainty_quantification_range"]}m. Put the board in high-uncertainty regions',
          hardcopy = filename,
         )
 print(f"Wrote '{filename}'")
