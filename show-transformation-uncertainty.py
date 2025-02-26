@@ -4,13 +4,15 @@ r'''Visualize transformation uncertainty between a pair of sensors
 
 SYNOPSIS
 
+  $ ./fit.py ... --dump /tmp/clc-context.pickle
+
   $ ./show-transformation-uncertainty.py                  \
       --bag camera-lidar.bag                              \
-      --topic /lidar/vl_points_0,/lidar/vl_points_1 \
-      /tmp/lidar[01]-mounted.cameramodel
+      --topic /lidar/vl_points_0,/lidar/vl_points_1       \
+      --context /tmp/clc-context.pickle
     [plot pops up to show the aligned points]
 
-Displays aligned point clouds. Useful for debugging
+Displays uncertainties of transformations between pairs of sensors
 
 '''
 
