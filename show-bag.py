@@ -90,6 +90,13 @@ def parse_args():
                         help = '''How much time to wait between moving to the
                         next bag; if <= 0 (the default), we wait until each
                         window is manually closed''')
+    parser.add_argument('--hardcopy',
+                        type=str,
+                        help='''Write the output to disk, instead of an interactive plot''')
+    parser.add_argument('--terminal',
+                        type=str,
+                        help=r'''gnuplotlib terminal. The default is good almost always, so most people don't
+                        need this option''')
     parser.add_argument('--set',
                         type=str,
                         action='append',
@@ -240,12 +247,10 @@ if args.timeline is not None:
 def show_lidar(bag, p,
                _with = 'dots',
                no_intensity = False):
-    kwargs = dict( _set   = args.set,
-                   _unset = args.unset)
-
-    gp.add_plot_option(kwargs,
-                       overwrite = False)
-
+    kwargs = dict( _set     = args.set,
+                   _unset   = args.unset,
+                   terminal = args.terminal,
+                   hardcopy = args.hardcopy)
 
     xyz       = p['xyz']
     intensity = p['intensity']
@@ -289,7 +294,9 @@ def show_lidar(bag, p,
 
 def show_image(bag, p):
     kwargs = dict( _set   = args.set,
-                   _unset = args.unset)
+                   _unset = args.unset,
+                   terminal = args.terminal,
+                   hardcopy = args.hardcopy)
 
     gp.add_plot_option(kwargs,
                        title = bag,
