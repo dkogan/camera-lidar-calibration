@@ -504,11 +504,10 @@ bool segment_is_valid(const segment_t* segment)
 }
 
 static
-bool is_point_segment_planar(const clc_point3f_t* p,
-                             const int ipoint0,
-                             const int ipoint1,
-                             const uint64_t* bitarray_invalid,
-                             const clc_lidar_segmentation_context_t* ctx)
+float stage1_worst_deviationsq_off_segment(const clc_point3f_t* p,
+                                           const int ipoint0,
+                                           const int ipoint1,
+                                           const uint64_t* bitarray_invalid)
 {
     const clc_point3f_t* p0 = &p[ipoint0];
     const clc_point3f_t* p1 = &p[ipoint1];
@@ -517,8 +516,7 @@ bool is_point_segment_planar(const clc_point3f_t* p,
 
     const float recip_norm2_v01 = 1.f / norm2(v01);
 
-    // do all the points in the chunk lie along v? If so, this is a linear
-    // feature
+    float norm2_e_worst = 0.f;
     for(int ipoint=ipoint0+1; ipoint<=ipoint1; ipoint++)
     {
         if(bitarray64_check(bitarray_invalid,ipoint-ipoint0))
@@ -536,11 +534,9 @@ bool is_point_segment_planar(const clc_point3f_t* p,
         //          = norm2(v) + inner(v01,v)^2 / norm2(v01) - 2 inner(v01,v)^2 / norm2(v01)
         //          = norm2(v) - inner(v01,v)^2 / norm2(v01)
         const float norm2_e = norm2(v) - inner(v,v01)*inner(v,v01) * recip_norm2_v01;
-
-        if(norm2_e > ctx->threshold_max_deviation_off_segment_line*ctx->threshold_max_deviation_off_segment_line)
-            return false;
+        if(norm2_e_worst < norm2_e) norm2_e_worst = norm2_e;
     }
-    return true;
+    return norm2_e_worst;
 }
 
 
@@ -575,17 +571,21 @@ void stage1_finish_segment(// out
        DEBUG_ON_TRUE_SEGMENT(Npoints < ctx->threshold_min_Npoints_in_segment,
                              iring,isegment,
                              "%d < %d", Npoints, ctx->threshold_min_Npoints_in_segment) ||
-       DEBUG_ON_TRUE_SEGMENT(!is_point_segment_planar(p,ipoint0,ipoint1,bitarray_invalid, ctx),
+       DEBUG_ON_TRUE_SEGMENT(stage1_worst_deviationsq_off_segment(p,ipoint0,ipoint1,bitarray_invalid) >
+                             ctx->threshold_max_deviation_off_segment_line*ctx->threshold_max_deviation_off_segment_line,
                              iring,isegment,
-                             ""))
+                             "%f > %f",
+                             sqrt(stage1_worst_deviationsq_off_segment(p,ipoint0,ipoint1,bitarray_invalid)),
+                             ctx->threshold_max_deviation_off_segment_line))
     {
         *segment = (segment_t){};
         return;
     }
 
-    // We passed the crude test: is_point_segment_planar() says that all the
-    // points lie on my line. I now refine this segment's p,v estimate to make
-    // this all work better with the downstream logic
+    // We passed the crude test:
+    // sqrt(stage1_worst_deviationsq_off_segment())<threshold_max_deviation_off_segment_line
+    // says that all the points lie on my line. I now refine this segment's p,v
+    // estimate to make this all work better with the downstream logic
 
 
     // This will be a conic section that I'm trying to represent as a line.
