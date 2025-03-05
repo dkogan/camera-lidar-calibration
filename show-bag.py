@@ -277,6 +277,9 @@ def show_lidar(bag, p,
         kwargs['_with']     = f'{_with} palette'
         kwargs['cblabel']   = 'intensity'
 
+    if len(xyz) == 0:
+        raise Exception("No data to plot")
+
     gp.plot(*data_tuple,
             tuplesize = len(data_tuple),
             square = True,
