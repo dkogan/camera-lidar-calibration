@@ -282,7 +282,8 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
     if isinstance(bag, str):
         message_iterator = messages(bag, topics,
                                     start = start,
-                                    stop  = stop)
+                                    stop  = stop,
+                                    ignore_unknown_message_types = True)
     else:
         message_iterator = bag
     start = parse_timestamp_to_ns_since_epoch(start)
