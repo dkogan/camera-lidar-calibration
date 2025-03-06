@@ -179,7 +179,7 @@ typedef struct
       "stage1: segments are accepted only if they contain at least this many points" ) \
   _(int,   threshold_max_Npoints_invalid_segment,        5,                 "i","i", \
       "stage1: segments are accepted only if they contain at most this many invalid points" ) \
-  _(float, threshold_max_range,                          13.f,               "f","f", \
+  _(float, threshold_max_range,                          9.f,               "f","f", \
       "stage2: discard all segment clusters that lie COMPLETELY past the given range" ) \
   _(float, threshold_distance_adjacent_points_cross_segment,                          .1f,               "f","f", \
       "stage2: adjacent cross-segment points in the same ring must be at most this far apart" ) \
@@ -209,7 +209,7 @@ typedef struct
       "If any points violate this, the entire segment is rejected" ) \
                                                                         \
   /* should be a factor of threshold_max_plane_size */                  \
-  _(float, threshold_max_distance_across_rings,          0.5f,              "f","f", \
+  _(float, threshold_max_distance_across_rings,          0.4f,              "f","f", \
       "stage2: max ring-ring distance allowed to join two segments into a cluster" ) \
   _(int,   Nrings,                                       32,                "i","i", \
       "How many rings are present in the LIDAR data.\n" \
