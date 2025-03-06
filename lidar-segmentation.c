@@ -574,9 +574,11 @@ void stage1_finish_segment(// out
        DEBUG_ON_TRUE_SEGMENT(stage1_worst_deviationsq_off_segment(p,ipoint0,ipoint1,bitarray_invalid) >
                              ctx->threshold_max_deviation_off_segment_line*ctx->threshold_max_deviation_off_segment_line,
                              iring,isegment,
-                             "%f > %f",
+                             "%f > %f; segment is (%f,%f,%f) - (%f,%f,%f)",
                              sqrt(stage1_worst_deviationsq_off_segment(p,ipoint0,ipoint1,bitarray_invalid)),
-                             ctx->threshold_max_deviation_off_segment_line))
+                             ctx->threshold_max_deviation_off_segment_line,
+                             p[ipoint0].x,p[ipoint0].y,p[ipoint0].z,
+                             p[ipoint1].x,p[ipoint1].y,p[ipoint1].z))
     {
         *segment = (segment_t){};
         return;
