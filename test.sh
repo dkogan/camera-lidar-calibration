@@ -39,6 +39,35 @@ bag_glob="$DIR/2024-calibration/images-and-lidar-*.bag"
   --context $dump \
 || Nfailed=$((Nfailed+1))
 
+
+
+
+
+echo "====== running test-transformation-uncertainty.py"
+models=($DIR/2023-10-19/results/intrinsics/multisense_front/{left,right,aux}_camera/camera-0-SPLINED.cameramodel)
+dump=/tmp/clc-context.pickle
+bag_glob="$DIR/2023-10-19/one*.bag"
+
+./fit.py \
+  --rt-vehicle-lidar0 0.01,0.02,0.03,-5.1,0.2,0.3 \
+  --dump $dump \
+  --topic /lidar/velodyne_front_horiz_points,/lidar/velodyne_front_tilted_points,/lidar/multisense_front/left/image_mono,/lidar/multisense_front/right/image_mono,/lidar/multisense_front/aux/image_color \
+  --bag $bag_glob \
+  $models && \
+./test-transformation-uncertainty.py \
+  --topic /lidar/velodyne_front_horiz_points,/lidar/multisense_front/left/image_mono \
+  --isector 3 \
+  --Nsamples 40 \
+  --context $dump \
+|| Nfailed=$((Nfailed+1))
+
+
+
+
+
+
+
+
 ./lidar-segmentation-auto-test.py $DIR \
 || Nfailed=$((Nfailed+1))
 
