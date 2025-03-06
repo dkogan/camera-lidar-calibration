@@ -209,7 +209,7 @@ typedef struct
       "If any points violate this, the entire segment is rejected" ) \
                                                                         \
   /* should be a factor of threshold_max_plane_size */                  \
-  _(float, threshold_max_distance_across_rings,          0.4f,              "f","f", \
+  _(float, threshold_max_distance_across_rings,          0.5f,              "f","f", \
       "stage2: max ring-ring distance allowed to join two segments into a cluster" ) \
   _(int,   Nrings,                                       32,                "i","i", \
       "How many rings are present in the LIDAR data.\n" \
