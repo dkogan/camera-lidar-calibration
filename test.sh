@@ -1,5 +1,7 @@
 #!/bin/zsh
 
+set -e
+
 DIR=$1
 if { [[ -z "$DIR" ]] } {
     echo "Usage: $0 DIRECTORY_TEST_DATA" > /dev/stderr;
