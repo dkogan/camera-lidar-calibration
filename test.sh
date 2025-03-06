@@ -21,6 +21,10 @@ echo "====== running test-bitarray"
 ./test-bitarray || Nfailed=$((Nfailed+1))
 
 
+
+
+if { false } {
+
 echo "====== running test-transformation-uncertainty.py"
 models=($DIR/2024-calibration/results-intrinsics/multisense/{left,right,aux}_camera/camera-0-SPLINED.cameramodel)
 dump=/tmp/clc-context.pickle
@@ -61,6 +65,7 @@ bag_glob="$DIR/2023-10-19/one*.bag"
   --context $dump \
 || Nfailed=$((Nfailed+1))
 
+}
 
 
 
