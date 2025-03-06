@@ -179,7 +179,7 @@ typedef struct
       "stage1: segments are accepted only if they contain at least this many points" ) \
   _(int,   threshold_max_Npoints_invalid_segment,        5,                 "i","i", \
       "stage1: segments are accepted only if they contain at most this many invalid points" ) \
-  _(float, threshold_max_range,                          9.f,               "f","f", \
+  _(float, threshold_max_range,                          13.f,               "f","f", \
       "stage2: discard all segment clusters that lie COMPLETELY past the given range" ) \
   _(float, threshold_distance_adjacent_points_cross_segment,                          .1f,               "f","f", \
       "stage2: adjacent cross-segment points in the same ring must be at most this far apart" ) \
