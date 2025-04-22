@@ -627,7 +627,7 @@ compute_board_poses(// out
             MSG("feedgnuplot failed. Giving up making the plot");       \
             return false;                                               \
         }                                                               \
-        MSG_IF_VERBOSE("Wrote '%s'", _filename);                        \
+        MSG("Wrote '%s'", _filename);                                   \
     }                                                                   \
 }
 
