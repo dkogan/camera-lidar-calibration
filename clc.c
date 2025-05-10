@@ -3676,20 +3676,7 @@ bool clc_fit_from_inputs_dump(// out
                     if(Npoints != fread(points_and_plane_full->points, sizeof(points_and_plane_full->points[0]), Npoints, fp))
                         goto done_inner;
 
-                    if(do_inject_noise)
-                    {
-                        for(int i=0; i<Npoints; i++)
-                        {
-                            clc_point3f_t* p = &points_and_plane_full->points[i];
 
-                            const double distance_have = sqrtf( p->x*p->x +
-                                                                p->y*p->y +
-                                                                p->z*p->z );
-                            const double distance_shift = randn()*SCALE_MEASUREMENT_M;
-                            for(int i=0; i<3; i++)
-                                p->xyz[i] *= 1. + distance_shift/distance_have;
-                        }
-                    }
 
                     if(points_and_plane_full->n != fread((uint32_t*)points_and_plane_full->ipoint, sizeof(points_and_plane_full->ipoint[0]), points_and_plane_full->n, fp))
                         goto done_inner;
@@ -3704,6 +3691,20 @@ bool clc_fit_from_inputs_dump(// out
                         }
                     }
 
+                    if(do_inject_noise)
+                    {
+                        for(int i=0; i<Npoints; i++)
+                        {
+                            clc_point3f_t* p = &points_and_plane_full->points[i];
+
+                            const double distance_have = sqrtf( p->x*p->x +
+                                                                p->y*p->y +
+                                                                p->z*p->z );
+                            const double distance_shift = randn()*SCALE_MEASUREMENT_M;
+                            for(int i=0; i<3; i++)
+                                p->xyz[i] *= 1. + distance_shift/distance_have;
+                        }
+                    }
                 }
 
                 if(1 != fread(&points_and_plane_full->plane, sizeof(points_and_plane_full->plane), 1, fp))
