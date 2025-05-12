@@ -3509,6 +3509,102 @@ confirm_Rt_are_valid(// in
     return true;
 }
 
+static bool read_snapshot_from_dump( // out
+                                     sensor_snapshot_segmented_t* snapshots,
+                                     // in
+                                     const uint64_t* bitarray_snapshots_selected,
+                                     const int Nsnapshots,
+                                     const int Ncameras,
+                                     const int Nlidars,
+                                     const int object_height_n,
+                                     const int object_width_n,
+                                     FILE* fp)
+{
+    LOOP_SNAPSHOT()
+    {
+        LOOP_SNAPSHOT_HEADER(,); // NOT const
+
+        for(int icamera=0; icamera<Ncameras; icamera++)
+        {
+            uint8_t camera_has_observations;
+            if(1 != fread(&camera_has_observations, 1,1, fp))
+                return false;
+            if(!camera_has_observations)
+            {
+                snapshot->chessboard_corners[icamera] = NULL;
+                continue;
+            }
+
+            snapshot->chessboard_corners[icamera] = malloc(sizeof(mrcal_point2_t)*object_width_n*object_height_n);
+            if(NULL == snapshot->chessboard_corners[icamera])
+                return false;
+            if(object_width_n*object_height_n !=
+               fread(snapshot->chessboard_corners[icamera], sizeof(mrcal_point2_t), object_width_n*object_height_n, fp))
+                return false;
+        }
+
+        for(int ilidar=0; ilidar<Nlidars; ilidar++)
+        {
+            points_and_plane_full_t* points_and_plane_full = &snapshot->lidar_scans[ilidar];
+
+            if(1 != fread(&points_and_plane_full->n, sizeof(points_and_plane_full->n),1, fp))
+                return false;
+            if(points_and_plane_full->n == 0)
+                continue;
+
+            int Npoints;
+            if(1 != fread(&Npoints, sizeof(int),1, fp))
+                return false;
+
+            if(Npoints == 0)
+            {
+                // No ipoints[]: points[] are used densely. Indicated here
+                // with a 0: Npoints = n
+                points_and_plane_full->ipoint = NULL;
+
+                points_and_plane_full->points = malloc(sizeof(points_and_plane_full->points[0])*points_and_plane_full->n);
+                if(NULL == points_and_plane_full->points)
+                    return false;
+                if(points_and_plane_full->n !=
+                   fread(points_and_plane_full->points, sizeof(points_and_plane_full->points[0]), points_and_plane_full->n, fp))
+                    return false;
+            }
+            else
+            {
+                // Have ipoints[]: points[] are indexed by ipoints[]. Here I can
+                // have Npoints != n: some of the points[] may not be used. I
+                // have the Npoints I need
+                points_and_plane_full->points = malloc(sizeof(points_and_plane_full->points[0])*Npoints);
+                if(NULL == points_and_plane_full->points)
+                    return false;
+                points_and_plane_full->ipoint = malloc(sizeof(points_and_plane_full->ipoint[0])*points_and_plane_full->n);
+                if(NULL == points_and_plane_full->ipoint)
+                    return false;
+                if(Npoints != fread(points_and_plane_full->points, sizeof(points_and_plane_full->points[0]), Npoints, fp))
+                    return false;
+
+                if(points_and_plane_full->n != fread((uint32_t*)points_and_plane_full->ipoint, sizeof(points_and_plane_full->ipoint[0]), points_and_plane_full->n, fp))
+                    return false;
+
+                for(int i=0; i<points_and_plane_full->n; i++)
+                {
+                    const clc_point3f_t* p = &points_and_plane_full->points[ points_and_plane_full->ipoint[i] ];
+                    if(p->x > 1000 ||p->y > 1000 ||p->z > 1000 || p->x < -1000 ||p->y < -1000 ||p->z < -1000)
+                    {
+                        MSG("******** READ BOGUS POINT FROM DUMP FILE: isnapshot=%d ilidar=%d iipt = %d ipt = %d p=(%f,%f,%f)",
+                            isnapshot, ilidar, i, points_and_plane_full->ipoint[i], p->x, p->y, p->z);
+                    }
+                }
+            }
+
+            if(1 != fread(&points_and_plane_full->plane, sizeof(points_and_plane_full->plane), 1, fp))
+                return false;
+        }
+    }
+
+    return true;
+}
+
 bool clc_fit_from_inputs_dump(// out
                               int* Nlidars,
                               int* Ncameras,
@@ -3611,104 +3707,41 @@ bool clc_fit_from_inputs_dump(// out
         if(Nwords                          != fread(bitarray_snapshots_selected, sizeof(uint64_t), Nwords, fp))
             goto done_inner;
 
-        int Ncamera_observations = 0;
+        if(!read_snapshot_from_dump(// out
+                                    snapshots,
+                                    // in
+                                    bitarray_snapshots_selected,
+                                    Nsnapshots,
+                                    *Ncameras,
+                                    *Nlidars,
+                                    object_height_n,
+                                    object_width_n,
+                                    fp))
+            goto done_inner;
 
-        LOOP_SNAPSHOT()
+        if(do_inject_noise)
         {
-            LOOP_SNAPSHOT_HEADER(,); // NOT const
-
-            for(int icamera=0; icamera<*Ncameras; icamera++)
+            LOOP_SNAPSHOT()
             {
-                uint8_t camera_has_observations;
-                if(1 != fread(&camera_has_observations, 1,1, fp))
-                    goto done_inner;
-                if(!camera_has_observations)
+                LOOP_SNAPSHOT_HEADER(,); // NOT const
+                for(int ilidar=0; ilidar<*Nlidars; ilidar++)
                 {
-                    snapshot->chessboard_corners[icamera] = NULL;
-                    continue;
-                }
-
-                snapshot->chessboard_corners[icamera] = malloc(sizeof(mrcal_point2_t)*object_width_n*object_height_n);
-                if(NULL == snapshot->chessboard_corners[icamera])
-                    goto done_inner;
-                if(object_width_n*object_height_n !=
-                   fread(snapshot->chessboard_corners[icamera], sizeof(mrcal_point2_t), object_width_n*object_height_n, fp))
-                    goto done_inner;
-            }
-
-            for(int ilidar=0; ilidar<*Nlidars; ilidar++)
-            {
-                points_and_plane_full_t* points_and_plane_full = &snapshot->lidar_scans[ilidar];
-
-                if(1 != fread(&points_and_plane_full->n, sizeof(points_and_plane_full->n),1, fp))
-                    goto done_inner;
-                if(points_and_plane_full->n == 0)
-                    continue;
-
-                int Npoints;
-                if(1 != fread(&Npoints, sizeof(int),1, fp))
-                    goto done_inner;
-
-                if(Npoints == 0)
-                {
-                    // No ipoints[]: points[] are used densely. Indicated here
-                    // with a 0: Npoints = n
-                    points_and_plane_full->ipoint = NULL;
-
-                    points_and_plane_full->points = malloc(sizeof(points_and_plane_full->points[0])*points_and_plane_full->n);
-                    if(NULL == points_and_plane_full->points)
-                        goto done_inner;
-                    if(points_and_plane_full->n !=
-                       fread(points_and_plane_full->points, sizeof(points_and_plane_full->points[0]), points_and_plane_full->n, fp))
-                        goto done_inner;
-                }
-                else
-                {
-                    // Have ipoints[]: points[] are indexed by ipoints[]. Here I can
-                    // have Npoints != n: some of the points[] may not be used. I
-                    // have the Npoints I need
-                    points_and_plane_full->points = malloc(sizeof(points_and_plane_full->points[0])*Npoints);
-                    if(NULL == points_and_plane_full->points)
-                        goto done_inner;
-                    points_and_plane_full->ipoint = malloc(sizeof(points_and_plane_full->ipoint[0])*points_and_plane_full->n);
-                    if(NULL == points_and_plane_full->ipoint)
-                        goto done_inner;
-                    if(Npoints != fread(points_and_plane_full->points, sizeof(points_and_plane_full->points[0]), Npoints, fp))
-                        goto done_inner;
-
-
-
-                    if(points_and_plane_full->n != fread((uint32_t*)points_and_plane_full->ipoint, sizeof(points_and_plane_full->ipoint[0]), points_and_plane_full->n, fp))
-                        goto done_inner;
+                    points_and_plane_full_t* points_and_plane_full = &snapshot->lidar_scans[ilidar];
 
                     for(int i=0; i<points_and_plane_full->n; i++)
                     {
-                        const clc_point3f_t* p = &points_and_plane_full->points[ points_and_plane_full->ipoint[i] ];
-                        if(p->x > 1000 ||p->y > 1000 ||p->z > 1000 || p->x < -1000 ||p->y < -1000 ||p->z < -1000)
-                        {
-                            MSG("******** READ BOGUS POINT FROM DUMP FILE: isnapshot=%d ilidar=%d iipt = %d ipt = %d p=(%f,%f,%f)",
-                                isnapshot, ilidar, i, points_and_plane_full->ipoint[i], p->x, p->y, p->z);
-                        }
-                    }
-
-                    if(do_inject_noise)
-                    {
-                        for(int i=0; i<Npoints; i++)
-                        {
-                            clc_point3f_t* p = &points_and_plane_full->points[i];
-
-                            const double distance_have = sqrtf( p->x*p->x +
-                                                                p->y*p->y +
-                                                                p->z*p->z );
-                            const double distance_shift = randn()*SCALE_MEASUREMENT_M;
-                            for(int i=0; i<3; i++)
-                                p->xyz[i] *= 1. + distance_shift/distance_have;
-                        }
+                        clc_point3f_t* p =
+                            (points_and_plane_full->ipoint == NULL) ?
+                            &points_and_plane_full->points[i] :
+                            &points_and_plane_full->points[ points_and_plane_full->ipoint[i] ];
+                        const double distance_have = sqrtf( p->x*p->x +
+                                                            p->y*p->y +
+                                                            p->z*p->z );
+                        const double distance_shift = randn()*SCALE_MEASUREMENT_M;
+                        for(int i=0; i<3; i++)
+                            p->xyz[i] *= 1. + distance_shift/distance_have;
                     }
                 }
-
-                if(1 != fread(&points_and_plane_full->plane, sizeof(points_and_plane_full->plane), 1, fp))
-                    goto done_inner;
             }
         }
 
