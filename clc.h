@@ -406,10 +406,10 @@ bool clc(// in/out
          // bits indicating whether a camera in sensor_snapshots.images[] is
          // color or not
          // unused if sensor_snapshots_unsorted==NULL &&
-         // sensor_snapshots_sorted==NULL
+         //           sensor_snapshots_sorted==NULL
          const clc_is_bgr_mask_t is_bgr_mask,
          // unused if sensor_snapshots_unsorted==NULL &&
-         // sensor_snapshots_sorted==NULL
+         //           sensor_snapshots_sorted==NULL
          const clc_lidar_segmentation_context_t* ctx,
 
          const mrcal_pose_t* rt_vehicle_lidar0,
