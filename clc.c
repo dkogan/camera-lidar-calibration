@@ -3143,7 +3143,7 @@ static bool dump_inputs(
             {
                 // Have ipoints[]: points[] are indexed by ipoints[]. Here I can
                 // have Npoints != n: some of the points[] may not be used. I
-                // write the minumum I need
+                // write the minimum I need
                 int ipoint_max = 0;
                 for(int i=0; i<points_and_plane_full->n; i++)
                     if(ipoint_max < points_and_plane_full->ipoint[i])
