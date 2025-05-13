@@ -5396,6 +5396,193 @@ get_isvisible_per_sensor_per_sector(// out
     return true;
 }
 
+static
+int ingest_sensor_snapshots(// out
+                            sensor_snapshot_segmented_t* snapshots,
+                            clc_point3f_t*          points_pool,
+                            clc_points_and_plane_t* points_and_plane_pool,
+                            mrcal_point2_t*         chessboard_corners_pool,
+                            uint64_t*               bitarray_snapshots_selected,
+
+                            // in
+                            const int Nsnapshots,
+                            const int Nplanes_max,
+
+                            const unsigned int lidar_packet_stride,
+
+
+                            const unsigned int Nlidars,
+                            const unsigned int Ncameras,
+                            const int object_height_n,
+                            const int object_width_n,
+                            const double object_spacing,
+
+                            // bits indicating whether a camera in sensor_snapshots.images[] is
+                            // color or not
+                            // unused if sensor_snapshots_unsorted==NULL &&
+                            // sensor_snapshots_sorted==NULL
+                            const clc_is_bgr_mask_t is_bgr_mask,
+                            // unused if sensor_snapshots_unsorted==NULL &&
+                            // sensor_snapshots_sorted==NULL
+                            const clc_lidar_segmentation_context_t* ctx,
+
+                            const clc_sensor_snapshot_unsorted_t*        sensor_snapshots_unsorted,
+                            const clc_sensor_snapshot_sorted_t*          sensor_snapshots_sorted,
+                            const clc_sensor_snapshot_segmented_t*       sensor_snapshots_segmented,
+                            const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots_segmented_dense,
+                            const bool verbose)
+{
+    int Nsnapshots_selected = 0;
+
+    int points_pool_index           = 0;
+    int points_and_plane_pool_index = 0;
+
+
+    for(unsigned int isnapshot=0; isnapshot < Nsnapshots; isnapshot++)
+    {
+        int Nsensors_observing = 0;
+
+        const clc_sensor_snapshot_unsorted_t* sensor_snapshot_unsorted =
+            (sensor_snapshots_unsorted != NULL ) ?
+            &sensor_snapshots_unsorted[isnapshot] :
+            NULL;
+        const clc_sensor_snapshot_sorted_t* sensor_snapshot_sorted =
+            (sensor_snapshots_sorted != NULL ) ?
+            &sensor_snapshots_sorted[isnapshot] :
+            NULL;
+        const clc_sensor_snapshot_segmented_t* sensor_snapshot_segmented =
+            (sensor_snapshots_segmented != NULL ) ?
+            &sensor_snapshots_segmented[isnapshot] :
+            NULL;
+        const clc_sensor_snapshot_segmented_dense_t* sensor_snapshot_segmented_dense =
+            (sensor_snapshots_segmented_dense != NULL ) ?
+            &sensor_snapshots_segmented_dense[isnapshot] :
+            NULL;
+
+        for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
+        {
+            snapshots[isnapshot].lidar_scans[ilidar] =
+                (points_and_plane_full_t){};
+
+
+            if(sensor_snapshot_unsorted != NULL ||
+               sensor_snapshot_sorted   != NULL)
+            {
+                if(!lidar_segmentation(&snapshots[isnapshot].lidar_scans[ilidar],
+
+                                       points_pool,
+                                       points_and_plane_pool,
+                                       &points_pool_index,
+                                       &points_and_plane_pool_index,
+
+
+                                       sensor_snapshot_unsorted,
+                                       sensor_snapshot_sorted,
+                                       ilidar,
+                                       _Nrings,
+                                       lidar_packet_stride,
+                                       Nplanes_max,
+                                       ctx))
+                    continue;
+            }
+            else if(sensor_snapshot_segmented != NULL)
+            {
+                const clc_lidar_scan_segmented_t* scan_segmented = &sensor_snapshot_segmented->lidar_scans[ilidar];
+                if(scan_segmented->points_and_plane.n == 0)
+                    continue;
+
+                snapshots[isnapshot].lidar_scans[ilidar] =
+                    (points_and_plane_full_t){ .points = scan_segmented->points,
+                                               .n      = scan_segmented->points_and_plane.n,
+                                               .ipoint = scan_segmented->points_and_plane.ipoint,
+                                               .plane  = scan_segmented->points_and_plane.plane};
+            }
+            else if(sensor_snapshot_segmented_dense != NULL)
+            {
+                const clc_lidar_scan_segmented_dense_t* scan_segmented = &sensor_snapshot_segmented_dense->lidar_scans[ilidar];
+                if(scan_segmented->points_and_plane.n == 0)
+                    continue;
+
+                snapshots[isnapshot].lidar_scans[ilidar] =
+                    (points_and_plane_full_t){ .points = scan_segmented->points,
+                                               .n      = scan_segmented->points_and_plane.n,
+                                               .ipoint = NULL,
+                                               .plane  = scan_segmented->points_and_plane.plane};
+            }
+            else
+            {
+                MSG("Getting here is a bug");
+                return -1;
+            }
+
+
+            MSG_IF_VERBOSE("Sensor snapshot %d observed by sensor %d (lidar%d)",
+                           isnapshot, ilidar, ilidar);
+            Nsensors_observing++;
+        }
+
+        for(unsigned int icamera=0; icamera<Ncameras; icamera++)
+        {
+            if( sensor_snapshot_segmented != NULL)
+            {
+                snapshots[isnapshot].chessboard_corners[icamera] =
+                    sensor_snapshot_segmented->chessboard_corners[icamera];
+            }
+            else if(sensor_snapshot_segmented_dense != NULL)
+            {
+                snapshots[isnapshot].chessboard_corners[icamera] =
+                    sensor_snapshot_segmented_dense->chessboard_corners[icamera];
+            }
+            else
+            {
+                snapshots[isnapshot].chessboard_corners[icamera] =
+                    &chessboard_corners_pool[ (isnapshot*Ncameras +
+                                               icamera) * object_width_n*object_height_n ];
+
+                // using uint8 type here; the image might be color. This is
+                // specified using the is_bgr_mask below
+                const mrcal_image_uint8_t* image;
+                if(     sensor_snapshot_unsorted  != NULL) image = &sensor_snapshot_unsorted ->images[icamera].uint8;
+                else if(sensor_snapshot_sorted    != NULL) image = &sensor_snapshot_sorted   ->images[icamera].uint8;
+                else
+                    assert(0);
+                if(image->data == NULL ||
+                   !clc_camera_chessboard_detection(snapshots[isnapshot].chessboard_corners[icamera],
+
+                                                    image,
+                                                    is_bgr_mask & (1U << icamera),
+                                                    object_height_n,
+                                                    object_width_n))
+                {
+                    snapshots[isnapshot].chessboard_corners[icamera] = NULL;
+                    continue;
+                }
+            }
+
+            MSG_IF_VERBOSE("Sensor snapshot %d observed by sensor %d (camera%d)",
+                           isnapshot, Nlidars+icamera, icamera);
+            Nsensors_observing++;
+        }
+
+        MSG_IF_VERBOSE("Sensor snapshot %d observed by %d sensors",
+                       isnapshot, Nsensors_observing);
+
+        if(Nsensors_observing < 2)
+        {
+            MSG_IF_VERBOSE("Need at least 2. Throwing out isnapshot=%d",
+                           isnapshot);
+            continue;
+        }
+
+        // This snapshot has observations from sufficient overlapping sensors. I
+        // use it
+        bitarray64_set(bitarray_snapshots_selected, isnapshot);
+        MSG_IF_VERBOSE("isnapshot=%d selected", isnapshot);
+        Nsnapshots_selected++;
+    }
+
+    return Nsnapshots_selected;
+}
 
 // Each sensor is uniquely identified by its position in the
 // sensor_snapshots[].lidar_scans[] or .images[] arrays. An unobserved sensor in
@@ -5643,149 +5830,32 @@ bool clc(// in/out
         (mrcal_point2_t*)&pool[Nbytes_pool_lidar];
 
 
-    int Nsnapshots_selected = 0;
-    for(unsigned int isnapshot=0; isnapshot < Nsnapshots; isnapshot++)
-    {
-        int Nsensors_observing = 0;
+    int Nsnapshots_selected =
+        ingest_sensor_snapshots(// out
+                                snapshots,
+                                points_pool,
+                                points_and_plane_pool,
+                                chessboard_corners_pool,
+                                bitarray_snapshots_selected,
 
-        const clc_sensor_snapshot_unsorted_t* sensor_snapshot_unsorted =
-            (sensor_snapshots_unsorted != NULL ) ?
-            &sensor_snapshots_unsorted[isnapshot] :
-            NULL;
-        const clc_sensor_snapshot_sorted_t* sensor_snapshot_sorted =
-            (sensor_snapshots_sorted != NULL ) ?
-            &sensor_snapshots_sorted[isnapshot] :
-            NULL;
-        const clc_sensor_snapshot_segmented_t* sensor_snapshot_segmented =
-            (sensor_snapshots_segmented != NULL ) ?
-            &sensor_snapshots_segmented[isnapshot] :
-            NULL;
-        const clc_sensor_snapshot_segmented_dense_t* sensor_snapshot_segmented_dense =
-            (sensor_snapshots_segmented_dense != NULL ) ?
-            &sensor_snapshots_segmented_dense[isnapshot] :
-            NULL;
-
-        for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
-        {
-            snapshots[isnapshot].lidar_scans[ilidar] =
-                (points_and_plane_full_t){};
-
-
-            if(sensor_snapshot_unsorted != NULL ||
-               sensor_snapshot_sorted   != NULL)
-            {
-                if(!lidar_segmentation(&snapshots[isnapshot].lidar_scans[ilidar],
-
-                                       points_pool,
-                                       points_and_plane_pool,
-                                       &points_pool_index,
-                                       &points_and_plane_pool_index,
-
-
-                                       sensor_snapshot_unsorted,
-                                       sensor_snapshot_sorted,
-                                       ilidar,
-                                       _Nrings,
-                                       lidar_packet_stride,
-                                       Nplanes_max,
-                                       ctx))
-                    continue;
-            }
-            else if(sensor_snapshot_segmented != NULL)
-            {
-                const clc_lidar_scan_segmented_t* scan_segmented = &sensor_snapshot_segmented->lidar_scans[ilidar];
-                if(scan_segmented->points_and_plane.n == 0)
-                    continue;
-
-                snapshots[isnapshot].lidar_scans[ilidar] =
-                    (points_and_plane_full_t){ .points = scan_segmented->points,
-                                               .n      = scan_segmented->points_and_plane.n,
-                                               .ipoint = scan_segmented->points_and_plane.ipoint,
-                                               .plane  = scan_segmented->points_and_plane.plane};
-            }
-            else if(sensor_snapshot_segmented_dense != NULL)
-            {
-                const clc_lidar_scan_segmented_dense_t* scan_segmented = &sensor_snapshot_segmented_dense->lidar_scans[ilidar];
-                if(scan_segmented->points_and_plane.n == 0)
-                    continue;
-
-                snapshots[isnapshot].lidar_scans[ilidar] =
-                    (points_and_plane_full_t){ .points = scan_segmented->points,
-                                               .n      = scan_segmented->points_and_plane.n,
-                                               .ipoint = NULL,
-                                               .plane  = scan_segmented->points_and_plane.plane};
-            }
-            else
-            {
-                MSG("Getting here is a bug");
-                return false;
-            }
-
-
-            MSG_IF_VERBOSE("Sensor snapshot %d observed by sensor %d (lidar%d)",
-                           isnapshot, ilidar, ilidar);
-            Nsensors_observing++;
-        }
-
-        for(unsigned int icamera=0; icamera<Ncameras; icamera++)
-        {
-            if( sensor_snapshot_segmented != NULL)
-            {
-                snapshots[isnapshot].chessboard_corners[icamera] =
-                    sensor_snapshot_segmented->chessboard_corners[icamera];
-            }
-            else if(sensor_snapshot_segmented_dense != NULL)
-            {
-                snapshots[isnapshot].chessboard_corners[icamera] =
-                    sensor_snapshot_segmented_dense->chessboard_corners[icamera];
-            }
-            else
-            {
-                snapshots[isnapshot].chessboard_corners[icamera] =
-                    &chessboard_corners_pool[ (isnapshot*Ncameras +
-                                               icamera) * object_width_n*object_height_n ];
-
-                // using uint8 type here; the image might be color. This is
-                // specified using the is_bgr_mask below
-                const mrcal_image_uint8_t* image;
-                if(     sensor_snapshot_unsorted  != NULL) image = &sensor_snapshot_unsorted ->images[icamera].uint8;
-                else if(sensor_snapshot_sorted    != NULL) image = &sensor_snapshot_sorted   ->images[icamera].uint8;
-                else
-                    assert(0);
-                if(image->data == NULL ||
-                   !clc_camera_chessboard_detection(snapshots[isnapshot].chessboard_corners[icamera],
-
-                                                    image,
-                                                    is_bgr_mask & (1U << icamera),
-                                                    object_height_n,
-                                                    object_width_n))
-                {
-                    snapshots[isnapshot].chessboard_corners[icamera] = NULL;
-                    continue;
-                }
-            }
-
-            MSG_IF_VERBOSE("Sensor snapshot %d observed by sensor %d (camera%d)",
-                           isnapshot, Nlidars+icamera, icamera);
-            Nsensors_observing++;
-        }
-
-        MSG_IF_VERBOSE("Sensor snapshot %d observed by %d sensors",
-                       isnapshot, Nsensors_observing);
-
-        if(Nsensors_observing < 2)
-        {
-            MSG_IF_VERBOSE("Need at least 2. Throwing out isnapshot=%d",
-                           isnapshot);
-            continue;
-        }
-
-        // This snapshot has observations from sufficient overlapping sensors. I
-        // use it
-        bitarray64_set(bitarray_snapshots_selected, isnapshot);
-        MSG_IF_VERBOSE("isnapshot=%d selected", isnapshot);
-        Nsnapshots_selected++;
-    }
+                                // in
+                                Nsnapshots,
+                                Nplanes_max,
+                                lidar_packet_stride,
+                                Nlidars,
+                                Ncameras,
+                                object_height_n,
+                                object_width_n,
+                                object_spacing,
+                                is_bgr_mask,
+                                ctx,
+                                sensor_snapshots_unsorted,
+                                sensor_snapshots_sorted,
+                                sensor_snapshots_segmented,
+                                sensor_snapshots_segmented_dense,
+                                verbose);
+    if(Nsnapshots_selected < 0)
+        goto done;
 
     MSG_IF_VERBOSE("Have %d joint observations", Nsnapshots_selected);
 
