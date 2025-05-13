@@ -3071,8 +3071,8 @@ static bool dump_inputs(
     const int                          Nsnapshots,
     const uint64_t*                    bitarray_snapshots_selected,
 
-    const unsigned int Nlidars,
-    const unsigned int Ncameras,
+    const int Nlidars,
+    const int Ncameras,
     const mrcal_cameramodel_t*const* models, // Ncameras of these
 
     // The dimensions of the chessboard grid being detected in the images
