@@ -1008,13 +1008,16 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
     PyObject* result      = NULL;
     PyObject* inputs_dump = NULL;
 
-    int            Nlidars          = 0;
-    int            Ncameras         = 0;
-    mrcal_pose_t*  rt_lidar0_lidar     = NULL;
-    mrcal_pose_t*  rt_lidar0_camera    = NULL;
-    PyArrayObject* py_rt_lidar0_lidar  = NULL;
-    PyArrayObject* py_rt_lidar0_camera = NULL;
-    PyArrayObject* py_isnapshot_exclude = NULL;
+    int            Nlidars                 = 0;
+    int            Ncameras                = 0;
+    mrcal_pose_t*  rt_lidar0_lidar         = NULL;
+    mrcal_pose_t*  rt_lidar0_camera        = NULL;
+    double*        Var_rt_lidar0_sensor    = NULL;
+    PyArrayObject* py_rt_lidar0_lidar      = NULL;
+    PyArrayObject* py_rt_lidar0_camera     = NULL;
+    PyArrayObject* py_Var_rt_lidar0_sensor = NULL;
+    PyArrayObject* py_isnapshot_exclude    = NULL;
+
     double fit_seed_position_err_threshold  = 0.5;
     double fit_seed_cos_angle_err_threshold = cos(10.*M_PI/180.);
     int            do_inject_noise  = 0;
@@ -1070,6 +1073,7 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
                                          &Ncameras,
                                          &rt_lidar0_lidar,
                                          &rt_lidar0_camera,
+                                         &Var_rt_lidar0_sensor,
                                          // in
                                          PyBytes_AS_STRING(inputs_dump),
                                          PyBytes_GET_SIZE( inputs_dump),
@@ -1092,21 +1096,36 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
     py_rt_lidar0_camera = (PyArrayObject*)PyArray_SimpleNew(2, ((npy_intp[]){Ncameras,6}), NPY_FLOAT64);
     if(py_rt_lidar0_camera == NULL) goto done;
 
+    const int Nsensors           = Nlidars + Ncameras;
+    const int Nsensors_optimized = Nsensors-1; // lidar0 is fixed
+    py_Var_rt_lidar0_sensor = (PyArrayObject*)PyArray_SimpleNew(4,
+                                                                ((npy_intp[]){Nsensors_optimized, 6,
+                                                                              Nsensors_optimized, 6,}),
+                                                                NPY_FLOAT64);
+    if(py_Var_rt_lidar0_sensor == NULL) goto done;
+
+
     memcpy( PyArray_DATA(py_rt_lidar0_lidar),
             rt_lidar0_lidar,
             Nlidars*6*sizeof(double));
     memcpy( PyArray_DATA(py_rt_lidar0_camera),
             rt_lidar0_camera,
             Ncameras*6*sizeof(double));
+    memcpy( PyArray_DATA(py_Var_rt_lidar0_sensor),
+            Var_rt_lidar0_sensor,
+            Nsensors_optimized*6*Nsensors_optimized*6*sizeof(double));
 
-    result = Py_BuildValue("{sOsO}",
-                           "rt_lidar0_lidar",  py_rt_lidar0_lidar,
-                           "rt_lidar0_camera", py_rt_lidar0_camera);
+    result = Py_BuildValue("{sOsOsO}",
+                           "rt_lidar0_lidar",      py_rt_lidar0_lidar,
+                           "rt_lidar0_camera",     py_rt_lidar0_camera,
+                           "Var_rt_lidar0_sensor", py_Var_rt_lidar0_sensor);
  done:
     free(rt_lidar0_lidar);
     free(rt_lidar0_camera);
+    free(Var_rt_lidar0_sensor);
     Py_XDECREF(py_rt_lidar0_lidar);
     Py_XDECREF(py_rt_lidar0_camera);
+    Py_XDECREF(py_Var_rt_lidar0_sensor);
     RESET_SIGINT();
 
     return result;

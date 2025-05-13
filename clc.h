@@ -420,19 +420,27 @@ bool clc(// in/out
          bool check_gradient,
          bool verbose);
 
+// All the ** output arguments that are not NULL are allocated by the function
+// on success. It's the caller's responsibility to free() all of these:
+//     rt_lidar0_lidar
+//     rt_lidar0_camera
+//     Var_rt_lidar0_sensor
 bool clc_fit_from_inputs_dump(// out
                               int* Nlidars,
                               int* Ncameras,
-                              // Allocated by the function on success.
-                              // It's the caller's responsibility to
-                              // free() these
                               mrcal_pose_t** rt_lidar0_lidar,
                               mrcal_pose_t** rt_lidar0_camera,
+
+                              // Covariance of the output. Symmetric matrix of shape
+                              // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
+                              // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6; may be NULL
+                              double**       Var_rt_lidar0_sensor,
+
                               // in
                               const char* buf_inputs_dump,
                               size_t      size_inputs_dump,
-                              const int*  exclude_isnapshot, // NULL to not exclude any
-                              const int   Nexclude_isnapshot,
+                              const int*  isnapshot_exclude, // NULL to not exclude any
+                              const int   Nisnapshot_exclude,
 
                               const double fit_seed_position_err_threshold,
                               const double fit_seed_cos_angle_err_threshold,
