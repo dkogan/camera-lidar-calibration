@@ -225,6 +225,12 @@ def messages(bag, topics,
                     data = data.reshape(msg.height,msg.width,3)
                 else:
                     raise Exception(f"Unknown {msg.encoding=}")
+            elif re.search(r'\bsensor_msgs__msg__CompressedImage\b', str(type(msg))):
+                if msg.format == 'rgb8; jpeg compressed bgr8':
+                    import cv2
+                    data = cv2.imdecode(msg.data, cv2.IMREAD_COLOR)
+                else:
+                    raise Exception(f"Have {type(msg)=}; don't know how to interpret {msg.format=}")
             else:
                 if ignore_unknown_message_types:
                     continue
