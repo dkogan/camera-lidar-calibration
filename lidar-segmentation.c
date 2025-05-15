@@ -1136,9 +1136,6 @@ stage2_grow_cluster(// out
                     const int*       ipoint0_in_ring,
                     const clc_lidar_segmentation_context_t* ctx)
 {
-    *cluster = (segment_cluster_t){.irings       = {iring0,iring0},
-                                   .isegments    =
-                                   { [0] = {isegment,isegment} }};
 
     int iring = iring0;
     while(true)
@@ -1293,6 +1290,10 @@ static void stage2_cluster_segments(// out
             // two adjacent rings. Once I get a plane I find the biggest
             // connected component of plane-consistent segments around this one
             segment_cluster_t* cluster = &clusters[icluster];
+            *cluster = (segment_cluster_t){.irings       = {iring0,iring0},
+                                           .isegments    =
+                                           { [0] = {isegment,isegment} }};
+
             const bool debug =
                 ctx->debug_xmin < segment0->p.x && segment0->p.x < ctx->debug_xmax &&
                 ctx->debug_ymin < segment0->p.y && segment0->p.y < ctx->debug_ymax;
