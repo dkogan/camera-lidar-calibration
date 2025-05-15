@@ -79,11 +79,21 @@ def parse_args():
                         action='store_true',
                         help = '''Applies to LIDAR data. If given, I make a 2D
                         plot, ignoring the z axis''')
-    parser.add_argument('--extract',
+    parser.add_argument('--extract-images',
+                        action='store_true',
                         help = '''Applies to camera data. If given, I write the
-                        image to the filename given in this argument. Exactly
-                        one bag is expected: I exit after writing the first
-                        image''')
+                        images to the directory given in this argument. Exactly
+                        one bag and one topic is expected. I write to the
+                        directory in --outdir ('/tmp' by default) and I write at
+                        most --extract-images-count (all images by default)''')
+    parser.add_argument('--extract-images-count',
+                        type=int,
+                        help = '''If --extract-images is given I write this many
+                        images at most. By default, I write ALL the images''')
+    parser.add_argument('--outdir',
+                        default = '/tmp',
+                        help = '''The directory --extract-.... will write to.
+                        The default is "/tmp/"''')
     parser.add_argument('--period',
                         type=float,
                         default = 0,
@@ -112,6 +122,12 @@ def parse_args():
                         or camera data. If omitted, we report the topics present
                         in the bag, and we exit. If --timeline, this is a
                         ,-separated list of topics to visualize''')
+    parser.add_argument('--decimation-period',
+                        type=float,
+                        help = '''If given, we expect ONE bag, and rather than
+                        taking the first message from each bag, we take all the
+                        messages from THIS bag, spaced out with a period given
+                        by this argument, in seconds''')
     parser.add_argument('--after',
                         type=str,
                         help = '''If given, start reading the bags at this time.
@@ -149,6 +165,19 @@ def parse_args():
     if args.timeline is not None:
         if len(args.bags) > 1:
             print("--timeline works only with ONE bag", file=sys.stderr)
+            sys.exit(1)
+
+    if args.extract_images:
+        if len(args.bags) > 1:
+            print("--extract-images expects exactly ONE bag", file=sys.stderr)
+            sys.exit(1)
+
+    if args.decimation_period is not None:
+        if args.decimation_period <= 0:
+            print("--decimation-period given, and it must some >0 number of seconds", file=sys.stderr)
+            sys.exit(1)
+        if len(args.bags) > 1:
+            print("--decimation-period given, so we MUST have gotten exactly one bag", file=sys.stderr)
             sys.exit(1)
 
     return args
@@ -193,6 +222,12 @@ if args.timeline is not None:
         topics = bag_interface.topics(bag)
     else:
         topics = args.topic.split(',')
+
+    if args.extract_images:
+        if len(topics) > 1:
+            print("--extract-images expects exactly ONE topic", file=sys.stderr)
+            sys.exit(1)
+
 
     timestamps = []
 
@@ -335,38 +370,69 @@ def show_image(bag, p):
 
 
 
+Nimages_written = 0
+
+# we have just one topic
+topic = args.topic
+
 for bag in bags():
-    try:
-        msg = next(bag_interface.messages(bag, (args.topic,),
-                                          start = args.after,
-                                          stop  = args.before))
-        p = msg['array']
-    except StopIteration:
-        print(f"No messages with {args.topic=} in {bag=} in the requested time span. Continuing to next bag, if any",
-              file = sys.stderr)
-        continue
 
-
-    def has_xyz(p):
-        try:
-            if 'xyz' in p.dtype.names:
-                return True
-        except:
-            return False
-
-    if has_xyz(p):
-        show_lidar(bag, p,
-                   _with = getattr(args, "with"),
-                   no_intensity = args.no_intensity)
-    elif p.dtype == np.uint8 and \
-         (p.ndim == 2 or (p.ndim==3 and p.shape[-1] == 3)):
-        if args.extract is not None:
-            import mrcal
-            mrcal.save_image(args.extract, p)
-            print(f"Wrote '{args.extract}'")
-            sys.exit()
-        show_image(bag, p)
+    if args.decimation_period is not None:
+        msg_iterator = bag_interface. \
+            first_message_from_each_topic_in_time_segments(bag, (topic,),
+                                                           period_s = args.decimation_period,
+                                                           start = args.after,
+                                                           stop  = args.before)
     else:
-        print(f"Cannot interpret message from {args.topic}",
-              file=sys.stderr)
-        sys.exit(1)
+        msg_iterator = ( bag_interface. \
+                         first_message_from_each_topic(bag, (topic,),
+                                                       start = args.after,
+                                                       stop  = args.before), )
+
+
+    for msg in msg_iterator:
+
+        itopic = 0 # we have just one topic
+        p = msg[itopic]['array']
+
+        def has_xyz(p):
+            try:
+                if 'xyz' in p.dtype.names:
+                    return True
+            except:
+                return False
+
+        def is_image(p):
+            return \
+                p.dtype == np.uint8 and \
+                (p.ndim == 2 or (p.ndim==3 and p.shape[-1] == 3))
+
+
+
+        if args.extract_images:
+            if is_image(p):
+                filename = f"{args.outdir}/image{Nimages_written:05d}.jpg"
+
+                import mrcal
+                mrcal.save_image(filename, p)
+                print(f"Wrote '{filename}'")
+
+                Nimages_written += 1
+
+                if args.extract_images_count is not None and \
+                   Nimages_written >= args.extract.images.count:
+                    sys.exit(0)
+
+            continue
+
+
+        if has_xyz(p):
+            show_lidar(bag, p,
+                       _with = getattr(args, "with"),
+                       no_intensity = args.no_intensity)
+        elif is_image(p):
+            show_image(bag, p)
+        else:
+            print(f"Cannot interpret message from {topic}",
+                  file=sys.stderr)
+            sys.exit(1)
