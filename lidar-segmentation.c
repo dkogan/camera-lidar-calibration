@@ -1454,16 +1454,20 @@ static void stage3_accumulate_points(// out
         }
 
         const float th_rad = th_from_point(&points[ipoint0_in_ring + ipoint]);
-        float abs_dth_rad = 0.0f;
+
+        int Ngap = -1;
         if(th_rad_last < FLT_MAX)
         {
             // we have a valid th_rad_last
-            abs_dth_rad = fabsf(th_rad - th_rad_last);
-            if( DEBUG_ON_TRUE_POINT( abs_dth_rad > ctx->threshold_max_gap_th_rad,
+            const float abs_dth_rad = fabsf(th_rad - th_rad_last);
+            Ngap =
+                (int)( 0.5f + abs_dth_rad * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
+
+            if( DEBUG_ON_TRUE_POINT( Ngap >= ctx->threshold_max_gap_Npoints,
                                      &points[ipoint0_in_ring + ipoint],
-                                     "%d-%d: gap too large; accumulation stopped. Have ~ %f > %f",
+                                     "%d-%d: gap too large; accumulation stopped. Have ~ %d >= %d",
                                      iring,isegment,
-                                     abs_dth_rad, ctx->threshold_max_gap_th_rad))
+                                     Ngap, ctx->threshold_max_gap_Npoints))
                 break;
         }
         else
@@ -1509,6 +1513,15 @@ static void stage3_accumulate_points(// out
         if((ipoint_lagging - ipoint0)*ipoint_increment >= 0 &&
            bitarray64_check(bitarray_visited, ipoint_lagging))
         {
+            // some bitarray64_check() succeeded here, so bitarray64_set() was
+            // called at some point, so th_rad_last is valid, so Ngap is valid
+            // too. In case my thought process is wrong, I confirm here
+            if(Ngap < 0)
+            {
+                MSG("This is a bug. Ngap must be >= 0 here");
+                break;
+            }
+
             // This lagging point is in range and was accepted, so I check the
             // direction consistency
 
@@ -1524,8 +1537,6 @@ static void stage3_accumulate_points(// out
             if(norm2_dp_last < FLT_MAX)
             {
                 // have dp_last, norm2_dp_last
-                const int Ngap =
-                    (int)( 0.5f + abs_dth_rad * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
                 const float cos_threshold_baseline = cosf(10.0f*M_PI/180.f);
 
                 // the cos_threshold_baseline is intended for a single gap. For

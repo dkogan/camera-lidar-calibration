@@ -236,9 +236,9 @@ typedef struct
   _(int,   threshold_min_Nrings_in_cluster,              3,                 "i","i", \
       "stage2: clusters with date from fewer than this many rings are rejected" ) \
   /* used in refinement */                                              \
-  _(float, threshold_max_gap_th_rad,                     0.5f * M_PI/180.f, "f","f", \
+  _(int, threshold_max_gap_Npoints,                     3, "i","i", \
       "stage3: moving from the center, we stop accumulating points when we encounter\n" \
-      "an angular gap of this many radians" )
+      "an angular gap at least this large" )
 
 
 
