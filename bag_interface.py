@@ -351,6 +351,8 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
 
     t1 = start if start is not None else d['t0']
 
+    N = 0
+
     def excluded(t0,t1, exclude_time_periods ):
         for t0_excluded,t1_excluded in exclude_time_periods:
             if t0_excluded > t0 and t0_excluded < t1 or \
@@ -358,7 +360,6 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
                 return True
         return False
 
-    msgs = []
     while True:
         t0 = t1
         t1 = t0 + int(period_s*1e9)
@@ -385,13 +386,13 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
             # doesn't have enough
             continue
 
-        msgs.append(msgs_now)
-
         if verbose:
-            isnapshot = len(msgs)-1
+            isnapshot = N
             print(f"{isnapshot=}: at time_ns = {['-' if m is None else m['time_ns'] for m in msgs_now]} (spread={_time_spread_s(msgs_now):.2f}s) '{bag}'")
 
-    return msgs
+        N += 1
+        yield msgs_now
+
 
 
 def topics(bag):

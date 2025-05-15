@@ -115,16 +115,18 @@ def _sorted_sensor_snapshots(bags, topics,
         if len(bags) != 1:
             raise Exception("decimation_period is not None, so I expect exactly one bag to have been given")
         bag = bags[0]
+        # slurp an iterator into a list. This wastes memory, but saves me some
+        # coding time today
         messages_bags = \
-            bag_interface. \
-            first_message_from_each_topic_in_time_segments(bag, topics,
-                                                           start    = start,
-                                                           stop     = stop,
-                                                           period_s = decimation_period,
-                                                           require_at_least_N_topics = 2,
-                                                           max_time_spread_s = max_time_spread_s,
-                                                           exclude_time_periods = exclude_time_periods,
-                                                           verbose = verbose)
+            list( bag_interface. \
+                  first_message_from_each_topic_in_time_segments(bag, topics,
+                                                                 start    = start,
+                                                                 stop     = stop,
+                                                                 period_s = decimation_period,
+                                                                 require_at_least_N_topics = 2,
+                                                                 max_time_spread_s = max_time_spread_s,
+                                                                 exclude_time_periods = exclude_time_periods,
+                                                                 verbose = verbose) )
 
     # I need to figure out which topic corresponds to a lidar and which to a
     # camera. I can get this information from the data, but if any bag is
