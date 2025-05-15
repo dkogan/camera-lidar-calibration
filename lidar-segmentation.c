@@ -803,10 +803,12 @@ static bool plane_point_compatible_stage2_unnormalized(const plane_unnormalized_
     // "distance-off-plane" so err = inner( (point - p), n) / mag(n)
     //
     // Accept if threshold > inner( (point - p), n) / mag(n)
-    // n is normalized here, so I omit the /magn
     const clc_point3f_t dp = sub(*point, plane_unnormalized->p);
     const float proj = inner(dp, plane_unnormalized->n_unnormalized);
-    return ctx->threshold_max_plane_point_error_stage2*norm2(plane_unnormalized->n_unnormalized) > proj*proj;
+    return
+        ctx->threshold_max_plane_point_error_stage2*ctx->threshold_max_plane_point_error_stage2*
+        norm2(plane_unnormalized->n_unnormalized)
+        > proj*proj;
 }
 
 

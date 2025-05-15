@@ -221,7 +221,7 @@ typedef struct
   _(float, threshold_min_cos_angle_error_same_direction_cross_ring, 0.996194698092f,   "f","f", \
       "stage2: cos threshold used to construct a cluster from two cross-ring segments.\n" \
       "Non fitting pairs are not used to create a new cluster" ) \
-  _(float, threshold_max_plane_point_error_stage2,       0.3,               "f","f", \
+  _(float, threshold_max_plane_point_error_stage2,       0.05,               "f","f", \
       "stage2: distance threshold to make sure each segment center lies in plane\n" \
       "Non-fitting segments are not added to the cluster") \
   _(float, threshold_max_plane_point_error_stage3,       0.05,              "f","f", \
