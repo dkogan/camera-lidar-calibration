@@ -128,7 +128,7 @@ def parse_args():
                         type = float,
                         help = '''If given, we plot time message timeline from
                         the ONE give bag. Multiple bags not allowed. If no
-                        --topics, we report ALL the topics. Takes one argument:
+                        --topic, we report ALL the topics. Takes one argument:
                         the duration (in seconds) of the requested plot. If <=
                         0, we plot the whole bag''')
     parser.add_argument('--time-header-ns',
