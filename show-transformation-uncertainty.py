@@ -129,15 +129,30 @@ else:
     Rt_vehicle_lidar0 = mrcal.identity_Rt()
 
 
+
+
+
+
+Var_rt_lidar0_sensor = context['result']['Var_rt_lidar0_sensor']
+
 isensor_solve_from_isensor_requested = [None] * len(args.topic)
 for isensor_requested,topic_requested in enumerate(args.topic):
     try:
-        isensor_solve_from_isensor_requested[isensor_requested] = \
-            context['topics'].index(topic_requested)
+        i = context['topics'].index(topic_requested)
     except:
         print(f"Requested topic '{topic_requested}' not present in the context file '{args.context}'; topics: {context['topics']}",
               file=sys.stderr)
         sys.exit(1)
+
+    isensor_solve_from_isensor_requested[isensor_requested] = i
+
+    if i > 0:
+        Var_rt_lidar0_sensor_this = Var_rt_lidar0_sensor[i-1,:,i-1,:]
+
+        l,v = mrcal.sorted_eig(Var_rt_lidar0_sensor_this)
+
+        s = v[:,-1] * np.sqrt(l[-1])
+        print(f"Topic {topic_requested} rt_lidar0_sensor worst-direction 1-sigma stdev: {s[:3]}rad, {s[3:]}m")
 
 
 x_sample = np.linspace(-args.radius,args.radius,args.gridn)
@@ -174,7 +189,7 @@ if args.ellipsoids:
                                                      context['result']['rt_lidar0_lidar'],
                                                      context['result']['rt_lidar0_camera'],
                                                      isensor_solve,
-                                                     context['result']['Var_rt_lidar0_sensor'])
+                                                     Var_rt_lidar0_sensor)
         stdev = np.sqrt(l)
 
         # v_lidar0 stored each eigenvector in COLUMNS. I transpose to store them in
@@ -225,7 +240,7 @@ for isensor_requested,topic_requested in enumerate(args.topic):
                                                  context['result']['rt_lidar0_lidar'],
                                                  context['result']['rt_lidar0_camera'],
                                                  isensor_solve,
-                                                 context['result']['Var_rt_lidar0_sensor'])
+                                                 Var_rt_lidar0_sensor)
     stdev = np.sqrt(l)
 
     # v_lidar0 stored each eigenvector in COLUMNS. I transpose to store them in
