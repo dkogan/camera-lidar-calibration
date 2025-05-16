@@ -67,6 +67,10 @@ def parse_args():
                         type=float,
                         default = 20.,
                         help = '''Max distance where we cut the plot''')
+    parser.add_argument('--cbmax',
+                        type=float,
+                        help = '''If given, we use this cbmax in the uncertainty plots''')
+
 
 
     args = parser.parse_args()
@@ -247,6 +251,7 @@ for isensor_requested,topic_requested in enumerate(args.topic):
           ),
          *data_tuples_sensor_forward_vectors,
          cbmin = 0,
+         cbmax = args.cbmax,
          square = True,
          wait = True,
          xlabel = 'x (vehicle)',
