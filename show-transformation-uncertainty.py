@@ -53,8 +53,7 @@ def parse_args():
                         help = '''The topics to visualize. This is a
                         comma-separated list of topics''')
     parser.add_argument('--bag',
-                        required = True,
-                        help = '''The one bag we're visualizing''')
+                        help = '''The one bag we're visualizing. Required if --ellipsoids''')
     parser.add_argument('--after',
                         type=str,
                         help = '''If given, start reading the bags at this time.
@@ -72,6 +71,10 @@ def parse_args():
 
     args = parser.parse_args()
     args.topic = args.topic.split(',')
+
+    if args.ellipsoids and args.bag is None:
+        print("ERROR: --ellipsoids requires --bag", file=sys.stderr)
+        sys.exit(1)
 
     return args
 
