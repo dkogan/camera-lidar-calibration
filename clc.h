@@ -196,8 +196,8 @@ typedef struct
       "Post-processing: high limit on the RMS plane fit residual. Lower values will demand flatter planes" ) \
   _(float, threshold_min_rms_point_cloud_2nd_dimension,  0.1f,              "f","f", \
       "Post-processing: low limit on the short length of the found plane. Too-skinny planes are rejected" ) \
-  /* found empirically in dump-lidar-scan.py */                         \
-  _(int,   Npoints_per_rotation,                         1809,              "i","i", \
+  /* found by infer-lidar-spacing.py */                         \
+  _(int,   Npoints_per_rotation,                         1800,              "i","i", \
       "How many points are reported by the LIDAR in a rotation.\n" \
       "This is hardware-dependent, and needs to be revisited for different LIDAR units" ) \
   _(int,   Npoints_per_segment,                          15,                "i","i", \
