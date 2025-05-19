@@ -821,19 +821,50 @@ static bool plane_point_compatible_stage2_unnormalized(const plane_unnormalized_
         > proj*proj;
 }
 
+static int isegment_add(const int isegment, const int dsegment,
+                        const clc_lidar_segmentation_context_t* ctx)
+{
+    int i = isegment + dsegment;
+    if(i >= Nsegments_per_rotation)
+        i -= Nsegments_per_rotation;
+    return i;
+}
+
+static int isegment_sub(const int isegment, const int dsegment,
+                        const clc_lidar_segmentation_context_t* ctx)
+{
+    int i = isegment - dsegment;
+    if(i < 0)
+        i += Nsegments_per_rotation;
+    return i;
+}
 
 static int
-count_segments_in_cluster(const segment_cluster_t* cluster)
+count_segments_in_range(const int isegment0, const int isegment1,
+                        const clc_lidar_segmentation_context_t* ctx)
+{
+    return isegment_sub(isegment1, isegment0, ctx) + 1;
+}
+
+static int
+count_segments_in_cluster(const segment_cluster_t* cluster,
+                          const clc_lidar_segmentation_context_t* ctx)
 {
     const int Nrings = cluster->irings[1] - cluster->irings[0] + 1;
     int N = 0;
     for(int i=0; i<Nrings; i++)
-    {
-        N +=
-            cluster->isegments[i][1] -
-            cluster->isegments[i][0] + 1;
-    }
+        N += count_segments_in_range(cluster->isegments[i][0], cluster->isegments[i][1], ctx);
     return N;
+}
+
+static int
+isegment_center_from_range(const int isegment0,
+                           const int isegment1,
+                           const clc_lidar_segmentation_context_t* ctx)
+{
+    const int Nsegments_in_range = count_segments_in_range(isegment0,isegment1, ctx);
+    return isegment_add(isegment0, Nsegments_in_range/2,
+                        ctx);
 }
 
 
@@ -871,10 +902,16 @@ static bool fit_plane_into_cluster(// out
         iring    <= cluster->irings[1];
         iring++)
     {
-        for(int isegment = cluster->isegments[iring-cluster->irings[0]][0];
-            isegment    <= cluster->isegments[iring-cluster->irings[0]][1];
-            isegment++)
+        const int Nsegments_in_range = count_segments_in_range(cluster->isegments[iring-cluster->irings[0]][0],
+                                                               cluster->isegments[iring-cluster->irings[0]][1],
+                                                               ctx);
+        for(int dsegment = 0; dsegment < Nsegments_in_range; dsegment++)
         {
+            const int isegment =
+                isegment_add(cluster->isegments[iring-cluster->irings[0]][0],
+                             dsegment,
+                             ctx);
+
             const segment_t* segment =
                 &segments[iring*Nsegments_per_rotation + isegment];
 
@@ -970,10 +1007,15 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
         iring_here    <= cluster->irings[1];
         iring_here++)
     {
-        for(int isegment_here = cluster->isegments[iring_here-cluster->irings[0]][0];
-            isegment_here    <= cluster->isegments[iring_here-cluster->irings[0]][1];
-            isegment_here++)
+        const int Nsegments_in_range = count_segments_in_range(cluster->isegments[iring_here-cluster->irings[0]][0],
+                                                               cluster->isegments[iring_here-cluster->irings[0]][1],
+                                                               ctx);
+        for(int dsegment = 0; dsegment < Nsegments_in_range; dsegment++)
         {
+            const int isegment_here =
+                isegment_add(cluster->isegments[iring_here-cluster->irings[0]][0],
+                             dsegment,
+                             ctx);
             const segment_t* segment_here =
                 &segments[iring_here*Nsegments_per_rotation + isegment_here];
 
@@ -996,11 +1038,10 @@ static bool stage2_plane_segment_compatible(// The initial plane estimate in
 }
 
 
-static void stage2_accumulate_segments_samering( // out
+static void stage2_accumulate_segments_samering( // out, in
                                                 int16_t*                                isegment,
                                                 // in
                                                 const int16_t                           isegment_increment,
-                                                const int16_t                           isegment_limit, // first invalid
                                                 segment_cluster_t*                      cluster,
                                                 const int                               iring,
                                                 segment_t*                              segments, // not const to set visited
@@ -1009,13 +1050,14 @@ static void stage2_accumulate_segments_samering( // out
                                                 const int*                              ipoint0_in_ring,
                                                 const clc_lidar_segmentation_context_t* ctx)
 {
-    while(true)
-    {
-        if(*isegment == isegment_limit)
-            return;
+    const int16_t isegment_start = *isegment;
 
+    do
+    {
         const int16_t isegment0 = *isegment;
-        const int16_t isegment1 = *isegment + isegment_increment;
+        int16_t isegment1 = *isegment + isegment_increment;
+        if     (isegment1 >= Nsegments_per_rotation) isegment1 -= Nsegments_per_rotation;
+        else if(isegment1 < 0                      ) isegment1 += Nsegments_per_rotation;
 
         const segment_t* segment0 = &segments[iring*Nsegments_per_rotation + isegment0];
         segment_t*       segment1 = &segments[iring*Nsegments_per_rotation + isegment1];
@@ -1086,7 +1128,8 @@ static void stage2_accumulate_segments_samering( // out
 
         segment1->visited = true;
         *isegment = isegment1;
-    }
+
+    } while(*isegment != isegment_start);
 }
 
 static
@@ -1154,7 +1197,6 @@ stage2_grow_cluster(// out
                                              &cluster->isegments[iring-iring0][0],
                                              // in
                                              -1,
-                                             -1,
                                              cluster,
                                              iring,
                                              segments,
@@ -1166,7 +1208,6 @@ stage2_grow_cluster(// out
                                              &cluster->isegments[iring-iring0][1],
                                              // in
                                              1,
-                                             Nsegments_per_rotation,
                                              cluster,
                                              iring,
                                              segments,
@@ -1191,62 +1232,77 @@ stage2_grow_cluster(// out
         if(iring >= ctx->Nrings)
             return;
 
-        int isegment_nextring_offcenter0 = -1;
-        int isegment_nextring_offcenter1 = -1;
-        const int isegment_center = (isegment0 + isegment1)/2;
+        int dsegment_nextring_offcenter0 = -1;
+        int dsegment_nextring_offcenter1 = -1;
+
+        const int isegment_center = isegment_center_from_range(isegment0, isegment1, ctx);
+
         // I start searching in the middle of the previous ring
-        for( int i = 0;
-             isegment_center-i >= isegment0;
-             i++ )
+        int dsegment;
+
+        dsegment = 0;
+        while(true)
         {
+            const int isegment_next = isegment_sub(isegment_center, dsegment, ctx);
+            if(!(isegment_next >= isegment0))
+                break;
+
             if(stage2_next_ring_segment_compatible(cluster,
                                                    iring,
-                                                   isegment_center-i,
+                                                   isegment_next,
                                                    // context
                                                    segments, icluster, points, ipoint0_in_ring, ctx))
             {
-                isegment_nextring_offcenter0 = i;
+                dsegment_nextring_offcenter0 = dsegment;
                 break;
             }
+
+            dsegment++;
         }
-        for( int i = 1;
-             isegment_center+i <= isegment1;
-             i++ )
+
+        dsegment = 1;
+        while(true)
         {
+            const int isegment_next = isegment_add(isegment_center, dsegment, ctx);
+            if(!(isegment_next <= isegment1))
+                break;
+
             if(stage2_next_ring_segment_compatible(cluster,
                                                    iring,
-                                                   isegment_center+i,
+                                                   isegment_next,
                                                    // context
                                                    segments, icluster, points, ipoint0_in_ring, ctx))
             {
-                isegment_nextring_offcenter1 = i;
+                dsegment_nextring_offcenter1 = dsegment;
                 break;
             }
+
+            dsegment++;
         }
 
         // The nearest (to the center) matching segments in the next ring are
-        // isegment_nextring_offcenter0,1. >=0 if defined
+        // dsegment_nextring_offcenter0,1. >=0 if defined
         int isegment_nextring;
-        if(isegment_nextring_offcenter0 < 0 &&
-           isegment_nextring_offcenter1 < 0)
+        if(dsegment_nextring_offcenter0 < 0 &&
+           dsegment_nextring_offcenter1 < 0)
         {
             // No matching segments in the next ring. We're done
             return;
         }
-        if(isegment_nextring_offcenter0 < 0)
+        if(dsegment_nextring_offcenter0 < 0)
             // The matching segment appears on only one side. Take it
-            isegment_nextring = isegment_center+isegment_nextring_offcenter1;
-        else if(isegment_nextring_offcenter1 < 0)
+            isegment_nextring = isegment_add(isegment_center,dsegment_nextring_offcenter1, ctx);
+        else if(dsegment_nextring_offcenter1 < 0)
             // The matching segment appears on only one side. Take it
-            isegment_nextring = isegment_center-isegment_nextring_offcenter0;
+            isegment_nextring = isegment_sub(isegment_center,dsegment_nextring_offcenter0, ctx);
         else
         {
             // The matching segment appears on both sides. Take the one closer
             // to the center
-            if(isegment_nextring_offcenter0 < isegment_nextring_offcenter1)
-                isegment_nextring = isegment_center-isegment_nextring_offcenter0;
+            if(dsegment_nextring_offcenter0 < dsegment_nextring_offcenter1)
+                isegment_nextring = isegment_sub(isegment_center,dsegment_nextring_offcenter0, ctx);
             else
-                isegment_nextring = isegment_center+isegment_nextring_offcenter1;
+                isegment_nextring = isegment_add(isegment_center,dsegment_nextring_offcenter1, ctx);
         }
 
         // I have the next-ring segment. Add it to the cluster, and expand it
@@ -1331,7 +1387,7 @@ static void stage2_cluster_segments(// out
                                 ipoint0_in_ring,
                                 ctx);
 
-            const int Nsegments_in_cluster = count_segments_in_cluster(cluster);
+            const int Nsegments_in_cluster = count_segments_in_cluster(cluster, ctx);
 
             if(DEBUG_ON_TRUE_SEGMENT(Nsegments_in_cluster == 2,
                                      iring0,isegment,
@@ -1383,10 +1439,15 @@ static void stage2_cluster_segments(// out
                 iring    <= cluster->irings[1];
                 iring++)
             {
-                for(int isegment = cluster->isegments[iring-cluster->irings[0]][0];
-                    isegment    <= cluster->isegments[iring-cluster->irings[0]][1];
-                    isegment++)
+                const int Nsegments_in_range = count_segments_in_range(cluster->isegments[iring-cluster->irings[0]][0],
+                                                                       cluster->isegments[iring-cluster->irings[0]][1],
+                                                                       ctx);
+                for(int dsegment = 0; dsegment < Nsegments_in_range; dsegment++)
                 {
+                    const int isegment =
+                        isegment_add(cluster->isegments[iring-cluster->irings[0]][0],
+                                     dsegment,
+                                     ctx);
                     const segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
 
                     if( norm2(segment->p) < ctx->threshold_max_range*ctx->threshold_max_range )
@@ -1964,7 +2025,9 @@ static bool stage3_refine_cluster(// out
             const segment_t* segment0 = &segments[iring*Nsegments_per_rotation + isegment0];
             const segment_t* segment1 = &segments[iring*Nsegments_per_rotation + isegment1];
 
-            const int isegment_mid = (isegment0 + isegment1) / 2;
+            const int isegment_mid =
+                isegment_center_from_range(isegment0,isegment1,
+                                           ctx);
 
             // I start in the center, and expand outwards to capture all the
             // matching points
@@ -2209,11 +2272,15 @@ int8_t clc_lidar_segmentation_sorted(// out
                 iring    <= cluster->irings[1];
                 iring++)
             {
-                for(int isegment = cluster->isegments[iring-cluster->irings[0]][0];
-                    isegment    <= cluster->isegments[iring-cluster->irings[0]][1];
-                    isegment++)
+                const int Nsegments_in_range = count_segments_in_range(cluster->isegments[iring-cluster->irings[0]][0],
+                                                                       cluster->isegments[iring-cluster->irings[0]][1],
+                                                                       ctx);
+                for(int dsegment = 0; dsegment < Nsegments_in_range; dsegment++)
                 {
-
+                    const int isegment =
+                        isegment_add(cluster->isegments[iring-cluster->irings[0]][0],
+                                     dsegment,
+                                     ctx);
                     segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
 
                     printf("%f %f stage2-cluster-kernels-%d %f\n",
