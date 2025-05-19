@@ -830,6 +830,17 @@ static int isegment_add(const int isegment, const int dsegment,
     return i;
 }
 
+static int isegment_add_signed(const int isegment, const int dsegment,
+                               const clc_lidar_segmentation_context_t* ctx)
+{
+    int i = isegment + dsegment;
+    if     (i >= Nsegments_per_rotation)
+        i -= Nsegments_per_rotation;
+    else if(i < 0)
+        i += Nsegments_per_rotation;
+    return i;
+}
+
 static int isegment_sub(const int isegment, const int dsegment,
                         const clc_lidar_segmentation_context_t* ctx)
 {
@@ -866,6 +877,59 @@ isegment_center_from_range(const int isegment0,
     return isegment_add(isegment0, Nsegments_in_range/2,
                         ctx);
 }
+
+
+
+
+
+static int ipoint_add(const int ipoint, const int dpoint,
+                      const int N)
+{
+    int i = ipoint + dpoint;
+    if(i >= N)
+        i -= N;
+    return i;
+}
+
+static int ipoint_add_signed(const int ipoint, const int dpoint,
+                             const int N)
+{
+    int i = ipoint + dpoint;
+    if     (i >= N)
+        i -= N;
+    else if(i < 0)
+        i += N;
+    return i;
+}
+
+static int ipoint_sub(const int ipoint, const int dpoint,
+                      const int N)
+{
+    int i = ipoint - dpoint;
+    if(i < 0)
+        i += N;
+    return i;
+}
+
+static int
+count_points_in_range(const int ipoint0, const int ipoint1,
+                      const int N)
+{
+    return ipoint_sub(ipoint1, ipoint0, N) + 1;
+}
+
+static int
+ipoint_center_from_range(const int ipoint0,
+                         const int ipoint1,
+                         const int N)
+{
+    const int Npoints_in_range = count_points_in_range(ipoint0,ipoint1, N);
+    return ipoint_add(ipoint0, Npoints_in_range/2,
+                      N);
+}
+
+
+
 
 
 static bool fit_plane_into_cluster(// out
@@ -1055,9 +1119,7 @@ static void stage2_accumulate_segments_samering( // out, in
     do
     {
         const int16_t isegment0 = *isegment;
-        int16_t isegment1 = *isegment + isegment_increment;
-        if     (isegment1 >= Nsegments_per_rotation) isegment1 -= Nsegments_per_rotation;
-        else if(isegment1 < 0                      ) isegment1 += Nsegments_per_rotation;
+        const int16_t isegment1 = isegment_add_signed(*isegment, isegment_increment, ctx);
 
         const segment_t* segment0 = &segments[iring*Nsegments_per_rotation + isegment0];
         segment_t*       segment1 = &segments[iring*Nsegments_per_rotation + isegment1];
@@ -1496,11 +1558,11 @@ static void stage3_accumulate_points(// out
                                      // in,out
                                      uint64_t* bitarray_visited, // indexed by IN-RING points
                                      // in
-                                     const int ipoint0, const int ipoint_increment, const int ipoint_limit, // in-ring
+                                     const int ipoint0, const int ipoint_increment, // in-ring
                                      const clc_plane_t* plane,
                                      const clc_point3f_t* points,
                                      const int ipoint0_in_ring, // start of this ring in the full points[] array
-                                     const int ipoint_segment_limit,
+                                     const int Npoints_this_ring,
                                      // for diagnostics
                                      const int icluster, const int iring, const int isegment,
                                      const bool debug __attribute__((unused)),
@@ -1512,10 +1574,14 @@ static void stage3_accumulate_points(// out
     clc_point3f_t dp_last = {}; // init to pacify compiler
     float norm2_dp_last = FLT_MAX; // indicate an invalid value initially
 
+    bool first = true;
+    int Npoint_steps = 0;
     for(int ipoint=ipoint0;
-        ipoint != ipoint_limit;
-        ipoint += ipoint_increment)
+        first || (ipoint != ipoint0);
+        ipoint = ipoint_add_signed(ipoint, ipoint_increment, Npoints_this_ring), Npoint_steps++)
     {
+        first = false;
+
         if( DEBUG_ON_TRUE_POINT( bitarray64_check(bitarray_visited, ipoint),
                                  &points[ipoint0_in_ring + ipoint],
                                  "%d-%d: we already processed this point; accumulation stopped",
@@ -1533,26 +1599,17 @@ static void stage3_accumulate_points(// out
         if(az_rad_last < FLT_MAX)
         {
             // we have a valid az_rad_last
-            const float abs_daz_rad = fabsf(az_rad - az_rad_last);
+            float daz_rad = (float)ipoint_increment*(az_rad - az_rad_last);
+            if(daz_rad < 0) daz_rad += 2.0f*M_PI;
+
             Ngap =
-                (int)( 0.5f + abs_daz_rad * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
+                (int)( 0.5f + daz_rad * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
 
             if( DEBUG_ON_TRUE_POINT( Ngap >= ctx->threshold_max_gap_Npoints,
                                      &points[ipoint0_in_ring + ipoint],
                                      "%d-%d: gap too large; accumulation stopped. Have ~ %d >= %d",
                                      iring,isegment,
                                      Ngap, ctx->threshold_max_gap_Npoints))
-                break;
-        }
-        else
-        {
-            // we do not have a valid az_rad_last. Stop when we reach the segment
-            // limit
-            if( DEBUG_ON_TRUE_POINT( ipoint == ipoint_segment_limit,
-                                     &points[ipoint0_in_ring + ipoint],
-                                     "%d-%d: reached end of point sequence; accumulation stopped. Have %d == %d",
-                                     iring,isegment,
-                                     ipoint, ipoint_segment_limit))
                 break;
         }
 
@@ -1571,7 +1628,7 @@ static void stage3_accumulate_points(// out
         {
             // Not accepting this point, but also not updating az_rad_last. So too
             // many successive invalid points will create a too-large gap, failing
-            // the threshold_max_gap_az_rad check above
+            // the threshold_max_gap_Npoints check above
             continue;
         }
 
@@ -1581,10 +1638,11 @@ static void stage3_accumulate_points(// out
         // at the difference between two points N points apart; where larger N
         // serve to reduce sensitivity to noise.
 
-        const int npoints_check_direction_step = 6;
+        const int Npoints_check_direction_step = 6;
 
-        int ipoint_lagging = ipoint - npoints_check_direction_step*ipoint_increment;
-        if((ipoint_lagging - ipoint0)*ipoint_increment >= 0 &&
+        const int ipoint_lagging =
+            ipoint_add_signed(ipoint, -Npoints_check_direction_step*ipoint_increment, Npoints_this_ring);
+        if(Npoint_steps >= Npoints_check_direction_step &&
            bitarray64_check(bitarray_visited, ipoint_lagging))
         {
             // some bitarray64_check() succeeded here, so bitarray64_set() was
@@ -1628,7 +1686,7 @@ static void stage3_accumulate_points(// out
                                        &(points[ipoint0_in_ring + ipoint]),
                                        "angle changed too quickly in %d-%d (icluster=%d); culling last %d points; cos_threshold_baseline=%f; I see threshold > inner(dp,dp_last) / (mag(dp) mag(dp_last)) ~ %f > %f/(%f * %f)",
                                        iring, isegment, icluster,
-                                       npoints_check_direction_step+1,
+                                       Npoints_check_direction_step+1,
                                        cos_threshold_baseline,
                                        cos_threshold, inner_dp_dp, sqrtf(norm2_dp), sqrtf(norm2_dp_last)))
                 {
@@ -2031,7 +2089,9 @@ static bool stage3_refine_cluster(// out
 
             // I start in the center, and expand outwards to capture all the
             // matching points
-            const int ipoint0 = (segment0->ipoint0 + segment1->ipoint1) / 2;
+            const int ipoint0 = ipoint_center_from_range(segment0->ipoint0,
+                                                         segment1->ipoint1,
+                                                         Npoints[iring]);
 
             unsigned int ipoint_set_start_this_ring __attribute__((unused)); // for the currently-disabled bloom_cull logic
 
@@ -2042,11 +2102,11 @@ static bool stage3_refine_cluster(// out
                                      (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
                                      bitarray_visited[iring-iring0],
                                      // in
-                                     ipoint0, +1, Npoints[iring],
+                                     ipoint0, +1,
                                      &plane_out,
                                      points,
                                      ipoint0_in_ring[iring],
-                                     segment1->ipoint1,
+                                     Npoints[iring],
                                      // for diagnostics
                                      icluster, iring, isegment_mid,
                                      debug,
@@ -2101,11 +2161,11 @@ static bool stage3_refine_cluster(// out
                                      (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
                                      bitarray_visited[iring-iring0],
                                      // in
-                                     ipoint0-1, -1, -1,
+                                     ipoint0-1, -1,
                                      &plane_out,
                                      points,
                                      ipoint0_in_ring[iring],
-                                     segment0->ipoint0,
+                                     Npoints[iring],
                                      // for diagnostics
                                      icluster, iring, isegment_mid,
                                      debug,
