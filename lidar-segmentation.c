@@ -456,27 +456,27 @@ static void fit_plane_into_points__unnormalized( // out
 
 
 static
-float th_from_point(const clc_point3f_t* p)
+float az_from_point(const clc_point3f_t* p)
 {
     return atan2f(p->y, p->x);
 }
 
 
 static
-void isegment_th_from_point(// out
+void isegment_az_from_point(// out
                             int*   isegment,
-                            float* th_rad,
+                            float* az_rad,
                             // in
                             const clc_point3f_t* p,
                             const clc_lidar_segmentation_context_t* ctx)
 {
-    *th_rad = th_from_point(p);
-    // ASSUMES th_rad CAME FROM atan2, SO IT'S IN [-pi,pi]
+    *az_rad = az_from_point(p);
+    // ASSUMES az_rad CAME FROM atan2, SO IT'S IN [-pi,pi]
 
     const float segment_width_rad = 2.0f*M_PI * (float)ctx->Npoints_per_segment / (float)ctx->Npoints_per_rotation;
 
-    const int i = (int)(((*th_rad) + M_PI) / segment_width_rad);
-    // Should be in range EXCEPT if th_rad == +pi. Just in case and for good
+    const int i = (int)(((*az_rad) + M_PI) / segment_width_rad);
+    // Should be in range EXCEPT if az_rad == +pi. Just in case and for good
     // hygiene, I check both cases
     if( i < 0 )
         *isegment = 0;
@@ -487,11 +487,11 @@ void isegment_th_from_point(// out
 }
 static
 bool point_is_valid__presolve(const clc_point3f_t* p,
-                              const float dth_rad,
+                              const float daz_rad,
                               const bool debug,
                               const clc_lidar_segmentation_context_t* ctx)
 {
-    const int Ngap = (int)( 0.5f + fabsf(dth_rad) * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
+    const int Ngap = (int)( 0.5f + fabsf(daz_rad) * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
 
     // Ngap==1 is the expected, normal value. Anything larger is a gap
     if( DEBUG_ON_TRUE_POINT((Ngap-1) > ctx->threshold_max_Ngap,
@@ -651,19 +651,19 @@ stage1_segment_from_ring(// out
 
     int ipoint0   = 0;
     int isegment0;
-    float th_rad0;
-    isegment_th_from_point(&isegment0, &th_rad0,
+    float az_rad0;
+    isegment_az_from_point(&isegment0, &az_rad0,
                            &points_thisring[0], ctx);
     int Npoints_invalid_in_segment = 0;
-    float th_rad_prev = th_rad0;
+    float az_rad_prev = az_rad0;
 
     memset(bitarray_invalid, 0, Nwords_bitarray_invalid*sizeof(uint64_t));
 
     for(int ipoint=1; ipoint<Npoints_thisring; ipoint++)
     {
         int isegment;
-        float th_rad;
-        isegment_th_from_point(&isegment, &th_rad,
+        float az_rad;
+        isegment_az_from_point(&isegment, &az_rad,
                                &points_thisring[ipoint], ctx);
         if(isegment != isegment0)
         {
@@ -687,7 +687,7 @@ stage1_segment_from_ring(// out
         // important
         if(ipoint-ipoint0 < ctx->Npoints_per_segment)
         {
-            if(!point_is_valid__presolve(&points_thisring[ipoint], th_rad - th_rad_prev,
+            if(!point_is_valid__presolve(&points_thisring[ipoint], az_rad - az_rad_prev,
                                          (iring == ctx->debug_iring) &&
                                          (ctx->debug_xmin < points_thisring[ipoint].x && points_thisring[ipoint].x < ctx->debug_xmax &&
                                           ctx->debug_ymin < points_thisring[ipoint].y && points_thisring[ipoint].y < ctx->debug_ymax),
@@ -698,7 +698,7 @@ stage1_segment_from_ring(// out
             }
         }
 
-        th_rad_prev = th_rad;
+        az_rad_prev = az_rad;
     }
 
     stage1_finish_segment(segments_thisring,
@@ -1507,7 +1507,7 @@ static void stage3_accumulate_points(// out
                                      const clc_lidar_segmentation_context_t* ctx)
 {
 
-    float th_rad_last = FLT_MAX; // indicate an invalid value initially
+    float az_rad_last = FLT_MAX; // indicate an invalid value initially
 
     clc_point3f_t dp_last = {}; // init to pacify compiler
     float norm2_dp_last = FLT_MAX; // indicate an invalid value initially
@@ -1527,15 +1527,15 @@ static void stage3_accumulate_points(// out
             break;
         }
 
-        const float th_rad = th_from_point(&points[ipoint0_in_ring + ipoint]);
+        const float az_rad = az_from_point(&points[ipoint0_in_ring + ipoint]);
 
         int Ngap = -1;
-        if(th_rad_last < FLT_MAX)
+        if(az_rad_last < FLT_MAX)
         {
-            // we have a valid th_rad_last
-            const float abs_dth_rad = fabsf(th_rad - th_rad_last);
+            // we have a valid az_rad_last
+            const float abs_daz_rad = fabsf(az_rad - az_rad_last);
             Ngap =
-                (int)( 0.5f + abs_dth_rad * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
+                (int)( 0.5f + abs_daz_rad * (float)ctx->Npoints_per_rotation / (2.0f*M_PI) );
 
             if( DEBUG_ON_TRUE_POINT( Ngap >= ctx->threshold_max_gap_Npoints,
                                      &points[ipoint0_in_ring + ipoint],
@@ -1546,7 +1546,7 @@ static void stage3_accumulate_points(// out
         }
         else
         {
-            // we do not have a valid th_rad_last. Stop when we reach the segment
+            // we do not have a valid az_rad_last. Stop when we reach the segment
             // limit
             if( DEBUG_ON_TRUE_POINT( ipoint == ipoint_segment_limit,
                                      &points[ipoint0_in_ring + ipoint],
@@ -1569,9 +1569,9 @@ static void stage3_accumulate_points(// out
                                  plane_point_error_stage3_normalized(plane,
                                                                      &points[ipoint0_in_ring + ipoint])))
         {
-            // Not accepting this point, but also not updating th_rad_last. So too
+            // Not accepting this point, but also not updating az_rad_last. So too
             // many successive invalid points will create a too-large gap, failing
-            // the threshold_max_gap_th_rad check above
+            // the threshold_max_gap_az_rad check above
             continue;
         }
 
@@ -1588,7 +1588,7 @@ static void stage3_accumulate_points(// out
            bitarray64_check(bitarray_visited, ipoint_lagging))
         {
             // some bitarray64_check() succeeded here, so bitarray64_set() was
-            // called at some point, so th_rad_last is valid, so Ngap is valid
+            // called at some point, so az_rad_last is valid, so Ngap is valid
             // too. In case my thought process is wrong, I confirm here
             if(Ngap < 0)
             {
@@ -1666,7 +1666,7 @@ static void stage3_accumulate_points(// out
         ipoints[(*n)++] = ipoint0_in_ring + ipoint;
 
         bitarray64_set(bitarray_visited, ipoint);
-        th_rad_last = th_rad;
+        az_rad_last = az_rad;
     }
 }
 
@@ -1829,7 +1829,7 @@ stage3_cull_bloom_and_count_non_isolated(// out
 
     // last accepted point
     const int ipoint0 = ipoints[ipoint_set_n_before_cull_bloom-1] - ipoint0_in_ring;
-    float th0_rad = th_from_point(&points[ipoint0_in_ring + ipoint0]);
+    float th0_rad = az_from_point(&points[ipoint0_in_ring + ipoint0]);
 
     float th0_deadzone_start_rad;
 
@@ -1861,11 +1861,11 @@ stage3_cull_bloom_and_count_non_isolated(// out
                 points[ipoint0_in_ring + ipoint].z);
         }
 
-        const float th_rad = th_from_point(&points[ipoint0_in_ring + ipoint]);
+        const float az_rad = az_from_point(&points[ipoint0_in_ring + ipoint]);
 
         if(in_bloom_region)
         {
-            const float dth = th_rad - th0_rad;
+            const float dth = az_rad - th0_rad;
             if(fabsf(dth) <= th_bloom_allowed_rad)
             {
                 const float err =
@@ -1888,7 +1888,7 @@ stage3_cull_bloom_and_count_non_isolated(// out
                 }
                 // We start the deadzone early. Right at this badly-fitting
                 // point
-                th0_deadzone_start_rad = th_rad;
+                th0_deadzone_start_rad = az_rad;
             }
             else
             {
@@ -1907,7 +1907,7 @@ stage3_cull_bloom_and_count_non_isolated(// out
             in_bloom_region = false;
         }
 
-        const float dth = th_rad - th0_deadzone_start_rad;
+        const float dth = az_rad - th0_deadzone_start_rad;
         if(fabsf(dth) > th_deadzone_required_rad)
         {
             // We're past the deadzone. Done!
