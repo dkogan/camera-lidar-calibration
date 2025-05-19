@@ -462,21 +462,28 @@ float th_from_point(const clc_point3f_t* p)
 }
 
 
-// ASSUMES th_rad CAME FROM atan2, SO IT'S IN [-pi,pi]
 static
-int isegment_from_th(const float th_rad,
-                     const clc_lidar_segmentation_context_t* ctx)
+void isegment_th_from_point(// out
+                            int*   isegment,
+                            float* th_rad,
+                            // in
+                            const clc_point3f_t* p,
+                            const clc_lidar_segmentation_context_t* ctx)
 {
+    *th_rad = th_from_point(p);
+    // ASSUMES th_rad CAME FROM atan2, SO IT'S IN [-pi,pi]
+
     const float segment_width_rad = 2.0f*M_PI * (float)ctx->Npoints_per_segment / (float)ctx->Npoints_per_rotation;
 
-    const int i = (int)((th_rad + M_PI) / segment_width_rad);
+    const int i = (int)(((*th_rad) + M_PI) / segment_width_rad);
     // Should be in range EXCEPT if th_rad == +pi. Just in case and for good
     // hygiene, I check both cases
     if( i < 0 )
-        return 0;
-    if(i >= Nsegments_per_rotation)
-        return Nsegments_per_rotation-1;
-    return i;
+        *isegment = 0;
+    else if(i >= Nsegments_per_rotation)
+        *isegment = Nsegments_per_rotation-1;
+    else
+        *isegment = i;
 }
 static
 bool point_is_valid__presolve(const clc_point3f_t* p,
@@ -642,10 +649,11 @@ stage1_segment_from_ring(// out
     uint64_t bitarray_invalid[Nwords_bitarray_invalid];
 
 
-    const float th_rad0 = th_from_point(&points_thisring[0]);
-
     int ipoint0   = 0;
-    int isegment0 = isegment_from_th(th_rad0, ctx);
+    int isegment0;
+    float th_rad0;
+    isegment_th_from_point(&isegment0, &th_rad0,
+                           &points_thisring[0], ctx);
     int Npoints_invalid_in_segment = 0;
     float th_rad_prev = th_rad0;
 
@@ -653,8 +661,10 @@ stage1_segment_from_ring(// out
 
     for(int ipoint=1; ipoint<Npoints_thisring; ipoint++)
     {
-        const float th_rad = th_from_point(&points_thisring[ipoint]);
-        const int isegment = isegment_from_th(th_rad, ctx);
+        int isegment;
+        float th_rad;
+        isegment_th_from_point(&isegment, &th_rad,
+                               &points_thisring[ipoint], ctx);
         if(isegment != isegment0)
         {
             stage1_finish_segment(segments_thisring,
