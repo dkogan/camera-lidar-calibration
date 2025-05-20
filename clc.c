@@ -14,10 +14,6 @@
 #include "bitarray.h"
 
 
-#warning hardcoded
-static
-const unsigned int _Nrings = 32;
-
 typedef struct
 {
     clc_point3f_t* points;
@@ -3995,7 +3991,6 @@ bool lidar_segmentation(// out
                         const clc_sensor_snapshot_unsorted_t* sensor_snapshot_unsorted,
                         const clc_sensor_snapshot_sorted_t* sensor_snapshot_sorted,
                         const int ilidar,
-                        const int Nrings,
                         const unsigned int lidar_packet_stride,
                         const int Nplanes_max,
                         const clc_lidar_segmentation_context_t* ctx)
@@ -4010,7 +4005,7 @@ bool lidar_segmentation(// out
         NULL;
 
     clc_point3f_t* points_here = NULL;
-    unsigned int   _Npoints[Nrings];
+    unsigned int   _Npoints[ctx->Nrings];
     unsigned int*  Npoints = _Npoints;
 
     if(scan_unsorted != NULL)
@@ -4032,7 +4027,7 @@ bool lidar_segmentation(// out
                        Npoints,
 
                        // in
-                       Nrings,
+                       ctx->Nrings,
                        // The stride, in bytes, between each successive points or
                        // rings value in clc_lidar_scan_unsorted_t
                        lidar_packet_stride,
@@ -4201,7 +4196,6 @@ static bool evaluate_lidar_visibility(// out
                                       // in
                                       const double*                      Rt_vehicle_lidar0, // may be NULL
                                       const int                          Nsectors,
-                                      const int                          Nrings,
 
                                       const double*                      Rt_lidar0_lidar_notfirst,
                                       const double                       threshold_valid_lidar_range,
@@ -5302,7 +5296,6 @@ get_isvisible_per_sensor_per_sector(// out
                                   // in
                                   Rt_vehicle_lidar0,
                                   Nsectors,
-                                  _Nrings,
                                   Rt_lidar0_lidar,
                                   threshold_valid_lidar_range,
                                   threshold_valid_lidar_Npoints,
@@ -5408,7 +5401,6 @@ int ingest_sensor_snapshots(// out
                                        sensor_snapshot_unsorted,
                                        sensor_snapshot_sorted,
                                        ilidar,
-                                       _Nrings,
                                        lidar_packet_stride,
                                        Nplanes_max,
                                        ctx))

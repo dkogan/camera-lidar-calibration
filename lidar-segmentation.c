@@ -13,6 +13,9 @@
 #include "util.h"
 #include "bitarray.h"
 
+// Should be >= any given Nrings value we have
+#define Nrings_max 512
+
 #define DEBUG_ON_TRUE_POINT(what, p, fmt, ...)                          \
     ({  if(debug && (what))                                             \
         {                                                               \
@@ -134,7 +137,7 @@ typedef struct
 
     int16_t irings[2]; // first and last ring
     // first and last segment in each successive ring, starting with irings[0]
-    int16_t isegments[32][2];
+    int16_t isegments[Nrings_max][2];
 
 } segment_cluster_t;
 
@@ -2086,7 +2089,7 @@ static bool stage3_refine_cluster(// out
             const int isegment_mid =
                 isegment_center_from_range(isegment0,isegment1,
                                            ctx);
-
+#warning "at this point I'm already wrong; I see segment0->ipoint=0. Why is it exactly 0???"
             // I start in the center, and expand outwards to capture all the
             // matching points
             const int ipoint0 = ipoint_center_from_range(segment0->ipoint0,
@@ -2251,6 +2254,22 @@ void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ct
 #undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_SET_DEFAULT
 }
 
+static bool validate_ctx(const clc_lidar_segmentation_context_t* ctx)
+{
+    if(ctx->Nrings <= 0)
+    {
+        MSG("Unexpected value of Nrings=%d", ctx->Nrings);
+        return false;
+    }
+    if(ctx->Nrings > Nrings_max)
+    {
+        MSG("Unexpected value of Nrings=%d. The static limit is Nrings_max=%d. If this is correct, bump up Nrings_max, and rebuild",
+            ctx->Nrings, Nrings_max);
+        return false;
+    }
+    return true;
+}
+
 // Returns how many planes were found or <0 on error
 int8_t clc_lidar_segmentation_sorted(// out
                           clc_points_and_plane_t* points_and_plane,
@@ -2259,12 +2278,8 @@ int8_t clc_lidar_segmentation_sorted(// out
                           const clc_lidar_scan_sorted_t* scan,
                           const clc_lidar_segmentation_context_t* ctx)
 {
-    if(!(ctx->Nrings > 0 && ctx->Nrings <= 1024))
-    {
-        MSG("Unexpected value of Nrings=%d. Does your LIDAR really have this many lasers?",
-            ctx->Nrings);
+    if(!validate_ctx(ctx))
         return -1;
-    }
 
     int ipoint0_in_ring[ctx->Nrings];
     ipoint0_in_ring[0] = 0;
@@ -2467,6 +2482,9 @@ int8_t clc_lidar_segmentation_unsorted(// out
                           const unsigned int lidar_packet_stride,
                           const clc_lidar_segmentation_context_t* ctx)
 {
+    if(!validate_ctx(ctx))
+        return -1;
+
     clc_point3f_t points[scan->Npoints];
     unsigned int Npoints[ctx->Nrings];
 
