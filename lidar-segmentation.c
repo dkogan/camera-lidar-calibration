@@ -2340,7 +2340,7 @@ int8_t clc_lidar_segmentation_sorted(// out
 
     // plane_clusters_from_segments() will return only clusters of an acceptable size,
     // so there will not be a huge number of candidates
-    const int Nmax_planes = 20;
+    const int Nmax_planes = 50;
     segment_cluster_t clusters[Nmax_planes];
     int Nclusters;
     stage2_cluster_segments(clusters,
