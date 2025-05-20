@@ -39,9 +39,9 @@
 
 
 
-/* round up */
+/* assumed to fit exactly; validate_ctx() checks that */
 #define Nsegments_per_rotation                                          \
-    (int)((ctx->Npoints_per_rotation + ctx->Npoints_per_segment-1) / ctx->Npoints_per_segment)
+    (int)(ctx->Npoints_per_rotation / ctx->Npoints_per_segment)
 
 
 
@@ -1309,8 +1309,6 @@ stage2_grow_cluster(// out
         while(true)
         {
             const int isegment_next = isegment_sub(isegment_center, dsegment, ctx);
-            if(!(isegment_next >= isegment0))
-                break;
 
             if(stage2_next_ring_segment_compatible(cluster,
                                                    iring,
@@ -1322,28 +1320,33 @@ stage2_grow_cluster(// out
                 break;
             }
 
+            if(isegment_next == isegment0)
+                break;
+
             dsegment++;
         }
 
         dsegment = 1;
-        while(true)
-        {
-            const int isegment_next = isegment_add(isegment_center, dsegment, ctx);
-            if(!(isegment_next <= isegment1))
-                break;
-
-            if(stage2_next_ring_segment_compatible(cluster,
-                                                   iring,
-                                                   isegment_next,
-                                                   // context
-                                                   segments, icluster, points, ipoint0_in_ring, ctx))
+        if(isegment_center != isegment1)
+            while(true)
             {
-                dsegment_nextring_offcenter1 = dsegment;
-                break;
-            }
+                const int isegment_next = isegment_add(isegment_center, dsegment, ctx);
 
-            dsegment++;
-        }
+                if(stage2_next_ring_segment_compatible(cluster,
+                                                       iring,
+                                                       isegment_next,
+                                                       // context
+                                                       segments, icluster, points, ipoint0_in_ring, ctx))
+                {
+                    dsegment_nextring_offcenter1 = dsegment;
+                    break;
+                }
+
+                if(isegment_next == isegment1)
+                    break;
+
+                dsegment++;
+            }
 
         // The nearest (to the center) matching segments in the next ring are
         // dsegment_nextring_offcenter0,1. >=0 if defined
@@ -2267,6 +2270,14 @@ static bool validate_ctx(const clc_lidar_segmentation_context_t* ctx)
             ctx->Nrings, Nrings_max);
         return false;
     }
+
+    if( Nsegments_per_rotation * ctx->Npoints_per_segment != ctx->Npoints_per_rotation)
+    {
+        MSG("Npoints_per_segment must fit into Npoints_per_rotation exactly");
+        return false;
+    }
+
+
     return true;
 }
 
