@@ -1,6 +1,7 @@
 #define NPY_NO_DEPRECATED_API NPY_API_VERSION
 
 #include <stdbool.h>
+#include <float.h>
 #include <assert.h>
 #include <Python.h>
 #include <structmember.h>
@@ -1156,12 +1157,28 @@ static PyObject* py_lidar_segmentation_default_context(PyObject* NPY_UNUSED(self
     clc_lidar_segmentation_default_context(&ctx);
 
 
-#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_PATTERN( type,name,default,pyparse,pybuild,...) "s" pybuild
-#define CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_KEYVALUE(type,name,default,pyparse,pybuild,...) ,#name, ctx.name
-    result = Py_BuildValue("{" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_PATTERN) "}"
-                           CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_KEYVALUE));
-#undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_PATTERN
-#undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_PYBUILD_KEYVALUE
+#define PYBUILD_PATTERN( type,name,default,pyparse,pybuild,...) "s" pybuild
+#define PYBUILD_KEYVALUE(type,name,default,pyparse,pybuild,...) ,#name, ctx.name
+    result = Py_BuildValue("{" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(PYBUILD_PATTERN) "}"
+                           CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(PYBUILD_KEYVALUE));
+#undef PYBUILD_PATTERN
+#undef PYBUILD_KEYVALUE
+
+    // If Py_BuildValue failed, this will already be NULL
+    return result;
+}
+
+static PyObject* py_lidar_segmentation_parameters(PyObject* NPY_UNUSED(self),
+                                    PyObject* NPY_UNUSED(args))
+{
+    PyObject* result = NULL;
+
+#define PYBUILD_PATTERN( type,name,default,pyparse,pybuild,doc) "s{sssss" pybuild "ss}"
+#define PYBUILD_KEYVALUE(type,name,default,pyparse,pybuild,doc) ,#name, "ctype", #type, "pyparse", pyparse, "default", default, "doc", doc
+    result = Py_BuildValue("{" CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(PYBUILD_PATTERN) "}"
+                           CLC_LIDAR_SEGMENTATION_LIST_CONTEXT(PYBUILD_KEYVALUE));
+#undef PYBUILD_PATTERN
+#undef PYBUILD_KEYVALUE
 
     // If Py_BuildValue failed, this will already be NULL
     return result;
@@ -1179,6 +1196,9 @@ static const char fit_from_inputs_dump_docstring[] =
 static const char lidar_segmentation_default_context_docstring[] =
 #include "lidar_segmentation_default_context.docstring.h"
     ;
+static const char lidar_segmentation_parameters_docstring[] =
+#include "lidar_segmentation_parameters.docstring.h"
+    ;
 
 static PyMethodDef methods[] =
     {
@@ -1186,6 +1206,7 @@ static PyMethodDef methods[] =
      PYMETHODDEF_ENTRY(fit_from_inputs_dump,        py_fit_from_inputs_dump,         METH_VARARGS | METH_KEYWORDS),
      PYMETHODDEF_ENTRY(lidar_segmentation,          py_lidar_segmentation,           METH_VARARGS | METH_KEYWORDS),
      PYMETHODDEF_ENTRY(lidar_segmentation_default_context, py_lidar_segmentation_default_context, METH_NOARGS),
+     PYMETHODDEF_ENTRY(lidar_segmentation_parameters, py_lidar_segmentation_parameters, METH_NOARGS),
      {}
     };
 
