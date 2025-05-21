@@ -68,7 +68,8 @@ _Static_assert((int)sizeof(clc_is_bgr_mask_t)*8 >= clc_Ncameras_max,
 typedef struct
 {
     // These point to the FIRST point,ring and are NOT stored densely. The
-    // stride for both of these is given in lidar_packet_stride
+    // stride for both of these is given in lidar_packet_stride. Invalid points
+    // p=(0,0,0) are allowed: will be culled by clc_lidar_sort()
     clc_point3f_t* points;      // 3D points, in the lidar frame
     uint16_t*      rings;       // For each point, which laser observed the point
 
@@ -77,8 +78,8 @@ typedef struct
 
 typedef struct
 {
-    // length sum(Npoints). Sorted by ring and then by
-    // azimuth. Use clc_lidar_sort() to do this
+    // length sum(Npoints). Sorted by ring and then by azimuth. Invalid points
+    // p=(0,0,0) have been removed. Use clc_lidar_sort() to do this
     clc_point3f_t* points;
     // length ctx->Nrings
     unsigned int* Npoints;
@@ -253,8 +254,8 @@ typedef struct
 } clc_lidar_segmentation_context_t;
 
 
-// Sorts the lidar data by ring and azimuth, to be passable to
-// clc_lidar_segmentation_sorted()
+// Sorts the lidar data by ring and azimuth, and removes invalid points. To be
+// passable to clc_lidar_segmentation_sorted()
 void clc_lidar_sort(// out
                     //
                     // These buffers must be pre-allocated

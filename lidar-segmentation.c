@@ -2501,6 +2501,7 @@ int8_t clc_lidar_segmentation_unsorted(// out
 
     uint32_t ipoint_unsorted_in_sorted_order[scan->Npoints];
 
+    // Sort and cull invalid points
     clc_lidar_sort(// out
                    //
                    // These buffers must be pre-allocated
@@ -2553,6 +2554,10 @@ static int compare_ring_az(const void* _a, const void* _b, void* cookie)
     const uint32_t a = *(const uint32_t*)_a;
     const uint32_t b = *(const uint32_t*)_b;
 
+    // sort the invalid points to the end
+    if(ctx->az[a] == FLT_MAX) return 1;
+    if(ctx->az[b] == FLT_MAX) return -1;
+
     const uint16_t ring_a = *(uint16_t*)&((uint8_t*)ctx->rings )[ctx->stride_rings*a];
     const uint16_t ring_b = *(uint16_t*)&((uint8_t*)ctx->rings )[ctx->stride_rings*b];
     if(ring_a < ring_b) return -1;
@@ -2563,8 +2568,8 @@ static int compare_ring_az(const void* _a, const void* _b, void* cookie)
 
     return 0;
 }
-// Sorts the lidar data by ring and azimuth, to be passable to
-// clc_lidar_segmentation_sorted()
+// Sorts the lidar data by ring and azimuth, and removes invalid points. To be
+// passable to clc_lidar_segmentation_sorted()
 void clc_lidar_sort(// out
                     //
                     // These buffers must be pre-allocated
@@ -2596,16 +2601,18 @@ void clc_lidar_sort(// out
         stride_rings  = lidar_packet_stride;
     }
 
-    float az [scan->Npoints];
+    float az[scan->Npoints];
     for(unsigned int i=0; i<scan->Npoints; i++)
     {
         ipoint_unsorted_in_sorted_order[i] = i;
 
         clc_point3f_t* p = (clc_point3f_t*)&((uint8_t*)scan->points)[stride_points*i];
 
-        if(p->x == 0 && p->y == 0)
-            MSG("ERROR: clc_lidar_sort(invalid point)");
-        az[i] = atan2f( p->y, p->x );
+        if(p->x == 0.0f && p->y == 0.0f)
+            // Invalid point. Indicate that
+            az[i] = FLT_MAX;
+        else
+            az[i] = atan2f( p->y, p->x );
     }
 
     compare_ring_az_ctx_t ctx = {.stride_rings = stride_rings,
@@ -2614,14 +2621,18 @@ void clc_lidar_sort(// out
     qsort_r(ipoint_unsorted_in_sorted_order, scan->Npoints, sizeof(ipoint_unsorted_in_sorted_order[0]),
             &compare_ring_az, (void*)&ctx);
 
-    // I now have the sorted indices in ipoint_unsorted_in_sorted_order. Copy everything
+    // I now have the sorted indices in ipoint_unsorted_in_sorted_order. The
+    // invalid points are all sorted to the end. Copy everything up to the first
+    // invalid point.
     int      i_ring_prev_start = 0;
     uint16_t ring_prev         = UINT16_MAX;
-    for(unsigned int i=0; i<scan->Npoints; i++)
+    unsigned int i;
+    for(i=0;
+        i<scan->Npoints && az[ipoint_unsorted_in_sorted_order[i]] != FLT_MAX;
+        i++)
     {
-        uint16_t ring_here;
-        points[i] = *((clc_point3f_t*)&((uint8_t*)scan->points)[stride_points*ipoint_unsorted_in_sorted_order[i]]);
-        ring_here = *((uint16_t*)     &((uint8_t*)scan->rings )[stride_rings *ipoint_unsorted_in_sorted_order[i]]);
+        points[i]          = *((clc_point3f_t*)&((uint8_t*)scan->points)[stride_points*ipoint_unsorted_in_sorted_order[i]]);
+        uint16_t ring_here = *((uint16_t*)     &((uint8_t*)scan->rings )[stride_rings *ipoint_unsorted_in_sorted_order[i]]);
 
         if(ring_prev != ring_here)
         {
@@ -2644,10 +2655,11 @@ void clc_lidar_sort(// out
             ring_prev = ring_here;
         }
     }
+    unsigned int Npoints_valid = i;
 
     // handle last ring
     uint16_t ring_here = Nrings;
-    Npoints[ring_prev] = scan->Npoints - i_ring_prev_start;
+    Npoints[ring_prev] = Npoints_valid - i_ring_prev_start;
     // account for any rings we didn't see at all
     for(ring_prev++; ring_prev<ring_here; ring_prev++)
         Npoints[ring_prev] = 0;

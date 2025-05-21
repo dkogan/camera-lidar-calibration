@@ -4017,6 +4017,8 @@ bool lidar_segmentation(// out
         *points_pool_index += scan_unsorted->Npoints;
 
         uint32_t ipoint_unsorted_in_sorted_order[scan_unsorted->Npoints];
+
+        // Sort and cull invalid points
         clc_lidar_sort(// out
                        //
                        // These buffers must be pre-allocated
