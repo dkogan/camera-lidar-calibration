@@ -676,6 +676,9 @@ stage1_segment_from_ring(// out
                                   iring, isegment0,
                                   Npoints_invalid_in_segment,
                                   bitarray_invalid,
+                                  // ipoint-1 will not wrap around because I'm
+                                  // in the same ring, and inside each segment
+                                  // the seam is right before ipoint=0
                                   points_thisring, ipoint0, ipoint-1,
                                   iring == ctx->debug_iring,
                                   ctx);
@@ -2169,7 +2172,7 @@ static bool stage3_refine_cluster(// out
                                      (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
                                      bitarray_visited[iring-iring0],
                                      // in
-                                     ipoint0-1, -1,
+                                     ipoint_sub(ipoint0,1,Npoints[iring]), -1,
                                      &plane_out,
                                      points,
                                      ipoint0_in_ring[iring],
