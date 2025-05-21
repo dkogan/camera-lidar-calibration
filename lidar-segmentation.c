@@ -2541,9 +2541,7 @@ int8_t clc_lidar_segmentation_unsorted(// out
 
 typedef struct
 {
-    // applies to rings, not to az. If lidar_packet_stride==0, dense storage is
-    // assumed
-    unsigned int lidar_packet_stride;
+    unsigned int stride_rings;
     uint16_t*    rings;
 
     float*       az;
@@ -2555,21 +2553,11 @@ static int compare_ring_az(const void* _a, const void* _b, void* cookie)
     const uint32_t a = *(const uint32_t*)_a;
     const uint32_t b = *(const uint32_t*)_b;
 
-    if(ctx->lidar_packet_stride > 0)
-    {
-        const uint16_t* ring_a = (uint16_t*)&((uint8_t*)ctx->rings )[ctx->lidar_packet_stride*a];
-        const uint16_t* ring_b = (uint16_t*)&((uint8_t*)ctx->rings )[ctx->lidar_packet_stride*b];
-        if(*ring_a < *ring_b) return -1;
-        if(*ring_a > *ring_b) return  1;
-    }
-    else
-    {
-        // dense storage
-        const uint16_t ring_a = ctx->rings[a];
-        const uint16_t ring_b = ctx->rings[b];
-        if(ring_a < ring_b) return -1;
-        if(ring_a > ring_b) return  1;
-    }
+    const uint16_t ring_a = *(uint16_t*)&((uint8_t*)ctx->rings )[ctx->stride_rings*a];
+    const uint16_t ring_b = *(uint16_t*)&((uint8_t*)ctx->rings )[ctx->stride_rings*b];
+    if(ring_a < ring_b) return -1;
+    if(ring_a > ring_b) return  1;
+
     if(ctx->az[a] < ctx->az[b]) return -1;
     if(ctx->az[a] > ctx->az[b]) return  1;
 
@@ -2595,27 +2583,34 @@ void clc_lidar_sort(// out
                     const unsigned int      lidar_packet_stride,
                     const clc_lidar_scan_unsorted_t* scan)
 {
-    float    az    [scan->Npoints];
+    unsigned int stride_points, stride_rings;
+    if(lidar_packet_stride <= 0)
+    {
+        // dense storage
+        stride_points = sizeof(scan->points[0]);
+        stride_rings  = sizeof(scan->rings [0]);
+    }
+    else
+    {
+        stride_points = lidar_packet_stride;
+        stride_rings  = lidar_packet_stride;
+    }
+
+    float az [scan->Npoints];
     for(unsigned int i=0; i<scan->Npoints; i++)
     {
         ipoint_unsorted_in_sorted_order[i] = i;
 
-        if(lidar_packet_stride > 0)
-        {
-            clc_point3f_t* p = (clc_point3f_t*)&((uint8_t*)scan->points)[lidar_packet_stride*i];
-            az[i] = atan2f( p->y, p->x );
-        }
-        else
-        {
-            // dense storage
-            clc_point3f_t* p = &scan->points[i];
-            az[i] = atan2f( p->y, p->x );
-        }
+        clc_point3f_t* p = (clc_point3f_t*)&((uint8_t*)scan->points)[stride_points*i];
+
+        if(p->x == 0 && p->y == 0)
+            MSG("ERROR: clc_lidar_sort(invalid point)");
+        az[i] = atan2f( p->y, p->x );
     }
 
-    compare_ring_az_ctx_t ctx = {.lidar_packet_stride = lidar_packet_stride,
-                                 .rings               = scan->rings,
-                                 .az                  = az};
+    compare_ring_az_ctx_t ctx = {.stride_rings = stride_rings,
+                                 .rings        = scan->rings,
+                                 .az           = az};
     qsort_r(ipoint_unsorted_in_sorted_order, scan->Npoints, sizeof(ipoint_unsorted_in_sorted_order[0]),
             &compare_ring_az, (void*)&ctx);
 
@@ -2625,17 +2620,8 @@ void clc_lidar_sort(// out
     for(unsigned int i=0; i<scan->Npoints; i++)
     {
         uint16_t ring_here;
-        if(lidar_packet_stride > 0)
-        {
-            points[i] = *((clc_point3f_t*)&((uint8_t*)scan->points)[lidar_packet_stride*ipoint_unsorted_in_sorted_order[i]]);
-            ring_here = *((uint16_t*)     &((uint8_t*)scan->rings )[lidar_packet_stride*ipoint_unsorted_in_sorted_order[i]]);
-        }
-        else
-        {
-            // dense storage
-            points[i] = scan->points[ipoint_unsorted_in_sorted_order[i]];
-            ring_here = scan->rings [ipoint_unsorted_in_sorted_order[i]];
-        }
+        points[i] = *((clc_point3f_t*)&((uint8_t*)scan->points)[stride_points*ipoint_unsorted_in_sorted_order[i]]);
+        ring_here = *((uint16_t*)     &((uint8_t*)scan->rings )[stride_rings *ipoint_unsorted_in_sorted_order[i]]);
 
         if(ring_prev != ring_here)
         {
