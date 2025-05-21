@@ -20,6 +20,8 @@ import argparse
 import re
 import os
 
+import clc
+lidar_segmentation_parameters = clc.lidar_segmentation_parameters()
 
 def parse_args():
 
@@ -27,13 +29,11 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('--dump',
-                        action='store_true',
-                        help = '''dump the c-level diagnostics; do not try to make Python plots''')
     parser.add_argument('--debug',
                         type=float,
                         nargs=5,
-                        help = '''debug_iring debug_xmin debug_ymin debug_xmax debug_ymax''')
+                        help = '''If given, overrides --debug-iring,
+                        --debug-xmin, --debug-ymin, --debug-xmax, --debug-ymax''')
     parser.add_argument('--after',
                         type=str,
                         help = '''If given, start reading the bag at this time.
@@ -47,6 +47,17 @@ def parse_args():
                         type=str,
                         help = '''The rosbag that contain the lidar data.''')
 
+    for param,metadata in lidar_segmentation_parameters.items():
+        if metadata['pyparse'] == 'p':
+            # special case for boolean
+            parser.add_argument(f'--{param.replace("_","-")}',
+                                action  = 'store_true',
+                                help = metadata['doc'])
+        else:
+            parser.add_argument(f'--{param.replace("_","-")}',
+                                type    = type(metadata['default']),
+                                default = metadata['default'],
+                                help = metadata['doc'])
 
     args = parser.parse_args()
     return args
@@ -58,22 +69,28 @@ args = parse_args()
 
 import numpy as np
 import numpysane as nps
-import clc
 
-kwargs = dict(dump = args.dump)
+ctx = dict()
+for k in lidar_segmentation_parameters.keys():
+    ctx[k] = getattr(args, k)
+
 if args.debug is not None:
-    kwargs['debug_iring'] = int(args.debug[0])
-    kwargs['debug_xmin']  = args.debug[1]
-    kwargs['debug_ymin']  = args.debug[2]
-    kwargs['debug_xmax']  = args.debug[3]
-    kwargs['debug_ymax']  = args.debug[4]
+    ctx['debug_iring'] = int(args.debug[0])
+    ctx['debug_xmin']  = args.debug[1]
+    ctx['debug_ymin']  = args.debug[2]
+    ctx['debug_xmax']  = args.debug[3]
+    ctx['debug_ymax']  = args.debug[4]
 
 segmentation = \
     clc.lidar_segmentation(bag         = args.bag,
                            lidar_topic = getattr(args, 'lidar-topic'),
                            start       = args.after,
-                           **kwargs)
-if args.dump or args.debug is not None:
+                           **ctx)
+if args.dump or \
+   args.debug_xmin <  1e10 or \
+   args.debug_xmax > -1e10 or \
+   args.debug_ymin <  1e10 or \
+   args.debug_ymax > -1e10:
     # Write the planes out to stdout, in a way that can be cut/pasted into
     # lidar-segmentation-auto-test.py
     plane_p = segmentation['plane_p']
