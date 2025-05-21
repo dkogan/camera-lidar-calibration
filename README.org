@@ -20,8 +20,9 @@ cd mrcal
 make
 #+end_src
 
-To make this available, build =clc= like this:
+Then build and use =clc= like this:
 
 #+begin_src sh
 MRCAL=$D/mrcal make
+PYTHONPATH=$D/mrcal fit.py ....
 #+end_src
