@@ -474,7 +474,7 @@ void isegment_az_from_point(// out
                             const clc_lidar_segmentation_context_t* ctx)
 {
     // I want the points in a ring to end up ordered by isegment.
-    // clc_lidar_sort() orders them by az = atan2(). So I want the segment
+    // clc_lidar_preprocess() orders them by az = atan2(). So I want the segment
     // starting at -pi to have isegment=0
     *az_rad = az_from_point(p);
 
@@ -2262,6 +2262,60 @@ void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ct
 #undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_SET_DEFAULT
 }
 
+static int infer_Npoints_per_rotation( const float* az_unsorted,
+                                       const uint32_t* ipoint_unsorted_in_sorted_order,
+                                       const unsigned int* Npoints_per_ring,
+                                       const int Nrings)
+{
+    const int Npoints_per_rotation_min = 1;
+    const int Npoints_per_rotation_max = 65536;
+    const int Nbins = Npoints_per_rotation_max - Npoints_per_rotation_min + 1;
+    int counts[Nbins];
+    for(int i=0; i<Nbins; i++) counts[i] = 0;
+
+    int ipoint0_ring = 0;
+    for(int iring=0; iring<Nrings; iring++)
+    {
+        const int Npoints_here = Npoints_per_ring[iring];
+        for(int ipoint_here=1; ipoint_here<Npoints_here; ipoint_here++)
+        {
+            const int ipoint0 = ipoint_unsorted_in_sorted_order[ipoint0_ring + ipoint_here-1];
+            const int ipoint1 = ipoint_unsorted_in_sorted_order[ipoint0_ring + ipoint_here  ];
+            float daz = az_unsorted[ipoint1] - az_unsorted[ipoint0];
+            const int Npoints_per_rotation_here = (int)(2.0f*M_PI / fabsf(daz) + 0.5f);
+            const int ibin = Npoints_per_rotation_here - Npoints_per_rotation_min;
+            if(!(ibin >= 0 && ibin < Nbins))
+                continue;
+
+            counts[ibin]++;
+        }
+        ipoint0_ring += Npoints_here;
+    }
+
+    int count_max = -1, ibin_max = -1;
+    for(int i=0; i<Nbins; i++)
+        if(counts[i] > count_max)
+        {
+            count_max = counts[i];
+            ibin_max  = i;
+        }
+
+    counts[ibin_max] = 0;
+    int count_2nd = -1;
+    for(int i=0; i<Nbins; i++)
+        if(counts[i] > count_2nd)
+            count_2nd = counts[i];
+
+    const float ratio = (float)count_max / (float)count_2nd;
+    const int Npoints_per_rotation = ibin_max + Npoints_per_rotation_min;
+    if( ratio < 5.f)
+        MSG("WARNING: the delta-az histogram doesn't have a single 5x spike. count(first)/count(second) = %.1f; Npoints_per_rotation=%d might be wrong",
+            ratio, Npoints_per_rotation);
+
+    MSG("Inferred Npoints_per_rotation = %d", Npoints_per_rotation);
+    return Npoints_per_rotation;
+}
+
 static bool validate_ctx(const clc_lidar_segmentation_context_t* ctx)
 {
     if(ctx->Nrings <= 0)
@@ -2273,6 +2327,12 @@ static bool validate_ctx(const clc_lidar_segmentation_context_t* ctx)
     {
         MSG("Unexpected value of Nrings=%d. The static limit is Nrings_max=%d. If this is correct, bump up Nrings_max, and rebuild",
             ctx->Nrings, Nrings_max);
+        return false;
+    }
+
+    if(ctx->Npoints_per_rotation <= 0)
+    {
+        MSG("Invalid Npoints_per_rotation. This is hardware-dependent, and must be set by the caller. If using clc_..._unsorted(), clc will try to infer this automatically");
         return false;
     }
 
@@ -2496,33 +2556,41 @@ int8_t clc_lidar_segmentation_unsorted(// out
                           // The stride, in bytes, between each successive points or rings value
                           // in clc_lidar_scan_unsorted_t
                           const unsigned int lidar_packet_stride,
-                          const clc_lidar_segmentation_context_t* ctx)
+                          // not const to be able to compute ctx->Npoints_per_rotation
+                          clc_lidar_segmentation_context_t* ctx)
 {
-    if(!validate_ctx(ctx))
-        return -1;
-
     clc_point3f_t points[scan->Npoints];
-    unsigned int Npoints[ctx->Nrings];
+    unsigned int Npoints_per_ring[ctx->Nrings];
 
     uint32_t ipoint_unsorted_in_sorted_order[scan->Npoints];
-
+    int* Npoints_per_rotation_estimate;
+    if(ctx->Npoints_per_rotation > 0)
+        // already have Npoints_per_rotation; don't need to estimate it
+        Npoints_per_rotation_estimate = NULL;
+    else
+        Npoints_per_rotation_estimate = &ctx->Npoints_per_rotation;
     // Sort and cull invalid points
-    clc_lidar_sort(// out
-                   //
-                   // These buffers must be pre-allocated
-                   // length sum(Npoints). Sorted by ring and then by azimuth
-                   points,
-                   // indices; length(sum(Npoints)); may be NULL
-                   ipoint_unsorted_in_sorted_order,
-                   // length Nrings
-                   Npoints,
+    clc_lidar_preprocess(// out
+                         //
+                         // These buffers must be pre-allocated
+                         // length scan->Npoints = sum(Npoints_per_ring). Sorted by ring and then by azimuth
+                         points,
+                         // indices; length(sum(Npoints_per_ring)); may be NULL
+                         ipoint_unsorted_in_sorted_order,
+                         // length Nrings
+                         Npoints_per_ring,
+                         // length scan->Npoints = sum(Npoints_per_ring)
+                         Npoints_per_rotation_estimate,
 
-                   // in
-                   ctx->Nrings,
-                   // The stride, in bytes, between each successive points or
-                   // rings value in clc_lidar_scan_unsorted_t
-                   lidar_packet_stride,
-                   scan);
+                         // in
+                         ctx->Nrings,
+                         // The stride, in bytes, between each successive points or
+                         // rings value in clc_lidar_scan_unsorted_t
+                         lidar_packet_stride,
+                         scan);
+
+    if(!validate_ctx(ctx))
+        return -1;
 
     int8_t Nplanes =
         clc_lidar_segmentation_sorted(// out
@@ -2530,7 +2598,7 @@ int8_t clc_lidar_segmentation_unsorted(// out
                                       // in
                                       Nplanes_max,
                                       &(clc_lidar_scan_sorted_t){.points  = points,
-                                                                 .Npoints = Npoints},
+                                                                 .Npoints = Npoints_per_ring},
                                       ctx);
     if(Nplanes <= 0)
         return Nplanes;
@@ -2575,23 +2643,26 @@ static int compare_ring_az(const void* _a, const void* _b, void* cookie)
 }
 // Sorts the lidar data by ring and azimuth, and removes invalid points. To be
 // passable to clc_lidar_segmentation_sorted()
-void clc_lidar_sort(// out
-                    //
-                    // These buffers must be pre-allocated
-                    // length sum(Npoints). Sorted by ring and then by azimuth
-                    clc_point3f_t* points,
-                    // indices; length(sum(Npoints))
-                    uint32_t* ipoint_unsorted_in_sorted_order,
-                    // length Nrings
-                    unsigned int* Npoints,
+void clc_lidar_preprocess(// out
+                          //
+                          // These buffers must be pre-allocated
+                          // length scan->Npoints = sum(Npoints). Sorted by ring and then by azimuth
+                          clc_point3f_t* points,
+                          // indices; length(sum(Npoints))
+                          uint32_t* ipoint_unsorted_in_sorted_order,
+                          // length Nrings
+                          unsigned int* Npoints_per_ring,
+                          // an estimate for Npoints_per_rotation; NULL if we
+                          // don't need it
+                          int* Npoints_per_rotation,
 
-                    // in
-                    int Nrings,
-                    // The stride, in bytes, between each successive points or
-                    // rings value in clc_lidar_scan_t. If
-                    // lidar_packet_stride==0, dense storage is assumed
-                    const unsigned int      lidar_packet_stride,
-                    const clc_lidar_scan_unsorted_t* scan)
+                          // in
+                          int Nrings,
+                          // The stride, in bytes, between each successive points or
+                          // rings value in clc_lidar_scan_t. If
+                          // lidar_packet_stride==0, dense storage is assumed
+                          const unsigned int      lidar_packet_stride,
+                          const clc_lidar_scan_unsorted_t* scan)
 {
     unsigned int stride_points, stride_rings;
     if(lidar_packet_stride <= 0)
@@ -2606,7 +2677,7 @@ void clc_lidar_sort(// out
         stride_rings  = lidar_packet_stride;
     }
 
-    float az[scan->Npoints];
+    float az_unsorted[scan->Npoints];
     for(unsigned int i=0; i<scan->Npoints; i++)
     {
         ipoint_unsorted_in_sorted_order[i] = i;
@@ -2615,14 +2686,14 @@ void clc_lidar_sort(// out
 
         if(p->x == 0.0f && p->y == 0.0f)
             // Invalid point. Indicate that
-            az[i] = FLT_MAX;
+            az_unsorted[i] = FLT_MAX;
         else
-            az[i] = atan2f( p->y, p->x );
+            az_unsorted[i] = atan2f( p->y, p->x );
     }
 
     compare_ring_az_ctx_t ctx = {.stride_rings = stride_rings,
                                  .rings        = scan->rings,
-                                 .az           = az};
+                                 .az           = az_unsorted};
     qsort_r(ipoint_unsorted_in_sorted_order, scan->Npoints, sizeof(ipoint_unsorted_in_sorted_order[0]),
             &compare_ring_az, (void*)&ctx);
 
@@ -2633,7 +2704,7 @@ void clc_lidar_sort(// out
     uint16_t ring_prev         = UINT16_MAX;
     unsigned int i;
     for(i=0;
-        i<scan->Npoints && az[ipoint_unsorted_in_sorted_order[i]] != FLT_MAX;
+        i<scan->Npoints && az_unsorted[ipoint_unsorted_in_sorted_order[i]] != FLT_MAX;
         i++)
     {
         points[i]          = *((clc_point3f_t*)&((uint8_t*)scan->points)[stride_points*ipoint_unsorted_in_sorted_order[i]]);
@@ -2645,7 +2716,7 @@ void clc_lidar_sort(// out
             if(ring_prev < ring_here)
             {
                 // normal path
-                Npoints[ring_prev] = i - i_ring_prev_start;
+                Npoints_per_ring[ring_prev] = i - i_ring_prev_start;
             }
             else
             {
@@ -2655,7 +2726,7 @@ void clc_lidar_sort(// out
             }
             // account for any rings we didn't see at all
             for(ring_prev++; ring_prev<ring_here; ring_prev++)
-                Npoints[ring_prev] = 0;
+                Npoints_per_ring[ring_prev] = 0;
             i_ring_prev_start = i;
             ring_prev = ring_here;
         }
@@ -2664,10 +2735,19 @@ void clc_lidar_sort(// out
 
     // handle last ring
     uint16_t ring_here = Nrings;
-    Npoints[ring_prev] = Npoints_valid - i_ring_prev_start;
+    Npoints_per_ring[ring_prev] = Npoints_valid - i_ring_prev_start;
     // account for any rings we didn't see at all
     for(ring_prev++; ring_prev<ring_here; ring_prev++)
-        Npoints[ring_prev] = 0;
+        Npoints_per_ring[ring_prev] = 0;
+
+    if(Npoints_per_rotation != NULL)
+    {
+        *Npoints_per_rotation =
+            infer_Npoints_per_rotation( az_unsorted,
+                                        ipoint_unsorted_in_sorted_order,
+                                        Npoints_per_ring,
+                                        Nrings);
+    }
 }
 
 /*

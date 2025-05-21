@@ -3993,7 +3993,8 @@ bool lidar_segmentation(// out
                         const int ilidar,
                         const unsigned int lidar_packet_stride,
                         const int Nplanes_max,
-                        const clc_lidar_segmentation_context_t* ctx)
+                        // not const to be able to compute ctx->Npoints_per_rotation
+                        clc_lidar_segmentation_context_t* ctx)
 {
     const clc_lidar_scan_unsorted_t* scan_unsorted =
         (sensor_snapshot_unsorted != NULL) ?
@@ -4005,8 +4006,8 @@ bool lidar_segmentation(// out
         NULL;
 
     clc_point3f_t* points_here = NULL;
-    unsigned int   _Npoints[ctx->Nrings];
-    unsigned int*  Npoints = _Npoints;
+    unsigned int   _Npoints_per_ring[ctx->Nrings];
+    unsigned int*  Npoints_per_ring = _Npoints_per_ring;
 
     if(scan_unsorted != NULL)
     {
@@ -4017,28 +4018,34 @@ bool lidar_segmentation(// out
         *points_pool_index += scan_unsorted->Npoints;
 
         uint32_t ipoint_unsorted_in_sorted_order[scan_unsorted->Npoints];
-
+        int* Npoints_per_rotation_estimate;
+        if(ctx->Npoints_per_rotation > 0)
+            // already have Npoints_per_rotation; don't need to estimate it
+            Npoints_per_rotation_estimate = NULL;
+        else
+            Npoints_per_rotation_estimate = &ctx->Npoints_per_rotation;
         // Sort and cull invalid points
-        clc_lidar_sort(// out
-                       //
-                       // These buffers must be pre-allocated
-                       // length sum(Npoints). Sorted by ring and then by azimuth
-                       points_here,
-                       ipoint_unsorted_in_sorted_order,
-                       // length Nrings
-                       Npoints,
+        clc_lidar_preprocess(// out
+                             //
+                             // These buffers must be pre-allocated
+                             // length scan->Npoints = sum(Npoints_per_ring). Sorted by ring and then by azimuth
+                             points_here,
+                             ipoint_unsorted_in_sorted_order,
+                             // length Nrings
+                             Npoints_per_ring,
+                             Npoints_per_rotation_estimate,
 
-                       // in
-                       ctx->Nrings,
-                       // The stride, in bytes, between each successive points or
-                       // rings value in clc_lidar_scan_unsorted_t
-                       lidar_packet_stride,
-                       scan_unsorted);
+                             // in
+                             ctx->Nrings,
+                             // The stride, in bytes, between each successive points or
+                             // rings value in clc_lidar_scan_unsorted_t
+                             lidar_packet_stride,
+                             scan_unsorted);
     }
     else
     {
-        points_here = scan_sorted->points;
-        Npoints     = scan_sorted->Npoints;
+        points_here      = scan_sorted->points;
+        Npoints_per_ring = scan_sorted->Npoints;
     }
 
     clc_points_and_plane_t* points_and_plane_here =
@@ -4051,7 +4058,7 @@ bool lidar_segmentation(// out
                                       // in
                                       Nplanes_max,
                                       &(clc_lidar_scan_sorted_t){.points  = points_here,
-                                                                 .Npoints = Npoints},
+                                                                 .Npoints = Npoints_per_ring},
                                       ctx);
 
     // If we didn't see a clear plane, I keep the previous
@@ -5346,9 +5353,9 @@ int ingest_sensor_snapshots(// out
                             // unused if sensor_snapshots_unsorted==NULL &&
                             // sensor_snapshots_sorted==NULL
                             const clc_is_bgr_mask_t is_bgr_mask,
-                            // unused if sensor_snapshots_unsorted==NULL &&
-                            // sensor_snapshots_sorted==NULL
-                            const clc_lidar_segmentation_context_t* ctx,
+                            // unused if sensor_snapshots_unsorted==NULL && sensor_snapshots_sorted==NULL
+                            // not const to be able to compute ctx->Npoints_per_rotation
+                            clc_lidar_segmentation_context_t* ctx,
 
                             const clc_sensor_snapshot_unsorted_t*        sensor_snapshots_unsorted,
                             const clc_sensor_snapshot_sorted_t*          sensor_snapshots_sorted,
@@ -6129,9 +6136,9 @@ bool clc(// in/out
          // unused if sensor_snapshots_unsorted==NULL &&
          // sensor_snapshots_sorted==NULL
          const clc_is_bgr_mask_t is_bgr_mask,
-         // unused if sensor_snapshots_unsorted==NULL &&
-         // sensor_snapshots_sorted==NULL
-         const clc_lidar_segmentation_context_t* ctx,
+         // unused if sensor_snapshots_unsorted==NULL && sensor_snapshots_sorted==NULL
+         // not const to be able to compute ctx->Npoints_per_rotation
+         clc_lidar_segmentation_context_t* ctx,
 
          const mrcal_pose_t* rt_vehicle_lidar0,
 

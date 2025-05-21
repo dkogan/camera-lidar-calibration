@@ -69,7 +69,7 @@ typedef struct
 {
     // These point to the FIRST point,ring and are NOT stored densely. The
     // stride for both of these is given in lidar_packet_stride. Invalid points
-    // p=(0,0,0) are allowed: will be culled by clc_lidar_sort()
+    // p=(0,0,0) are allowed: will be culled by clc_lidar_preprocess()
     clc_point3f_t* points;      // 3D points, in the lidar frame
     uint16_t*      rings;       // For each point, which laser observed the point
 
@@ -79,7 +79,7 @@ typedef struct
 typedef struct
 {
     // length sum(Npoints). Sorted by ring and then by azimuth. Invalid points
-    // p=(0,0,0) have been removed. Use clc_lidar_sort() to do this
+    // p=(0,0,0) have been removed. Use clc_lidar_preprocess() to do this
     clc_point3f_t* points;
     // length ctx->Nrings
     unsigned int* Npoints;
@@ -197,10 +197,11 @@ typedef struct
       "Post-processing: high limit on the RMS plane fit residual. Lower values will demand flatter planes" ) \
   _(float, threshold_min_rms_point_cloud_2nd_dimension,  0.1f,              "f","f", \
       "Post-processing: low limit on the short length of the found plane. Too-skinny planes are rejected" ) \
-  /* found by infer-lidar-spacing.py */                         \
-  _(int,   Npoints_per_rotation,                         1800,              "i","i", \
+  /* This is found by infer-lidar-spacing.py */                         \
+  _(int,   Npoints_per_rotation,                         -1,              "i","i", \
       "How many points are reported by the LIDAR in a rotation.\n" \
-      "This is hardware-dependent, and needs to be revisited for different LIDAR units" ) \
+      "This is hardware-dependent, and needs to be set each for LIDAR unit.\n" \
+      "Defaults to -1, in which case clc_lidar_preprocess() will try to estimate this") \
   _(int,   Npoints_per_segment,                          15,                "i","i", \
       "stage1: length of segments we're looking for" ) \
   _(int,   threshold_max_Ngap,                           2,                 "i","i", \
@@ -256,23 +257,26 @@ typedef struct
 
 // Sorts the lidar data by ring and azimuth, and removes invalid points. To be
 // passable to clc_lidar_segmentation_sorted()
-void clc_lidar_sort(// out
-                    //
-                    // These buffers must be pre-allocated
-                    // length sum(Npoints). Sorted by ring and then by azimuth
-                    clc_point3f_t* points,
-                    // indices; length(sum(Npoints))
-                    uint32_t* ipoint_unsorted_in_sorted_order,
-                    // length Nrings
-                    unsigned int* Npoints,
+void clc_lidar_preprocess(// out
+                          //
+                          // These buffers must be pre-allocated
+                          // length scan->Npoints = sum(Npoints). Sorted by ring and then by azimuth
+                          clc_point3f_t* points,
+                          // indices; length(sum(Npoints))
+                          uint32_t* ipoint_unsorted_in_sorted_order,
+                          // length Nrings
+                          unsigned int* Npoints,
+                          // an estimate for Npoints_per_rotation; NULL if we
+                          // don't need it
+                          int* Npoints_per_rotation,
 
-                    // in
-                    int Nrings,
-                    // The stride, in bytes, between each successive points or
-                    // rings value in clc_lidar_scan_unsorted_t
-                    const unsigned int      lidar_packet_stride,
-                    const clc_lidar_scan_unsorted_t* scan);
-
+                          // in
+                          int Nrings,
+                          // The stride, in bytes, between each successive points or
+                          // rings value in clc_lidar_scan_t. If
+                          // lidar_packet_stride==0, dense storage is assumed
+                          const unsigned int      lidar_packet_stride,
+                          const clc_lidar_scan_unsorted_t* scan);
 
 // Returns how many planes were found or <0 on error
 int8_t clc_lidar_segmentation_unsorted(// out
@@ -283,7 +287,8 @@ int8_t clc_lidar_segmentation_unsorted(// out
                           // The stride, in bytes, between each successive points or rings value
                           // in clc_lidar_scan_unsorted_t
                           const unsigned int lidar_packet_stride,
-                          const clc_lidar_segmentation_context_t* ctx);
+                          // not const to be able to compute ctx->Npoints_per_rotation
+                          clc_lidar_segmentation_context_t* ctx);
 
 // Returns how many planes were found or <0 on error
 int8_t clc_lidar_segmentation_sorted(// out
@@ -409,9 +414,9 @@ bool clc(// in/out
          // unused if sensor_snapshots_unsorted==NULL &&
          //           sensor_snapshots_sorted==NULL
          const clc_is_bgr_mask_t is_bgr_mask,
-         // unused if sensor_snapshots_unsorted==NULL &&
-         //           sensor_snapshots_sorted==NULL
-         const clc_lidar_segmentation_context_t* ctx,
+         // unused if sensor_snapshots_unsorted==NULL && sensor_snapshots_sorted==NULL
+         // not const to be able to compute ctx->Npoints_per_rotation
+         clc_lidar_segmentation_context_t* ctx,
 
          const mrcal_pose_t* rt_vehicle_lidar0,
 
