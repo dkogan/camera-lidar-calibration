@@ -154,7 +154,10 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
                                      // in
                                      points,
                                      rings))
+    {
+        BARF("lidar_scan_from_points_rings() failed");
         goto done;
+    }
 
     int8_t Nplanes =
         clc_lidar_segmentation_unsorted( // out
@@ -165,7 +168,10 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
                                          lidar_packet_stride,
                                          &ctx);
     if(Nplanes < 0)
+    {
+        BARF("clc_lidar_segmentation_unsorted() failed");
         goto done;
+    }
 
     // Success. Allocate the output and copy
     for(int i=0; i<Nplanes; i++)
@@ -693,10 +699,16 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
 
             if(!ingest_lidar_snapshot (snapshot, &Nlidars, &lidar_packet_stride,
                                        py_snapshot))
+            {
+                BARF("ingest_lidar_snapshot() failed");
                 goto done;
+            }
             if(!ingest_camera_snapshot(snapshot, &Ncameras, &is_bgr_mask,
                                        py_snapshot))
+            {
+                BARF("ingest_camera_snapshot() failed");
                 goto done;
+            }
         }
 
         if(Ncameras > 0)
@@ -957,6 +969,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
         }
         if(0 != PyDict_SetItemString(result, "inputs_dump", inputs_dump))
         {
+            BARF("PyDict_SetItemString(result) failed when setting key \"inputs_dump\"");
             Py_DECREF(result);
             result = NULL;
             goto done;
@@ -966,12 +979,14 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     {
         if(0 != PyDict_SetItemString(result, "rt_vehicle_lidar", (PyObject*)rt_vehicle_lidar))
         {
+            BARF("PyDict_SetItemString(result) failed when setting key \"rt_vehicle_lidar\"");
             Py_DECREF(result);
             result = NULL;
             goto done;
         }
         if(0 != PyDict_SetItemString(result, "rt_vehicle_camera", (PyObject*)rt_vehicle_camera))
         {
+            BARF("PyDict_SetItemString(result) failed when setting key \"rt_vehicle_camera\"");
             Py_DECREF(result);
             result = NULL;
             goto done;
