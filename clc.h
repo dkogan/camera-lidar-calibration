@@ -164,7 +164,7 @@ typedef struct
       "      --autolegend \\\n"                                         \
       "      --xlabel x \\\n"                                           \
       "      --ylabel y \\\n"                                           \
-      "      --zlabel z\\n")                                            \
+      "      --zlabel z\\\n")                                           \
   _(int,   debug_iring,                                  -1,                "i","i", \
       "stage1: report diagnostic information on stderr, ONLY for this ring" ) \
   _(float, debug_xmin,                                   FLT_MAX,           "f","f", \
