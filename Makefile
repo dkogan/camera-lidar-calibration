@@ -21,9 +21,10 @@ CCXXFLAGS += -Wno-comment
 
 
 # I need the bleeding-edge mrcal
-MRCAL     ?= /home/dima/projects/mrcal
-CCXXFLAGS += -I$(MRCAL)/..
-LDFLAGS   += -L$(MRCAL) -Wl,-rpath=$(MRCAL)
+ifneq ($(MRCAL),)
+  CCXXFLAGS += -I$(MRCAL)/..
+  LDFLAGS   += -L$(MRCAL) -Wl,-rpath=$(MRCAL)
+endif
 
 CFLAGS += -I/usr/include/suitesparse
 
