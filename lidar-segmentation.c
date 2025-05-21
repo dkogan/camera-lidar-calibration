@@ -473,8 +473,10 @@ void isegment_az_from_point(// out
                             const clc_point3f_t* p,
                             const clc_lidar_segmentation_context_t* ctx)
 {
+    // I want the points in a ring to end up ordered by isegment.
+    // clc_lidar_sort() orders them by az = atan2(). So I want the segment
+    // starting at -pi to have isegment=0
     *az_rad = az_from_point(p);
-    // ASSUMES az_rad CAME FROM atan2, SO IT'S IN [-pi,pi]
 
     const float segment_width_rad = 2.0f*M_PI * (float)ctx->Npoints_per_segment / (float)ctx->Npoints_per_rotation;
 
