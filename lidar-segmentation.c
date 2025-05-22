@@ -1593,6 +1593,13 @@ static void stage3_accumulate_points(// out
     {
         first = false;
 
+        if(ipoint >= ctx->Npoints_per_rotation)
+        {
+            MSG("WARNING: ipoint indexing past Npoints_per_rotation=%d; perhaps Npoints_per_rotation is too small? Ignoring the remaining points in this call",
+                ctx->Npoints_per_rotation);
+            break;
+        }
+
         if( DEBUG_ON_TRUE_POINT( bitarray64_check(bitarray_visited, ipoint),
                                  &points[ipoint0_in_ring + ipoint],
                                  "%d-%d: we already processed this point; accumulation stopped",
@@ -2262,6 +2269,20 @@ void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ct
 #undef CLC_LIDAR_SEGMENTATION_LIST_CONTEXT_SET_DEFAULT
 }
 
+
+static uint32_t ceil_power_of2(uint32_t v)
+{
+    // from https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+    v--;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    v++;
+    return v;
+}
+
 static int infer_Npoints_per_rotation( const float* az_unsorted,
                                        const uint32_t* ipoint_unsorted_in_sorted_order,
                                        const unsigned int* Npoints_per_ring,
@@ -2307,12 +2328,21 @@ static int infer_Npoints_per_rotation( const float* az_unsorted,
             count_2nd = counts[i];
 
     const float ratio = (float)count_max / (float)count_2nd;
-    const int Npoints_per_rotation = ibin_max + Npoints_per_rotation_min;
+    const int Npoints_per_rotation_mode = ibin_max + Npoints_per_rotation_min;
     if( ratio < 5.f)
-        MSG("WARNING: the delta-az histogram doesn't have a single 5x spike. count(first)/count(second) = %.1f; Npoints_per_rotation=%d might be wrong",
-            ratio, Npoints_per_rotation);
+        MSG("WARNING: the delta-az histogram doesn't have a single 5x spike. count(first)/count(second) = %.1f; Npoints_per_rotation_mode=%d might be wrong",
+            ratio, Npoints_per_rotation_mode);
 
-    MSG("Inferred Npoints_per_rotation = %d", Npoints_per_rotation);
+    // nearest power-of-2
+    const int Npoints_per_rotation_ceil_power_of2  = ceil_power_of2(Npoints_per_rotation_mode);
+    const int Npoints_per_rotation_floor_power_of2 = Npoints_per_rotation_ceil_power_of2 >> 1;
+    const int Npoints_per_rotation =
+        ( Npoints_per_rotation_ceil_power_of2 - Npoints_per_rotation_mode <
+          Npoints_per_rotation_mode - Npoints_per_rotation_floor_power_of2) ?
+        Npoints_per_rotation_ceil_power_of2 : Npoints_per_rotation_floor_power_of2;
+
+    MSG("Inferred Npoints_per_rotation mode: %d, using nearest-power-of-2: %d",
+        Npoints_per_rotation_mode, Npoints_per_rotation);
     return Npoints_per_rotation;
 }
 
