@@ -202,7 +202,7 @@ typedef struct
       "How many points are reported by the LIDAR in a rotation.\n" \
       "This is hardware-dependent, and needs to be set each for LIDAR unit.\n" \
       "Defaults to -1, in which case clc_lidar_preprocess() will try to estimate this") \
-  _(int,   Npoints_per_segment,                          15,                "i","i", \
+  _(int,   Npoints_per_segment,                          16,                "i","i", \
       "stage1: length of segments we're looking for" ) \
   _(int,   threshold_max_Ngap,                           2,                 "i","i", \
       "The maximum number of consecutive missing points in a ring" ) \
