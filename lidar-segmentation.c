@@ -1805,7 +1805,6 @@ stage3_cull_bloom_and_count_non_isolated(// out
                                          const int ipoint_set_start_this_ring,
                                          const int ipoint0_in_ring, // start of this ring in the full points[] array
                                          const int icluster, const int iring,
-                                         const bool final_iteration,
                                          const bool debug __attribute__((unused)),
                                          const clc_lidar_segmentation_context_t* ctx)
 {
@@ -1880,7 +1879,7 @@ stage3_cull_bloom_and_count_non_isolated(// out
             {
                 // We're at the first "good" point. Cull everything else
                 const int ipoint_set_n_new = i+1;
-                if(final_iteration && ctx->dump)
+                if(ctx->dump)
                     for(unsigned int j=ipoint_set_n_new; j < *n; j++)
                         printf("%f %f stage3-culled-bloom %f\n",
                                points[ ipoints[j] ].x,
@@ -1901,11 +1900,6 @@ stage3_cull_bloom_and_count_non_isolated(// out
 
         // if we get here without ever finding a "good" point, do something
     }
-
-
-
-    if(!final_iteration)
-        return 0;
 
 
     ////////////////////////////////////////////////////////
@@ -2085,178 +2079,165 @@ static bool stage3_refine_cluster(// out
         ctx->debug_xmin < cluster->plane.p_mean.x && cluster->plane.p_mean.x < ctx->debug_xmax &&
         ctx->debug_ymin < cluster->plane.p_mean.y && cluster->plane.p_mean.y < ctx->debug_ymax;
 
-    // will only be modified on the final iteration
     int Npoints_non_isolated = 0;
 
-#warning FOR NOW I JUST RUN A SINGLE ITERATION
-    const int Niterations = 1;
-    for(int iteration=0; iteration<Niterations; iteration++)
+    points_and_plane->n = 0;
+    int ipoint_set_n_prev = 0;
+
+    for(int i=0; i<Nrings_considered; i++)
+        memset(bitarray_visited[i], 0, Nwords_bitarray_visited*sizeof(uint64_t));
+
+
+
+
+
+    if(Nrings_considered > 64)
     {
-        const bool final_iteration = (iteration == Niterations-1);
-
-        points_and_plane->n = 0;
-        int ipoint_set_n_prev = 0;
-
-        for(int i=0; i<Nrings_considered; i++)
-            memset(bitarray_visited[i], 0, Nwords_bitarray_visited*sizeof(uint64_t));
-
-
-
-
-
-        if(Nrings_considered > 64)
-        {
-            MSG("Too many rings");
-            return false;
-        }
-
-        for(int iring = cluster->irings[0];
-            iring    <= cluster->irings[1];
-            iring++)
-        {
-            const int isegment0 = cluster->isegments[iring-cluster->irings[0]] [0];
-            const int isegment1 = cluster->isegments[iring-cluster->irings[0]] [1];
-
-            const segment_t* segment0 = &segments[iring*Nsegments_per_rotation + isegment0];
-            const segment_t* segment1 = &segments[iring*Nsegments_per_rotation + isegment1];
-
-            const int isegment_mid =
-                isegment_center_from_range(isegment0,isegment1,
-                                           ctx);
-#warning "at this point I'm already wrong; I see segment0->ipoint=0. Why is it exactly 0???"
-            // I start in the center, and expand outwards to capture all the
-            // matching points
-            const int ipoint0 = ipoint_center_from_range(segment0->ipoint0,
-                                                         segment1->ipoint1,
-                                                         Npoints[iring]);
-
-            unsigned int ipoint_set_start_this_ring __attribute__((unused)); // for the currently-disabled bloom_cull logic
-
-            ipoint_set_start_this_ring = points_and_plane->n;
-            stage3_accumulate_points(// out
-                                     &points_and_plane->n,
-                                     points_and_plane->ipoint,
-                                     (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
-                                     bitarray_visited[iring-iring0],
-                                     // in
-                                     ipoint0, +1,
-                                     &plane_out,
-                                     points,
-                                     ipoint0_in_ring[iring],
-                                     Npoints[iring],
-                                     // for diagnostics
-                                     icluster, iring, isegment_mid,
-                                     debug,
-                                     ctx);
-
-            // disabling this for now; see comment at stage3_cull_bloom_and_count_non_isolated() above
-#if 0
-            if(points_and_plane->n > ipoint_set_start_this_ring)
-            {
-                // some points were added
-
-                // I cull the bloom points at the edges. This will need to
-                // un-accumulate some points. stage3_accumulate_points() does:
-                //
-                //   points_and_plane->ipoint[points_and_plane->n++] = ipoint0_in_ring + ipoint;
-                //   bitarray64_set(bitarray_visited, ipoint);
-                //
-                // I can easily update the ipoint_set: I pull some points off the
-                // end. The bitarray_visited doesn't matter, since I will never
-                // process this ring again
-                //
-                // After we get a final-ish fit. I check to see if this board
-                // isn't isolated in space. And if it isn't, I reject it
-
-                // This will be non-zero ONLY if final_iteration
-                int Npoints_non_isolated_here =
-                    stage3_cull_bloom_and_count_non_isolated(// out
-                                                             &points_and_plane->n,
-                                                             points_and_plane->ipoint,
-                                                             // in
-                                                             +1, Npoints[iring],
-                                                             &plane_out,
-                                                             points,
-                                                             ipoint_set_start_this_ring,
-                                                             ipoint0_in_ring[iring],
-                                                             icluster, iring,
-                                                             final_iteration,
-                                                             debug,
-                                                             ctx);
-                if(Npoints_non_isolated_here == INT_MAX)
-                    Npoints_non_isolated = Npoints_non_isolated_here;
-                else
-                    Npoints_non_isolated += Npoints_non_isolated_here;
-            }
-#endif
-
-
-            ipoint_set_start_this_ring = points_and_plane->n;
-            stage3_accumulate_points(// out
-                                     &points_and_plane->n,
-                                     points_and_plane->ipoint,
-                                     (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
-                                     bitarray_visited[iring-iring0],
-                                     // in
-                                     ipoint_sub(ipoint0,1,Npoints[iring]), -1,
-                                     &plane_out,
-                                     points,
-                                     ipoint0_in_ring[iring],
-                                     Npoints[iring],
-                                     // for diagnostics
-                                     icluster, iring, isegment_mid,
-                                     debug,
-                                     ctx);
-            // disabling this for now; see comment at stage3_cull_bloom_and_count_non_isolated() above
-#if 0
-            if(points_and_plane->n > ipoint_set_start_this_ring)
-            {
-                // This will be non-zero ONLY if final_iteration
-                int Npoints_non_isolated_here =
-                    stage3_cull_bloom_and_count_non_isolated(// out
-                                                             &points_and_plane->n,
-                                                             points_and_plane->ipoint,
-                                                             // in
-                                                             -1, -1,
-                                                             &plane_out,
-                                                             points,
-                                                             ipoint_set_start_this_ring,
-                                                             ipoint0_in_ring[iring],
-                                                             icluster, iring,
-                                                             final_iteration,
-                                                             debug,
-                                                             ctx);
-                if(Npoints_non_isolated_here == INT_MAX)
-                    Npoints_non_isolated = Npoints_non_isolated_here;
-                else
-                    Npoints_non_isolated += Npoints_non_isolated_here;
-            }
-#endif
-
-            // I don't bother to look in rings that don't appear in the
-            // cluster. This will by contain not very much data (because
-            // the pre-solve didn't find it), and won't be of much value
-            if(debug)
-            {
-                MSG("%d-%d at icluster=%d: refinement gathered %d points",
-                    iring, isegment_mid,
-                    icluster,
-                    points_and_plane->n - ipoint_set_n_prev);
-                ipoint_set_n_prev = points_and_plane->n;
-            }
-        }
-
-        if(DEBUG_ON_TRUE_POINT(points_and_plane->n == 0,
-                                &cluster->plane.p_mean,
-                               "All points thrown out during refinement"))
-            return false;
-
-        // Got a set of points. Fit a plane
-        fit_plane_into_points__normalized(&plane_out,
-                                          max_norm2_dp,
-                                          eigenvalues_ascending,
-                                          points, points_and_plane->n, points_and_plane->ipoint);
+        MSG("Too many rings");
+        return false;
     }
+
+    for(int iring = cluster->irings[0];
+        iring    <= cluster->irings[1];
+        iring++)
+    {
+        const int isegment0 = cluster->isegments[iring-cluster->irings[0]] [0];
+        const int isegment1 = cluster->isegments[iring-cluster->irings[0]] [1];
+
+        const segment_t* segment0 = &segments[iring*Nsegments_per_rotation + isegment0];
+        const segment_t* segment1 = &segments[iring*Nsegments_per_rotation + isegment1];
+
+        const int isegment_mid =
+            isegment_center_from_range(isegment0,isegment1,
+                                       ctx);
+#warning "at this point I'm already wrong; I see segment0->ipoint=0. Why is it exactly 0???"
+        // I start in the center, and expand outwards to capture all the
+        // matching points
+        const int ipoint0 = ipoint_center_from_range(segment0->ipoint0,
+                                                     segment1->ipoint1,
+                                                     Npoints[iring]);
+
+        unsigned int ipoint_set_start_this_ring __attribute__((unused)); // for the currently-disabled bloom_cull logic
+
+        ipoint_set_start_this_ring = points_and_plane->n;
+        stage3_accumulate_points(// out
+                                 &points_and_plane->n,
+                                 points_and_plane->ipoint,
+                                 (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
+                                 bitarray_visited[iring-iring0],
+                                 // in
+                                 ipoint0, +1,
+                                 &plane_out,
+                                 points,
+                                 ipoint0_in_ring[iring],
+                                 Npoints[iring],
+                                 // for diagnostics
+                                 icluster, iring, isegment_mid,
+                                 debug,
+                                 ctx);
+
+        // disabling this for now; see comment at stage3_cull_bloom_and_count_non_isolated() above
+#if 0
+        if(points_and_plane->n > ipoint_set_start_this_ring)
+        {
+            // some points were added
+
+            // I cull the bloom points at the edges. This will need to
+            // un-accumulate some points. stage3_accumulate_points() does:
+            //
+            //   points_and_plane->ipoint[points_and_plane->n++] = ipoint0_in_ring + ipoint;
+            //   bitarray64_set(bitarray_visited, ipoint);
+            //
+            // I can easily update the ipoint_set: I pull some points off the
+            // end. The bitarray_visited doesn't matter, since I will never
+            // process this ring again
+            //
+            // After we get a final-ish fit. I check to see if this board
+            // isn't isolated in space. And if it isn't, I reject it
+            int Npoints_non_isolated_here =
+                stage3_cull_bloom_and_count_non_isolated(// out
+                                                         &points_and_plane->n,
+                                                         points_and_plane->ipoint,
+                                                         // in
+                                                         +1, Npoints[iring],
+                                                         &plane_out,
+                                                         points,
+                                                         ipoint_set_start_this_ring,
+                                                         ipoint0_in_ring[iring],
+                                                         icluster, iring,
+                                                         debug,
+                                                         ctx);
+            if(Npoints_non_isolated_here == INT_MAX)
+                Npoints_non_isolated = Npoints_non_isolated_here;
+            else
+                Npoints_non_isolated += Npoints_non_isolated_here;
+        }
+#endif
+
+
+        ipoint_set_start_this_ring = points_and_plane->n;
+        stage3_accumulate_points(// out
+                                 &points_and_plane->n,
+                                 points_and_plane->ipoint,
+                                 (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
+                                 bitarray_visited[iring-iring0],
+                                 // in
+                                 ipoint_sub(ipoint0,1,Npoints[iring]), -1,
+                                 &plane_out,
+                                 points,
+                                 ipoint0_in_ring[iring],
+                                 Npoints[iring],
+                                 // for diagnostics
+                                 icluster, iring, isegment_mid,
+                                 debug,
+                                 ctx);
+        // disabling this for now; see comment at stage3_cull_bloom_and_count_non_isolated() above
+#if 0
+        if(points_and_plane->n > ipoint_set_start_this_ring)
+        {
+            int Npoints_non_isolated_here =
+                stage3_cull_bloom_and_count_non_isolated(// out
+                                                         &points_and_plane->n,
+                                                         points_and_plane->ipoint,
+                                                         // in
+                                                         -1, -1,
+                                                         &plane_out,
+                                                         points,
+                                                         ipoint_set_start_this_ring,
+                                                         ipoint0_in_ring[iring],
+                                                         icluster, iring,
+                                                         debug,
+                                                         ctx);
+            if(Npoints_non_isolated_here == INT_MAX)
+                Npoints_non_isolated = Npoints_non_isolated_here;
+            else
+                Npoints_non_isolated += Npoints_non_isolated_here;
+        }
+#endif
+
+        // I don't bother to look in rings that don't appear in the
+        // cluster. This will by contain not very much data (because
+        // the pre-solve didn't find it), and won't be of much value
+        if(debug)
+        {
+            MSG("%d-%d at icluster=%d: refinement gathered %d points",
+                iring, isegment_mid,
+                icluster,
+                points_and_plane->n - ipoint_set_n_prev);
+            ipoint_set_n_prev = points_and_plane->n;
+        }
+    }
+
+    if(DEBUG_ON_TRUE_POINT(points_and_plane->n == 0,
+                            &cluster->plane.p_mean,
+                           "All points thrown out during refinement"))
+        return false;
+
+    // Got a set of points. Fit a plane
+    fit_plane_into_points__normalized(&plane_out,
+                                      max_norm2_dp,
+                                      eigenvalues_ascending,
+                                      points, points_and_plane->n, points_and_plane->ipoint);
 
     points_and_plane->plane = plane_out;
 
