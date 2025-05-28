@@ -307,7 +307,7 @@ if args.dump is not None:
 sensor_forward_vectors_plot_tuples = \
     clc.sensor_forward_vectors_plot_tuples(rt_ref_lidar,
                                            rt_ref_camera,
-                                           context['topics'])
+                                           args.topics)
 
 
 
