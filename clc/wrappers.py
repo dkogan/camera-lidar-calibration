@@ -487,7 +487,7 @@ Plot tuples passable to gnuplotlib.plot() as in the SYNOPSIS above.
 
 
 def sensor_forward_vectors_plot_tuples(rt_ref_lidar,
-                                       rt_ref_camer1a,
+                                       rt_ref_camera,
                                        topics,
                                        *,
                                        isensor = None):
