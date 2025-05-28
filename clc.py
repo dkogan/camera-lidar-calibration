@@ -42,18 +42,18 @@ def lidar_segmentation(*,
               plane_n = plane_pn[:,3:] )
 
 
-def lidar_points(msg):
+def _lidar_points(msg):
     if msg is None: return None
     array = msg['array']
     return \
         (array['xyz' ],
          array['ring'])
-def images(msg):
+def _images(msg):
     if msg is None: return None
     return msg['array']
 
 
-def is_message_pointcloud(msg):
+def _is_message_pointcloud(msg):
 
     if msg is None:
         # I don't know if this was supposed to be a point cloud. I arbitrarily
@@ -145,8 +145,8 @@ def _sorted_sensor_snapshots(bags, topics,
                 continue
             if i in itopics_lidar or i in itopics_camera:
                 continue
-            if is_message_pointcloud(msg): itopics_lidar .add(i)
-            else:                          itopics_camera.add(i)
+            if _is_message_pointcloud(msg): itopics_lidar .add(i)
+            else:                           itopics_camera.add(i)
             Ntopics_identified += 1
     if Ntopics_identified != len(topics):
         itopics_missing = \
@@ -157,8 +157,8 @@ def _sorted_sensor_snapshots(bags, topics,
     itopics_camera = sorted(itopics_camera)
 
     return \
-        tuple( ( tuple(lidar_points(messages[i]) for i in itopics_lidar),
-                 tuple(images      (messages[i]) for i in itopics_camera) ) \
+        tuple( ( tuple(_lidar_points(messages[i]) for i in itopics_lidar),
+                 tuple(_images      (messages[i]) for i in itopics_camera) ) \
                for messages in messages_bags )
 
 
@@ -225,7 +225,7 @@ def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
         raise Exception(f"Bag '{bag}' doesn't have at least one message for each of {lidar_topic} in the requested time span")
 
     for i,msg in enumerate(pointcloud_msgs):
-        if not is_message_pointcloud(msg):
+        if not _is_message_pointcloud(msg):
             raise Exception(f"Topic {lidar_topic[i]} is not a pointcloud type")
 
     # Package into a numpy array
