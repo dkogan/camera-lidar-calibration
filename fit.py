@@ -322,7 +322,7 @@ plotradius = nps.transpose(np.arange(Nsensors) + 10)
 ones = np.ones( (args.Nsectors,) )
 
 filename = '/tmp/observability.pdf'
-gp.plot( (th,                 # angle
+clc.plot( (th,                # angle
           plotradius*ones,    # radius
           ones*dth*angular_width_ratio, # angular width of slice
           ones*0.9,           # depth of slice
@@ -337,12 +337,11 @@ gp.plot( (th,                 # angle
          title = 'Observability map of each sensor',
          hardcopy = filename,
         )
-print(f"Wrote '{filename}'")
 
 stdev_worst_per_sector = result['stdev_worst_per_sector']
 i = stdev_worst_per_sector != 0
 filename = '/tmp/uncertainty.pdf'
-gp.plot( (th[i],                 # angle
+clc.plot( (th[i],                # angle
           10.*ones[i],           # radius
           ones[i]*dth*0.9,       # angular width of slice
           ones[i]*0.9,           # depth of slice
@@ -356,11 +355,10 @@ gp.plot( (th[i],                 # angle
          title = f'Worst-case uncertainty at {result["uncertainty_quantification_range"]}m. Put the board in high-uncertainty regions',
          hardcopy = filename,
         )
-print(f"Wrote '{filename}'")
 
 observations_per_sector = result['observations_per_sector']
 filename = '/tmp/observations_per_sector.pdf'
-gp.plot( (th,                 # angle
+clc.plot( (th,                # angle
           10.*ones,           # radius
           ones*dth*0.9,       # angular width of slice
           ones*0.9,           # depth of slice
@@ -374,5 +372,4 @@ gp.plot( (th,                 # angle
          title = 'Observations per sector',
          hardcopy = filename,
         )
-print(f"Wrote '{filename}'")
 
