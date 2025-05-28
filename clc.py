@@ -209,31 +209,33 @@ def plot(*args,
         print(f"Wrote '{hardcopy}'")
 
 
-def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
+def get_pointcloud_plot_tuples(bag, lidar_topics,
                                rt_lidar0_lidar,
                                *,
-                               isensor_from_itopic                  = None,
-                               Rt_vehicle_lidar0                    = None,
-                               start                                = None):
+                               threshold_range     = None,
+                               isensor_from_itopic = None,
+                               Rt_vehicle_lidar0   = None,
+                               start               = None):
 
     try:
         pointcloud_msgs = \
             [ next(bag_interface.messages(bag, (topic,),
                                           start = start)) \
-              for topic in lidar_topic ]
+              for topic in lidar_topics ]
     except:
-        raise Exception(f"Bag '{bag}' doesn't have at least one message for each of {lidar_topic} in the requested time span")
+        raise Exception(f"Bag '{bag}' doesn't have at least one message for each of {lidar_topics} in the requested time span")
 
     for i,msg in enumerate(pointcloud_msgs):
         if not _is_message_pointcloud(msg):
-            raise Exception(f"Topic {lidar_topic[i]} is not a pointcloud type")
+            raise Exception(f"Topic {lidar_topics[i]} is not a pointcloud type")
 
     # Package into a numpy array
     pointclouds = [ msg['array']['xyz'].astype(float) \
                     for msg in pointcloud_msgs ]
 
     # Throw out everything that's too far, in the LIDAR's own frame
-    pointclouds = [ p[ nps.mag(p) < threshold ] for p in pointclouds ]
+    if threshold_range is not None:
+        pointclouds = [ p[ nps.mag(p) < threshold_range ] for p in pointclouds ]
 
     if isensor_from_itopic is not None:
         pointclouds = \
@@ -249,7 +251,7 @@ def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
                        for p in pointclouds]
 
     data_tuples = [ ( p, dict( tuplesize = -3,
-                               legend    = lidar_topic[i],
+                               legend    = lidar_topics[i],
                                _with     = f'points pt 7 ps 1 lc rgb "{color_sequence_rgb[i%len(color_sequence_rgb)]}"')) \
                     for i,p in enumerate(pointclouds) ]
 

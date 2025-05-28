@@ -94,9 +94,10 @@ import clc
 rt_lidar0_lidar = [mrcal.cameramodel(f).extrinsics_rt_toref() for f in args.lidar_models]
 
 data_tuples = \
-    clc.get_pointcloud_plot_tuples(args.bag, args.topic, args.threshold,
+    clc.get_pointcloud_plot_tuples(args.bag, args.topic,
                                    rt_lidar0_lidar,
-                                   start = args.after)
+                                   threshold_range = args.threshold,
+                                   start           = args.after)
 
 
 plotkwargs = dict(hardcopy = args.hardcopy,
