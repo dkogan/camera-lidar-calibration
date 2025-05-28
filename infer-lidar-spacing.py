@@ -49,14 +49,14 @@ args = parse_args()
 
 
 
-import bag_interface
+import clc.bag_interface
 import numpy as np
 import numpysane as nps
 
 
 msg_iter = \
-    bag_interface.messages(args.bag, (args.topic,),
-                           ignore_unknown_message_types = True)
+    clc.bag_interface.messages(args.bag, (args.topic,),
+                               ignore_unknown_message_types = True)
 
 msg = next(msg_iter)
 

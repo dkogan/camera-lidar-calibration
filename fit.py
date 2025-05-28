@@ -30,7 +30,7 @@ single frame (one set of images, LIDAR revolutions) of a stationary scene
 
 import sys
 import argparse
-import argparse_helpers
+import clc.argparse_helpers
 import re
 import os
 
@@ -125,7 +125,7 @@ def parse_args():
                         with a bigger time differences than this are thrown out;
                         the WHOLE snapshot''')
     parser.add_argument('--rt-vehicle-lidar0',
-                        type=argparse_helpers.comma_separated_list_of_floats,
+                        type=clc.argparse_helpers.comma_separated_list_of_floats,
                         help='''Used in the uncertainty quantification. The
                         vehicle-lidar0 transform. The solve is always done in
                         lidar0 coordinates, but we the uncertainty

@@ -4,7 +4,7 @@ r'''LIDAR point-cloud-segmentation test suite
 
 SYNOPSIS
 
-  $ ./lidar-segmentation-auto-test.py testdata/     \
+  $ ./test-lidar-segmentation.py testdata/     \
     ....
     All tests passed
 
@@ -33,6 +33,9 @@ def parse_args():
     return args
 args = parse_args()
 
+testdir = os.path.dirname(os.path.realpath(__file__))
+# I import the LOCAL clc since that's what I'm testing
+sys.path[:0] = f"{testdir}/..",
 
 import numpy as np
 import numpysane as nps

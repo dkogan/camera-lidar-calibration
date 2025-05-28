@@ -16,7 +16,6 @@ Displays the point clouds in the lidar0 coord system
 
 import sys
 import argparse
-import argparse_helpers
 import re
 import os
 

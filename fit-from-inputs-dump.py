@@ -8,7 +8,7 @@ For debugging
 
 import sys
 import argparse
-import argparse_helpers
+import clc.argparse_helpers
 import re
 import os
 
@@ -32,7 +32,7 @@ def parse_args():
                         previous fit_seed() result if no --inject-noise or from
                         the previous fit() result if --inject-noise''')
     parser.add_argument('--exclude',
-                        type=argparse_helpers.comma_separated_list_of_non_negative_integers,
+                        type=clc.argparse_helpers.comma_separated_list_of_non_negative_integers,
                         help = '''Optional comma-separated list of integers >=
                         0. If given, exclude these snapshots''')
     parser.add_argument('--verbose',
@@ -58,8 +58,6 @@ import numpysane as nps
 import pickle
 import clc
 import mrcal
-
-import testutils
 
 with open(args.context, "rb") as f:
     try:

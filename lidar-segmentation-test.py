@@ -92,7 +92,7 @@ if args.dump or \
    args.debug_ymin <  1e10 or \
    args.debug_ymax > -1e10:
     # Write the planes out to stdout, in a way that can be cut/pasted into
-    # lidar-segmentation-auto-test.py
+    # test/test-lidar-segmentation.py
     plane_p = segmentation['plane_p']
     plane_n = segmentation['plane_n']
     for i in range(len(plane_p)):

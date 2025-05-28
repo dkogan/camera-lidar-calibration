@@ -34,22 +34,22 @@ LIB_SOURCES += lidar-segmentation.c clc.c mrgingham-c-bridge.cc opencv-c-bridge.
 clc-pywrap.o: CFLAGS += $(PY_MRBUILD_CFLAGS)
 clc-pywrap.o: $(addsuffix .h,$(wildcard *.docstring))
 
-_clc$(PY_EXT_SUFFIX): clc-pywrap.o libclc.so
+clc/_clc$(PY_EXT_SUFFIX): clc-pywrap.o libclc.so
 	$(PY_MRBUILD_LINKER) $(PY_MRBUILD_LDFLAGS) $(LDFLAGS) $^ -o $@
 
 mrgingham-c-bridge.o: CXXFLAGS += -I/usr/include/mrgingham -I/usr/include/opencv4/
 opencv-c-bridge.o:    CXXFLAGS += -I/usr/include/opencv4/
 
-DIST_PY3_MODULES := _clc$(PY_EXT_SUFFIX)
+DIST_PY3_MODULES := clc
 
-all: _clc$(PY_EXT_SUFFIX)
+all: clc/_clc$(PY_EXT_SUFFIX)
 
 
 
 # rules to build the tests. The tests are conducted via test.sh
-test-bitarray: test-bitarray.c bitarray.h
-tests:  test-bitarray
+BIN_SOURCES += \
+	test/test-bitarray.c
 
-.PHONY: tests
+$(BIN_SOURCES:.c=.o): CFLAGS += -I.
 
 include $(MRBUILD_MK)/Makefile.common.footer

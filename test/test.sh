@@ -2,7 +2,7 @@
 
 set -e
 
-DIR=$1
+DIR=${1:A}
 if { [[ -z "$DIR" ]] } {
     echo "Usage: $0 DIRECTORY_TEST_DATA" > /dev/stderr;
     exit 1;
@@ -13,12 +13,17 @@ if {! [[ -d "$DIR" ]]} {
     exit 1;
 }
 
-make all tests || exit 1
+THISDIR=${0:A:h}
+CLCDIR=${THISDIR:h}
+
+cd $CLCDIR
+
+make || exit 1
 
 Nfailed=0
 
 echo "====== running test-bitarray"
-./test-bitarray || Nfailed=$((Nfailed+1))
+test/test-bitarray || Nfailed=$((Nfailed+1))
 
 test -x test_private.sh && Nfailed=$(./test_private)
 
@@ -36,7 +41,7 @@ bag_glob="$DIR/2023-10-19/one*.bag"
   --topic /lidar/velodyne_front_horiz_points,/lidar/velodyne_front_tilted_points,/lidar/multisense_front/left/image_mono,/lidar/multisense_front/right/image_mono,/lidar/multisense_front/aux/image_color \
   --bag $bag_glob \
   $models && \
-./test-transformation-uncertainty.py \
+test/test-transformation-uncertainty.py \
   --topic /lidar/velodyne_front_horiz_points,/lidar/multisense_front/left/image_mono \
   --isector 3 \
   --Nsamples 40 \
@@ -51,7 +56,7 @@ bag_glob="$DIR/2023-10-19/one*.bag"
 
 
 
-./lidar-segmentation-auto-test.py $DIR \
+test/test-lidar-segmentation.py $DIR \
 || Nfailed=$((Nfailed+1))
 
 

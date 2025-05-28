@@ -67,6 +67,10 @@ def parse_args():
 
 args = parse_args()
 
+testdir = os.path.dirname(os.path.realpath(__file__))
+# I import the LOCAL clc since that's what I'm testing
+sys.path[:0] = f"{testdir}/..",
+
 import pickle
 import numpy as np
 import numpysane as nps

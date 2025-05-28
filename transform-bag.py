@@ -86,7 +86,6 @@ import rosbags
 import rosbags.rosbag2
 from pathlib import Path
 import numpy as np
-import bag_interface
 
 try:
     import transforms3d

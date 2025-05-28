@@ -85,7 +85,7 @@ args = parse_args()
 import fnmatch
 import rosbags
 import rosbags.rosbag2
-import bag_interface
+import clc.bag_interface
 from typing import TypeVar
 import importlib
 import numpy as np
@@ -177,7 +177,7 @@ def to_native(msg: object) -> object:
 
 
 
-topics_all = bag_interface.topics(args.bag)
+topics_all = clc.bag_interface.topics(args.bag)
 topics = fnmatch.filter(topics_all, args.lidar_topic)
 print(f"Reading topics {topics}")
 
@@ -220,7 +220,7 @@ with rosbags.rosbag2.Reader(args.bag) as reader:
 # sequence of events is monotonically increasing, and that all the topics
 # cross each period threshold together
 print(topics)
-for msg in bag_interface.messages(args.bag, topics):
+for msg in clc.bag_interface.messages(args.bag, topics):
     t = msg["time_ns"]
     if not t_0:
         t_0 = t

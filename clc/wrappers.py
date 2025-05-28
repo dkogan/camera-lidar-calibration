@@ -5,9 +5,9 @@ import numpy as np
 import numpysane as nps
 import os
 
-import _clc
+import clc._clc as _clc
 import mrcal
-import bag_interface
+import clc.bag_interface
 
 def lidar_segmentation(*,
                        bag, lidar_topic,
@@ -24,8 +24,8 @@ def lidar_segmentation(*,
         if not os.path.exists(bag):
             raise Exception(f"Bag path '{bag}' does not exist")
 
-        array = next(bag_interface.messages(bag, (lidar_topic,),
-                                            start = start))['array']
+        array = next(clc.bag_interface.messages(bag, (lidar_topic,),
+                                                start = start))['array']
 
         points = array['xyz']
         rings  = array['ring']
@@ -84,11 +84,11 @@ def _sorted_sensor_snapshots(bags, topics,
         # Each bag is a snapshot in time. We take the first set of messages (one
         # per topic) from each bag
         messages_bags = \
-            [bag_interface.first_message_from_each_topic(bag, topics,
-                                                         start = start,
-                                                         stop  = stop,
-                                                         max_time_spread_s = max_time_spread_s,
-                                                         verbose = verbose) \
+            [clc.bag_interface.first_message_from_each_topic(bag, topics,
+                                                             start = start,
+                                                             stop  = stop,
+                                                             max_time_spread_s = max_time_spread_s,
+                                                             verbose = verbose) \
              for bag in bags]
 
         # each snapshot in messages_bags maybe None (if no usable data in a bag
@@ -118,7 +118,7 @@ def _sorted_sensor_snapshots(bags, topics,
         # slurp an iterator into a list. This wastes memory, but saves me some
         # coding time today
         messages_bags = \
-            list( bag_interface. \
+            list( clc.bag_interface. \
                   first_message_from_each_topic_in_time_segments(bag, topics,
                                                                  start    = start,
                                                                  stop     = stop,
@@ -447,8 +447,8 @@ Plot tuples passable to gnuplotlib.plot() as in the SYNOPSIS above.
     '''
     try:
         pointcloud_msgs = \
-            [ next(bag_interface.messages(bag, (topic,),
-                                          start = start)) \
+            [ next(clc.bag_interface.messages(bag, (topic,),
+                                              start = start)) \
               for topic in lidar_topics ]
     except:
         raise Exception(f"Bag '{bag}' doesn't have at least one message for each of {lidar_topics} in the requested time span")

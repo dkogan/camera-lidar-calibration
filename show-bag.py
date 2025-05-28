@@ -199,11 +199,11 @@ def bags():
             yield(bag)
 
 
-import bag_interface
+import clc.bag_interface
 
 if args.timeline is None and args.topic is None:
     for bag in bags():
-        bag_interface.print_info(bag)
+        clc.bag_interface.print_info(bag)
     sys.exit()
 
 
@@ -219,7 +219,7 @@ if args.timeline is not None:
     bag = args.bags[0]
 
     if args.topic is None:
-        topics = bag_interface.topics(bag)
+        topics = clc.bag_interface.topics(bag)
     else:
         topics = args.topic.split(',')
 
@@ -237,7 +237,7 @@ if args.timeline is not None:
 
     t0       = None
     duration = args.timeline
-    messages = bag_interface.messages(bag, topics,
+    messages = clc.bag_interface.messages(bag, topics,
                                       start = args.after,
                                       stop  = args.before,
                                       ignore_unknown_message_types = True)
@@ -263,7 +263,7 @@ if args.timeline is not None:
 
     ytics = ','.join( [ f'"{t}" {i}' for i,t in enumerate(topics)])
     timestamps = np.array(timestamps)
-    t0 = bag_interface.info(bag)['t0']/1e9
+    t0 = clc.bag_interface.info(bag)['t0']/1e9
     timestamps[:,0] -= t0
     gp.plot( timestamps,
              tuplesize = -2,
@@ -378,13 +378,13 @@ topic = args.topic
 for bag in bags():
 
     if args.decimation_period is not None:
-        msg_iterator = bag_interface. \
+        msg_iterator = clc.bag_interface. \
             first_message_from_each_topic_in_time_segments(bag, (topic,),
                                                            period_s = args.decimation_period,
                                                            start = args.after,
                                                            stop  = args.before)
     else:
-        msg_iterator = ( bag_interface. \
+        msg_iterator = ( clc.bag_interface. \
                          first_message_from_each_topic(bag, (topic,),
                                                        start = args.after,
                                                        stop  = args.before), )
