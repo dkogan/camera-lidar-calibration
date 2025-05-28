@@ -792,7 +792,9 @@ static bool plane_from_segment_segment(// out
     clc_point3f_t n0 = cross(dp,s0->v);
     clc_point3f_t n1 = cross(dp,s1->v);
 
-    if(!is_same_direction(n0,n1,ctx))
+    if(!DEBUG_ON_TRUE_SEGMENT(is_same_direction(n0,n1,ctx),
+                              iring1,isegment,
+                              "cross-ring segments have unaligned normals") )
         return false;
 
     plane_unnormalized->n_unnormalized = mean(n0,n1);
