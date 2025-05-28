@@ -207,13 +207,13 @@ def plot(*args,
         print(f"Wrote '{hardcopy}'")
 
 
-def get_pointcloud_plot_tuples(bag, lidar_topics,
-                               rt_lidar0_lidar,
-                               *,
-                               threshold_range     = None,
-                               isensor_from_itopic = None,
-                               Rt_vehicle_lidar0   = None,
-                               start               = None):
+def pointcloud_plot_tuples(bag, lidar_topics,
+                           rt_lidar0_lidar,
+                           *,
+                           threshold_range     = None,
+                           isensor_from_itopic = None,
+                           Rt_vehicle_lidar0   = None,
+                           start               = None):
 
     try:
         pointcloud_msgs = \

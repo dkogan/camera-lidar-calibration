@@ -172,12 +172,13 @@ p0_lidar0 = mrcal.transform_point_Rt(Rt_vehicle_lidar0, p0_vehicle,
 
 if args.ellipsoids:
     psphere = get_psphere(scale = 10.) # 10x ellipses to improve legibility
-    data_tuples = \
-        clc.get_pointcloud_plot_tuples(args.bag, args.topic,
-                                       context['result']['rt_lidar0_lidar'],
-                                       threshold_range   = args.threshold,
-                                       Rt_vehicle_lidar0 = Rt_vehicle_lidar0,
-                                       start = args.after)
+
+    plot_tuples = \
+        clc.pointcloud_plot_tuples(args.bag, args.topic,
+                                   context['result']['rt_lidar0_lidar'],
+                                   threshold_range   = args.threshold,
+                                   Rt_vehicle_lidar0 = Rt_vehicle_lidar0,
+                                   start = args.after)
 
     for isensor_requested,topic_requested in enumerate(args.topic):
         isensor_solve = isensor_solve_from_isensor_requested[isensor_requested]
