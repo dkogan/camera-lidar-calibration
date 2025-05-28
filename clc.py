@@ -171,6 +171,118 @@ def calibrate(*,
               verbose           = False,
               exclude_time_periods = [],
               **kwargs):
+
+    r'''Re-runs a previously-dumped calibration
+
+SYNOPSIS
+
+    result = clc.calibrate(bags   = bags,
+                           topics = topics,
+                           ...)
+
+    with open('clc.dump', 'wb') as f:
+        f.write(result['inputs_dump'])
+
+    ....
+
+    with open('clc.dump', "rb") as f:
+        dump = f.read()
+
+    result = clc.fit_from_inputs_dump(dump)
+
+CLC has a lot of complexity, and it's very useful to be able to rerun previous
+computations to find and fix issues. Solve state can be dumped using the
+"buf_inputs_dump" argument in the C clc() function, or it can be obtained in the
+binary clc.calibrate(....)['inputs_dump'] in the Python API.
+
+The dump can be loaded and re-solved by calling clc_fit_from_inputs_dump() in
+the C API or clc.fit_from_inputs_dump() in the Python API.
+
+This dump/replay infrastructure exercises the solve only. The LIDAR point
+segmentation is NOT a part of this tooling: the dump contains already-segmented
+points.
+
+These functions load the previous solve state, and re-run the fit from it. Some
+small tweaks to the solve are available:
+
+- The do_fit_seed argument allows the seed solve to be re-run, or the dumped
+  seed output to be used instead
+
+- The do_inject_noise argument allows noise to be added to the input. This is
+  useful for validation of the uncertainty-quantification routine
+
+These two arguments work together. The full logic:
+
+  if(!do_fit_seed && !do_inject_noise) {
+    fit from the previous fit_seed() result; do NOT fit_seed()
+    Useful to experiment with the fit() routine.
+  }
+
+  if(!do_fit_seed &&  do_inject_noise) {
+    fit from the previous fit() result; do NOT fit_seed()
+
+    Useful to test the uncertainty logic. Many noise samples will be taken, with
+    a separate fit() for each. Fitting from the dumped fit() result makes each
+    solve converge very quickly, since we will start very close to the optimum
+  }
+
+  if(do_fit_seed) {
+    fit_seed() && fit()
+    Useful to experiment with fit_seed() and the full fit pipeline
+  }
+
+The other arguments are described below
+
+ARGUMENTS
+
+- inputs_dump: a Python "bytes" object, containing the binary dump of the solve
+  inputs. This comes from either a .pickle file from "fit.py --dump" or from the
+  buf_inputs_dump argument to the clc_...() C functions
+
+- isnapshot_exclude: optional iterable of integers. Each snapshot in this list
+  will NOT be a part of the solve
+
+- fit_seed_position_err_threshold
+- fit_seed_cos_angle_err_threshold
+
+  Optional values to customize the behavior of fit_seed()
+
+- do_inject_noise: optional boolean, defaulting to False. If True, we inject
+  some expected noise into the inputs. See above for details.
+
+- do_fit_seed: optional boolean, defaulting to False. If True, we re-run
+  fit_seed(). By default we use the dumped result of fit_seed() instead. See
+  above for details.
+
+- verbose: optional boolean, defaulting to False. If True, verbose output about
+  the solve is produced on stdout
+
+- do_skip_plots: optional boolean, defaulting to True. If True, we do NOT
+  produce plots of the results
+
+RETURNED VALUE
+
+A dict describing the result. The items are:
+
+- rt_lidar0_lidar:      A (Nlidars,6) numpy array containing rt transforms
+                        mapping points in each lidar frame to the frame of
+                        lidar0
+
+- rt_lidar0_camera:     A (Ncameras,6) numpy array containing rt transforms
+                        mapping points in each camera frame to the frame of
+                        lidar0
+
+- Var_rt_lidar0_sensor: A (Nsensors_optimized, 6, Nsensors_optimized, 6)
+                        symmetric numpy array representing the 1-sigma
+                        uncertainty of the solution due to the expected noise in
+                        the inputs. Nsensors_optimized counts the number of
+                        sensors in the optimization problem: Nsensors_optimized
+                        = Nlidars + Ncameras - 1. Lidar0 is always at the
+                        reference frame, and thus is not a part of the
+                        optimization.
+
+'''
+
     return _clc.calibrate( _sorted_sensor_snapshots(bags, topics,
                                                     decimation_period = decimation_period,
                                                     start             = start,
@@ -185,6 +297,50 @@ def calibrate(*,
 
 
 def color_sequence_rgb():
+    r'''Returns the default color sequence for gnuplot objects
+
+SYNOPSIS
+
+    clc.color_sequence_rgb()
+    ===> ('#9400d3', '#009e73', '#56b4e9', '#e69f00', '#f0e442', '#0072b2', '#e51e10', '#000000')
+
+
+    import gnuplotlib as gp
+    colors = clc.color_sequence_rgb()
+    gp.plot( equation = ( 'x   notitle axis x1y1',
+                          'x*x notitle axis x1y2'),
+             _set     = (f'ytics  textcolor rgb "{colors[0]}"',
+                         f'ylabel "line" textcolor "{colors[0]}"',
+                         f'y2tics textcolor rgb "{colors[1]}"',
+                         f'y2label "parabola" textcolor "{colors[1]}"',
+                         ),
+             wait = 1)
+
+    [ plot pops up showing a line against the left y axis and a parabola against  ]
+    [ the right y axis; the color of the line matches the left-y-axis labels; the ]
+    [ the color of the parabola matches the right-y-axis labels                   ]
+
+Gnuplot uses a specific sequence of colors for each data object being plotted.
+This function returns this sequence in an iterable, each color represented by a
+'#RRGGBB' string. This is useful if we want to match the color of the plotted
+data to the color of some other objects in the plot
+
+This is obtained by running
+
+  $ gnuplot -e 'show linetype'"
+
+Any named colors reported here are defined in gnuplot/src/tables.c.
+
+ARGUMENTS
+
+None
+
+RETURNED VALUE
+
+An iterable of strings for each color, in order.
+
+    '''
+
     return ("#9400d3",
             "#009e73",
             "#56b4e9",
@@ -198,7 +354,27 @@ def color_sequence_rgb():
 def plot(*args,
          hardcopy = None,
          **kwargs):
-    r'''Wrapper for gp.plot(), but printing out where the hardcopy went'''
+    r'''Wrapper for gnuplotlib.plot(), reporting the hardcopy output to the console
+
+SYNOPSIS
+
+    clc.plot(....,
+             hardcopy = '/tmp/plot.svg')
+
+    ===> Wrote '/tmp/plot.svg'
+
+This is a thin wrapper to gnuplotlib.plot(). If we're writing a hardcopy,
+clc.plot() will report the hardcopy name to the console.
+
+ARGUMENTS
+
+All args and kwargs forwarded to gnuplotlib.plot() unmodified
+
+RETURNED VALUE
+
+Whatever gnuplotlib.plot() returned
+
+    '''
 
     import gnuplotlib as gp
     gp.plot(*args, **kwargs,
@@ -215,6 +391,60 @@ def pointcloud_plot_tuples(bag, lidar_topics,
                            Rt_vehicle_lidar0   = None,
                            start               = None):
 
+    r'''Helper function for visualizing LIDAR data
+
+SYNOPSIS
+
+    import gnuplotlib as gp
+
+    data_tuples = \
+        clc.pointcloud_plot_tuples(bag, lidar_topics,
+                                   rt_lidar0_lidar,
+                                   threshold_range = threshold_range)
+
+    plotkwargs = dict(....)
+
+    # Can add to the data_tuples here, to plot more stuff
+
+    gp.plot(*data_tuples, **plotkwargs)
+
+CLC usually keeps track of the raw LIDAR data, the geometric transforms between
+the LIDARs and between the base LIDAR and the vehicle. This function contains
+all the common logic applying the various transforms to the raw data, to make
+them available for plotting.
+
+ARGUMENTS
+
+- bag: a string containing a path to the rosbag with the data we're plotting.
+  Uses the "rosbags" library to interpret this, so generally ROS1 and ROS2 are
+  supported
+
+- lidar_topics: an iterable of strings for the ROSs topics we're visualizing
+
+- rt_lidar0_lidar: a (Nlidars,6) numpy array. Each row i is a (6,) array
+  containing an rt transform FROM the coord system of LIDAR i to the coord
+  system of LIDAR 0
+
+- threshold_range: optional distance, in m. If given, all points further from
+  the sensor than this threshold are culled in the visualization
+
+- isensor_from_itopic: optional map to/from integers. If given, associates topic
+  lidar_topics[itopic] with transform rt_lidar0_lidar[
+  isensor_from_itopic[ilidar] ]. If omitted or None, an identity mapping is
+  assumed: lidar_topics[itopic] goes with rt_lidar0_lidar[itopic]
+
+- Rt_vehicle_lidar0: optional (4,3) numpy array (an Rt transform), mapping
+  points in the lidar0 coord system to the vehicle coord system.
+
+- start: optional timestamp. If given, we visualize the first message for each
+  topic in the bag AFTER the given timestamp. If omitted, we take the first
+  message.
+
+RETURNED VALUE
+
+Plot tuples passable to gnuplotlib.plot() as in the SYNOPSIS above.
+
+    '''
     try:
         pointcloud_msgs = \
             [ next(bag_interface.messages(bag, (topic,),
@@ -256,49 +486,57 @@ def pointcloud_plot_tuples(bag, lidar_topics,
     return data_tuples
 
 
-def transformation_covariance_decomposed( # shape (...,3)
-                                          p0,
-                                          rt_lidar0_lidar,
-                                          rt_lidar0_camera,
-                                          isensor,
-                                          Var):
+def sensor_forward_vectors_plot_tuples(rt_ref_lidar,
+                                       rt_ref_camer1a,
+                                       topics,
+                                       *,
+                                       isensor = None):
 
-    if isensor <= 0:
-        raise Exception("Must have isensor>0 because isensor==0 is the reference frame, and has no covariance")
+    r'''Helper function for visualizing sensor poses
 
-    Nlidars = len(rt_lidar0_lidar)
-    if isensor < Nlidars: rt_lidar0_sensor = rt_lidar0_lidar [isensor]
-    else:                 rt_lidar0_sensor = rt_lidar0_camera[isensor-Nlidars]
+SYNOPSIS
 
-    # shape (...,3)
-    p1 = \
-        mrcal.transform_point_rt(rt_lidar0_sensor, p0, inverted=True)
+    import gnuplotlib as gp
 
-    # shape (...,3,6)
-    _,dp0__drt_lidar01,_ = \
-        mrcal.transform_point_rt(rt_lidar0_sensor, p1,
-                                 get_gradients = True)
+    result = clc.calibrate(...)
 
-    # shape (6,6)
-    Var_rt_lidar01 = Var[isensor-1,:,
-                         isensor-1,:]
+    rt_ref_lidar  = result['rt_lidar0_lidar']
+    rt_ref_camera = result['rt_lidar0_camera']
 
-    # shape (...,3,3)
-    Var_p0 = nps.matmult(dp0__drt_lidar01,
-                         Var_rt_lidar01,
-                         nps.transpose(dp0__drt_lidar01))
+    sensor_forward_vectors_plot_tuples = \
+        clc.sensor_forward_vectors_plot_tuples(rt_ref_lidar,
+                                               rt_ref_camera,
+                                               topics)
 
-    # shape (...,3) and (...,3,3)
-    l,v = mrcal.sorted_eig(Var_p0)
+    gp.plot( *sensor_forward_vectors_plot_tuples,
+             ... )
 
-    return l,v
+This function provides the gnuplotlib directives to display the "forward"
+direction at the sensor location of all the sensors in a 2D plot in the
+horizontal xy plane of the lidar0 frame. Each sensor is labelled. If given, the
+sensor "isensor" is highlighted in red.
+
+ARGUMENTS
 
 
-def get_data_tuples_sensor_forward_vectors(rt_ref_lidar,
-                                           rt_ref_camera,
-                                           topics,
-                                           *,
-                                           isensor = None):
+- rt_ref_lidar: a (Nlidars,6) numpy array. Each row i is a (6,) array containing
+  an rt transform FROM the coord system of LIDAR i to the reference coord system
+  (lidar0)
+
+- rt_ref_camera: a (Ncameras,6) numpy array. Each row i is a (6,) array
+  containing an rt transform FROM the coord system of CAMERA i to the reference
+  coord system (lidar0)
+
+- topics: a list of strings, used to label each sensor. The number of strings
+  must match the number of sensors: len(rt_ref_lidar) + len(rt_ref_camera)
+
+- isensor: optional integer, indicating which sensor should be highlighted. If
+  given, this sensor's direction and label are shown in red
+
+RETURNED VALUE
+
+The gnuplotlib tuples, passable to gnuplotlib.plot()
+    '''
 
     if len(rt_ref_lidar)+len(rt_ref_camera) != len(topics):
         raise Exception("Mismatched transform/topic counts")

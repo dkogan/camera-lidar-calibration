@@ -304,10 +304,10 @@ if args.dump is not None:
 
 
 
-data_tuples_sensor_forward_vectors = \
-    clc.get_data_tuples_sensor_forward_vectors(rt_ref_lidar,
-                                               rt_ref_camera,
-                                               context['topics'])
+sensor_forward_vectors_plot_tuples = \
+    clc.sensor_forward_vectors_plot_tuples(rt_ref_lidar,
+                                           rt_ref_camera,
+                                           context['topics'])
 
 
 
@@ -329,7 +329,7 @@ clc.plot( (th,                # angle
           isvisible_per_sensor_per_sector,
           dict(_with = 'sectors palette fill solid',
                tuplesize = 5)),
-         *data_tuples_sensor_forward_vectors,
+         *sensor_forward_vectors_plot_tuples,
          _xrange = (-10-Nsensors,10+Nsensors),
          _yrange = (-10-Nsensors,10+Nsensors),
          square = True,
@@ -348,7 +348,7 @@ clc.plot( (th[i],                # angle
           stdev_worst_per_sector[i],
           dict(tuplesize = 5,
                _with = 'sectors palette fill solid')),
-         *data_tuples_sensor_forward_vectors,
+         *sensor_forward_vectors_plot_tuples,
          _xrange = (-11,11),
          _yrange = (-11,11),
          square = True,
@@ -365,7 +365,7 @@ clc.plot( (th,                # angle
           observations_per_sector,
           dict(tuplesize = 5,
                _with = 'sectors palette fill solid')),
-         *data_tuples_sensor_forward_vectors,
+         *sensor_forward_vectors_plot_tuples,
          _xrange = (-11,11),
          _yrange = (-11,11),
          square = True,

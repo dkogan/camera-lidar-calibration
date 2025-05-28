@@ -1,1 +1,108 @@
-xxx
+Re-runs a previously-dumped calibration
+
+SYNOPSIS
+
+    result = clc.calibrate(bags   = bags,
+                           topics = topics,
+                           ...)
+
+    with open('clc.dump', 'wb') as f:
+        f.write(result['inputs_dump'])
+
+    ....
+
+    with open('clc.dump', "rb") as f:
+        dump = f.read()
+
+    result = clc.fit_from_inputs_dump(dump)
+
+CLC has a lot of complexity, and it's very useful to be able to rerun previous
+computations to find and fix issues. Solve state can be dumped using the
+"buf_inputs_dump" argument in the C clc() function, or it can be obtained in the
+binary clc.calibrate(....)['inputs_dump'] in the Python API.
+
+The dump can be loaded and re-solved by calling clc_fit_from_inputs_dump() in
+the C API or clc.fit_from_inputs_dump() in the Python API.
+
+This dump/replay infrastructure exercises the solve only. The LIDAR point
+segmentation is NOT a part of this tooling: the dump contains already-segmented
+points.
+
+These functions load the previous solve state, and re-run the fit from it. Some
+small tweaks to the solve are available:
+
+- The do_fit_seed argument allows the seed solve to be re-run, or the dumped
+  seed output to be used instead
+
+- The do_inject_noise argument allows noise to be added to the input. This is
+  useful for validation of the uncertainty-quantification routine
+
+These two arguments work together. The full logic:
+
+  if(!do_fit_seed && !do_inject_noise) {
+    fit from the previous fit_seed() result; do NOT fit_seed()
+    Useful to experiment with the fit() routine.
+  }
+
+  if(!do_fit_seed &&  do_inject_noise) {
+    fit from the previous fit() result; do NOT fit_seed()
+
+    Useful to test the uncertainty logic. Many noise samples will be taken, with
+    a separate fit() for each. Fitting from the dumped fit() result makes each
+    solve converge very quickly, since we will start very close to the optimum
+  }
+
+  if(do_fit_seed) {
+    fit_seed() && fit()
+    Useful to experiment with fit_seed() and the full fit pipeline
+  }
+
+The other arguments are described below
+
+ARGUMENTS
+
+- inputs_dump: a Python "bytes" object, containing the binary dump of the solve
+  inputs. This comes from either a .pickle file from "fit.py --dump" or from the
+  buf_inputs_dump argument to the clc_...() C functions
+
+- isnapshot_exclude: optional iterable of integers. Each snapshot in this list
+  will NOT be a part of the solve
+
+- fit_seed_position_err_threshold
+- fit_seed_cos_angle_err_threshold
+
+  Optional values to customize the behavior of fit_seed()
+
+- do_inject_noise: optional boolean, defaulting to False. If True, we inject
+  some expected noise into the inputs. See above for details.
+
+- do_fit_seed: optional boolean, defaulting to False. If True, we re-run
+  fit_seed(). By default we use the dumped result of fit_seed() instead. See
+  above for details.
+
+- verbose: optional boolean, defaulting to False. If True, verbose output about
+  the solve is produced on stdout
+
+- do_skip_plots: optional boolean, defaulting to True. If True, we do NOT
+  produce plots of the results
+
+RETURNED VALUE
+
+A dict describing the result. The items are:
+
+- rt_lidar0_lidar:      A (Nlidars,6) numpy array containing rt transforms
+                        mapping points in each lidar frame to the frame of
+                        lidar0
+
+- rt_lidar0_camera:     A (Ncameras,6) numpy array containing rt transforms
+                        mapping points in each camera frame to the frame of
+                        lidar0
+
+- Var_rt_lidar0_sensor: A (Nsensors_optimized, 6, Nsensors_optimized, 6)
+                        symmetric numpy array representing the 1-sigma
+                        uncertainty of the solution due to the expected noise in
+                        the inputs. Nsensors_optimized counts the number of
+                        sensors in the optimization problem: Nsensors_optimized
+                        = Nlidars + Ncameras - 1. Lidar0 is always at the
+                        reference frame, and thus is not a part of the
+                        optimization.

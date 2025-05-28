@@ -1,1 +1,33 @@
-asdf
+Reports the metadata for ALL of the lidar segmentation parameters
+
+SYNOPSIS
+
+    pprint( clc.lidar_segmentation_parameters() )
+
+    ===>
+    {'Npoints_per_rotation': {'ctype': 'int',
+                              'default': -1,
+                              'pyparse': 'i',
+                              'doc': 'How many points are reported by the LIDAR...',
+                             },
+      ...
+    }
+
+The lidar point segmentation routine contains many parameters that affect its
+behavior. These are defined in clc.h, and can be passed to the clc C library in
+the clc_lidar_segmentation_context_t structure. The Python layer makes all of
+these available in clc.lidar_segmentation_parameters() and
+clc.lidar_segmentation_default_context().
+
+This clc.lidar_segmentation_parameters() function returns all the parameter
+metadata defined in clc.h. Used to integrate these parameters into Python code,
+such as making them available as arguments to Python commandline tools.
+
+ARGUMENTS
+
+None
+
+RETURNED VALUE
+
+A dict mapping parameter names to their metadata. The metadata is a dict as
+well, with keys/values to define each parameter property

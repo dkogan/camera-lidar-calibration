@@ -1,1 +1,54 @@
-asdfxxx
+Reports the metadata for ALL of the lidar segmentation parameters
+
+SYNOPSIS
+
+    pprint( clc.lidar_segmentation_default_context() )
+
+    {'Npoints_per_rotation': -1,
+     'Npoints_per_segment': 16,
+     'Nrings': 128,
+     'debug_iring': -1,
+     'debug_xmax': -3.4028234663852886e+38,
+     'debug_xmin': 3.4028234663852886e+38,
+     'debug_ymax': -3.4028234663852886e+38,
+     'debug_ymin': 3.4028234663852886e+38,
+     'dump': 0,
+     'threshold_distance_adjacent_points_cross_segment': 0.10000000149011612,
+     'threshold_max_Ngap': 2,
+     'threshold_max_Npoints_invalid_segment': 5,
+     'threshold_max_Nsegments_in_cluster': 150,
+     'threshold_max_cos_angle_error_normal': 0.15000000596046448,
+     'threshold_max_deviation_off_segment_line': 0.05000000074505806,
+     'threshold_max_distance_across_rings': 0.4000000059604645,
+     'threshold_max_gap_Npoints': 5,
+     'threshold_max_plane_point_error_stage2': 0.05000000074505806,
+     'threshold_max_plane_point_error_stage3': 0.05000000074505806,
+     'threshold_max_plane_size': 2.5,
+     'threshold_max_range': 9.0,
+     'threshold_max_rms_fit_error': 0.019999999552965164,
+     'threshold_min_Npoints_in_segment': 7,
+     'threshold_min_Nrings_in_cluster': 3,
+     'threshold_min_Nsegments_in_cluster': 4,
+     'threshold_min_cos_angle_error_same_direction_cross_ring': 0.9961947202682495,
+     'threshold_min_cos_angle_error_same_direction_intra_ring': 0.9848077297210693,
+     'threshold_min_plane_point_error_isolation': 0.30000001192092896,
+     'threshold_min_rms_point_cloud_2nd_dimension': 0.09000000357627869}
+
+The lidar point segmentation routine contains many parameters that affect its
+behavior. These are defined in clc.h, and can be passed to the clc C library in
+the clc_lidar_segmentation_context_t structure. The Python layer makes all of
+these available in clc.lidar_segmentation_parameters() and
+clc.lidar_segmentation_default_context().
+
+This clc.lidar_segmentation_default_context() function returns a dict mappin
+each parameter name to its default value. Used to create a baseline parameter
+set, to update, and then pass on to the segmentation routine.
+
+ARGUMENTS
+
+None
+
+RETURNED VALUE
+
+A dict mapping parameter names to their default value.
+

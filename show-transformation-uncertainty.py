@@ -99,6 +99,45 @@ import clc
 
 
 
+
+
+def transformation_covariance_decomposed( # shape (...,3)
+                                          p0,
+                                          rt_lidar0_lidar,
+                                          rt_lidar0_camera,
+                                          isensor,
+                                          Var):
+    if isensor <= 0:
+        raise Exception("Must have isensor>0 because isensor==0 is the reference frame, and has no covariance")
+
+    Nlidars = len(rt_lidar0_lidar)
+    if isensor < Nlidars: rt_lidar0_sensor = rt_lidar0_lidar [isensor]
+    else:                 rt_lidar0_sensor = rt_lidar0_camera[isensor-Nlidars]
+
+    # shape (...,3)
+    p1 = \
+        mrcal.transform_point_rt(rt_lidar0_sensor, p0, inverted=True)
+
+    # shape (...,3,6)
+    _,dp0__drt_lidar01,_ = \
+        mrcal.transform_point_rt(rt_lidar0_sensor, p1,
+                                 get_gradients = True)
+
+    # shape (6,6)
+    Var_rt_lidar01 = Var[isensor-1,:,
+                         isensor-1,:]
+
+    # shape (...,3,3)
+    Var_p0 = nps.matmult(dp0__drt_lidar01,
+                         Var_rt_lidar01,
+                         nps.transpose(dp0__drt_lidar01))
+
+    # shape (...,3) and (...,3,3)
+    l,v = mrcal.sorted_eig(Var_p0)
+
+    return l,v
+
+
 def get_psphere(scale = 1.):
 
 
@@ -205,12 +244,12 @@ if args.ellipsoids:
                         nps.dummy(psphere, -2,-2,-2) * nps.dummy(stdev, axis=-2),
                         v_vehicle)[...,0,:]
 
-        data_tuples.append( ( nps.clump(pellipsoid_vehicle, n=3),
+        plot_tuples.append( ( nps.clump(pellipsoid_vehicle, n=3),
                               dict( tuplesize = -3,
                                     _with     = f'dots lc rgb "{clc.color_sequence_rgb()[isensor_solve%len(clc.color_sequence_rgb())]}"',
                                     legend = f'1-sigma uncertainty for {topic_requested}')), )
 
-    clc.plot(*data_tuples,
+    clc.plot(*plot_tuples,
          _3d = True,
          square = True,
          xlabel = 'x (vehicle)',
@@ -228,11 +267,11 @@ for isensor_requested,topic_requested in enumerate(args.topic):
     if isensor_solve == 0: continue # reference coord system
 
     # These apply to ALL the sensors, not just the ones being requested
-    data_tuples_sensor_forward_vectors = \
-        clc.get_data_tuples_sensor_forward_vectors(mrcal.compose_rt(rt_vehicle_lidar0, context['result']['rt_lidar0_lidar']),
-                                                   mrcal.compose_rt(rt_vehicle_lidar0, context['result']['rt_lidar0_camera']),
-                                                   context['kwargs_calibrate']['topics'],
-                                                   isensor = isensor_solve)
+    sensor_forward_vectors_plot_tuples = \
+        clc.sensor_forward_vectors_plot_tuples(mrcal.compose_rt(rt_vehicle_lidar0, context['result']['rt_lidar0_lidar']),
+                                               mrcal.compose_rt(rt_vehicle_lidar0, context['result']['rt_lidar0_camera']),
+                                               context['kwargs_calibrate']['topics'],
+                                               isensor = isensor_solve)
 
 
     l,v_lidar0 = \
@@ -264,7 +303,7 @@ for isensor_requested,topic_requested in enumerate(args.topic):
                _with = 'image',
                using = using),
           ),
-         *data_tuples_sensor_forward_vectors,
+         *sensor_forward_vectors_plot_tuples,
          cbmin = 0,
          cbmax = args.cbmax,
          square = True,
@@ -281,7 +320,7 @@ for isensor_requested,topic_requested in enumerate(args.topic):
                _with = 'image',
                using = using),
           ),
-         *data_tuples_sensor_forward_vectors,
+         *sensor_forward_vectors_plot_tuples,
          cbmin = 0,
          cbmax = 30,
          square = True,
