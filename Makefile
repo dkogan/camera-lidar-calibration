@@ -50,6 +50,6 @@ all: _clc$(PY_EXT_SUFFIX)
 test-bitarray: test-bitarray.c bitarray.h
 tests:  test-bitarray
 
-.PHONY: test
+.PHONY: tests
 
 include $(MRBUILD_MK)/Makefile.common.footer
