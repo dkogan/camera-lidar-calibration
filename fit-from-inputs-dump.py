@@ -53,7 +53,6 @@ def parse_args():
 
 args = parse_args()
 
-import pickle
 import numpy as np
 import numpysane as nps
 import pickle
