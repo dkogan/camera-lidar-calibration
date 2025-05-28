@@ -1586,19 +1586,19 @@ static void stage3_accumulate_points(// out
                                      uint32_t* ipoints,
                                      unsigned int max_num_ipoints,
                                      // in,out
-                                     uint64_t* bitarray_visited, // indexed by IN-RING points
+                                     uint64_t* bitarray_visited, // indexed by Nrings*Npoints_per_rotation points
                                      // in
                                      const int ipoint0, const int ipoint_increment, // in-ring
                                      const clc_plane_t* plane,
                                      const clc_point3f_t* points,
                                      const int ipoint0_in_ring, // start of this ring in the full points[] array
                                      const int Npoints_this_ring,
+                                     const int iring,
                                      // for diagnostics
-                                     const int icluster, const int iring, const int isegment,
+                                     const int icluster, const int isegment,
                                      const bool debug __attribute__((unused)),
                                      const clc_lidar_segmentation_context_t* ctx)
 {
-
     float az_rad_last = FLT_MAX; // indicate an invalid value initially
 
     clc_point3f_t dp_last = {}; // init to pacify compiler
@@ -1619,7 +1619,8 @@ static void stage3_accumulate_points(// out
             break;
         }
 
-        if( DEBUG_ON_TRUE_POINT( bitarray64_check(bitarray_visited, ipoint),
+        const int ibit = ctx->Npoints_per_rotation * iring + ipoint;
+        if( DEBUG_ON_TRUE_POINT( bitarray64_check(bitarray_visited, ibit),
                                  &points[ipoint0_in_ring + ipoint],
                                  "%d-%d: we already processed this point; accumulation stopped",
                                  iring,isegment))
@@ -1679,8 +1680,9 @@ static void stage3_accumulate_points(// out
 
         const int ipoint_lagging =
             ipoint_add_signed(ipoint, -Npoints_check_direction_step*ipoint_increment, Npoints_this_ring);
+        const int ibit_lagging = ctx->Npoints_per_rotation * iring + ipoint_lagging;
         if(Npoint_steps >= Npoints_check_direction_step &&
-           bitarray64_check(bitarray_visited, ipoint_lagging))
+           bitarray64_check(bitarray_visited, ibit_lagging))
         {
             // some bitarray64_check() succeeded here, so bitarray64_set() was
             // called at some point, so az_rad_last is valid, so Ngap is valid
@@ -1760,7 +1762,7 @@ static void stage3_accumulate_points(// out
         }
         ipoints[(*n)++] = ipoint0_in_ring + ipoint;
 
-        bitarray64_set(bitarray_visited, ipoint);
+        bitarray64_set(bitarray_visited, ibit);
         az_rad_last = az_rad;
     }
 }
@@ -2043,6 +2045,8 @@ static bool stage3_refine_cluster(// out
                                   clc_points_and_plane_t* points_and_plane,
                                   float*              max_norm2_dp,
                                   float*              eigenvalues_ascending, // 3 of these
+                                  // out,in
+                                  uint64_t* bitarray_visited,
                                   // in
                                   const int icluster,
                                   const segment_cluster_t* cluster,
@@ -2066,10 +2070,6 @@ static bool stage3_refine_cluster(// out
 
     const int Nrings_considered = iring1-iring0+1;
 
-    // I keep track of the already-visited points
-    const int Nwords_bitarray_visited = bitarray64_nwords(ctx->Npoints_per_rotation); // largest-possible size
-    uint64_t bitarray_visited[Nrings_considered][Nwords_bitarray_visited];
-
     // Start with the best-available plane estimate. This should be pretty good
     // already.
     clc_plane_t plane_out = cluster->plane;
@@ -2083,13 +2083,6 @@ static bool stage3_refine_cluster(// out
 
     points_and_plane->n = 0;
     int ipoint_set_n_prev = 0;
-
-    for(int i=0; i<Nrings_considered; i++)
-        memset(bitarray_visited[i], 0, Nwords_bitarray_visited*sizeof(uint64_t));
-
-
-
-
 
     if(Nrings_considered > 64)
     {
@@ -2124,15 +2117,16 @@ static bool stage3_refine_cluster(// out
                                  &points_and_plane->n,
                                  points_and_plane->ipoint,
                                  (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
-                                 bitarray_visited[iring-iring0],
+                                 bitarray_visited,
                                  // in
                                  ipoint0, +1,
                                  &plane_out,
                                  points,
                                  ipoint0_in_ring[iring],
                                  Npoints[iring],
+                                 iring,
                                  // for diagnostics
-                                 icluster, iring, isegment_mid,
+                                 icluster, isegment_mid,
                                  debug,
                                  ctx);
 
@@ -2180,15 +2174,16 @@ static bool stage3_refine_cluster(// out
                                  &points_and_plane->n,
                                  points_and_plane->ipoint,
                                  (int)(sizeof(points_and_plane->ipoint)/sizeof(points_and_plane->ipoint[0])),
-                                 bitarray_visited[iring-iring0],
+                                 bitarray_visited,
                                  // in
                                  ipoint_sub(ipoint0,1,Npoints[iring]), -1,
                                  &plane_out,
                                  points,
                                  ipoint0_in_ring[iring],
                                  Npoints[iring],
+                                 iring,
                                  // for diagnostics
-                                 icluster, iring, isegment_mid,
+                                 icluster, isegment_mid,
                                  debug,
                                  ctx);
         // disabling this for now; see comment at stage3_cull_bloom_and_count_non_isolated() above
@@ -2489,6 +2484,11 @@ int8_t clc_lidar_segmentation_sorted(// out
         }
 
 
+    // I keep track of the already-visited points
+    const int Nwords_bitarray_visited = bitarray64_nwords(ctx->Nrings * ctx->Npoints_per_rotation); // largest-possible size
+    uint64_t bitarray_visited[Nwords_bitarray_visited];
+    memset(bitarray_visited, 0, Nwords_bitarray_visited*sizeof(uint64_t));
+
     int8_t iplane_out = 0;
     for(int icluster=0; icluster<Nclusters; icluster++)
     {
@@ -2504,9 +2504,13 @@ int8_t clc_lidar_segmentation_sorted(// out
         float max_norm2_dp;
         float eigenvalues_ascending[3];
         bool not_rejected =
-            stage3_refine_cluster(&points_and_plane[iplane_out],
+            stage3_refine_cluster(// out
+                                  &points_and_plane[iplane_out],
                                   &max_norm2_dp,
                                   eigenvalues_ascending,
+                                  // out,in
+                                  bitarray_visited,
+                                  // in
                                   icluster,
                                   cluster,
                                   segments,
