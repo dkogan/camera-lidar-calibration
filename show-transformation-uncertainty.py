@@ -206,7 +206,7 @@ if args.ellipsoids:
 
         data_tuples.append( ( nps.clump(pellipsoid_vehicle, n=3),
                               dict( tuplesize = -3,
-                                    _with     = f'dots lc rgb "{clc.color_sequence_rgb[isensor_solve%len(clc.color_sequence_rgb)]}"',
+                                    _with     = f'dots lc rgb "{clc.color_sequence_rgb()[isensor_solve%len(clc.color_sequence_rgb())]}"',
                                     legend = f'1-sigma uncertainty for {topic_requested}')), )
 
     clc.plot(*data_tuples,

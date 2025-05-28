@@ -184,18 +184,16 @@ def calibrate(*,
 
 
 
-# from "gnuplot -e 'show linetype'"
-# Named colors are defined in gnuplot/src/tables.c
-color_sequence_rgb = (
-    "#9400d3",
-    "#009e73",
-    "#56b4e9",
-    "#e69f00",
-    "#f0e442",
-    "#0072b2",
-    "#e51e10",
-    "#000000"
-)
+def color_sequence_rgb():
+    return ("#9400d3",
+            "#009e73",
+            "#56b4e9",
+            "#e69f00",
+            "#f0e442",
+            "#0072b2",
+            "#e51e10",
+            "#000000")
+
 
 def plot(*args,
          hardcopy = None,
@@ -252,7 +250,7 @@ def get_pointcloud_plot_tuples(bag, lidar_topics,
 
     data_tuples = [ ( p, dict( tuplesize = -3,
                                legend    = lidar_topics[i],
-                               _with     = f'points pt 7 ps 1 lc rgb "{color_sequence_rgb[i%len(color_sequence_rgb)]}"')) \
+                               _with     = f'points pt 7 ps 1 lc rgb "{color_sequence_rgb()[i%len(color_sequence_rgb())]}"')) \
                     for i,p in enumerate(pointclouds) ]
 
     return data_tuples
