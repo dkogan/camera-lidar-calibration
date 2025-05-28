@@ -799,6 +799,23 @@ static bool plane_from_segment_segment(// out
 
     plane_unnormalized->n_unnormalized = mean(n0,n1);
     plane_unnormalized->p              = mean(s0->p, s1->p);
+
+    // I want angle(p,n) < threshold ->
+    // cos > cos_threshold ->
+    // inner/magp/magn > cos_threshold ->
+    // inner > cos_threshold*magp*magn ->
+    // inner*inner > cos_threshold^2*norm2p*norm2n
+    const float inner_p_n = inner(plane_unnormalized->p,
+                                  plane_unnormalized->n_unnormalized);
+    const float norm2p    = norm2(plane_unnormalized->p);
+    const float norm2n    = norm2(plane_unnormalized->n_unnormalized);
+    if(!DEBUG_ON_TRUE_SEGMENT(inner_p_n*inner_p_n > ctx->threshold_min_cos_plane_tilt_stage2*ctx->threshold_min_cos_plane_tilt_stage2*norm2n*norm2p,
+                              iring1,isegment,
+                              "cross-ring segments implies a too-tilted plane: %fdeg > %fdeg",
+                              acos(fabs(inner_p_n/sqrt(norm2p*norm2n))),
+                              acos(ctx->threshold_min_cos_plane_tilt_stage2)) )
+        return false;
+
     return true;
 }
 

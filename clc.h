@@ -226,6 +226,8 @@ typedef struct
   _(float, threshold_max_plane_point_error_stage2,       0.05,               "f","f", \
       "stage2: distance threshold to make sure each segment center lies in plane\n" \
       "Non-fitting segments are not added to the cluster") \
+  _(float, threshold_min_cos_plane_tilt_stage2,       0.5 /* 60deg */,               "f","f", \
+      "stage2: the 'tilt' is the off-head-on orientation") \
   _(float, threshold_max_plane_point_error_stage3,       0.05,              "f","f", \
       "stage3: distance threshold to make sure each point lies in the plane\n" \
       "Non-fitting points are culled from the reported plane") \
