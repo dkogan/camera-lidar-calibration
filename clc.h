@@ -233,6 +233,8 @@ typedef struct
       "Non-fitting points are culled from the reported plane") \
   _(float, threshold_min_plane_point_error_isolation,    0.3,               "f","f", \
       "stage3: points just off the edge of the detected board must fit AT LEAST this badly" ) \
+  _(int,   threshold_min_points_per_ring__multiple_Npoints_per_segment, 2, "i","i", \
+      "stage3: minimum number of points in EACH ring in the cluster; a multiple of Npoints_per_segment" ) \
   _(int,   threshold_max_Nsegments_in_cluster,           150,               "i","i", \
       "stage2: clusters with more than this many segments are rejected" ) \
   _(int,   threshold_min_Nsegments_in_cluster,           4,                 "i","i", \

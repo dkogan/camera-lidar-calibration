@@ -2215,6 +2215,8 @@ static bool stage3_refine_cluster(// out
         }
 #endif
 
+        const int Npoints_thisring = points_and_plane->n - ipoint_set_n_prev;
+
         // I don't bother to look in rings that don't appear in the
         // cluster. This will by contain not very much data (because
         // the pre-solve didn't find it), and won't be of much value
@@ -2223,9 +2225,17 @@ static bool stage3_refine_cluster(// out
             MSG("%d-%d at icluster=%d: refinement gathered %d points",
                 iring, isegment_mid,
                 icluster,
-                points_and_plane->n - ipoint_set_n_prev);
+                Npoints_thisring);
             ipoint_set_n_prev = points_and_plane->n;
         }
+
+        const int threshold = ctx->threshold_min_points_per_ring__multiple_Npoints_per_segment * ctx->Npoints_per_segment;
+        if(!DEBUG_ON_TRUE_SEGMENT(Npoints_thisring > threshold,
+                                  iring,isegment_mid,
+                                  "Ring contains too few points N=%d <= threshold=%d; giving up on the whole cluster",
+                                  Npoints_thisring, threshold))
+            return false;
+
     }
 
     if(DEBUG_ON_TRUE_POINT(points_and_plane->n == 0,
