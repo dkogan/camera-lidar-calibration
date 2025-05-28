@@ -2483,13 +2483,6 @@ int8_t clc_lidar_segmentation_sorted(// out
                                      ctx);
                     segment_t* segment = &segments[iring*Nsegments_per_rotation + isegment];
 
-                    printf("%f %f stage2-cluster-kernels-%d %f\n",
-                           segment->p.x,
-                           segment->p.y,
-                           icluster,
-                           segment->p.z);
-
-
                     for(int ipoint=segment->ipoint0;
                         ipoint <= segment->ipoint1;
                         ipoint++)
