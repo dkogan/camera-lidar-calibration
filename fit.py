@@ -295,7 +295,6 @@ for ilidar in range(len(rt_ref_lidar)):
 
 context = \
     dict(result           = result,
-         topics           = args.topics,
          kwargs_calibrate = kwargs_calibrate)
 if args.dump is not None:
     with open(args.dump, 'wb') as f:

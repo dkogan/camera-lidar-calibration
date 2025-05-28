@@ -138,9 +138,9 @@ Var_rt_lidar0_sensor = context['result']['Var_rt_lidar0_sensor']
 isensor_solve_from_isensor_requested = [None] * len(args.topic)
 for isensor_requested,topic_requested in enumerate(args.topic):
     try:
-        i = context['topics'].index(topic_requested)
+        i = context['kwargs_calibrate']['topics'].index(topic_requested)
     except:
-        print(f"Requested topic '{topic_requested}' not present in the context file '{args.context}'; topics: {context['topics']}",
+        print(f"Requested topic '{topic_requested}' not present in the context file '{args.context}'; topics: {context['kwargs_calibrate']['topics']}",
               file=sys.stderr)
         sys.exit(1)
 
@@ -231,7 +231,7 @@ for isensor_requested,topic_requested in enumerate(args.topic):
     data_tuples_sensor_forward_vectors = \
         clc.get_data_tuples_sensor_forward_vectors(mrcal.compose_rt(rt_vehicle_lidar0, context['result']['rt_lidar0_lidar']),
                                                    mrcal.compose_rt(rt_vehicle_lidar0, context['result']['rt_lidar0_camera']),
-                                                   context['topics'],
+                                                   context['kwargs_calibrate']['topics'],
                                                    isensor = isensor_solve)
 
 

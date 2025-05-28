@@ -93,8 +93,7 @@ topics = \
 
 context = \
     dict(result           = result,
-         topics           = topics,
-         kwargs_calibrate = dict())
+         kwargs_calibrate = dict(topics = topics))
 if args.dump is not None:
     with open(args.dump, 'wb') as f:
         pickle.dump( context,

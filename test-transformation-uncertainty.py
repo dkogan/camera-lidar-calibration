@@ -267,7 +267,7 @@ samples = get_sampled_results()
 if args.topics is not None:
 
     for topics in args.topics:
-        isensor = [topic_index(context['topics'],t) for t in topics]
+        isensor = [topic_index(context['kwargs_calibrate']['topics'],t) for t in topics]
 
         if len(isensor) == 1:
             if isensor[0] == 0:
