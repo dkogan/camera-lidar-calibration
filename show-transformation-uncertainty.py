@@ -175,10 +175,8 @@ if args.ellipsoids:
     data_tuples = \
         clc.get_pointcloud_plot_tuples(args.bag, args.topic, args.threshold,
                                        context['result']['rt_lidar0_lidar'],
-                                       isensor_solve_from_isensor_requested = None,
                                        Rt_vehicle_lidar0 = Rt_vehicle_lidar0,
                                        start = args.after)
-
 
     for isensor_requested,topic_requested in enumerate(args.topic):
         isensor_solve = isensor_solve_from_isensor_requested[isensor_requested]

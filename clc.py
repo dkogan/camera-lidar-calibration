@@ -212,7 +212,7 @@ def plot(*args,
 def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
                                rt_lidar0_lidar,
                                *,
-                               isensor_solve_from_isensor_requested = None,
+                               isensor_from_itopic                  = None,
                                Rt_vehicle_lidar0                    = None,
                                start                                = None):
 
@@ -235,9 +235,9 @@ def get_pointcloud_plot_tuples(bag, lidar_topic, threshold,
     # Throw out everything that's too far, in the LIDAR's own frame
     pointclouds = [ p[ nps.mag(p) < threshold ] for p in pointclouds ]
 
-    if isensor_solve_from_isensor_requested is not None:
+    if isensor_from_itopic is not None:
         pointclouds = \
-            [ mrcal.transform_point_rt(rt_lidar0_lidar[ isensor_solve_from_isensor_requested[i] ],
+            [ mrcal.transform_point_rt(rt_lidar0_lidar[ isensor_from_itopic[i] ],
                                        p) for i,p in enumerate(pointclouds) ]
     else:
         pointclouds = \
