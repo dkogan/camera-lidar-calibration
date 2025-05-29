@@ -39,7 +39,7 @@ def parse_args():
                         Could be an integer (s since epoch or ns since epoch), a
                         float (s since the epoch) or a string, to be parsed with
                         dateutil.parser.parse()''')
-    parser.add_argument('--threshold',
+    parser.add_argument('--threshold-range',
                         type=float,
                         default = 20.,
                         help = '''Max distance where we cut the plot''')
@@ -95,7 +95,7 @@ rt_lidar0_lidar = [mrcal.cameramodel(f).extrinsics_rt_toref() for f in args.lida
 plot_tuples = \
     clc.pointcloud_plot_tuples(args.bag, args.topics,
                                rt_lidar0_lidar,
-                               threshold_range = args.threshold,
+                               threshold_range = args.threshold_range,
                                start           = args.after)
 
 plotkwargs = dict(hardcopy = args.hardcopy,
