@@ -10,7 +10,7 @@ import re
 import dateutil
 
 
-def parse_timestamp_to_ns_since_epoch(t):
+def _parse_timestamp_to_ns_since_epoch(t):
     if t is None: return None
 
     if isinstance(t, str):
@@ -175,8 +175,8 @@ def messages(bag, topics,
 
         for connection, time_ns, rawdata in \
                 reader.messages( connections = connections,
-                                 start = parse_timestamp_to_ns_since_epoch(start),
-                                 stop  = parse_timestamp_to_ns_since_epoch(stop)):
+                                 start = _parse_timestamp_to_ns_since_epoch(start),
+                                 stop  = _parse_timestamp_to_ns_since_epoch(stop)):
 
             # This is GLOBAL, and WILL BREAK if I have multiple such iterators
             # going at the same time. It's not clear how to fix that
@@ -292,8 +292,8 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
                                     ignore_unknown_message_types = True)
     else:
         message_iterator = bag
-    start = parse_timestamp_to_ns_since_epoch(start)
-    stop  = parse_timestamp_to_ns_since_epoch(stop)
+    start = _parse_timestamp_to_ns_since_epoch(start)
+    stop  = _parse_timestamp_to_ns_since_epoch(stop)
     end_of_file = False
     for msg in message_iterator:
         if start is not None and msg['time_ns'] < start:
@@ -341,12 +341,12 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
     message_iterator = messages(bag, topics,
                                 start = start)
 
-    start = parse_timestamp_to_ns_since_epoch(start)
-    stop  = parse_timestamp_to_ns_since_epoch(stop)
+    start = _parse_timestamp_to_ns_since_epoch(start)
+    stop  = _parse_timestamp_to_ns_since_epoch(stop)
     d     = info(bag)
 
-    exclude_time_periods = [ (parse_timestamp_to_ns_since_epoch(t0),
-                              parse_timestamp_to_ns_since_epoch(t1)) \
+    exclude_time_periods = [ (_parse_timestamp_to_ns_since_epoch(t0),
+                              _parse_timestamp_to_ns_since_epoch(t1)) \
                             for t0,t1 in exclude_time_periods ]
 
     t1 = start if start is not None else d['t0']
