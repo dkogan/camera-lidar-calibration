@@ -195,8 +195,9 @@ typedef struct
       "In a square board this is roughly compared to the side length") \
   _(float, threshold_max_rms_fit_error,                  0.02f,            "f","f", \
       "Post-processing: high limit on the RMS plane fit residual. Lower values will demand flatter planes" ) \
-  _(float, threshold_min_rms_point_cloud_2nd_dimension,  0.1f,              "f","f", \
-      "Post-processing: low limit on the short length of the found plane. Too-skinny planes are rejected" ) \
+  _(float, threshold_min_rms_point_cloud_2nd_dimension__multiple_max_plane_size,  0.1f / 1.9f,              "f","f", \
+      "Post-processing: low limit on the short length of the found plane. Too-skinny planes are rejected\n" \
+      "Given as a multiple of the max_plane_size")                        \
   /* This is found by infer-lidar-spacing.py */                         \
   _(int,   Npoints_per_rotation,                         -1,              "i","i", \
       "How many points are reported by the LIDAR in a rotation.\n" \

@@ -2523,6 +2523,10 @@ int8_t clc_lidar_segmentation_sorted(// out
             ctx->debug_xmin < points_and_plane[iplane_out].plane.p_mean.x && points_and_plane[iplane_out].plane.p_mean.x < ctx->debug_xmax &&
             ctx->debug_ymin < points_and_plane[iplane_out].plane.p_mean.y && points_and_plane[iplane_out].plane.p_mean.y < ctx->debug_ymax;
 
+        const float threshold_min_rms_point_cloud_2nd_dimension =
+            ctx->threshold_min_rms_point_cloud_2nd_dimension__multiple_max_plane_size * ctx->threshold_max_plane_size;
+
+
         const bool rejected =
 
             !not_rejected ||
@@ -2540,11 +2544,11 @@ int8_t clc_lidar_segmentation_sorted(// out
             // first eigenvalue is 0-ish: we're looking at a plane, and the data
             // must be squished in that way. But the next eigenvalue should be a
             // decent size. Otherwise the data is linear-y instead of plane-y
-            DEBUG_ON_TRUE_POINT(eigenvalues_ascending[1] < ctx->threshold_min_rms_point_cloud_2nd_dimension*ctx->threshold_min_rms_point_cloud_2nd_dimension*(float)Npoints_in_plane,
+            DEBUG_ON_TRUE_POINT(eigenvalues_ascending[1] < threshold_min_rms_point_cloud_2nd_dimension*threshold_min_rms_point_cloud_2nd_dimension*(float)Npoints_in_plane,
                                 &points_and_plane[iplane_out].plane.p_mean,
                                 "icluster=%d: refined plane is degenerate (2nd eigenvalue of point cloud dispersion is too small): %f < %f",
                                 icluster,
-                                sqrt(eigenvalues_ascending[1]/(float)Npoints_in_plane), ctx->threshold_min_rms_point_cloud_2nd_dimension) ||
+                                sqrt(eigenvalues_ascending[1]/(float)Npoints_in_plane), threshold_min_rms_point_cloud_2nd_dimension) ||
 
             DEBUG_ON_TRUE_POINT(max_norm2_dp*2.*2. > ctx->threshold_max_plane_size*ctx->threshold_max_plane_size,
                                 &points_and_plane[iplane_out].plane.p_mean,
