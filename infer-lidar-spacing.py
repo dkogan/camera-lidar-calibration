@@ -29,6 +29,12 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
+    parser.add_argument('--show-histogram',
+                        action = 'store_true',
+                        help = '''If given, we display the histogram of
+                        potential Npoints_per_rotation values. Hopefully we see
+                        a sharp peak at the "right" value and that it is a power
+                        of 2'''),
     parser.add_argument('lidar-topic',
                         type=str,
                         help = '''The LIDAR topic we're looking at''')
@@ -87,6 +93,14 @@ Npoints_per_rotation_per_ring = \
     [ np.round( 2.*np.pi / np.abs(np.diff(az[ring == iring]))).astype(int) \
       for iring in range(Nrings) ]
 Npoints_per_rotation = nps.glue(*Npoints_per_rotation_per_ring, axis=-1)
+
+
+if args.show_histogram:
+    import gnuplotlib as gp
+    gp.plot(Npoints_per_rotation[Npoints_per_rotation < 1e6],
+            histogram = True,
+            binwidth  = True,
+            wait      = True)
 
 counts = np.bincount(Npoints_per_rotation[Npoints_per_rotation < 1e6])
 Npoints_per_rotation,Npoints_per_rotation_second = np.argsort(-counts)[:2]
