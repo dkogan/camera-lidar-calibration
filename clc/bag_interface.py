@@ -396,10 +396,65 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
 
 
 def topics(bag):
+    r'''Report the topics present in a ros bag
+
+SYNOPSIS
+
+    clc.bag_interface.topics(bag)
+    ===> ('/lidar0/points', '/lidar1/points', '/tf_static')
+
+ROS bags contain a set of "topics" to describe the different data streams. This
+function reports which topics are present in a given bag
+
+ARGUMENTS
+
+- bag: a string pointing to the bag we're reading. This is either a file or a
+  directory on disk. The "rosbags" library is used to read the data, so the ROS1
+  and the various ROS2 formats are supported
+
+RETURNED VALUE
+
+A tuple of strings, describing the topics
+    '''
     with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
         return [c.topic for c in reader.connections]
 
+
 def info(bag):
+    r'''Report metadata about a ros bag
+
+SYNOPSIS
+
+    clc.bag_interface.info(bag)
+
+    ===>
+    {'t0': 1748372407601618910,
+     't1': 1748372828435060696,
+     'topics': ['/lidar0/points',
+                '/lidar1/points',
+                '/tf_static']}
+
+This function reports various metadata about a ros bag. This is a dict of
+key/value pairs. Currently this reports a topic list and the timestamps for the
+start/end of the data in the bag. More may be added in the future.
+
+ARGUMENTS
+
+- bag: a string pointing to the bag we're reading. This is either a file or a
+  directory on disk. The "rosbags" library is used to read the data, so the ROS1
+  and the various ROS2 formats are supported
+
+RETURNED VALUE
+
+A dict with keys:
+
+- t0, t1: timestamps for the start,end of the data in the bag. An integer, in ns
+  since the unix epoch
+
+- topics: a list of strings for the available topics
+
+    '''
+
     with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
         return dict( topics = [c.topic for c in reader.connections],
                      t0     = reader.start_time,
