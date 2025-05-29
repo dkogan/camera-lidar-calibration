@@ -46,7 +46,7 @@ def parse_args():
                         ellipsoids. It is sometimes useful to see the ellipsoids
                         themselves, usually for debugging. Pass --ellipsoids to
                         do that''')
-    parser.add_argument('--topic',
+    parser.add_argument('--topics',
                         type=str,
                         required = True,
                         help = '''The topics to visualize. This is a
@@ -73,7 +73,7 @@ def parse_args():
 
 
     args = parser.parse_args()
-    args.topic = args.topic.split(',')
+    args.topics = args.topics.split(',')
 
     if args.ellipsoids and args.bag is None:
         print("ERROR: --ellipsoids requires --bag", file=sys.stderr)
@@ -172,8 +172,8 @@ else:
 
 Var_rt_lidar0_sensor = context['result']['Var_rt_lidar0_sensor']
 
-isensor_solve_from_isensor_requested = [None] * len(args.topic)
-for isensor_requested,topic_requested in enumerate(args.topic):
+isensor_solve_from_isensor_requested = [None] * len(args.topics)
+for isensor_requested,topic_requested in enumerate(args.topics):
     try:
         i = context['kwargs_calibrate']['topics'].index(topic_requested)
     except:
@@ -211,13 +211,13 @@ if args.ellipsoids:
     psphere = get_psphere(scale = 10.) # 10x ellipses to improve legibility
 
     plot_tuples = \
-        clc.pointcloud_plot_tuples(args.bag, args.topic,
+        clc.pointcloud_plot_tuples(args.bag, args.topics,
                                    context['result']['rt_lidar0_lidar'],
                                    threshold_range   = args.threshold,
                                    Rt_vehicle_lidar0 = Rt_vehicle_lidar0,
                                    start = args.after)
 
-    for isensor_requested,topic_requested in enumerate(args.topic):
+    for isensor_requested,topic_requested in enumerate(args.topics):
         isensor_solve = isensor_solve_from_isensor_requested[isensor_requested]
         if isensor_solve == 0: continue # reference coord system
 
@@ -260,7 +260,7 @@ if args.ellipsoids:
 
 
 
-for isensor_requested,topic_requested in enumerate(args.topic):
+for isensor_requested,topic_requested in enumerate(args.topics):
     isensor_solve = isensor_solve_from_isensor_requested[isensor_requested]
     if isensor_solve == 0: continue # reference coord system
 

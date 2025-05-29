@@ -25,7 +25,7 @@ def parse_args():
         argparse.ArgumentParser(description = __doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('--topic',
+    parser.add_argument('--topics',
                         type=str,
                         required = True,
                         help = '''The LIDAR topics to visualize. This is a
@@ -71,11 +71,11 @@ def parse_args():
 
     args = parser.parse_args()
 
-    args.topic = args.topic.split(',')
+    args.topics = args.topics.split(',')
     args.lidar_models = getattr(args, 'lidar-models')
 
-    if len(args.lidar_models) != len(args.topic):
-        print(f"MUST have been given a matching number of lidar models and topics. Got {len(args.lidar_models)=} and {len(args.topic)=} instead",
+    if len(args.lidar_models) != len(args.topics):
+        print(f"MUST have been given a matching number of lidar models and topics. Got {len(args.lidar_models)=} and {len(args.topics)=} instead",
               file=sys.stderr)
         sys.exit(1)
 
@@ -93,7 +93,7 @@ import clc
 rt_lidar0_lidar = [mrcal.cameramodel(f).extrinsics_rt_toref() for f in args.lidar_models]
 
 plot_tuples = \
-    clc.pointcloud_plot_tuples(args.bag, args.topic,
+    clc.pointcloud_plot_tuples(args.bag, args.topics,
                                rt_lidar0_lidar,
                                threshold_range = args.threshold,
                                start           = args.after)
