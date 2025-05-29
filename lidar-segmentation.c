@@ -764,14 +764,37 @@ static bool segment_segment_across_rings_close_enough(const clc_point3f_t* dp,
                                mag(*dp), ctx->threshold_max_distance_across_rings);
 }
 
-static bool plane_from_segment_segment(// out
-                                       plane_unnormalized_t* plane_unnormalized,
-                                       // in
-                                       const segment_t* s0,
-                                       const segment_t* s1,
-                                       const clc_lidar_segmentation_context_t* ctx,
-                                       // for diagnostics only
-                                       const int iring1, const int isegment)
+static bool stage2_plane_not_too_tilted(const clc_point3f_t* p,
+                                        const clc_point3f_t* n_unnormalized,
+                                        // for diagnostics only
+                                        const bool debug,
+                                        const clc_lidar_segmentation_context_t* ctx,
+                                        const int iring, const int isegment)
+{
+    // I want angle(p,n) < threshold ->
+    // cos > cos_threshold ->
+    // inner/magp/magn > cos_threshold ->
+    // inner > cos_threshold*magp*magn ->
+    // inner*inner > cos_threshold^2*norm2p*norm2n
+    const float inner_p_n = inner(*p, *n_unnormalized);
+    const float norm2p    = norm2(*p);
+    const float norm2n    = norm2(*n_unnormalized);
+    return
+        !DEBUG_ON_TRUE_SEGMENT(inner_p_n*inner_p_n < ctx->threshold_min_cos_plane_tilt_stage2*ctx->threshold_min_cos_plane_tilt_stage2*norm2n*norm2p,
+                               iring,isegment,
+                               "cross-ring segments implies a too-tilted plane; have th=%fdeg > threshold=%fdeg",
+                               acos(fabs(inner_p_n/sqrt(norm2p*norm2n))),
+                               acos(ctx->threshold_min_cos_plane_tilt_stage2));
+}
+
+static bool stage2_plane_from_segment_segment(// out
+                                              plane_unnormalized_t* plane_unnormalized,
+                                              // in
+                                              const segment_t* s0,
+                                              const segment_t* s1,
+                                              const clc_lidar_segmentation_context_t* ctx,
+                                              // for diagnostics only
+                                              const int iring1, const int isegment)
 {
     // I want:
     //   inner(p1-p0, n=cross(v0,v1)) = 0
@@ -800,20 +823,8 @@ static bool plane_from_segment_segment(// out
     plane_unnormalized->n_unnormalized = mean(n0,n1);
     plane_unnormalized->p              = mean(s0->p, s1->p);
 
-    // I want angle(p,n) < threshold ->
-    // cos > cos_threshold ->
-    // inner/magp/magn > cos_threshold ->
-    // inner > cos_threshold*magp*magn ->
-    // inner*inner > cos_threshold^2*norm2p*norm2n
-    const float inner_p_n = inner(plane_unnormalized->p,
-                                  plane_unnormalized->n_unnormalized);
-    const float norm2p    = norm2(plane_unnormalized->p);
-    const float norm2n    = norm2(plane_unnormalized->n_unnormalized);
-    if(!DEBUG_ON_TRUE_SEGMENT(inner_p_n*inner_p_n > ctx->threshold_min_cos_plane_tilt_stage2*ctx->threshold_min_cos_plane_tilt_stage2*norm2n*norm2p,
-                              iring1,isegment,
-                              "cross-ring segments implies a too-tilted plane: %fdeg > %fdeg",
-                              acos(fabs(inner_p_n/sqrt(norm2p*norm2n))),
-                              acos(ctx->threshold_min_cos_plane_tilt_stage2)) )
+    if(!stage2_plane_not_too_tilted(&plane_unnormalized->p, &plane_unnormalized->n_unnormalized,
+                                    debug, ctx, iring1, isegment))
         return false;
 
     return true;
@@ -1455,11 +1466,11 @@ static void stage2_cluster_segments(// out
             const bool debug =
                 ctx->debug_xmin < segment0->p.x && segment0->p.x < ctx->debug_xmax &&
                 ctx->debug_ymin < segment0->p.y && segment0->p.y < ctx->debug_ymax;
-            if(DEBUG_ON_TRUE_SEGMENT(!plane_from_segment_segment(&cluster->plane_unnormalized,
-                                                                 segment0,segment1,
-                                                                 ctx,
-                                                                 // for diagnostics only
-                                                                 iring1, isegment),
+            if(DEBUG_ON_TRUE_SEGMENT(!stage2_plane_from_segment_segment(&cluster->plane_unnormalized,
+                                                                        segment0,segment1,
+                                                                        ctx,
+                                                                        // for diagnostics only
+                                                                        iring1, isegment),
                                      iring0,isegment,
                                      "icluster=%d: segment isn't plane-consistent with %d-%d",
                                      icluster,
@@ -1557,9 +1568,7 @@ static void stage2_cluster_segments(// out
                 continue;
 
 
-
-            // We're accepting this cluster. To prepare for the next stage I
-            // refine the plane estimate and I normalize the normal vector
+            // Cluster looks mostly good. I refine the plane...
             if(!fit_plane_into_cluster(// out
                                        &cluster->plane_unnormalized,
                                        // in
@@ -1571,6 +1580,17 @@ static void stage2_cluster_segments(// out
                                        ctx))
                 continue;
 
+            const int iring_mid = (cluster->irings[0] + cluster->irings[1])/2;
+            if(!stage2_plane_not_too_tilted(&cluster->plane_unnormalized.p, &cluster->plane_unnormalized.n_unnormalized,
+                                            debug, ctx,
+                                            iring_mid,
+                                            isegment_center_from_range(cluster->isegments[iring_mid][0], cluster->isegments[iring_mid][0], ctx)))
+                continue;
+
+
+            // WE'RE ACCEPTING THIS CLUSTER
+
+            // To prepare for the next stage I normalize the normal vector
             const float magn = mag(cluster->plane_unnormalized.n_unnormalized);
             for(int i=0; i<3;i++)
                 cluster->plane.n.xyz[i] = cluster->plane_unnormalized.n_unnormalized.xyz[i] / magn;
