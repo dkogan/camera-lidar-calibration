@@ -222,11 +222,11 @@ if args.ellipsoids:
         if isensor_solve == 0: continue # reference coord system
 
         l,v_lidar0 = \
-            clc.transformation_covariance_decomposed(p0_lidar0,
-                                                     context['result']['rt_lidar0_lidar'],
-                                                     context['result']['rt_lidar0_camera'],
-                                                     isensor_solve,
-                                                     Var_rt_lidar0_sensor)
+            transformation_covariance_decomposed(p0_lidar0,
+                                                 context['result']['rt_lidar0_lidar'],
+                                                 context['result']['rt_lidar0_camera'],
+                                                 isensor_solve,
+                                                 Var_rt_lidar0_sensor)
         stdev = np.sqrt(l)
 
         # v_lidar0 stored each eigenvector in COLUMNS. I transpose to store them in
@@ -273,11 +273,11 @@ for isensor_requested,topic_requested in enumerate(args.topics):
 
 
     l,v_lidar0 = \
-        clc.transformation_covariance_decomposed(p0_lidar0,
-                                                 context['result']['rt_lidar0_lidar'],
-                                                 context['result']['rt_lidar0_camera'],
-                                                 isensor_solve,
-                                                 Var_rt_lidar0_sensor)
+        transformation_covariance_decomposed(p0_lidar0,
+                                             context['result']['rt_lidar0_lidar'],
+                                             context['result']['rt_lidar0_camera'],
+                                             isensor_solve,
+                                             Var_rt_lidar0_sensor)
     stdev = np.sqrt(l)
 
     # v_lidar0 stored each eigenvector in COLUMNS. I transpose to store them in
