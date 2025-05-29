@@ -203,7 +203,17 @@ import clc.bag_interface
 
 if args.timeline is None and args.topic is None:
     for bag in bags():
-        clc.bag_interface.print_info(bag)
+
+        d = clc.bag_interface.info(bag)
+        t0 = d['t0']
+        t1 = d['t1']
+
+        print(f"Bag '{bag}':")
+
+        print(f"  {t0=} {t1=} duration={(t1-t0)/1e9:.1f} seconds")
+        for topic in d['topics']:
+            print(f"  {topic}")
+
     sys.exit()
 
 

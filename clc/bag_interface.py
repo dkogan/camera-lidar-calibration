@@ -404,15 +404,3 @@ def info(bag):
         return dict( topics = [c.topic for c in reader.connections],
                      t0     = reader.start_time,
                      t1     = reader.end_time )
-
-def print_info(bag):
-
-    d = info(bag)
-    t0 = d['t0']
-    t1 = d['t1']
-
-    print(f"Bag '{bag}':")
-
-    print(f"  {t0=} {t1=} duration={(t1-t0)/1e9:.1f} seconds")
-    for topic in d['topics']:
-        print(f"  {topic}")
