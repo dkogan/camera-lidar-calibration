@@ -262,28 +262,136 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
                                   max_time_spread_s = None,
                                   verbose           = False):
 
-    def out_culled_if_too_spread(out, max_time_spread_s):
-        if max_time_spread_s is None or \
-           not any(out):
-            return out
+    max_time_spread_ns = max_time_spread_s * 1e9
 
-        # Here I look at the data-acquisition time, since that most
-        # closely describes the data being consistent
-        dt = _time_spread_s(out)
-        if dt > max_time_spread_s:
-
-            timestamps = ['-' if m is None else m['time_header_ns'] for m in out]
-            if verbose:
-                print(f"Not reporting snapshot in time interval {[start,stop]} because the time_header_ns is too spread-out. {dt=:.2f}s. {timestamps=}")
-            return [None] * len(topics)
-        return out
-
+    idx = dict()
+    for i,t in enumerate(topics): idx[t] = i
 
 
     out = [None] * len(topics)
-    idx = dict()
-    for i,t in enumerate(topics): idx[t] = i
     Nstored = 0
+    time_max,time_min = None,None
+
+    def accumulate(msg, itopic):
+        nonlocal out
+        nonlocal Nstored
+        nonlocal time_max,time_min
+
+
+        if max_time_spread_s is None:
+            if out[itopic] is None:
+                out[itopic] = msg
+                Nstored += 1
+            return
+
+        time = msg['time_header_ns']
+
+        # We're trying to meet a worst-case-time-error requirement in
+        # max_time_spread_s. The data will come in more-or-less in order of
+        # increasing time, but not 100% so. I try to be greedy, and hope that
+        # eventually I'll get a usable set. This algorithm isn't perfect (it
+        # isn't guaranteed to find a good set), and it isn't perfectly fast (I
+        # recompute O(N) the min/max periodically instead of using a heap).
+        # Should be sufficient
+        if Nstored == 0:
+            # this is the first message in the set:
+            out[itopic] = msg
+            Nstored += 1
+
+            time_max = time
+            time_min = time
+
+        elif time_min <= time and time <= time_max:
+            # new message is within existing time bounds
+            if out[itopic] is None:
+                # we dont already have a message for this topic
+                out[itopic] = msg
+                Nstored += 1
+            else:
+                # we DO already have a message for this topic. I take the newer
+                # one of the two. Because future messages for other topics will
+                # presumably sit even further in the future, and the newer
+                # message will be more compatible with those
+                if time <= out[itopic]['time_header_ns']:
+                    # Existing message is newer. Ignore new message
+                    return
+
+                # Existing message is older. Toss existing message. THIS message
+                # is neither min nor max. But the existing message I'm removing
+                # might be min (can't be max because THIS message isn't max)
+                out[itopic] = msg
+                if Nstored == 1:
+                    time_max = time
+                    time_min = time
+                    return
+
+                time_min = min(m['time_header_ns'] for m in out if m is not None)
+                return
+
+        elif time > time_max:
+            # new message is the new time-max
+
+            if out[itopic] is not None:
+                # we DO already have a message for this topic. I take the newer
+                # one of the two. Because future messages for other topics will
+                # presumably sit even further in the future, and the newer
+                # message will be more compatible with those
+                if time < out[itopic]['time_header_ns']:
+                    # Existing message is newer. Ignore new message
+                    return
+
+                # Existing message is older. Toss existing message
+                if Nstored == 1:
+                    # It was the only one; just replace it
+                    out[itopic] = msg
+                    time_max = time
+                    time_min = time
+                    return
+
+                out[itopic] = None
+                Nstored -= 1
+
+                time_min = min(m['time_header_ns'] for m in out if m is not None)
+
+                # THIS message is about to become the new max, so I don't need
+                # to set the max here; it's about to be overwritten
+
+            # Don't already have a message for this topic. Either I didn't have
+            # it, or I just removed what I had
+            itopic_sorted = np.argsort(np.array([m['time_header_ns'] if m is not None else 1.e308 for m in out ], dtype=float))
+            i = 0
+            while time - time_min > max_time_spread_ns:
+                # New message breaks the sync requirement. We expect future
+                # messages to be even further out in the future, so this
+                # will get worse. I throw out the youngest message, to
+                # hopefully be able to use a future message for THAT topic
+                Nstored -= 1
+                out[itopic_sorted[i]] = None
+                if Nstored == 0:
+                    break
+
+                time_min = out[itopic_sorted[i+1]]['time_header_ns']
+                i += 1
+
+            # The current min is compatible with the new message. Store the
+            # new message
+            if Nstored == 0: # the new message is the only message
+                time_min = time
+            out[itopic] = msg
+            Nstored += 1
+            time_max = time
+
+        else:
+            # New message is the new time-min. I expect these to mostly
+            # arrive in ascending order, so I just consider this a fluke,
+            # and move on
+            return
+
+
+
+
+
+
 
     if isinstance(bag, str):
         message_iterator = messages(bag, topics,
@@ -310,19 +418,25 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
                 messages.re_report_message = msg
             break
 
-        i = idx[msg['topic']]
-        if out[i] is None:
-            out[i] = msg
-            Nstored += 1
-            if Nstored == len(topics):
-                return out_culled_if_too_spread(out, max_time_spread_s)
+        accumulate(msg,
+                   itopic = idx[msg['topic']])
+
+        dt = (time_max-time_min)/1e9
+
+        Nstored_check = len(list(m for m in out if m is not None))
+
+        if Nstored != Nstored_check:
+            sys.exit()
+
+        if Nstored == len(out):
+            break
     else:
         end_of_file = True
 
     if end_of_file and Nstored == 0:
         return None
 
-    return out_culled_if_too_spread(out, max_time_spread_s)
+    return out
 
 
 def first_message_from_each_topic_in_time_segments(bag, topics,
@@ -388,7 +502,8 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
 
         if verbose:
             isnapshot = N
-            print(f"{isnapshot=}: at time_ns = {['-' if m is None else m['time_ns'] for m in msgs_now]} (spread={_time_spread_s(msgs_now):.2f}s) '{bag}'")
+            spread = _time_spread_s(msgs_now)
+            print(f"{isnapshot=}: at time_ns = {['-' if m is None else m['time_ns'] for m in msgs_now]} (spread={spread:.2f}s) '{bag}'")
 
         N += 1
         yield msgs_now
