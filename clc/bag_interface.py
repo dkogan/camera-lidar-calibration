@@ -31,15 +31,6 @@ def _parse_timestamp_to_ns_since_epoch(t):
     return int(dateutil.parser.parse(t).timestamp() * 1e9)
 
 
-def _time_spread_s(msgs):
-    try:
-        tmin = min(m['time_header_ns'] for m in msgs if m is not None)
-        tmax = max(m['time_header_ns'] for m in msgs if m is not None)
-    except:
-        return None
-    return (tmax-tmin)/1e9
-
-
 def messages(bag, topics,
              *,
              # if integer: s since epoch or ns since epoch
@@ -502,8 +493,12 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
 
         if verbose:
             isnapshot = N
-            spread = _time_spread_s(msgs_now)
-            print(f"{isnapshot=}: at time_ns = {['-' if m is None else m['time_ns'] for m in msgs_now]} (spread={spread:.2f}s) '{bag}'")
+
+            tmin = min(m['time_header_ns'] for m in msgs_now if m is not None)
+            tmax = max(m['time_header_ns'] for m in msgs_now if m is not None)
+            spread_s = (tmax-tmin)/1e9
+
+            print(f"{isnapshot=}: at time_header_ns = {['-' if m is None else m['time_header_ns'] for m in msgs_now]} (spread={spread_s:.2f}s) '{bag}'")
 
         N += 1
         yield msgs_now
