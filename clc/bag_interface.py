@@ -412,13 +412,6 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
         accumulate(msg,
                    itopic = idx[msg['topic']])
 
-        dt = (time_max-time_min)/1e9
-
-        Nstored_check = len(list(m for m in out if m is not None))
-
-        if Nstored != Nstored_check:
-            sys.exit()
-
         if Nstored == len(out):
             break
     else:
