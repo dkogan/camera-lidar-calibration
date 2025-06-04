@@ -34,6 +34,9 @@ import clc.argparse_helpers
 import re
 import os
 
+import clc
+lidar_segmentation_parameters = clc.lidar_segmentation_parameters()
+
 
 def parse_args():
 
@@ -143,6 +146,22 @@ def parse_args():
                         the intrinsics are used. The number of models given must
                         match the number of camera --topics arguments EXACTLY''')
 
+    for param,metadata in lidar_segmentation_parameters.items():
+        # Here I have a --dump that's different from the 'dump' in the
+        # segmentation parameters. I ignore the latter for now
+        if param == 'dump': continue
+
+        if metadata['pyparse'] == 'p':
+            # special case for boolean
+            parser.add_argument(f'--{param.replace("_","-")}',
+                                action  = 'store_true',
+                                help = metadata['doc'])
+        else:
+            parser.add_argument(f'--{param.replace("_","-")}',
+                                type    = type(metadata['default']),
+                                default = metadata['default'],
+                                help = metadata['doc'])
+
     args = parser.parse_args()
 
     import glob
@@ -187,8 +206,15 @@ import numpysane as nps
 import gnuplotlib as gp
 import io
 import pickle
-import clc
 import mrcal
+
+# ingest the lidar segmentation parameters from the arguments
+ctx = dict()
+for k in lidar_segmentation_parameters.keys():
+    # Here I have a --dump that's different from the 'dump' in the
+    # segmentation parameters. I ignore the latter for now
+    if k == 'dump': continue
+    ctx[k] = getattr(args, k)
 
 
 if args.rt_vehicle_lidar0 is not None:
@@ -237,12 +263,9 @@ if len(args.models) > 0:
     m = mrcal.cameramodel(args.models[0])
     o = m.optimization_inputs()
     H,W = o['observations_board'].shape[-3:-1]
-    kwargs_calibration_object = \
-        dict(object_spacing  = o['calibration_object_spacing'],
-             object_width_n  = W,
-             object_height_n = H)
-else:
-    kwargs_calibration_object = dict()
+    ctx['object_spacing']  = o['calibration_object_spacing']
+    ctx['object_width_n']  = W
+    ctx['object_height_n'] = H
 
 kwargs_calibrate = dict(bags                               = args.bag,
                         topics                             = args.topics,
@@ -259,7 +282,7 @@ kwargs_calibrate = dict(bags                               = args.bag,
                         threshold_valid_lidar_Npoints      = args.threshold_valid_lidar_Npoints,
                         uncertainty_quantification_range   = args.uncertainty_quantification_range,
                         rt_vehicle_lidar0                  = args.rt_vehicle_lidar0,
-                        **kwargs_calibration_object)
+                        **ctx)
 
 result = clc.calibrate(do_dump_inputs = args.dump is not None,
                        **kwargs_calibrate)
