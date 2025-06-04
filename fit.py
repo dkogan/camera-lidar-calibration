@@ -294,25 +294,36 @@ else:
     rt_ref_lidar  = result['rt_lidar0_lidar']
     rt_ref_camera = result['rt_lidar0_camera']
 
-for imodel in range(len(args.models)):
-    models[imodel].extrinsics_rt_toref(rt_ref_camera[imodel])
-    d,f = os.path.split(args.models[imodel])
-    r,e = os.path.splitext(f)
-    filename = f"/tmp/{r}-mounted{e}"
-    models[imodel].write(filename)
-    print(f"Wrote '{filename}'")
-
+D = '/tmp'
 for ilidar in range(len(rt_ref_lidar)):
     # dummy lidar "cameramodel". The intrinsics are made-up, but the extrinsics
     # are true, and can be visualized with the usual tools
-    filename = f"/tmp/lidar{ilidar}-mounted.cameramodel"
+    filename = f"lidar{ilidar}-mounted.cameramodel"
+    path = f"{D}/{filename}"
     model = mrcal.cameramodel( intrinsics = ('LENSMODEL_PINHOLE',
                                              np.array((1.,1.,0.,0.))),
                                imagersize = (1,1),
                                extrinsics_rt_toref = rt_ref_lidar[ilidar] )
-    model.write(filename,
+    model.write(path,
                 note = "Intrinsics are made-up and nonsensical")
-    print(f"Wrote '{filename}'")
+
+    symlink =  f"{D}/sensor{ilidar}-mounted.cameramodel"
+    os.symlink(filename, symlink)
+
+    print(f"Wrote '{path}' and a symlink '{symlink}'")
+
+for imodel in range(len(args.models)):
+    models[imodel].extrinsics_rt_toref(rt_ref_camera[imodel])
+    d,f = os.path.split(args.models[imodel])
+    r,e = os.path.splitext(f)
+    filename = f"{r}-mounted{e}"
+    path     = f"{D}/{filename}"
+    models[imodel].write(path)
+
+    symlink =  f"{D}/sensor{len(rt_ref_lidar) + imodel}-mounted.cameramodel"
+    os.symlink(filename, symlink)
+
+    print(f"Wrote '{path}' and a symlink '{symlink}'")
 
 
 
