@@ -70,6 +70,7 @@ args = parse_args()
 import numpy as np
 import numpysane as nps
 
+# ingest the lidar segmentation parameters from the arguments
 ctx = dict()
 for k in lidar_segmentation_parameters.keys():
     ctx[k] = getattr(args, k)
