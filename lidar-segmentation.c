@@ -2415,7 +2415,7 @@ int8_t clc_lidar_segmentation_sorted(// out
     int ipoint0_in_ring[ctx->Nrings];
     ipoint0_in_ring[0] = 0;
     for(int i=1; i<ctx->Nrings; i++)
-        ipoint0_in_ring[i] = ipoint0_in_ring[i-1] + scan->Npoints[i-1];
+        ipoint0_in_ring[i] = ipoint0_in_ring[i-1] + scan->Npoints_per_ring[i-1];
 
     segment_t segments[ctx->Nrings*Nsegments_per_rotation];
     memset(segments, 0, ctx->Nrings*Nsegments_per_rotation*sizeof(segments[0]));
@@ -2426,12 +2426,12 @@ int8_t clc_lidar_segmentation_sorted(// out
                                  &segments[Nsegments_per_rotation*iring],
                                  // in
                                  iring,
-                                 &scan->points[ipoint0_in_ring[iring]], scan->Npoints[iring],
+                                 &scan->points[ipoint0_in_ring[iring]], scan->Npoints_per_ring[iring],
                                  ctx);
 
         if(ctx->dump)
         {
-            for(unsigned int i=0; i<scan->Npoints[iring]; i++)
+            for(unsigned int i=0; i<scan->Npoints_per_ring[iring]; i++)
                 printf("%f %f all %f\n",
                        scan->points[ipoint0_in_ring[iring] + i].x,
                        scan->points[ipoint0_in_ring[iring] + i].y,
@@ -2534,7 +2534,7 @@ int8_t clc_lidar_segmentation_sorted(// out
                                   icluster,
                                   cluster,
                                   segments,
-                                  scan->points, ipoint0_in_ring, scan->Npoints,
+                                  scan->points, ipoint0_in_ring, scan->Npoints_per_ring,
                                   ctx);
 
         const int Npoints_in_plane = points_and_plane[iplane_out].n;
@@ -2659,7 +2659,7 @@ int8_t clc_lidar_segmentation_unsorted(// out
                                       // in
                                       Nplanes_max,
                                       &(clc_lidar_scan_sorted_t){.points  = points,
-                                                                 .Npoints = Npoints_per_ring},
+                                                                 .Npoints_per_ring = Npoints_per_ring},
                                       ctx);
     if(Nplanes <= 0)
         return Nplanes;

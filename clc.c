@@ -4045,7 +4045,7 @@ bool lidar_segmentation(// out
     else
     {
         points_here      = scan_sorted->points;
-        Npoints_per_ring = scan_sorted->Npoints;
+        Npoints_per_ring = scan_sorted->Npoints_per_ring;
     }
 
     clc_points_and_plane_t* points_and_plane_here =
@@ -4058,7 +4058,7 @@ bool lidar_segmentation(// out
                                       // in
                                       Nplanes_max,
                                       &(clc_lidar_scan_sorted_t){.points  = points_here,
-                                                                 .Npoints = Npoints_per_ring},
+                                                                 .Npoints_per_ring = Npoints_per_ring},
                                       ctx);
 
     // If we didn't see a clear plane, I keep the previous

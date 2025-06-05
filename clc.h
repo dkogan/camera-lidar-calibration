@@ -82,7 +82,7 @@ typedef struct
     // p=(0,0,0) have been removed. Use clc_lidar_preprocess() to do this
     clc_point3f_t* points;
     // length ctx->Nrings
-    unsigned int* Npoints;
+    unsigned int* Npoints_per_ring;
 } clc_lidar_scan_sorted_t;
 
 typedef struct
