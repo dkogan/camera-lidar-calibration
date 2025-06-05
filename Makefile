@@ -19,13 +19,6 @@ CCXXFLAGS += -Wno-sign-compare
 # silence here
 CCXXFLAGS += -Wno-comment
 
-
-# I need the bleeding-edge mrcal
-ifneq ($(MRCAL),)
-  CCXXFLAGS += -I$(MRCAL)/..
-  LDFLAGS   += -L$(MRCAL) -Wl,-rpath=$(MRCAL)
-endif
-
 CFLAGS += -I/usr/include/suitesparse
 
 
