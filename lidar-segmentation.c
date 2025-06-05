@@ -2810,26 +2810,3 @@ void clc_lidar_preprocess(// out
                                         Nrings);
     }
 }
-
-/*
-The segment finder should use missing points or too-long ranges as breaks. The
-current implementation doesn't do this right: it throws out the point after a
-too-large gap, but then continues adding subsequent points to the segment
-
-check for conic sections, not just line segments
-
-I already flag too many invalid points total in a segment. I should have a
-separate metric to flag too many in a contiguous block
-
-Make a note that the initial segment finder is crude. It does not try to work on
-the edges at all: it sees a gap or a switch to another object, and it throws out
-the entire segment
-
-handle wraparound at th=180. All th - th math should be modulo 360
-
-For each ring segment, make sure that the local gradient is in-plane. This
-should throw out points at the edges. Or even better: if off-plane points exist
-at the edges, throw out the whole ring: we're looking at a wall instead of a
-plane floating in space
-
-*/
