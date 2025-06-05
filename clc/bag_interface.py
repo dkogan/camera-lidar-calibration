@@ -395,9 +395,9 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
     stop  = _parse_timestamp_to_ns_since_epoch(stop)
     end_of_file = False
     for msg in message_iterator:
-        if start is not None and msg['time_ns'] < start:
+        if start is not None and msg['time_header_ns'] < start:
             continue
-        if stop is not None and msg['time_ns'] >= stop:
+        if stop is not None and msg['time_header_ns'] >= stop:
             # This message is past the stop time, so we're done. If we reuse
             # this iterator with the current stop time being the new start time,
             # then I want to return this message then. I save it in the iterator
