@@ -308,6 +308,8 @@ for ilidar in range(len(rt_ref_lidar)):
                 note = "Intrinsics are made-up and nonsensical")
 
     symlink =  f"{D}/sensor{ilidar}-mounted.cameramodel"
+    try:    os.unlink(symlink)
+    except: pass
     os.symlink(filename, symlink)
 
     print(f"Wrote '{path}' and a symlink '{symlink}'")
@@ -321,6 +323,8 @@ for imodel in range(len(args.models)):
     models[imodel].write(path)
 
     symlink =  f"{D}/sensor{len(rt_ref_lidar) + imodel}-mounted.cameramodel"
+    try:    os.unlink(symlink)
+    except: pass
     os.symlink(filename, symlink)
 
     print(f"Wrote '{path}' and a symlink '{symlink}'")
