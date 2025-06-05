@@ -2102,12 +2102,6 @@ static bool stage3_refine_cluster(// out
     points_and_plane->n = 0;
     int ipoint_set_n_prev = 0;
 
-    if(Nrings_considered > 64)
-    {
-        MSG("Too many rings");
-        return false;
-    }
-
     for(int iring = cluster->irings[0];
         iring    <= cluster->irings[1];
         iring++)
