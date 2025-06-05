@@ -253,7 +253,10 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
                                   max_time_spread_s = None,
                                   verbose           = False):
 
-    max_time_spread_ns = max_time_spread_s * 1e9
+    if max_time_spread_s is None:
+        max_time_spread_ns = None
+    else:
+        max_time_spread_ns = max_time_spread_s * 1e9
 
     idx = dict()
     for i,t in enumerate(topics): idx[t] = i
@@ -269,7 +272,7 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
         nonlocal time_max,time_min
 
 
-        if max_time_spread_s is None:
+        if max_time_spread_ns is None:
             if out[itopic] is None:
                 out[itopic] = msg
                 Nstored += 1
@@ -278,7 +281,7 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
         time = msg['time_header_ns']
 
         # We're trying to meet a worst-case-time-error requirement in
-        # max_time_spread_s. The data will come in more-or-less in order of
+        # max_time_spread_ns. The data will come in more-or-less in order of
         # increasing time, but not 100% so. I try to be greedy, and hope that
         # eventually I'll get a usable set. This algorithm isn't perfect (it
         # isn't guaranteed to find a good set), and it isn't perfectly fast (I
