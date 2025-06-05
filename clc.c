@@ -5354,8 +5354,7 @@ int ingest_sensor_snapshots(// out
                             // sensor_snapshots_sorted==NULL
                             const clc_is_bgr_mask_t is_bgr_mask,
                             // unused if sensor_snapshots_unsorted==NULL && sensor_snapshots_sorted==NULL
-                            // not const to be able to compute ctx->Npoints_per_rotation
-                            clc_lidar_segmentation_context_t* ctx,
+                            const clc_lidar_segmentation_context_t* ctx,
 
                             const clc_sensor_snapshot_unsorted_t*        sensor_snapshots_unsorted,
                             const clc_sensor_snapshot_sorted_t*          sensor_snapshots_sorted,
@@ -5368,6 +5367,9 @@ int ingest_sensor_snapshots(// out
     int points_pool_index           = 0;
     int points_and_plane_pool_index = 0;
 
+    clc_lidar_segmentation_context_t ctx_mutable[Nlidars];
+    for(int i=0; i<Nlidars; i++)
+        ctx_mutable[i] = *ctx;
 
     for(unsigned int isnapshot=0; isnapshot < Nsnapshots; isnapshot++)
     {
@@ -5412,7 +5414,8 @@ int ingest_sensor_snapshots(// out
                                        ilidar,
                                        lidar_packet_stride,
                                        Nplanes_max,
-                                       ctx))
+                                       &ctx_mutable[ilidar]
+                                       ))
                     continue;
             }
             else if(sensor_snapshot_segmented != NULL)
@@ -6137,8 +6140,7 @@ bool clc(// in/out
          // sensor_snapshots_sorted==NULL
          const clc_is_bgr_mask_t is_bgr_mask,
          // unused if sensor_snapshots_unsorted==NULL && sensor_snapshots_sorted==NULL
-         // not const to be able to compute ctx->Npoints_per_rotation
-         clc_lidar_segmentation_context_t* ctx,
+         const clc_lidar_segmentation_context_t* ctx,
 
          const mrcal_pose_t* rt_vehicle_lidar0,
 

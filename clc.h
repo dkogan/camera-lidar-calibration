@@ -421,8 +421,7 @@ bool clc(// in/out
          //           sensor_snapshots_sorted==NULL
          const clc_is_bgr_mask_t is_bgr_mask,
          // unused if sensor_snapshots_unsorted==NULL && sensor_snapshots_sorted==NULL
-         // not const to be able to compute ctx->Npoints_per_rotation
-         clc_lidar_segmentation_context_t* ctx,
+         const clc_lidar_segmentation_context_t* ctx,
 
          const mrcal_pose_t* rt_vehicle_lidar0,
 
