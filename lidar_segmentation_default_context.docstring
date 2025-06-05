@@ -6,7 +6,6 @@ SYNOPSIS
 
     {'Npoints_per_rotation': -1,
      'Npoints_per_segment': 16,
-     'Nrings': 128,
      'debug_iring': -1,
      'debug_xmax': -3.4028234663852886e+38,
      'debug_xmin': 3.4028234663852886e+38,

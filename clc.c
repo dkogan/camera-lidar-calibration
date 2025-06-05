@@ -4006,7 +4006,7 @@ bool lidar_segmentation(// out
         NULL;
 
     clc_point3f_t* points_here = NULL;
-    unsigned int   _Npoints_per_ring[ctx->Nrings];
+    unsigned int   _Npoints_per_ring[clc_Nrings_max];
     unsigned int*  Npoints_per_ring = _Npoints_per_ring;
 
     if(scan_unsorted != NULL)
@@ -4036,7 +4036,7 @@ bool lidar_segmentation(// out
                              Npoints_per_rotation_estimate,
 
                              // in
-                             ctx->Nrings,
+                             clc_Nrings_max,
                              // The stride, in bytes, between each successive points or
                              // rings value in clc_lidar_scan_unsorted_t
                              lidar_packet_stride,

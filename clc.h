@@ -52,6 +52,7 @@ _Static_assert(sizeof(clc_points_and_plane_t) == 8192*4, "clc_points_and_plane_t
 
 #define clc_Nlidars_max  16
 #define clc_Ncameras_max 16
+#define clc_Nrings_max   256
 
 typedef uint32_t clc_is_bgr_mask_t;
 // I can't find a single static assertion invocation that works in both C++ and
@@ -81,7 +82,7 @@ typedef struct
     // length sum(Npoints). Sorted by ring and then by azimuth. Invalid points
     // p=(0,0,0) have been removed. Use clc_lidar_preprocess() to do this
     clc_point3f_t* points;
-    // length ctx->Nrings
+    // length clc_Nrings_max
     unsigned int* Npoints_per_ring;
 } clc_lidar_scan_sorted_t;
 
@@ -276,7 +277,7 @@ void clc_lidar_preprocess(// out
                           int* Npoints_per_rotation,
 
                           // in
-                          int Nrings,
+                          const int Nrings,
                           // The stride, in bytes, between each successive points or
                           // rings value in clc_lidar_scan_t. If
                           // lidar_packet_stride==0, dense storage is assumed

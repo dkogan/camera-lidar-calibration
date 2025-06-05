@@ -13,9 +13,6 @@
 #include "util.h"
 #include "bitarray.h"
 
-// Should be >= any given Nrings value we have
-#define Nrings_max 512
-
 #define DEBUG_ON_TRUE_POINT(what, p, fmt, ...)                          \
     ({  if(debug && (what))                                             \
         {                                                               \
@@ -137,7 +134,7 @@ typedef struct
 
     int16_t irings[2]; // first and last ring
     // first and last segment in each successive ring, starting with irings[0]
-    int16_t isegments[Nrings_max][2];
+    int16_t isegments[clc_Nrings_max][2];
 
 } segment_cluster_t;
 
@@ -1329,7 +1326,8 @@ stage2_grow_cluster(// out
             return;
         }
 
-        if(iring >= ctx->Nrings)
+        // just in case
+        if(iring >= clc_Nrings_max)
             return;
 
         int dsegment_nextring_offcenter0 = -1;
@@ -1432,7 +1430,7 @@ static void stage2_cluster_segments(// out
 {
     *Nclusters = 0;
 
-    for(int iring0 = 0; iring0 < ctx->Nrings-1; iring0++)
+    for(int iring0 = 0; iring0 < clc_Nrings_max-1; iring0++)
     {
         const int iring1 = iring0+1;
 
@@ -2373,18 +2371,6 @@ static int infer_Npoints_per_rotation( const float* az_unsorted,
 
 static bool validate_ctx(const clc_lidar_segmentation_context_t* ctx)
 {
-    if(ctx->Nrings <= 0)
-    {
-        MSG("Unexpected value of Nrings=%d", ctx->Nrings);
-        return false;
-    }
-    if(ctx->Nrings > Nrings_max)
-    {
-        MSG("Unexpected value of Nrings=%d. The static limit is Nrings_max=%d. If this is correct, bump up Nrings_max, and rebuild",
-            ctx->Nrings, Nrings_max);
-        return false;
-    }
-
     if(ctx->Npoints_per_rotation <= 0)
     {
         MSG("Invalid Npoints_per_rotation. This is hardware-dependent, and must be set by the caller. If using clc_..._unsorted(), clc will try to infer this automatically");
@@ -2412,15 +2398,15 @@ int8_t clc_lidar_segmentation_sorted(// out
     if(!validate_ctx(ctx))
         return -1;
 
-    int ipoint0_in_ring[ctx->Nrings];
+    int ipoint0_in_ring[clc_Nrings_max];
     ipoint0_in_ring[0] = 0;
-    for(int i=1; i<ctx->Nrings; i++)
-        ipoint0_in_ring[i] = ipoint0_in_ring[i-1] + scan->Npoints_per_ring[i-1];
+    for(int iring=1; iring<clc_Nrings_max; iring++)
+        ipoint0_in_ring[iring] = ipoint0_in_ring[iring-1] + scan->Npoints_per_ring[iring-1];
 
-    segment_t segments[ctx->Nrings*Nsegments_per_rotation];
-    memset(segments, 0, ctx->Nrings*Nsegments_per_rotation*sizeof(segments[0]));
+    segment_t segments[clc_Nrings_max*Nsegments_per_rotation];
+    memset(segments, 0, clc_Nrings_max*Nsegments_per_rotation*sizeof(segments[0]));
 
-    for(int iring=0; iring<ctx->Nrings; iring++)
+    for(int iring=0; iring<clc_Nrings_max; iring++)
     {
         stage1_segment_from_ring(// out
                                  &segments[Nsegments_per_rotation*iring],
@@ -2505,7 +2491,7 @@ int8_t clc_lidar_segmentation_sorted(// out
 
 
     // I keep track of the already-visited points
-    const int Nwords_bitarray_visited = bitarray64_nwords(ctx->Nrings * ctx->Npoints_per_rotation); // largest-possible size
+    const int Nwords_bitarray_visited = bitarray64_nwords(clc_Nrings_max * ctx->Npoints_per_rotation); // largest-possible size
     uint64_t bitarray_visited[Nwords_bitarray_visited];
     memset(bitarray_visited, 0, Nwords_bitarray_visited*sizeof(uint64_t));
 
@@ -2621,7 +2607,7 @@ int8_t clc_lidar_segmentation_unsorted(// out
                           clc_lidar_segmentation_context_t* ctx)
 {
     clc_point3f_t points[scan->Npoints];
-    unsigned int Npoints_per_ring[ctx->Nrings];
+    unsigned int Npoints_per_ring[clc_Nrings_max];
 
     uint32_t ipoint_unsorted_in_sorted_order[scan->Npoints];
     int* Npoints_per_rotation_estimate;
@@ -2644,7 +2630,7 @@ int8_t clc_lidar_segmentation_unsorted(// out
                          Npoints_per_rotation_estimate,
 
                          // in
-                         ctx->Nrings,
+                         clc_Nrings_max,
                          // The stride, in bytes, between each successive points or
                          // rings value in clc_lidar_scan_unsorted_t
                          lidar_packet_stride,
@@ -2718,7 +2704,7 @@ void clc_lidar_preprocess(// out
                           int* Npoints_per_rotation,
 
                           // in
-                          int Nrings,
+                          const int Nrings,
                           // The stride, in bytes, between each successive points or
                           // rings value in clc_lidar_scan_t. If
                           // lidar_packet_stride==0, dense storage is assumed
