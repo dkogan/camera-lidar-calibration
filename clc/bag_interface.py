@@ -225,13 +225,17 @@ def messages(bag, topics,
             else:
                 if ignore_unknown_message_types:
                     continue
-                raise Exception(f"Unknown message type {type(msg)=}")
+                data = None
 
-            time_header_ns = msg.header.stamp.sec*1000000000 + msg.header.stamp.nanosec
+            try:    time_header_ns = msg.header.stamp.sec*1000000000 + msg.header.stamp.nanosec
+            except: time_header_ns = time_ns
+
+            try:    frame_id = msg.header.frame_id
+            except: frame_id = None
 
             yield dict( time_ns        = time_ns,
                         time_header_ns = time_header_ns,
-                        frame_id       = msg.header.frame_id,
+                        frame_id       = frame_id,
                         topic          = connection.topic,
                         msgtype        = connection.msgtype,
                         array          = data,
