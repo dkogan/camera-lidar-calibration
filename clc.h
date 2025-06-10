@@ -177,7 +177,7 @@ typedef struct
       "report diagnostic information on stderr, ONLY for the region within the given xy bounds" ) \
   _(float, debug_ymax,                                   -FLT_MAX,          "f","f", \
       "report diagnostic information on stderr, ONLY for the region within the given xy bounds" ) \
-  _(int,   threshold_min_Npoints_in_segment,             10,                "i","i", \
+  _(int,   threshold_min_Npoints_in_segment,             6,                "i","i", \
       "stage1: segments are accepted only if they contain at least this many points" ) \
   _(int,   threshold_max_Npoints_invalid_segment,        5,                 "i","i", \
       "stage1: segments are accepted only if they contain at most this many invalid points" ) \
@@ -191,12 +191,12 @@ typedef struct
                                                                         \
   /* This is unnaturally high. I'm comparing it to p-mean(p), but if the points aren't */ \
   /* distributed evenly, mean(p) won't be at the center */              \
-  _(float, threshold_max_plane_size,                     1.9f,              "f","f", \
+  _(float, threshold_max_plane_size,                     2.5f,              "f","f", \
       "Post-processing: high limit on the linear size of the reported plane.\n" \
       "In a square board this is roughly compared to the side length") \
   _(float, threshold_max_rms_fit_error,                  0.02f,            "f","f", \
       "Post-processing: high limit on the RMS plane fit residual. Lower values will demand flatter planes" ) \
-  _(float, threshold_min_rms_point_cloud_2nd_dimension__multiple_max_plane_size,  0.1f / 1.9f,              "f","f", \
+  _(float, threshold_min_rms_point_cloud_2nd_dimension__multiple_max_plane_size,  0.1f,              "f","f", \
       "Post-processing: low limit on the short length of the found plane. Too-skinny planes are rejected\n" \
       "Given as a multiple of the max_plane_size")                        \
   /* This is found by infer-lidar-spacing.py */                         \
@@ -204,7 +204,7 @@ typedef struct
       "How many points are reported by the LIDAR in a rotation.\n" \
       "This is hardware-dependent, and needs to be set each for LIDAR unit.\n" \
       "Defaults to -1, in which case clc_lidar_preprocess() will try to estimate this") \
-  _(int,   Npoints_per_segment,                          16,                "i","i", \
+  _(int,   Npoints_per_segment,                          8,                 "i","i", \
       "stage1: length of segments we're looking for" ) \
   _(int,   threshold_max_Ngap,                           2,                 "i","i", \
       "The maximum number of consecutive missing points in a ring" ) \
@@ -241,7 +241,7 @@ typedef struct
   _(int,   threshold_min_Nrings_in_cluster,              3,                 "i","i", \
       "stage2: clusters with date from fewer than this many rings are rejected" ) \
   /* used in refinement */                                              \
-  _(int, threshold_max_gap_Npoints,                     3, "i","i", \
+  _(int, threshold_max_gap_Npoints,                     5, "i","i", \
       "stage3: moving from the center, we stop accumulating points when we encounter\n" \
       "an angular gap at least this large" )
 
