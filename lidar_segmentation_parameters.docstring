@@ -5,16 +5,238 @@ SYNOPSIS
     pprint( clc.lidar_segmentation_parameters() )
 
     ===>
-    {'Npoints_per_rotation': {'ctype': 'int',
-                              'default': -1,
-                              'pyparse': 'i',
-                              'doc': 'How many points are reported by the LIDAR...',
-                             },
-      ...
-    }
+    dump:
+    {'ctype': 'int',
+     'default': 0,
+     'doc': 'if true, diagnostic detector data meant for plotting is output on '
+            'stdout. The intended use is\n'
+            '  ./lidar-segmentation-test.py --dump TOPIC BAG |\n'
+            '  | feedgnuplot \\\n'
+            "      --style label 'with labels' \\\n"
+            '      --style ACCEPTED "with points pt 2 ps 2 lw 2 lc \\"red\\""\\\n'
+            '      --tuplesize label 4 \\\n'
+            "      --style all 'with points pt 7 ps 0.5' \\\n"
+            '      --style stage1-segment "with vectors lc \\"green\\""\\\n'
+            '      --style plane-normal   "with vectors lc \\"black\\""\\\n'
+            '      --tuplesize stage1-segment,plane-normal 6\\\n'
+            '      --3d \\\n'
+            '      --domain \\\n'
+            '      --dataid \\\n'
+            '      --square \\\n'
+            '      --points \\\n'
+            '      --tuplesizeall 3 \\\n'
+            '      --autolegend \\\n'
+            '      --xlabel x \\\n'
+            '      --ylabel y \\\n'
+            '      --zlabel z\\\n',
+     'pyparse': 'p'}
+
+    debug_iring:
+    {'ctype': 'int',
+     'default': -1,
+     'doc': 'stage1: report diagnostic information on stderr, ONLY for this ring',
+     'pyparse': 'i'}
+
+    debug_xmin:
+    {'ctype': 'float',
+     'default': 3.4028234663852886e+38,
+     'doc': 'report diagnostic information on stderr, ONLY for the region within '
+            'the given xy bounds',
+     'pyparse': 'f'}
+
+    debug_xmax:
+    {'ctype': 'float',
+     'default': -3.4028234663852886e+38,
+     'doc': 'report diagnostic information on stderr, ONLY for the region within '
+            'the given xy bounds',
+     'pyparse': 'f'}
+
+    debug_ymin:
+    {'ctype': 'float',
+     'default': 3.4028234663852886e+38,
+     'doc': 'report diagnostic information on stderr, ONLY for the region within '
+            'the given xy bounds',
+     'pyparse': 'f'}
+
+    debug_ymax:
+    {'ctype': 'float',
+     'default': -3.4028234663852886e+38,
+     'doc': 'report diagnostic information on stderr, ONLY for the region within '
+            'the given xy bounds',
+     'pyparse': 'f'}
+
+    threshold_min_Npoints_in_segment:
+    {'ctype': 'int',
+     'default': 6,
+     'doc': 'stage1: segments are accepted only if they contain at least this many '
+            'points',
+     'pyparse': 'i'}
+
+    threshold_max_Npoints_invalid_segment:
+    {'ctype': 'int',
+     'default': 5,
+     'doc': 'stage1: segments are accepted only if they contain at most this many '
+            'invalid points',
+     'pyparse': 'i'}
+
+    threshold_max_range:
+    {'ctype': 'float',
+     'default': 9.0,
+     'doc': 'stage2: discard all segment clusters that lie COMPLETELY past the '
+            'given range',
+     'pyparse': 'f'}
+
+    threshold_distance_adjacent_points_cross_segment:
+    {'ctype': 'float',
+     'default': 0.10000000149011612,
+     'doc': 'stage2: adjacent cross-segment points in the same ring must be at '
+            'most this far apart',
+     'pyparse': 'f'}
+
+    threshold_min_cos_angle_error_same_direction_intra_ring:
+    {'ctype': 'float',
+     'default': 0.9848077297210693,
+     'doc': 'stage2: cos threshold used to accumulate a segment to an adjacent one '
+            'in the same ring',
+     'pyparse': 'f'}
+
+    threshold_max_plane_size:
+    {'ctype': 'float',
+     'default': 2.5,
+     'doc': 'Post-processing: high limit on the linear size of the reported '
+            'plane.\n'
+            'In a square board this is roughly compared to the side length',
+     'pyparse': 'f'}
+
+    threshold_max_rms_fit_error:
+    {'ctype': 'float',
+     'default': 0.019999999552965164,
+     'doc': 'Post-processing: high limit on the RMS plane fit residual. Lower '
+            'values will demand flatter planes',
+     'pyparse': 'f'}
+
+    threshold_min_rms_point_cloud_2nd_dimension__multiple_max_plane_size:
+    {'ctype': 'float',
+     'default': 0.10000000149011612,
+     'doc': 'Post-processing: low limit on the short length of the found plane. '
+            'Too-skinny planes are rejected\n'
+            'Given as a multiple of the max_plane_size',
+     'pyparse': 'f'}
+
+    Npoints_per_rotation:
+    {'ctype': 'int',
+     'default': -1,
+     'doc': 'How many points are reported by the LIDAR in a rotation.\n'
+            'This is hardware-dependent, and needs to be set each for LIDAR unit.\n'
+            'Defaults to -1, in which case clc_lidar_preprocess() will try to '
+            'estimate this',
+     'pyparse': 'i'}
+
+    Npoints_per_segment:
+    {'ctype': 'int',
+     'default': 8,
+     'doc': "stage1: length of segments we're looking for",
+     'pyparse': 'i'}
+
+    threshold_max_Ngap:
+    {'ctype': 'int',
+     'default': 2,
+     'doc': 'The maximum number of consecutive missing points in a ring',
+     'pyparse': 'i'}
+
+    threshold_max_deviation_off_segment_line:
+    {'ctype': 'float',
+     'default': 0.05000000074505806,
+     'doc': 'stage1: maximum allowed deviation off a segment line fit.\n'
+            'If any points violate this, the entire segment is rejected',
+     'pyparse': 'f'}
+
+    threshold_max_distance_across_rings:
+    {'ctype': 'float',
+     'default': 0.4000000059604645,
+     'doc': 'stage2: max ring-ring distance allowed to join two segments into a '
+            'cluster',
+     'pyparse': 'f'}
+
+    threshold_max_cos_angle_error_normal:
+    {'ctype': 'float',
+     'default': 0.15,
+     'doc': 'stage2: cos(v,n) threshold to accept a segment (and its direction v) '
+            'into an existing cluster (and its normal n)',
+     'pyparse': 'f'}
+
+    threshold_min_cos_angle_error_same_direction_cross_ring:
+    {'ctype': 'float',
+     'default': 0.9961947202682495,
+     'doc': 'stage2: cos threshold used to construct a cluster from two cross-ring '
+            'segments.\n'
+            'Non fitting pairs are not used to create a new cluster',
+     'pyparse': 'f'}
+
+    threshold_max_plane_point_error_stage2:
+    {'ctype': 'float',
+     'default': 0.05,
+     'doc': 'stage2: distance threshold to make sure each segment center lies in '
+            'plane\n'
+            'Non-fitting segments are not added to the cluster',
+     'pyparse': 'f'}
+
+    threshold_min_cos_plane_tilt_stage2:
+    {'ctype': 'float',
+     'default': 0.707106781185,
+     'doc': "stage2: the 'tilt' is the off-head-on orientation",
+     'pyparse': 'f'}
+
+    threshold_max_plane_point_error_stage3:
+    {'ctype': 'float',
+     'default': 0.05,
+     'doc': 'stage3: distance threshold to make sure each point lies in the plane\n'
+            'Non-fitting points are culled from the reported plane',
+     'pyparse': 'f'}
+
+    threshold_min_plane_point_error_isolation:
+    {'ctype': 'float',
+     'default': 0.3,
+     'doc': 'stage3: points just off the edge of the detected board must fit AT '
+            'LEAST this badly',
+     'pyparse': 'f'}
+
+    threshold_min_points_per_ring__multiple_Npoints_per_segment:
+    {'ctype': 'int',
+     'default': 2,
+     'doc': 'stage3: minimum number of points in EACH ring in the cluster; a '
+            'multiple of Npoints_per_segment',
+     'pyparse': 'i'}
+
+    threshold_max_Nsegments_in_cluster:
+    {'ctype': 'int',
+     'default': 150,
+     'doc': 'stage2: clusters with more than this many segments are rejected',
+     'pyparse': 'i'}
+
+    threshold_min_Nsegments_in_cluster:
+    {'ctype': 'int',
+     'default': 4,
+     'doc': 'stage2: clusters with fewer than this many segments are rejected',
+     'pyparse': 'i'}
+
+    threshold_min_Nrings_in_cluster:
+    {'ctype': 'int',
+     'default': 3,
+     'doc': 'stage2: clusters with date from fewer than this many rings are '
+            'rejected',
+     'pyparse': 'i'}
+
+    threshold_max_gap_Npoints:
+    {'ctype': 'int',
+     'default': 5,
+     'doc': 'stage3: moving from the center, we stop accumulating points when we '
+            'encounter\n'
+            'an angular gap at least this large',
+     'pyparse': 'i'}
 
 The lidar point segmentation routine contains many parameters that affect its
-behavior. These are defined in clc.h, and can be passed to the clc C library in
+operation. These are defined in clc.h, and can be passed to the clc C library in
 the clc_lidar_segmentation_context_t structure. The Python layer makes all of
 these available in clc.lidar_segmentation_parameters() and
 clc.lidar_segmentation_default_context().
@@ -22,6 +244,9 @@ clc.lidar_segmentation_default_context().
 This clc.lidar_segmentation_parameters() function returns all the parameter
 metadata defined in clc.h. Used to integrate these parameters into Python code,
 such as making them available as arguments to Python commandline tools.
+
+The most up-to-date parameter data, as of this writing, appears in the SYNOPSIS
+above.
 
 ARGUMENTS
 
