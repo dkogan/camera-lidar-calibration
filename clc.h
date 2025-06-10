@@ -215,9 +215,6 @@ typedef struct
   /* should be a factor of threshold_max_plane_size */                  \
   _(float, threshold_max_distance_across_rings,          0.4f,              "f","f", \
       "stage2: max ring-ring distance allowed to join two segments into a cluster" ) \
-  _(int,   Nrings,                                       32,                "i","i", \
-      "How many rings are present in the LIDAR data.\n" \
-      "This is hardware-dependent, and needs to be revisited for different LIDAR units" ) \
   /* cos(90-5deg) */                                                    \
   _(float, threshold_max_cos_angle_error_normal,         0.15,   "f","f", \
       "stage2: cos(v,n) threshold to accept a segment (and its direction v) into an existing cluster (and its normal n)" ) \
