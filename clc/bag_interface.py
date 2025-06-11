@@ -33,12 +33,122 @@ def _parse_timestamp_to_ns_since_epoch(t):
 
 def messages(bag, topics,
              *,
-             # if integer: s since epoch or ns since epoch
-             # if float:   s since epoch
-             # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
              start = None,
              stop  = None,
              ignore_unknown_message_types = False):
+
+    r'''Iterator to read messages from a rosbag
+
+SYNOPSIS
+
+    import clc
+
+    bag = '/path/to/bag'
+    for msg in clc.bag_interface.messages(bag, ('/lidar1/points', '/camera1/image')):
+
+        print(msg['time_header_ns'])
+        # timestamp when this message was produced by the hardware, in ns since the epoch
+
+        print(msg['time_ns'])
+        # timestamp when this message was recorded by the logging tool, in ns since the epoch
+
+        print(msg['frame_id'])
+        # The geometric frame of this sensor
+
+        if msg['msgtype'] == 'sensor_msgs/msg/PointCloud2':
+            # This is a single revolution of the lidar
+
+            # 3D points in the LIDAR frame. Numpy array of shape (Npoints,3)
+            points = msg['array']['xyz']
+
+        elif msg['msgtype'] == 'sensor_msgs/msg/Image':
+            # A single image from a camera
+
+            # Numpy array of shape (H,W) for grayscale images or (H,W,3) for
+            # color images
+            image = msg['array']
+
+clc is able to use a rosbag as its input data storage format. A rosbag may
+contain multiple data streams with a "topic" string identifying each one. The
+data stream for any given topic is a series of messages of identical data type.
+messages() is an iterator that produces messages "msg" one at a time. clc is
+primarily interested in lidar scans (msg['msgtype] =
+'sensor_msgs/msg/PointCloud2') and images (msg['msgtype] =
+'sensor_msgs/msg/Image').
+
+Each message yielded by this iterator is a dict with keys:
+
+- time_ns:        timestamp when this message was recorded by the logging tool
+
+- time_header_ns: timestamp when this messages was produced by the hardware. If
+                  unavailable, same as time_ns
+
+- frame_id:       The name of the geometric frame of this sensor. None if
+                  unavailable
+
+- topic:          string identifying this topic
+
+- msgtype:        string identifying the type of this message
+
+- array:          parsed numpy array representing this data. This depends on the
+                  specific msgtype and the hardware and its driver. At this time
+                  I only parse LIDAR and camera data. Other messages will
+                  produce None. See below for details
+
+- rawdata:        Unparsed bytes representing this message. Will never be None.
+
+- qos:            ros IPC quality-of-service data
+
+Each LIDAR message contains readings for a single revolution of the lidar. The
+data is returned in a numpy array msg['array']. This has a compound dtype,
+containing much metadata; the exact set varies depending on the LIDAR model and
+its driver. msg['array']['xyz'] will always be a point cloud of shape
+(Npoints,3). These are represented in the LIDAR's local coordinate system: xyz
+is (forward,right,down). Invalid points will usually have p = (0,0,0) for that
+point. Each point will usually also have intensity information in
+msg['array']['intensity'] and "ring" information in msg['array']['ring']. The
+"ring" identifies the specific laser that was used to capture this point. Since
+the lasers are rigidly mounted on a spindle rotating around the z axis, the
+elevation = atan( z, mag(x,y) ) of every point will be constant for each ring.
+
+Each camera image is stored in msg['array']. This is a 2D array of shape (H,W)
+for grayscale images or a 3D array of shape (H,W,3) for color images.
+
+clc does NOT use ros, and it is NOT required to be installed. Instead it uses
+the "rosbags" library to read the data.
+
+ARGUMENTS
+
+- bag: required string. The path on disk to the bag containing the data we're
+  reading. Everything supported by "rosbags" is valid here. Specifically, both
+  ros1 and ros2 data should work
+
+- topics: required iterable for the topics we're interested in. If we're
+  interested in a single topic, this should still be an iterable: something like
+  (topic,)
+
+- start: optional timestamp, indicating the start point in the bag. If None or
+  omitted, we start at the beginning. These timestamps are compared against
+  msg['time_ns']: the time when the message was recorded, NOT when the sensor
+  produced it. This timestamp is interpreted differently, based on its type. if
+  it's an integer: we interpret it as "sec since the epoch" or "nanosec since
+  epoch", depending on the numerical value. If it's a float: "sec since epoch".
+  If a string: we parse it as an integer or float OR as a freeform string using
+  dateutil.parser.parse().
+
+- stop: optional timestamp, indicating the end point in the bag. If None or
+  omitted, we read the bag to the end. The details are the same as with the
+  "start" timestamp.
+
+- ignore_unknown_message_types: optional boolean, defaulting to False. If
+  ignore_unknown_message_types: we will not yield any messages that aren't LIDAR
+  scans or images. Else: we will return all messages for the requested topics.
+  Unknown messages may have msg['array'] is None
+
+RETURNED VALUE
+
+An iterator, producing a dict for each message.
+    '''
 
     dtype_cache = dict()
 
@@ -196,6 +306,41 @@ def messages(bag, topics,
                 if 'ret' in dtype.fields:
                     data = data[data['ret'] == 0]
 
+
+                # Some datasets in the test suite were taken indoors. The floor
+                # and ceiling are confusing the lidar segmentation right now. So
+                # I explicitly throw them out; just for now hopefully
+                def env_true(n):
+                    import os
+                    v = os.environ.get(n, False)
+                    try:    v = int(v)
+                    except: pass
+                    return bool(v)
+
+                # Deegan
+                if env_true('CLC_CULL_FLOOR_CEILING_1'):
+                    import mrcal
+                    rt_world_lidar = np.array(( 0,.225,0,
+                                                0,0,0,),
+                                              dtype=float)
+                    p = data['xyz']
+                    p = mrcal.transform_point_rt(rt_world_lidar, p.astype(float))
+                    i = (p[...,2] > -0.3) * (p[...,2] < 2)
+                    data = data[i]
+                # Casey Majhor
+                elif env_true('CLC_CULL_FLOOR_CEILING_2'):
+                    import mrcal
+                    rt_world_lidar = np.array(( 0,-.11,0,
+                                                0,0,0,),
+                                              dtype=float)
+                    p = data['xyz']
+                    p = mrcal.transform_point_rt(rt_world_lidar, p.astype(float))
+                    i = (p[...,2] > -1.5) * (p[...,2] < 1.5)
+                    data = data[i]
+
+
+
+
             elif re.search(r'\bsensor_msgs__msg__Image\b', str(type(msg))):
                 data  = msg.data
                 shape = data.shape
@@ -243,19 +388,93 @@ def messages(bag, topics,
                         qos            = qos )
 
 
-# Returns None if we reached the end, and no data is available
-# Returns [None,None,....] if no data is available, but there's more data in the
-# bag/iterator
-def first_message_from_each_topic(bag, # the bag file OR an existing message iterator
+def first_message_from_each_topic(bag,
                                   topics,
                                   *,
-                                  # if integer: s since epoch or ns since epoch
-                                  # if float:   s since epoch
-                                  # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
                                   start             = None,
                                   stop              = None,
                                   max_time_spread_s = None,
                                   verbose           = False):
+    r'''Report the first message in the bag for each topic
+
+SYNOPSIS
+
+    import clc
+
+    bag      = '/path/to/bag'
+    topics   = ('/lidar1/points', '/camera1/image')
+    messages = clc.bag_interface.first_message_from_each_topic(bag, topics)
+
+clc tries to geometrically align data from multiple sensors. Each sensor
+produces data in a ros "topic", and the data we're ingesting comes from one or
+more "rosbags".
+
+One strategy for capturing the input data is to record a small rosbag for each
+stationary configuration of sensors and the calibration object. In this
+scenario, any set of messages in each bag is a good representation of a
+stationary sensor "snapshot", and we can use the first_message_from_each_topic()
+function to read off such a snapshot.
+
+Another strategy is to record one bag that contains ALL the data, including the
+transitions between stationary poses. We would then need slow motions and tight
+timings and outlier rejection to get consistent, stationary snapshots. in that
+scenario we can use first_message_from_each_topic() with start,stop specifying
+moving time windows and a tight max_time_spread_s to reduce synchronization
+errors. This is largely what first_message_from_each_topic_in_time_segments()
+does.
+
+For details about rosbags and how we read them, and what each "message"
+contains, see the docstring for clc.bag_interface.messages().
+
+This function calls messages(ignore_unknown_message_types = True), so there's an
+expectation that this will be used for LIDAR and/or camera data only.
+
+ARGUMENTS
+
+- bag: a required string (a path on disk pointing to a readable rosbag) or an
+  existing iterator returned by clc.bag_interface.messages().
+
+- topics: required iterable for the topics we're interested in. If we're
+  interested in a single topic, this should still be an iterable: something like
+  (topic,)
+
+- start: optional timestamp, indicating the start point in the bag. If None or
+  omitted, we start at the beginning. These timestamps are compared against
+  msg['time_ns']: the time when the message was recorded, NOT when the sensor
+  produced it. This timestamp is interpreted differently, based on its type. if
+  it's an integer: we interpret it as "sec since the epoch" or "nanosec since
+  epoch", depending on the numerical value. If it's a float: "sec since epoch".
+  If a string: we parse it as an integer or float OR as a freeform string using
+  dateutil.parser.parse().
+
+- stop: optional timestamp, indicating the end point in the bag. If None or
+  omitted, we read the bag to the end. The details are the same as with the
+  "start" timestamp.
+
+- max_time_spread_s: optional value for the worst-possible acceptable spread
+  between the earliest and latest message in the returned set. If omitted or
+  None, no checks are performed on the message timestamps. If max_time_spread_s
+  is given, the returned set WILL satisfy this requirement, but the returned
+  messages for some of the topics may be None, if the requirement could not be
+  satisfied. The algorithm used to satisfy this requirement is heuristic and NOT
+  optimal, but should be sufficient to return usable data
+
+- verbose: optional boolean, defaulting to False. Report diagnostics. At this
+  time, this does nothing
+
+RETURNED VALUE
+
+Under nominal conditions, a list of messages, corresponding to each topic in
+topics. Some/all of the messages in the list may be None if no valid data for
+that topic was found.
+
+If more data is available in the bag, past the given stop time, the list will be
+returned, possibly with all-None entries.
+
+If we have reached the end of the bag, and no more data is available, we return
+None instead of a list
+
+    '''
 
     if max_time_spread_s is None:
         max_time_spread_ns = None
@@ -432,16 +651,14 @@ def first_message_from_each_topic(bag, # the bag file OR an existing message ite
 
 def first_message_from_each_topic_in_time_segments(bag, topics,
                                                    *,
-                                                   period_s, # in seconds
-                                                   # if integer: s since epoch or ns since epoch
-                                                   # if float:   s since epoch
-                                                   # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
-                                                   start = None,
-                                                   stop  = None,
+                                                   period_s,
+                                                   start                     = None,
+                                                   stop                      = None,
                                                    require_at_least_N_topics = 1,
-                                                   verbose = False,
-                                                   exclude_time_periods = [],
-                                                   max_time_spread_s = None):
+                                                   verbose                   = False,
+                                                   exclude_time_periods      = [],
+                                                   max_time_spread_s         = None):
+
 
     message_iterator = messages(bag, topics,
                                 start = start)
