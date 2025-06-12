@@ -130,7 +130,7 @@ ARGUMENTS
 - start: optional timestamp, indicating the start point in the bag. If None or
   omitted, we start at the beginning. These timestamps are compared against
   msg['time_ns']: the time when the message was recorded, NOT when the sensor
-  produced it. This timestamp is interpreted differently, based on its type. if
+  produced it. This timestamp is interpreted differently, based on its type. If
   it's an integer: we interpret it as "sec since the epoch" or "nanosec since
   epoch", depending on the numerical value. If it's a float: "sec since epoch".
   If a string: we parse it as an integer or float OR as a freeform string using
@@ -441,7 +441,7 @@ ARGUMENTS
 - start: optional timestamp, indicating the start point in the bag. If None or
   omitted, we start at the beginning. These timestamps are compared against
   msg['time_ns']: the time when the message was recorded, NOT when the sensor
-  produced it. This timestamp is interpreted differently, based on its type. if
+  produced it. This timestamp is interpreted differently, based on its type. If
   it's an integer: we interpret it as "sec since the epoch" or "nanosec since
   epoch", depending on the numerical value. If it's a float: "sec since epoch".
   If a string: we parse it as an integer or float OR as a freeform string using
@@ -654,10 +654,115 @@ def first_message_from_each_topic_in_time_segments(bag, topics,
                                                    period_s,
                                                    start                     = None,
                                                    stop                      = None,
-                                                   require_at_least_N_topics = 1,
+                                                   require_at_least_N_topics = 2,
                                                    verbose                   = False,
                                                    exclude_time_periods      = [],
                                                    max_time_spread_s         = None):
+
+    r'''Report sets of messages for each topic over time
+
+SYNOPSIS
+
+    import clc
+
+    bag      = '/path/to/bag'
+    topics   = ('/lidar1/points', '/camera1/image')
+
+    for messages in clc.bag_interface. \
+                  first_message_from_each_topic_in_time_segments(bag, topics,
+                                                                 start    = start,
+                                                                 stop     = stop,
+                                                                 period_s = 2,
+                                                                 max_time_spread_s = 0.1)
+
+        # "messages" is a list of messages (one per topic) in this 2-sec-long
+        # time interval; the messages are guaranteed within 0.1s of each other
+
+        for topic,msg in zip(topics,messages):
+            if msg is None: continue
+            # Have "msg" corresopnding to "topic"
+            ....
+
+
+clc tries to geometrically align data from multiple sensors. Each sensor
+produces data in a ros "topic", and the data we're ingesting comes from one or
+more "rosbags".
+
+One strategy for capturing the input data is to record a small rosbag for each
+stationary configuration of sensors and the calibration object. In this
+scenario, any set of messages in each bag is a good representation of a
+stationary sensor "snapshot", and we can use the first_message_from_each_topic()
+function to read off such a snapshot.
+
+Another strategy is to record one bag that contains ALL the data, including the
+transitions between stationary poses. We would then need slow motions and tight
+timings and outlier rejection to get consistent, stationary snapshots. in that
+scenario we can use first_message_from_each_topic() with start,stop specifying
+moving time windows and a tight max_time_spread_s to reduce synchronization
+errors. This is largely what first_message_from_each_topic_in_time_segments()
+does.
+
+For details about rosbags and how we read them, and what each "message"
+contains, see the docstring for clc.bag_interface.messages().
+
+This function calls messages(ignore_unknown_message_types = True), so there's an
+expectation that this will be used for LIDAR and/or camera data only.
+
+This function creates a message iterator with messages() using the given
+[start,stop] interval. Then it gets sets of messages from this iterator for each
+window of period_s within that [start,stop] interval using a sequence of
+first_message_from_each_topic() calls
+
+ARGUMENTS
+
+- bag: a required string (a path on disk pointing to a readable rosbag)
+
+- topics: required iterable for the topics we're interested in. If we're
+  interested in a single topic, this should still be an iterable: something like
+  (topic,)
+
+- period_s: required; the duration, in seconds of the time interval for each
+  reported set of messages
+
+- start: optional timestamp, indicating the start point in the bag. If None or
+  omitted, we start at the beginning. These timestamps are compared against
+  msg['time_ns']: the time when the message was recorded, NOT when the sensor
+  produced it. This timestamp is interpreted differently, based on its type. If
+  it's an integer: we interpret it as "sec since the epoch" or "nanosec since
+  epoch", depending on the numerical value. If it's a float: "sec since epoch".
+  If a string: we parse it as an integer or float OR as a freeform string using
+  dateutil.parser.parse().
+
+- stop: optional timestamp, indicating the end point in the bag. If None or
+  omitted, we read the bag to the end. The details are the same as with the
+  "start" timestamp.
+
+- require_at_least_N_topics: optional integer. We only report messages sets if
+  the set has valid data for at least this many topics. If a set doesn't have
+  enough valid messages, we return nothing for this interval, and move on to the
+  next one. If omitted, defaults to 2.
+
+- exclude_time_periods: optional list of time periods to exclude from being
+  reported by this function. Each element of the list is a (time_start,time_end)
+  iterable describing that interval.
+
+- max_time_spread_s: optional value for the worst-possible acceptable spread
+  between the earliest and latest message in the returned set. If omitted or
+  None, no checks are performed on the message timestamps. If max_time_spread_s
+  is given, the returned set WILL satisfy this requirement, but the returned
+  messages for some of the topics may be None, if the requirement could not be
+  satisfied. The algorithm used to satisfy this requirement is heuristic and NOT
+  optimal, but should be sufficient to return usable data
+
+- verbose: optional boolean, defaulting to False. Report diagnostics.
+
+RETURNED VALUE
+
+An iterator. Each item returned by the iterator is a list of messages,
+corresponding to each topic in topics. Some/all of the messages in the list may
+be None if no valid data for that topic was found. Each set of messages respects
+require_at_least_N_topics and max_time_spread_s.
+    '''
 
 
     message_iterator = messages(bag, topics,
