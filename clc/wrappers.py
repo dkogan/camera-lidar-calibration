@@ -18,7 +18,104 @@ def lidar_segmentation(*,
                        # if float:   s since epoch
                        # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
                        start  = None,
-                       **kwargs):
+                       **lidar_segmentation_parameters):
+
+    r'''Find the calibration plane in a LIDAR point cloud
+
+SYNOPSIS
+
+    import gnuplotlib as gp
+
+    result = clc.lidar_segmentation(bag = BAG,
+                                    lidar_topic = TOPIC,
+                                    ...)
+
+    gp.plot( result['points'],
+             tuplesize = -3,
+             _with     = 'points',
+             _3d       = True,
+             square    = True )
+
+    # a 3D plot pops up showing the points in the calibration object
+
+LIDAR point cloud segmentation is a significant part of the whole clc pipeline.
+This function allows this component to be exercised in isolation, all by itself,
+to make it possible to effectively test it.
+
+The input to the segmentation routine is a point cloud resulting from one full
+rotation of the LIDAR. The LIDAR unit contains some number of lasers rigidly
+mounted onto a spindle, rotating around the z axis of the LIDAR coordinate
+system. Thus for each laser, the elevation = atan( z, mag(x,y) ) will be
+constant for all points produced by that laser. Furthermore, the spacing of az =
+atan2(y,x) is generally even and consistent for all lasers.
+
+In the LIDAR data ingested by clc, each laser is identied by a single integer
+"ring". The "ring" values are sequential, from 0 to Nrings-1.
+
+This lidar_segmentation() function can ingest either
+
+- A "bag" of data and a "lidar_topic". The first full 360deg set of points is
+  pulled out of this bag, and used for the segmentation
+
+- Numpy arrays "points" and "rings". Both of these have length = Npoints. These
+  are assumed to represent a 360deg set of points, and are used for the
+  segmentation
+
+Whether the points are read from the "bag" or the "poitns" array, invalid points
+will have p = (0,0,0), and will be ignored
+
+ARGUMENTS
+
+- bag: optional string pointing to the bag we're reading. If given and not None,
+  the the "lidar_topic" must also be given and not None, while "rings" and
+  "points" MUST be omitted or None
+
+- lidar_topic: optional string identifying the specific sensor we're reading.
+  Required and used if "bag" is also given. MUST be omitted or None if "points"
+  and "rings" are given
+
+- "points": optional numpy array of shape (Npoints,3). If given, this is the
+  point cloud we're segmenting. If given, the "rings" must be given also, while
+  "bag" and "lidar_topic" must not be.
+
+- "rings" optional numpy array of shape (Npoints,); identifies the laser that
+  captured each corresponding point in "points". If given, "points" is required,
+  while "bag" and "lidar_topic" must be omitted or None
+
+- start: optional timestamp, indicating the start point in the bag. Used only if
+  "bag" is given and not None. This timestamp is compared against
+  msg['time_ns']: the time when the message was recorded, NOT when the sensor
+  produced it. This timestamp is interpreted differently, based on its type. If
+  it's an integer: we interpret it as "sec since the epoch" or "nanosec since
+  epoch", depending on the numerical value. If it's a float: "sec since epoch".
+  If a string: we parse it as an integer or float OR as a freeform string using
+  dateutil.parser.parse().
+
+- **lidar_segmentation_parameters: optional parameters controlling the operation
+  of the segmentation routine. Any parameters that are omitted will take their
+  default values. The available parameters, a description of their operation and
+  their default values are given in clc.h in the
+  CLC_LIDAR_SEGMENTATION_LIST_CONTEXT macro.
+
+RETURNED VALUE
+
+A dict describing the result. The key/values are:
+
+- "points": a list of length Nplanes. Each element is a numpy array of shape
+  (Npoints[iplane],3). These are the points determined to lie on a plane
+  suitable for calibrating
+
+- "plane_p": a numpy array of shape (Nplane,3). For each plane, contains a point
+  lying somewhere on the plane
+
+- "plane_n": a numpy array of shape (Nplane,3). For each plane, contains a unit
+  normal vector FROM the LIDAR unit TO the plane.
+
+This dict is returned even if no planes were found: the same results will be
+returned, with Nplanes=0. If an error occurred during the computation, and
+exception will be raised.
+
+    '''
 
     if bag is not None:
         if not os.path.exists(bag):
@@ -33,7 +130,7 @@ def lidar_segmentation(*,
     ipoint, plane_pn = \
         _clc.lidar_segmentation(points = points,
                                 rings  = rings,
-                                **kwargs)
+                                **lidar_segmentation_parameters)
     Nplanes = len(ipoint)
 
     return \
