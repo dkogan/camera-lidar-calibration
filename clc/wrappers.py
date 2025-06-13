@@ -167,17 +167,17 @@ def _is_message_pointcloud(msg):
 
 def _sorted_sensor_snapshots(bags, topics,
                              *,
-                             decimation_period = None,
-                             start             = None,
-                             stop              = None,
-                             max_time_spread_s = None,
+                             decimation_period_s  = None,
+                             start                = None,
+                             stop                 = None,
+                             max_time_spread_s    = None,
                              exclude_time_periods = [],
-                             verbose           = False):
+                             verbose              = False):
     for bag in bags:
         if not os.path.exists(bag):
             raise Exception(f"Bag path '{bag}' does not exist")
 
-    if decimation_period is None:
+    if decimation_period_s is None:
         # Each bag is a snapshot in time. We take the first set of messages (one
         # per topic) from each bag
         messages_bags = \
@@ -206,11 +206,11 @@ def _sorted_sensor_snapshots(bags, topics,
             for isnapshot,bag in enumerate(bags_selected):
                 print(f"{isnapshot=}: {bag=}")
     else:
-        # We have one long bag. I look at each time segment decimation_period
+        # We have one long bag. I look at each time segment decimation_period_s
         # long, and take the first set of messages (one per topic) from such
         # segment
         if len(bags) != 1:
-            raise Exception("decimation_period is not None, so I expect exactly one bag to have been given")
+            raise Exception("decimation_period_s is not None, so I expect exactly one bag to have been given")
         bag = bags[0]
         # slurp an iterator into a list. This wastes memory, but saves me some
         # coding time today
@@ -219,7 +219,7 @@ def _sorted_sensor_snapshots(bags, topics,
                   first_message_from_each_topic_in_time_segments(bag, topics,
                                                                  start    = start,
                                                                  stop     = stop,
-                                                                 period_s = decimation_period,
+                                                                 period_s = decimation_period_s,
                                                                  require_at_least_N_topics = 2,
                                                                  max_time_spread_s = max_time_spread_s,
                                                                  exclude_time_periods = exclude_time_periods,
@@ -261,11 +261,11 @@ def _sorted_sensor_snapshots(bags, topics,
 
 def calibrate(*,
               bags, topics,
-              decimation_period = None,
-              start             = None,
-              stop              = None,
-              max_time_spread_s = None,
-              verbose           = False,
+              decimation_period_s  = None,
+              start                = None,
+              stop                 = None,
+              max_time_spread_s    = None,
+              verbose              = False,
               exclude_time_periods = [],
               **kwargs):
 
@@ -381,12 +381,12 @@ A dict describing the result. The items are:
 '''
 
     return _clc.calibrate( _sorted_sensor_snapshots(bags, topics,
-                                                    decimation_period = decimation_period,
-                                                    start             = start,
-                                                    stop              = stop,
-                                                    max_time_spread_s = max_time_spread_s,
+                                                    decimation_period_s  = decimation_period_s,
+                                                    start                = start,
+                                                    stop                 = stop,
+                                                    max_time_spread_s    = max_time_spread_s,
                                                     exclude_time_periods = exclude_time_periods,
-                                                    verbose           = verbose),
+                                                    verbose              = verbose),
                            verbose = verbose,
                            **kwargs)
 

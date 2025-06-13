@@ -269,7 +269,7 @@ if len(args.models) > 0:
 
 kwargs_calibrate = dict(bags                               = args.bag,
                         topics                             = args.topics,
-                        decimation_period                  = args.decimation_period,
+                        decimation_period_s                = args.decimation_period,
                         max_time_spread_s                  = args.max_time_spread_s,
                         exclude_time_periods               = args.exclude_time_period,
                         start                              = args.after,
