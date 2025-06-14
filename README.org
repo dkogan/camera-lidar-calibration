@@ -8,21 +8,12 @@ The bulk of this is C code. To build you need to
 sudo apt install libmrgingham-dev libdogleg-dev libopencv-dev libpython3-dev
 #+end_src
 
-You also need to build the bleeding-edge mrcal tree:
+You also need to build the bleeding-edge mrcal tree. The v2.5 series is
+recent-enough.
+
+Build and use =clc= like this:
 
 #+begin_src sh
-sudo apt build-dep mrcal
-
-D=YOUR_DIRECTORY_FOR_SOURCES
-cd $D
-git clone https://github.com/dkogan/mrcal.git
-cd mrcal
 make
-#+end_src
-
-Then build and use =clc= like this:
-
-#+begin_src sh
-MRCAL=$D/mrcal make
 PYTHONPATH=$D/mrcal fit.py ....
 #+end_src
