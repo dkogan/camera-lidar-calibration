@@ -461,30 +461,3 @@ bool clc_fit_from_inputs_dump(// out
                               bool do_inject_noise,
                               bool do_skip_plots,
                               bool verbose);
-
-bool
-clc_estimate_camera_pose_from_fixed_point_observations(// out
-                                                    double* Rt_cam_points,
-                                                    // in
-                                                    const mrcal_lensmodel_t* lensmodel,
-                                                    const double*            intrinsics,
-                                                    const mrcal_point2_t*    observations,
-                                                    const mrcal_point3_t*    points_ref,
-                                                    const int                N);
-
-bool clc_fit_Rt_camera_board(// out
-                 double*                    Rt_camera_board,
-                 // in
-                 const mrcal_cameramodel_t* model,
-                 const mrcal_point2_t*      observations,
-                 const int                  object_height_n,
-                 const int                  object_width_n,
-                 const double               object_spacing);
-
-void
-clc_ref_calibration_object(// out
-                       mrcal_point3_t*            points_ref,
-                       // in
-                       const int                  object_height_n,
-                       const int                  object_width_n,
-                       const double               object_spacing);

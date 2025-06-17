@@ -219,15 +219,15 @@ static bool Rt_uninitialized(const double* Rt)
 // mrcal.calibration._estimate_camera_pose_from_fixed_point_observations(). Not
 // pushed to mrcal itself because it calls OpenCV, but mrcal does not link to it
 // in its C library
-bool
-clc_estimate_camera_pose_from_fixed_point_observations(// out
-                                                    double* Rt_cam_points,
-                                                    // in
-                                                    const mrcal_lensmodel_t* lensmodel,
-                                                    const double*            intrinsics,
-                                                    const mrcal_point2_t*    observations,
-                                                    const mrcal_point3_t*    points_ref,
-                                                    const int                N)
+static bool
+estimate_camera_pose_from_fixed_point_observations(// out
+                                                double* Rt_cam_points,
+                                                // in
+                                                const mrcal_lensmodel_t* lensmodel,
+                                                const double*            intrinsics,
+                                                const mrcal_point2_t*    observations,
+                                                const mrcal_point3_t*    points_ref,
+                                                const int                N)
 {
     // if z<0, try again with bigger f
     // if too few points: try again with smaller f
@@ -343,13 +343,14 @@ clc_estimate_camera_pose_from_fixed_point_observations(// out
     return false;
 }
 
+static
 void
-clc_ref_calibration_object(// out
-                       mrcal_point3_t*            points_ref,
-                       // in
-                       const int                  object_height_n,
-                       const int                  object_width_n,
-                       const double               object_spacing)
+ref_calibration_object(// out
+                   mrcal_point3_t*            points_ref,
+                   // in
+                   const int                  object_height_n,
+                   const int                  object_width_n,
+                   const double               object_spacing)
 
 {
     // The board geometry is usually computed by mrcal.ref_calibration_object():
@@ -371,25 +372,26 @@ clc_ref_calibration_object(// out
         }
 }
 
-bool clc_fit_Rt_camera_board(// out
-                 double*                    Rt_camera_board,
-                 // in
-                 const mrcal_cameramodel_t* model,
-                 const mrcal_point2_t*      observations,
-                 const int                  object_height_n,
-                 const int                  object_width_n,
-                 const double               object_spacing)
+static
+bool fit_Rt_camera_board(// out
+             double*                    Rt_camera_board,
+             // in
+             const mrcal_cameramodel_t* model,
+             const mrcal_point2_t*      observations,
+             const int                  object_height_n,
+             const int                  object_width_n,
+             const double               object_spacing)
 {
     const int N = object_height_n*object_width_n;
     mrcal_point3_t points_ref[N];
-    clc_ref_calibration_object(points_ref, object_height_n, object_width_n, object_spacing);
+    ref_calibration_object(points_ref, object_height_n, object_width_n, object_spacing);
 
-    if(!clc_estimate_camera_pose_from_fixed_point_observations( Rt_camera_board,
-                                                             &model->lensmodel,
-                                                             model->intrinsics,
-                                                             observations,
-                                                             points_ref,
-                                                             N))
+    if(!estimate_camera_pose_from_fixed_point_observations( Rt_camera_board,
+                                                            &model->lensmodel,
+                                                            model->intrinsics,
+                                                            observations,
+                                                            points_ref,
+                                                            N))
         return false;
     if(Rt_camera_board[3*3 + 2] <= 0)
     {
@@ -411,14 +413,14 @@ fit_Rt_camera_board_withcache(// out
                               const double               object_spacing)
 {
     if(Rt_uninitialized(Rt_camera_board))
-        if(!clc_fit_Rt_camera_board(// out
-                                    Rt_camera_board,
-                                    // in
-                                    model,
-                                    observations,
-                                    object_height_n,
-                                    object_width_n,
-                                    object_spacing))
+        if(!fit_Rt_camera_board(// out
+                                Rt_camera_board,
+                                // in
+                                model,
+                                observations,
+                                object_height_n,
+                                object_width_n,
+                                object_spacing))
             return false;
     return true;
 }
@@ -989,7 +991,7 @@ bool align_point_clouds(// out
                      N = object_height_n*object_width_n;
                  mrcal_point3_t chessboard_points_ref[N];
                  if(Ncameras > 0)
-                     clc_ref_calibration_object(chessboard_points_ref, object_height_n, object_width_n, object_spacing);
+                     ref_calibration_object(chessboard_points_ref, object_height_n, object_width_n, object_spacing);
 
                  for(int i=0; i<Nfit_snapshot; i++)
                  {
