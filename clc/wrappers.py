@@ -269,7 +269,7 @@ def calibrate(*,
               exclude_time_periods = [],
               **kwargs):
 
-    r'''Re-runs a previously-dumped calibration
+    r'''Invoke the full clc calibration routine
 
 SYNOPSIS
 
@@ -394,7 +394,7 @@ A dict describing the result. The items are:
 
 
 def color_sequence_rgb():
-    r'''Returns the default color sequence for gnuplot objects
+    r'''Return the default color sequence for gnuplot objects
 
 SYNOPSIS
 
@@ -488,7 +488,7 @@ def pointcloud_plot_tuples(bag, lidar_topics,
                            Rt_vehicle_lidar0   = None,
                            start               = None):
 
-    r'''Helper function for visualizing LIDAR data
+    r'''Helper function for visualizing LIDAR data in a common frame
 
 SYNOPSIS
 
@@ -589,7 +589,7 @@ def sensor_forward_vectors_plot_tuples(rt_ref_lidar,
                                        *,
                                        isensor = None):
 
-    r'''Helper function for visualizing sensor poses
+    r'''Helper function for visualizing sensor poses in geometric plots
 
 SYNOPSIS
 

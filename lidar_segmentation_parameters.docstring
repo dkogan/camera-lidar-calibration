@@ -237,8 +237,9 @@ SYNOPSIS
 
 The lidar point segmentation routine contains many parameters that affect its
 operation. These are defined in clc.h, and can be passed to the clc C library in
-the clc_lidar_segmentation_context_t structure. The Python layer makes all of
-these available in clc.lidar_segmentation_parameters() and
+the clc_lidar_segmentation_context_t structure (in the
+CLC_LIDAR_SEGMENTATION_LIST_CONTEXT macro). The Python layer makes all of these
+available in clc.lidar_segmentation_parameters() and
 clc.lidar_segmentation_default_context().
 
 This clc.lidar_segmentation_parameters() function returns all the parameter

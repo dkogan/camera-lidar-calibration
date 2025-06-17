@@ -243,20 +243,34 @@ The input data is provided as a set of synchronized /snapshots/ in one of these
 structures:
 
 - =clc_sensor_snapshot_unsorted_t=: the LIDAR data is not assumed to be ordered
-  in any way, and may contain invalid points (0,0,0)
+  in any way, and may contain invalid points (0,0,0). The images are given as
+  images
 - =clc_sensor_snapshot_segmented_t=: the LIDAR point clouds have been segmented
   by =clc_lidar_segmentation_unsorted()= or =clc_lidar_segmentation_sorted()=.
-  The segmented points are stored as indices into the original =points= array
+  The segmented points are stored as indices into the original =points= array.
+  The images are still given as images
 - =clc_sensor_snapshot_sorted_t=: the LIDAR data has been process by
   =clc_lidar_preprocess()=: the points have been sorted by ring and azimuth, and
-  invalid entries have been removed
+  invalid entries have been removed. The images were processed with a chessboard
+  detector, and the chessboard corners are stored instead of the source images
 - =clc_sensor_snapshot_segmented_dense_t=. The LIDAR point clouds have been
-  segmented. The =points= array contains /only/ the segmented points.
+  segmented. The =points= array contains /only/ the segmented points. The images
+  were processed with a chessboard detector, and the chessboard corners are
+  stored instead of the source images
 
-Many functions take a =const clc_lidar_segmentation_context_t* ctx=. This is a
-set of parameters controlling the operation of the LIDAR segmentation routine.
-Most often, we would set the default parameters, make small adjustments, and
-then invoke clc:
+The available functions are:
+
+*** =clc_lidar_preprocess()=
+Sort the input LIDAR points by ring and azimuth, and remove the invalid entries.
+Usually there's no reason to call this explicitly:
+=fit(sensor_snapshots_unsorted)= does this for you. If calling this function
+ourselves, we can call =fit(sensor_snapshots_sorted)= instead.
+
+*** =clc_lidar_segmentation_default_context()=
+Several functions in the C API invoke the LIDAR segmentation routine. This
+routine has a number of parameters that affect its operation, given in the
+=const clc_lidar_segmentation_context_t* ctx= argument. Most often, we would set
+the default parameters, make small adjustments, and then invoke clc:
 
 #+begin_src c
 clc_lidar_segmentation_context_t ctx;
@@ -267,210 +281,75 @@ clc(..., &ctx, ...);
 #+end_src
 
 The available parameters, a description of their operation and their default
-values are given in clc.h in the CLC_LIDAR_SEGMENTATION_LIST_CONTEXT macro.
-
-The available functions are:
-
-*** =clc_lidar_preprocess()=
-The prototype is
-
-#+begin_src c
-// Sorts the lidar data by ring and azimuth, to be passable to
-// clc_lidar_segmentation_sorted()
-void clc_lidar_sort(// out
-                    //
-                    // These buffers must be pre-allocated
-                    // length sum(Npoints). Sorted by ring and then by azimuth
-                    clc_point3f_t* points,
-                    // indices; length(sum(Npoints))
-                    uint32_t* ipoint_unsorted_in_sorted_order,
-                    // length Nrings
-                    unsigned int* Npoints,
-
-                    // in
-                    int Nrings,
-                    // The stride, in bytes, between each successive points or
-                    // rings value in clc_lidar_scan_unsorted_t
-                    const unsigned int      lidar_packet_stride,
-                    const clc_lidar_scan_unsorted_t* scan);
-#+end_src
-
-*** =clc_lidar_segmentation_default_context()=
-The prototype is
-
-#+begin_src c
-void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ctx);
-#+end_src
+values are given in =clc.h= in the =CLC_LIDAR_SEGMENTATION_LIST_CONTEXT= macro.
 
 *** =clc_lidar_segmentation_unsorted()=, =clc_lidar_segmentation_sorted()=
-Run the LIDAR segmentation routine in isolation
+Invoke the LIDAR segmentation routine in isolation. Usually there's no reason to
+call this explicitly: =fit(sensor_snapshots_unsorted)= and
+=fit(sensor_snapshots_sorted)= does this for us. If calling this function /and/
+=clc_camera_chessboard_detection()= ourselves, we can call
+=fit(sensor_snapshots_segmented)= or =fit(sensor_snapshots_segmented_dense)=
+instead.
 
-*** x =clc_camera_chessboard_detection()=
-The prototype is
-
-#+begin_src c
-bool
-clc_camera_chessboard_detection(// out
-                               mrcal_point2_t* chessboard_corners,
-                               // in
-                               const mrcal_image_uint8_t* image, // might be color
-                               const bool is_image_bgr,
-                               const int object_height_n,
-                               const int object_width_n);
-#+end_src
+*** =clc_camera_chessboard_detection()=
+Invoke the chessboard detector in isolation, to find the chessboard in images
+from the camera. Usually there's no reason to call this explicitly:
+=fit(sensor_snapshots_unsorted)= and =fit(sensor_snapshots_sorted)= does this
+for us. If calling this function /and/ =clc_lidar_segmentation_...()= ourselves,
+we can call =fit(sensor_snapshots_segmented)= or
+=fit(sensor_snapshots_segmented_dense)= instead.
 
 *** =clc()=
-The prototype is
+Invoke the full calibration routine. As with the other functions, each argument
+is documented in =clc.h=. The outputs are given first, and most can be =NULL= if
+we aren't interested in those specific outputs. To run uncertainty computations,
+the covariance output is needed, so set =Var_rt_lidar0_sensor= to non-=NULL=.
 
-#+begin_src c
-// Each sensor is uniquely identified by its position in the
-// sensor_snapshots[].lidar_scans[] or .images[] arrays. An unobserved sensor in
-// some sensor snapshot should be indicated by lidar_scans[] = {} or images[] =
-// {}
-//
-// The rt_lidar0|vehicle_lidar|camera arrays are the input/output. Some (but not
-// all) may be NULL
-//
-// We return true on success
-bool clc(// in/out
-         // On input:
-         //   if(     use_given_seed_geometry_lidar0):  rt_lidar0_...  are used as a seed
-         //   else if(use_given_seed_geometry_vehicle): rt_vehicle_... are used as a seed
-         //   else: neither is used as the seed, and we COMPUTE the initial geometry
-         //
-         //   if a seed is given, rt_lidar0_lidar[0] MUST be the identity transform
-         //
-         // On output:
-         //   we store the solution into all of these that are != NULL. If
-         //   possible, both rt_lidar0_... and rt_vehicle_... are populated
-         //
-         // If rt_vehicle_... are given (for input or output), then
-         // rt_vehicle_lidar0 MUST be non-NULL
-         mrcal_pose_t* rt_lidar0_lidar,   // Nlidars  of these; some may be NULL
-         mrcal_pose_t* rt_lidar0_camera,  // Ncameras of these; some may be NULL
-         mrcal_pose_t* rt_vehicle_lidar,  // Nlidars  of these; some may be NULL
-         mrcal_pose_t* rt_vehicle_camera, // Ncameras of these; some may be NULL
-         // at most one of these should be true
-         bool          use_given_seed_geometry_lidar0,
-         bool          use_given_seed_geometry_vehicle,
-
-         // Covariance of the output. Symmetric matrix of shape
-         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
-         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6; may be NULL
-         double*       Var_rt_lidar0_sensor,
-         // dense array of shape (Nsectors,); may be NULL
-         // Will try to set this even if clc() failed: from
-         // rt_lidar0/vehicle_lidar_camera and use_given_seed_geometry_... If it
-         // really couldn't be computed from those either, all entries will be
-         // set to 0
-         uint16_t* observations_per_sector,
-
-         // A dense array of shape (Nsensors,Nsectors); may be NULL
-         // Needs lidar_scans_for_isvisible!=NULL
-         // Will try to set this even if clc() failed: from
-         // rt_lidar0/vehicle_lidar_camera and use_given_seed_geometry_... If it
-         // really couldn't be computed from those either, all entries will be
-         // set to 0
-         uint8_t* isvisible_per_sensor_per_sector,
-
-         // array of shape (Nsectors,); may be NULL
-         // if not NULL, requires that
-         //   isvisible_per_sensor_per_sector!=NULL && Var_rt_lidar0_sensor!=NULL
-         double* stdev_worst_per_sector,
-         // dense array of shape (Nsectors,2); may be NULL
-         uint16_t* isensors_pair_stdev_worst,
-         const int Nsectors,
-         // used for isvisible_per_sensor_per_sector
-         const double threshold_valid_lidar_range,
-         const int    threshold_valid_lidar_Npoints,
-         // used for isvisible_per_sensor_per_sector and stdev_worst_per_sector
-         const double uncertainty_quantification_range,
-
-         // may be NULL. Will attempt to report this even if clc() fails; -1
-         // means it could not be computed
-         int* isector_of_last_snapshot,
-
-         // Pass non-NULL to get the fit-inputs dump. These encode the data
-         // buffer. The caller must free(*buf_inputs_dump) when done. Even when
-         // this call fails
-         char**  buf_inputs_dump,
-         size_t* size_inputs_dump,
-
-         // in
-
-         // Exactly one of these should be non-NULL
-         const clc_sensor_snapshot_unsorted_t*        sensor_snapshots_unsorted,
-         const clc_sensor_snapshot_sorted_t*          sensor_snapshots_sorted,
-         const clc_sensor_snapshot_segmented_t*       sensor_snapshots_segmented,
-         const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots_segmented_dense,
-
-         const unsigned int                    Nsnapshots,
-         // The stride, in bytes, between each successive points or rings value
-         // in sensor_snapshots_unsorted and lidar_scans_for_isvisible; unused
-         // if either of those is NULL
-         const unsigned int           lidar_packet_stride,
-
-         // Nlidars of these. Required if isvisible_per_sensor_per_sector!=NULL
-         const clc_lidar_scan_unsorted_t* lidar_scans_for_isvisible,
-
-         const unsigned int Nlidars,
-         const unsigned int Ncameras,
-         const mrcal_cameramodel_t*const* models, // Ncameras of these
-         // The dimensions of the chessboard grid being detected in the images
-         const int object_height_n,
-         const int object_width_n,
-         const double object_spacing,
-
-         // bits indicating whether a camera in sensor_snapshots.images[] is
-         // color or not
-         // unused if sensor_snapshots_unsorted==NULL &&
-         // sensor_snapshots_sorted==NULL
-         const clc_is_bgr_mask_t is_bgr_mask,
-         // unused if sensor_snapshots_unsorted==NULL &&
-         // sensor_snapshots_sorted==NULL
-         const clc_lidar_segmentation_context_t* ctx,
-
-         const mrcal_pose_t* rt_vehicle_lidar0,
-
-         const double fit_seed_position_err_threshold,
-         const double fit_seed_cos_angle_err_threshold,
-         bool check_gradient__use_distance_to_plane,
-         bool check_gradient,
-         bool verbose);
-#+end_src
+It's often helpful to be able to to re-run a solve for testing different
+configurations. The =buf_inputs_dump= argument can be used to store a solve
+dump, which can then be replayed by calling =clc_fit_from_inputs_dump()=
 
 *** =clc_fit_from_inputs_dump()=
-The prototype is
-
-#+begin_src c
-bool clc_fit_from_inputs_dump(// out
-                              int* Nlidars,
-                              int* Ncameras,
-                              // Allocated by the function on success.
-                              // It's the caller's responsibility to
-                              // free() these
-                              mrcal_pose_t** rt_lidar0_lidar,
-                              mrcal_pose_t** rt_lidar0_camera,
-                              // in
-                              const char* buf_inputs_dump,
-                              size_t      size_inputs_dump,
-                              const int*  exclude_isnapshot, // NULL to not exclude any
-                              const int   Nexclude_isnapshot,
-
-                              const double fit_seed_position_err_threshold,
-                              const double fit_seed_cos_angle_err_threshold,
-
-                              // if(!do_fit_seed && !do_inject_noise) { fit(previous fit_seed() result)     }
-                              // if(!do_fit_seed &&  do_inject_noise) { fit(previous fit() result)          }
-                              // if(do_fit_seed)                      { fit( fit_seed() )                   }
-                              bool do_fit_seed,
-                              // if true, the observations are noised; regardless of do_fit_seed
-                              bool do_inject_noise,
-                              bool do_skip_plots,
-                              bool verbose);
-#+end_src
+It's often helpful to be able to to re-run a solve for testing different
+configurations. The =buf_inputs_dump= argument to =fit()= can be used to store a
+solve dump, which can then be replayed by calling =clc_fit_from_inputs_dump()=
 
 ** Python API
+The Python API provides Python access to all the core functionality provided by
+the C API. This Python access is then used by all the commandline tools, which
+are also written in Python. The public Python API lives in the =clc= module, and
+all the functions are documented thoroughly in their respective docstrings.
+
+A summary of all the available functions:
+
+- =lidar_segmentation()=
+Find the calibration plane in a LIDAR point cloud
+
+- =calibrate()=
+Invoke the full clc calibration routine
+
+- =clc.fit_from_inputs_dump()=
+Re-run a previously-dumped calibration
+
+- =clc.lidar_segmentation_parameters()=
+Reports the metadata for ALL of the lidar segmentation parameters
+
+- =clc.lidar_segmentation_default_context()=
+Reports the default values for ALL of the lidar segmentation parameters
+
+- =color_sequence_rgb()=
+Return the default color sequence for gnuplot objects. Useful for complex
+plotting
+
+- =plot()=
+Wrapper for gnuplotlib.plot(), reporting the hardcopy output to the console
+
+- =pointcloud_plot_tuples()=
+Helper function for visualizing LIDAR data in a common frame
+
+- =sensor_forward_vectors_plot_tuples()=
+Helper function for visualizing sensor poses in geometric plots
+
 ** Commandline tools
 * ROS business, time periods, etc, etc
 

@@ -1,4 +1,4 @@
-Reports the metadata for ALL of the lidar segmentation parameters
+Reports the default values for ALL of the lidar segmentation parameters
 
 SYNOPSIS
 
@@ -36,9 +36,10 @@ SYNOPSIS
      'threshold_min_rms_point_cloud_2nd_dimension__multiple_max_plane_size': 0.10000000149011612}
 
 The lidar point segmentation routine contains many parameters that affect its
-operation. These are defined in clc.h, and can be passed to the clc C library in
-the clc_lidar_segmentation_context_t structure. The Python layer makes all of
-these available in clc.lidar_segmentation_parameters() and
+operation. These are defined in clc.h (in the
+CLC_LIDAR_SEGMENTATION_LIST_CONTEXT macro), and can be passed to the clc C
+library in the clc_lidar_segmentation_context_t structure. The Python layer
+makes all of these available in clc.lidar_segmentation_parameters() and
 clc.lidar_segmentation_default_context().
 
 This clc.lidar_segmentation_default_context() function returns a dict mapping
