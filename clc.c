@@ -2059,22 +2059,24 @@ static void cost(const double*   b,
 
         if(ctx->use_distance_to_plane)
         {
-            // Simplified error: look at perpendicular distance off the
-            // plane
+            // Simplified error: look at perpendicular distance off the plane
             //
-            // The pose of the board is Rt_lidar0_board. The board is z=0 in the
+            // The pose of the board is Rt_lidar0_board. The board is at z=0 in
             // board coords so the normal to the plane is nlidar0 =
-            // R_lidar0_board[:,2]. I define the board as
+            // R_lidar0_board[:,2] = R_lidar0_board [0 0 1]t. I define the board
+            // as an infinite plane:
             //
-            //   all x where d = inner(nlidar0,xlidar0) = inner(nlidar0, Rt_lidar0_board xy0)
+            //   all x where inner(nlidar0,xlidar0) = d
             //
-            // So
+            // So the normal distance from the sensor to the board plane at
+            // Rt_lidar0_board is
             //
-            //   d1 = inner(nlidar0, R_lidar0_board xy0 + t_lidar0_board) =
-            //      = inner(nlidar0, R_lidar0_board[:,0] x + R_lidar0_board[:,1] y + t_lidar0_board)
+            //   d1 = inner(nlidar0, R_lidar0_board xboard0 + t_lidar0_board) =
+            //      = [0 0 1] R_lidar0_board_t R_lidar0_board xboard0 + [0 0 1] R_lidar0_board_t t_lidar0_board)
             //      = inner(nlidar0, t_lidar0_board)
             //
-            // For any lidar-observed point p I can compute its distance to the board:
+            // For any lidar-observed point p I can compute its perpendicular
+            // distance to the board plane:
             //
             //   d2 = inner(nlidar0, Rt_lidar0_lidar p)
             //      = inner(nlidar0, R_lidar0_lidar p + t_lidar0_lidar)
