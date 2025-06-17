@@ -1,19 +1,481 @@
 This is a LIDAR-camera calibration toolkit using sets of stationary chessboard
 observations to calibrate the two sets of sensors together.
 
-* Dependencies
+* Build
 The bulk of this is C code. To build you need to
 
 #+begin_src sh
-sudo apt install libmrgingham-dev libdogleg-dev libopencv-dev libpython3-dev
+sudo apt install \
+  libmrgingham-dev \
+  libdogleg-dev \
+  libopencv-dev \
+  libpython3-dev \
+  libmrcal-dev \
+  python3-mrcal
 #+end_src
 
-You also need to build the bleeding-edge mrcal tree. The v2.5 series is
+Note that you need bleeding-edge mrcal packages. The v2.5 series is
 recent-enough.
 
-Build and use =clc= like this:
+Once the deependencies are installed, a plain =make= will build clc. To run the
+tool from logged data, run =./fit.py ...=
 
-#+begin_src sh
-make
-PYTHONPATH=$D/mrcal fit.py ....
+* Overview
+CLC is a geometric calibration algorithm to align some number of rigidly-mounted
+cameras (=Ncameras= may be 0) and some number of rigidly mounted LIDAR units
+(=Nlidars= must be at least 1). A common use case is a ground vehicle equipped
+with some number of these sensors.
+
+It is assumed that the camera intrinsics have already been calibrated (with a
+tool such as [[https://mrcal.secretsauce.net][=mrcal=]]), and that the LIDAR angular spacings are known. With those
+assumptions, the only parameters this calibration problem needs to estimate are
+the poses of all of the sensors.
+
+Arbitrarily, CLC computes all the geometry in the coordinate system of the first
+LIDAR unit (=lidar0=). Thus it needs to solve for =Nlidars-1 + Ncameras=
+transformations, which is an optimization problem of =6*(Nlidars-1 + Ncameras)=
+variables. As with all optimization problems, detecting issues and quantifying
+the quality of the result is a crucial part of the computation, and CLC provides
+this feedback by quantifying the solve uncertainty: the sensitivity of
+transforming a 3D point from one sensor's frame to another in respect to
+existing noise in the calibration inputs. This is inspired by, and is very
+similar to the logic in [[https://mrcal.secretsauce.net][mrcal]], for quantifying the uncertainty of camera
+calibrations. The resulting algorithm is good at identifying issues in the
+calibration data, and will tell you where the result is or is not reliable.
+
+* Calibration process
+In order to compute a calibration, it is assumed that the set of sensors is
+mounted rigidly, and does not move. A user moves a /calibration object/ over the
+field of view of the sensors to capture the calibration input data. The sensors
+capture a set of /snapshots/: synchronized observations of the object by the
+sensors. In order to be useful, each snapshot must be observed by all the
+sensors. It is /not/ required for /every/ snapshot to contain observations from
+/all/ the sensors, but the full set of sensors /must/ be transitively connected.
+For instance, if snapshot 0 has observations from LIDAR 0 and LIDAR 1, and
+snapshot 1 has observations from LIDAR 1 and LIDAR 2, this is sufficient to
+compute a solution for LIDARs 0, 1 and 2.
+
+The calibration object must be observable by all the sensors, so we use a big
+chessboard target, the same one used to calibrate cameras. The cameras see the
+chessboard grid. The LIDAR units cannot see the chessboard grid, but they do see
+a flat object. Thus all the sensors /can/ observe this object, and we can feed
+those observations to the CLC solver.
+
+** Camera observations
+The cameras observe the chessboard grid, and we employ the same chessboard
+detector used by the camera calibration routine ([[https://github.com/dkogan/mrgingham][=mrgingham=]]). The chessboard
+corner pixel coordinates are input to the solver.
+
+This routine is available standalone in =clc_camera_chessboard_detection()=
+
+** LIDAR segmentation
+Each LIDAR contains a set of lasers that are rigidly mounted on a spindle
+rotating around the LIDAR z axis. Each laser has a full 360deg view all around
+it. The chessboard is located somewhere in space, in an location unknown prior
+to running the solve. So in order to input the LIDAR observations to the solver,
+we must find the chessboard in the point cloud. We look for a flat object of
+roughly the known size at a reasonable distance away from the sensor. These
+conditions aren't very discrimintating, so this /LIDAR segmentation/ routine is
+challenging to get right. There /are/ extra conditions we're not yet employing,
+like throwing out stationary objects over time, and this will likely be done at
+some point.
+
+These routines are available standalone in
+- =clc_lidar_segmentation_unsorted()=
+- =clc_lidar_segmentation_sorted()=
+
+** Solve
+Once we have sets of observation snapshots, we can attempt the solve. We are
+trying to find a set of geomeric transformations $\left\{ T_\mathrm{ref,lidar_i}
+\right\}$ and $\left\{ T_\mathrm{ref,camera_j} \right\}$ that best explain our
+observations. For any hypothesis set of $\left\{ T_\mathrm{ref,lidar_i}
+\right\}$ and $\left\{ T_\mathrm{ref,camera_j} \right\}$ I can compute where
+those hypothetical LIDARs and cameras would have observed the board, I can
+compute an error function $E$, and I move the LIDARs and cameras and boards in
+order to minimize $E$.
+
+Arbitrarily, CLC uses the frame of the first LIDAR (called the =lidar0= frame
+from now on) as the reference frame: it is the $\mathrm{ref}$ in the
+transformations $T$ above.
+
+*** Seed
+We're solving a nonlinear least-squares optimization problem. We employ a
+traditional iterative method, so starting the search from a good initial
+estimate of the solution (a /seed/) is essential to ensure convergence of the
+solve. We compute the seed using a non-iterative global method, solving a
+simplified version of our full optimization problem. The simplifications are
+required for the global method to work. This is implemented in =fit_seed()=. The
+approach is very similar to what [[https://mrcal.secretsauce.net][=mrcal=]] does:
+
+1. We traverse a graph of sensors with overlapping observations. We start with
+   those with the most overlapping observations, and eventually we cover /all/
+   the sensors. For each pair of sensors visited, we can use a simple [[https://mrcal.secretsauce.net/mrcal-python-api-reference.html#-align_procrustes_points_Rt01][Procrustes
+   fit]] to compute a transformation relating that pair of sensors. And we can
+   then use one path through the graph to estimate the transform between each
+   sensor and =lidar0=.
+
+2. We now have an estimate of the pose of each sensor, and we can use this to
+   estimate the pose of the chessboard for each snapshot. If any cameras observe
+   the chessboard, I use a PnP solve from one of those cameras to estimate the
+   board pose. Otherwise I use the LIDAR points to reconstruct the board pose
+   with arbitrary origin point and yaw (because the LIDARs only see a plane, and
+   don't have a sense of the rotation of the board, or where its edges are).
+
+*** Solve
+We now have the input data and an initial estimate of the solution. We can feed
+the solver. As with [[https://mrcal.secretsauce.net][=mrcal=]], [[https://github.com/dkogan/libdogleg][=libdogleg=]] is used to solve the least-squares
+problem. Two different ways to define the cost function are implemented:
+
+**** Perpendicular distance off the plane
+This is a simplified cost function. I observed that it converges better than the
+full cost function below, so I use this as another pre-solve.
+
+The pose of the board is Rt_lidar0_board. The board is at z=0 in board coords so
+the normal to the plane is nlidar0 = R_lidar0_board[:,2] = R_lidar0_board [0 0
+1]t. I define the board as an infinite plane:
+
+#+begin_example
+  all x where inner(nlidar0,xlidar0) = d
+#+end_example
+
+So the normal distance from the sensor to the board plane at
+Rt_lidar0_board is
+
+#+begin_example
+  d1 = inner(nlidar0, R_lidar0_board xboard0 + t_lidar0_board) =
+     = [0 0 1] R_lidar0_board_t R_lidar0_board xboard0 + [0 0 1] R_lidar0_board_t t_lidar0_board)
+     = inner(nlidar0, t_lidar0_board)
+#+end_example
+
+For any lidar-observed point p I can compute its perpendicular
+distance to the board plane:
+
+#+begin_example
+  d2 = inner(nlidar0, Rt_lidar0_lidar p)
+     = inner(nlidar0, R_lidar0_lidar p + t_lidar0_lidar)
+     = inner(nlidar0, v)
+#+end_example
+
+where v = R_lidar0_lidar p + t_lidar0_lidar. So
+
+#+begin_example
+  err = d1 - d2 =
+      = inner(nlidar0, t_lidar0_board - v)
+#+end_example
+
+Elements of the measurement vector $\vec x$ in the least-squares problem are the
+individual =err= quantities above.
+
+**** LIDAR range error
+The previous derivation is aphysical. I want my optimization to produce a
+maximum-likelihood estimate of the solution. This requires the errors in the
+measurement vector $\vec x$ to be independent and homoscedactic. With enough
+data, the measurement vector will track the noise in the input observations,
+which /are/ independent, and can be scaled to be homoscedactic. Thus I want the
+measurement vector $\vec x$ to contain discrepancies in the input observations:
+
+- LIDAR ranges
+- Pixel coordinates from the chessboard corners
+
+#+begin_example
+A plane is zboard = 0
+A lidar point plidar = vlidar dlidar
+
+pboard = Rbl plidar + tbl
+       = T_b_l0 T_l0_l plidar
+0 = zboard = pboard[2] = inner(Rbl[2,:],plidar) + tbl[2]
+-> inner(Rbl[2,:],vlidar)*dlidar = -tbl[2]
+-> dlidar = -tbl[2] / inner(Rbl[2,:],vlidar)
+          = -tbl[2] / (inner(Rbl[2,:],plidar) / mag(plidar))
+          = -tbl[2] mag(plidar) / inner(Rbl[2,:],plidar)
+
+And the error is
+
+  err = dlidar_observed - dlidar
+      = mag(plidar) - dlidar
+      = mag(plidar) + tbl[2] mag(plidar) / inner(Rbl[2,:],plidar)
+      = mag(plidar) * (1 + tbl[2] / inner(Rbl[2,:],plidar) )
+
+Rbl[2,:] = Rlb[:,2] = R_lidar_board z = R_lidar_lidar0 nlidar0
+
+tbl[2]   = (R_board_lidar0 t_lidar0_lidar + t_board_lidar0)[2]
+         = R_board_lidar0[2,:] t_lidar0_lidar + t_board_lidar0[2]
+         = R_lidar0_board[:,2] t_lidar0_lidar + t_board_lidar0[2]
+         = inner(nlidar0,t_lidar0_lidar) + t_board_lidar0[2]
+
+R_lidar0_board pb + t_lidar0_board = pl0
+-> pb = R_board_lidar0 pl0 - R_board_lidar0 t_lidar0_board
+-> t_board_lidar0 = - R_board_lidar0 t_lidar0_board
+-> t_board_lidar0[2] = - R_board_lidar0[2,:] t_lidar0_board
+                     = - R_lidar0_board[:,2] t_lidar0_board
+                     = - inner(nlidar0, t_lidar0_board)
+                     = -d1 (the same d1 as in the crude solve above)
+#+end_example
+
+*** Regularization terms
+For snapshots observed only by LIDARs, the above error expression is ambiguous.
+Since we're considering an infinite plane, the board pose representation
+=rt_lidar0_board= is free to translate and yaw within the plane. We resolve this
+ambiguity with regularization terms, extra terms in the measurement vector $\vec
+x$ that *lightly* pull every element of =rt_lidar0_board= towards zero.
+
+*** Outliers
+Currently no outlier rejection is implemented. This should be done, it just
+isn't implemented /yet/. Today the residuals can be visualized, and a human can
+visually evaluate whether outliers are a problem or not. This should be
+automated.
+
+* Usage details
+Currently several interfaces are provided:
+
+- A C API to access all the core functionality, as a /library/
+
+- A Python API to access the core functions provided by the C API
+
+- Commandline tools to run the sensor calibration routines without writing any
+  code. These are written in Python, and utilize the Python API
+
+** C API
+The CLC core is implemented in C, using =mrcal= for the core geometric types and
+camera models. The API is defined in =clc.h=.
+
+The input data is provided as a set of synchronized /snapshots/ in one of these
+structures:
+
+- =clc_sensor_snapshot_unsorted_t=: the LIDAR data is not assumed to be ordered
+  in any way, and may contain invalid points (0,0,0)
+- =clc_sensor_snapshot_segmented_t=: the LIDAR point clouds have been segmented
+  by =clc_lidar_segmentation_unsorted()= or =clc_lidar_segmentation_sorted()=.
+  The segmented points are stored as indices into the original =points= array
+- =clc_sensor_snapshot_sorted_t=: the LIDAR data has been process by
+  =clc_lidar_preprocess()=: the points have been sorted by ring and azimuth, and
+  invalid entries have been removed
+- =clc_sensor_snapshot_segmented_dense_t=. The LIDAR point clouds have been
+  segmented. The =points= array contains /only/ the segmented points.
+
+Many functions take a =const clc_lidar_segmentation_context_t* ctx=. This is a
+set of parameters controlling the operation of the LIDAR segmentation routine.
+Most often, we would set the default parameters, make small adjustments, and
+then invoke clc:
+
+#+begin_src c
+clc_lidar_segmentation_context_t ctx;
+clc_lidar_segmentation_default_context(&ctx);
+ctx.threshold_max_plane_size = ...; // segmentation parameter tweaks here
+...;
+clc(..., &ctx, ...);
 #+end_src
+
+The available parameters, a description of their operation and their default
+values are given in clc.h in the CLC_LIDAR_SEGMENTATION_LIST_CONTEXT macro.
+
+The available functions are:
+
+*** =clc_lidar_preprocess()=
+The prototype is
+
+#+begin_src c
+// Sorts the lidar data by ring and azimuth, to be passable to
+// clc_lidar_segmentation_sorted()
+void clc_lidar_sort(// out
+                    //
+                    // These buffers must be pre-allocated
+                    // length sum(Npoints). Sorted by ring and then by azimuth
+                    clc_point3f_t* points,
+                    // indices; length(sum(Npoints))
+                    uint32_t* ipoint_unsorted_in_sorted_order,
+                    // length Nrings
+                    unsigned int* Npoints,
+
+                    // in
+                    int Nrings,
+                    // The stride, in bytes, between each successive points or
+                    // rings value in clc_lidar_scan_unsorted_t
+                    const unsigned int      lidar_packet_stride,
+                    const clc_lidar_scan_unsorted_t* scan);
+#+end_src
+
+*** =clc_lidar_segmentation_default_context()=
+The prototype is
+
+#+begin_src c
+void clc_lidar_segmentation_default_context(clc_lidar_segmentation_context_t* ctx);
+#+end_src
+
+*** =clc_lidar_segmentation_unsorted()=, =clc_lidar_segmentation_sorted()=
+Run the LIDAR segmentation routine in isolation
+
+*** x =clc_camera_chessboard_detection()=
+The prototype is
+
+#+begin_src c
+bool
+clc_camera_chessboard_detection(// out
+                               mrcal_point2_t* chessboard_corners,
+                               // in
+                               const mrcal_image_uint8_t* image, // might be color
+                               const bool is_image_bgr,
+                               const int object_height_n,
+                               const int object_width_n);
+#+end_src
+
+*** =clc()=
+The prototype is
+
+#+begin_src c
+// Each sensor is uniquely identified by its position in the
+// sensor_snapshots[].lidar_scans[] or .images[] arrays. An unobserved sensor in
+// some sensor snapshot should be indicated by lidar_scans[] = {} or images[] =
+// {}
+//
+// The rt_lidar0|vehicle_lidar|camera arrays are the input/output. Some (but not
+// all) may be NULL
+//
+// We return true on success
+bool clc(// in/out
+         // On input:
+         //   if(     use_given_seed_geometry_lidar0):  rt_lidar0_...  are used as a seed
+         //   else if(use_given_seed_geometry_vehicle): rt_vehicle_... are used as a seed
+         //   else: neither is used as the seed, and we COMPUTE the initial geometry
+         //
+         //   if a seed is given, rt_lidar0_lidar[0] MUST be the identity transform
+         //
+         // On output:
+         //   we store the solution into all of these that are != NULL. If
+         //   possible, both rt_lidar0_... and rt_vehicle_... are populated
+         //
+         // If rt_vehicle_... are given (for input or output), then
+         // rt_vehicle_lidar0 MUST be non-NULL
+         mrcal_pose_t* rt_lidar0_lidar,   // Nlidars  of these; some may be NULL
+         mrcal_pose_t* rt_lidar0_camera,  // Ncameras of these; some may be NULL
+         mrcal_pose_t* rt_vehicle_lidar,  // Nlidars  of these; some may be NULL
+         mrcal_pose_t* rt_vehicle_camera, // Ncameras of these; some may be NULL
+         // at most one of these should be true
+         bool          use_given_seed_geometry_lidar0,
+         bool          use_given_seed_geometry_vehicle,
+
+         // Covariance of the output. Symmetric matrix of shape
+         // (Nstate_sensor_poses,Nstate_sensor_poses) stored densely, written on
+         // output. Nstate_sensor_poses = (Nlidars-1 + Ncameras)*6; may be NULL
+         double*       Var_rt_lidar0_sensor,
+         // dense array of shape (Nsectors,); may be NULL
+         // Will try to set this even if clc() failed: from
+         // rt_lidar0/vehicle_lidar_camera and use_given_seed_geometry_... If it
+         // really couldn't be computed from those either, all entries will be
+         // set to 0
+         uint16_t* observations_per_sector,
+
+         // A dense array of shape (Nsensors,Nsectors); may be NULL
+         // Needs lidar_scans_for_isvisible!=NULL
+         // Will try to set this even if clc() failed: from
+         // rt_lidar0/vehicle_lidar_camera and use_given_seed_geometry_... If it
+         // really couldn't be computed from those either, all entries will be
+         // set to 0
+         uint8_t* isvisible_per_sensor_per_sector,
+
+         // array of shape (Nsectors,); may be NULL
+         // if not NULL, requires that
+         //   isvisible_per_sensor_per_sector!=NULL && Var_rt_lidar0_sensor!=NULL
+         double* stdev_worst_per_sector,
+         // dense array of shape (Nsectors,2); may be NULL
+         uint16_t* isensors_pair_stdev_worst,
+         const int Nsectors,
+         // used for isvisible_per_sensor_per_sector
+         const double threshold_valid_lidar_range,
+         const int    threshold_valid_lidar_Npoints,
+         // used for isvisible_per_sensor_per_sector and stdev_worst_per_sector
+         const double uncertainty_quantification_range,
+
+         // may be NULL. Will attempt to report this even if clc() fails; -1
+         // means it could not be computed
+         int* isector_of_last_snapshot,
+
+         // Pass non-NULL to get the fit-inputs dump. These encode the data
+         // buffer. The caller must free(*buf_inputs_dump) when done. Even when
+         // this call fails
+         char**  buf_inputs_dump,
+         size_t* size_inputs_dump,
+
+         // in
+
+         // Exactly one of these should be non-NULL
+         const clc_sensor_snapshot_unsorted_t*        sensor_snapshots_unsorted,
+         const clc_sensor_snapshot_sorted_t*          sensor_snapshots_sorted,
+         const clc_sensor_snapshot_segmented_t*       sensor_snapshots_segmented,
+         const clc_sensor_snapshot_segmented_dense_t* sensor_snapshots_segmented_dense,
+
+         const unsigned int                    Nsnapshots,
+         // The stride, in bytes, between each successive points or rings value
+         // in sensor_snapshots_unsorted and lidar_scans_for_isvisible; unused
+         // if either of those is NULL
+         const unsigned int           lidar_packet_stride,
+
+         // Nlidars of these. Required if isvisible_per_sensor_per_sector!=NULL
+         const clc_lidar_scan_unsorted_t* lidar_scans_for_isvisible,
+
+         const unsigned int Nlidars,
+         const unsigned int Ncameras,
+         const mrcal_cameramodel_t*const* models, // Ncameras of these
+         // The dimensions of the chessboard grid being detected in the images
+         const int object_height_n,
+         const int object_width_n,
+         const double object_spacing,
+
+         // bits indicating whether a camera in sensor_snapshots.images[] is
+         // color or not
+         // unused if sensor_snapshots_unsorted==NULL &&
+         // sensor_snapshots_sorted==NULL
+         const clc_is_bgr_mask_t is_bgr_mask,
+         // unused if sensor_snapshots_unsorted==NULL &&
+         // sensor_snapshots_sorted==NULL
+         const clc_lidar_segmentation_context_t* ctx,
+
+         const mrcal_pose_t* rt_vehicle_lidar0,
+
+         const double fit_seed_position_err_threshold,
+         const double fit_seed_cos_angle_err_threshold,
+         bool check_gradient__use_distance_to_plane,
+         bool check_gradient,
+         bool verbose);
+#+end_src
+
+*** =clc_fit_from_inputs_dump()=
+The prototype is
+
+#+begin_src c
+bool clc_fit_from_inputs_dump(// out
+                              int* Nlidars,
+                              int* Ncameras,
+                              // Allocated by the function on success.
+                              // It's the caller's responsibility to
+                              // free() these
+                              mrcal_pose_t** rt_lidar0_lidar,
+                              mrcal_pose_t** rt_lidar0_camera,
+                              // in
+                              const char* buf_inputs_dump,
+                              size_t      size_inputs_dump,
+                              const int*  exclude_isnapshot, // NULL to not exclude any
+                              const int   Nexclude_isnapshot,
+
+                              const double fit_seed_position_err_threshold,
+                              const double fit_seed_cos_angle_err_threshold,
+
+                              // if(!do_fit_seed && !do_inject_noise) { fit(previous fit_seed() result)     }
+                              // if(!do_fit_seed &&  do_inject_noise) { fit(previous fit() result)          }
+                              // if(do_fit_seed)                      { fit( fit_seed() )                   }
+                              bool do_fit_seed,
+                              // if true, the observations are noised; regardless of do_fit_seed
+                              bool do_inject_noise,
+                              bool do_skip_plots,
+                              bool verbose);
+#+end_src
+
+** Python API
+** Commandline tools
+* ROS business, time periods, etc, etc
+
+* Feedback
+uncertainty
+sector stuff
+auxillary tools
+generated scriplets to see residuals and geometry and such
