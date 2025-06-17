@@ -350,8 +350,43 @@ Helper function for visualizing LIDAR data in a common frame
 - =sensor_forward_vectors_plot_tuples()=
 Helper function for visualizing sensor poses in geometric plots
 
+*** Input data format
+The Python API (and thus the commandline tools) can read logged data. As of
+today, clc uses ROS bags as its input data storage format. clc does NOT actually
+use ROS, and it is NOT required to be install it; instead it uses the "rosbags"
+library to read the data.
+
+A rosbag may contain multiple data streams with a "topic" string identifying
+each one. The data stream for any given topic is a series of messages of
+identical data type. clc reads lidar scans (msgtype
+'sensor_msgs/msg/PointCloud2') and images (msgtype 'sensor_msgs/msg/Image').
+
+We want to get a set of time-synchronized "snapshots" from the data, reporting
+observations of a moving calibration object by a set of stationary sensors. Each
+snapshot should report observations from a single instant in time.
+
+There are two ways to capture such data:
+
+- Move the chessboard between stationary poses; capture a small rosbag from each
+  sensor at each stationary pose. Each bag provides one snapshot. This works
+  well, but takes more work from the people capturing the data. Therefore, most
+  people prefer the next method
+
+- Move the chessboard; slowly. Continuously capture the data into a single bag.
+  Subdivide the bag into time periods of length =decimation_period_s=. Each
+  decimation period produces one snapshot. This method has risks of motion blur
+  and synchronization issues, so the motions need to be slow, and the tooling
+  needs to enforce tight timings, and it is highly desireable to have an outlier
+  rejection method.
+
+The tooling supports both methods. The functions and tools that accept a
+"decimation period" will use the one-snapshot-per-bag scheme if the decimation
+period is omitted, and the one-big-bag scheme if the decimation period is given.
+
+The various utilities for reading the input data are in the =clc.bag_interface=
+module
+
 ** Commandline tools
-* ROS business, time periods, etc, etc
 
 * Feedback
 uncertainty

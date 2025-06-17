@@ -68,12 +68,12 @@ SYNOPSIS
             # color images
             image = msg['array']
 
-clc is able to use a rosbag as its input data storage format. A rosbag may
+As of today, clc uses ROS bags as its input data storage format. A rosbag may
 contain multiple data streams with a "topic" string identifying each one. The
 data stream for any given topic is a series of messages of identical data type.
 messages() is an iterator that produces messages "msg" one at a time. clc is
-primarily interested in lidar scans (msg['msgtype] =
-'sensor_msgs/msg/PointCloud2') and images (msg['msgtype] =
+primarily interested in lidar scans (msg['msgtype'] =
+'sensor_msgs/msg/PointCloud2') and images (msg['msgtype'] =
 'sensor_msgs/msg/Image').
 
 Each message yielded by this iterator is a dict with keys:
@@ -114,8 +114,8 @@ elevation = atan( z, mag(x,y) ) of every point will be constant for each ring.
 Each camera image is stored in msg['array']. This is a 2D array of shape (H,W)
 for grayscale images or a 3D array of shape (H,W,3) for color images.
 
-clc does NOT use ros, and it is NOT required to be installed. Instead it uses
-the "rosbags" library to read the data.
+clc does NOT actually use ROS, and it is NOT required to be install it; instead
+it uses the "rosbags" library to read the data.
 
 ARGUMENTS
 
@@ -148,6 +148,7 @@ ARGUMENTS
 RETURNED VALUE
 
 An iterator, producing a dict for each message.
+
     '''
 
     dtype_cache = dict()
@@ -409,7 +410,11 @@ clc tries to geometrically align data from multiple sensors. Each sensor
 produces data in a ros "topic", and the data we're ingesting comes from one or
 more "rosbags".
 
-One strategy for capturing the input data is to record a small rosbag for each
+We want to get a set of time-synchronized "snapshots" from the data, reporting
+observations of a moving calibration object by a set of stationary sensors. Each
+snapshot should report observations from a single instant in time.
+
+One strategy for capturing such input data is to record a small rosbag for each
 stationary configuration of sensors and the calibration object. In this
 scenario, any set of messages in each bag is a good representation of a
 stationary sensor "snapshot", and we can use the first_message_from_each_topic()
@@ -683,10 +688,13 @@ SYNOPSIS
             # Have "msg" corresopnding to "topic"
             ....
 
-
 clc tries to geometrically align data from multiple sensors. Each sensor
 produces data in a ros "topic", and the data we're ingesting comes from one or
 more "rosbags".
+
+We want to get a set of time-synchronized "snapshots" from the data, reporting
+observations of a moving calibration object by a set of stationary sensors. Each
+snapshot should report observations from a single instant in time.
 
 One strategy for capturing the input data is to record a small rosbag for each
 stationary configuration of sensors and the calibration object. In this
