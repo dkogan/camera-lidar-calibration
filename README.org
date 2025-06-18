@@ -353,7 +353,7 @@ Helper function for visualizing sensor poses in geometric plots
 *** Input data format
 The Python API (and thus the commandline tools) can read logged data. As of
 today, clc uses ROS bags as its input data storage format. clc does NOT actually
-use ROS, and it is NOT required to be install it; instead it uses the "rosbags"
+use ROS, and it is NOT required to be installed; instead it uses the "rosbags"
 library to read the data.
 
 A rosbag may contain multiple data streams with a "topic" string identifying
@@ -384,9 +384,14 @@ The tooling supports both methods. The functions and tools that accept a
 period is omitted, and the one-big-bag scheme if the decimation period is given.
 
 The various utilities for reading the input data are in the =clc.bag_interface=
-module
+module, with each function's docstring providing detailed documentation.
 
 ** Commandline tools
+clc also provides a number of commandline tools, intended to make the most
+common applications of the tool available directly to the users, without
+requiring any code to be written. These are written in Python, using the Python
+API. The manpages for each available tool follow
+
 
 * Feedback
 uncertainty

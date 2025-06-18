@@ -114,7 +114,7 @@ elevation = atan( z, mag(x,y) ) of every point will be constant for each ring.
 Each camera image is stored in msg['array']. This is a 2D array of shape (H,W)
 for grayscale images or a 3D array of shape (H,W,3) for color images.
 
-clc does NOT actually use ROS, and it is NOT required to be install it; instead
+clc does NOT actually use ROS, and it is NOT required to be installed; instead
 it uses the "rosbags" library to read the data.
 
 ARGUMENTS

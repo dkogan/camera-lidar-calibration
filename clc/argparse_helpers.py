@@ -1,3 +1,9 @@
+r'''Convenience functions for commandline option parsing
+
+Intended for the clc commandline tools. NOT intended for end-user usage
+
+'''
+
 import argparse
 
 
