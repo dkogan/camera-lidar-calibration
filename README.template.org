@@ -392,6 +392,8 @@ common applications of the tool available directly to the users, without
 requiring any code to be written. These are written in Python, using the Python
 API. The manpages for each available tool follow
 
+xxxxxMANPAGESxxxxx
+
 
 * Feedback
 uncertainty

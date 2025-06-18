@@ -38,6 +38,45 @@ DIST_PY3_MODULES := clc
 all: clc/_clc$(PY_EXT_SUFFIX)
 
 
+DIST_BIN :=					\
+  fit-from-inputs-dump.py			\
+  fit.py					\
+  format-geometry-for-ros.py			\
+  infer-lidar-spacing.py			\
+  lidar-segmentation.py				\
+  show-aligned-lidar-pointclouds.py		\
+  show-bag.py					\
+  show-transformation-uncertainty.py
+DIST_MAN := $(patsubst %.py,%.1,$(DIST_BIN))
+PODS     := $(patsubst %.py,%.pod,$(DIST_BIN))
+$(DIST_MAN): %.1: %.pod
+	pod2man --center="clc: camera-lidar alignment toolkit" --name=CLC --release="clc $(VERSION)" --section=1 $< $@
+%.pod: %.py
+	$(MRBUILD_BIN)/make-pod-from-help $< > $@.tmp && cat footer.pod >> $@.tmp && mv $@.tmp $@
+EXTRA_CLEAN += $(DIST_MAN) $(PODS)
+
+define MAKE_README =
+while(<STDIN>)								\
+{									\
+  if(!/xxxxxMANPAGESxxxxx/) { print; }					\
+  else {								\
+    for $$pod (@ARGV)							\
+    {									\
+      $$cmd = $$pod =~ s/pod$$/py/r;					\
+      say("*** $$cmd");							\
+      say("#+begin_example");						\
+      system(qq{pod2text $$pod | mawk "/REPOSITORY/{exit} {print}"});	\
+      say("#+end_example");						\
+      say(q{});								\
+    }									\
+  }									\
+}
+endef
+
+README.org: README.template.org $(PODS)
+	< $(filter README%,$^) perl -E '$(MAKE_README)' $(filter-out README%,$^) > $@.tmp && mv $@.tmp $@
+all: README.org
+
 
 # rules to build the tests. The tests are conducted via test.sh
 BIN_SOURCES += \

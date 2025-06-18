@@ -1,8 +1,9 @@
 #!/usr/bin/python3
 r'''Calibrate from a binary input dump
 
-For debugging
+SYNOPSIS
 
+  ./fit-from-inputs-dump.py xxx
 '''
 
 
