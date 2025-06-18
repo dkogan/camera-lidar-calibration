@@ -10,7 +10,7 @@ SYNOPSIS
       --bag camera-lidar.bag                              \
       --topic /lidar/vl_points_0,/lidar/vl_points_1       \
       --context /tmp/clc-context.pickle
-    [plot pops up to show the aligned points]
+    [plots pop up to show the uncertainty]
 
 Displays uncertainties of transformations between pairs of sensors
 
@@ -69,6 +69,11 @@ def parse_args():
     parser.add_argument('--cbmax',
                         type=float,
                         help = '''If given, we use this cbmax in the uncertainty plots''')
+    parser.add_argument('--hardcopy',
+                        help = '''If given, plot to this file instead of making
+                        an interactive plot. If no --ellipsoids, we make
+                        multiple plots, one per topic. The sanitized topic name
+                        will be appended to the end of this given filename''')
 
 
 
@@ -253,7 +258,8 @@ if args.ellipsoids:
          xlabel = 'x (vehicle)',
          ylabel = 'y (vehicle)',
          zlabel = 'z (vehicle)',
-         wait = True)
+         hardcopy = args.hardcopy,
+         wait = args.hardcopy is None)
 
     sys.exit()
 
@@ -296,6 +302,16 @@ for isensor_requested,topic_requested in enumerate(args.topics):
 
     using = f'({x_sample[0]} + $1*({x_sample[-1]-x_sample[0]})/{args.gridn-1}):({y_sample[0]} + $2*({y_sample[-1]-y_sample[0]})/{args.gridn-1}):3'
 
+    if args.hardcopy is not None:
+        topic_sanitized = re.sub(r'[^a-zA-Z0-9_]+', '_', topic_requested)
+        topic_sanitized = re.sub(r'^_*',            '',  topic_sanitized)
+        topic_sanitized = re.sub(r'_*$',            '',  topic_sanitized)
+
+        r,e      = os.path.splitext(args.hardcopy)
+        hardcopy = f'{r}--{topic_sanitized}{e}'
+    else:
+        hardcopy = None
+
     clc.plot((uncertainty_1sigma,
           dict(tuplesize = 3,
                _with = 'image',
@@ -305,27 +321,29 @@ for isensor_requested,topic_requested in enumerate(args.topics):
          cbmin = 0,
          cbmax = args.cbmax,
          square = True,
-         wait = True,
          xlabel = 'x (vehicle)',
          ylabel = 'y (vehicle)',
          title = f'Worst-case 1-sigma transform uncertainty for {topic_requested} (top-down view)',
          ascii = 1, # needed for the "using" scale
          _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
-         hardcopy=f'/tmp/uncertainty-1sigma-isensor={isensor_solve}.gp')
+         hardcopy = hardcopy,
+         wait = hardcopy is None)
 
-    clc.plot((thdeg_vertical,
-          dict(tuplesize = 3,
-               _with = 'image',
-               using = using),
-          ),
-         *sensor_forward_vectors_plot_tuples,
-         cbmin = 0,
-         cbmax = 30,
-         square = True,
-         wait = True,
-         xlabel = 'x (vehicle)',
-         ylabel = 'y (vehicle)',
-         title = f'Worst-case transform uncertainty for {topic_requested} (top-down view): angle off vertical (deg)',
-         ascii = 1, # needed for the "using" scale
-         _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
-         hardcopy=f'/tmp/uncertainty-direction-1sigma-isensor={isensor_solve}.gp')
+    if False:
+        # Directions plot. Usually not interesting
+        clc.plot((thdeg_vertical,
+              dict(tuplesize = 3,
+                   _with = 'image',
+                   using = using),
+              ),
+             *sensor_forward_vectors_plot_tuples,
+             cbmin = 0,
+             cbmax = 30,
+             square = True,
+             wait = True,
+             xlabel = 'x (vehicle)',
+             ylabel = 'y (vehicle)',
+             title = f'Worst-case transform uncertainty for {topic_requested} (top-down view): angle off vertical (deg)',
+             ascii = 1, # needed for the "using" scale
+             _set  = ('xrange [:] noextend', 'yrange [:] noextend'),
+             hardcopy=f'/tmp/uncertainty-direction-1sigma-isensor={isensor_solve}.gp')
