@@ -1791,7 +1791,7 @@ static void stage3_accumulate_points(// out
 // I'm turning this off for now. It doesn't work right. I'm at ddc519d. This
 // fails:
 //
-//   ./lidar-segmentation-test.py --dump --debug -1 ${^x0y0x1y1} \
+//   ./lidar-segmentation.py --dump --debug -1 ${^x0y0x1y1} \
 //     /vl_points_1 \
 //     2023-11-01/images-and-lidar-24.bag \
 //   | awk " $x0y0x1y1[1] < \$1 && \$1 < $x0y0x1y1[3] && $x0y0x1y1[2] < \$2 && \$2 < $x0y0x1y1[4]" \

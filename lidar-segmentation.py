@@ -4,7 +4,7 @@ r'''Find the board in a point cloud
 
 SYNOPSIS
 
-  $ ./lidar-segmentation-test.py     \
+  $ ./lidar-segmentation.py     \
       /lidar/vl_points_1     \
       'camera-lidar*.bag'
 

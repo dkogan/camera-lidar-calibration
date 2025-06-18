@@ -148,7 +148,7 @@ typedef struct
   /* bool, but PyArg_ParseTupleAndKeywords("p") wants an int */         \
   _(int,   dump,                                         (int)false,        "p","i", \
       "if true, diagnostic detector data meant for plotting is output on stdout. The intended use is\n" \
-      "  ./lidar-segmentation-test.py --dump TOPIC BAG |\n"             \
+      "  ./lidar-segmentation.py --dump TOPIC BAG |\n"             \
       "  | feedgnuplot \\\n"                                            \
       "      --style label 'with labels' \\\n"                          \
       "      --style ACCEPTED \"with points pt 2 ps 2 lw 2 lc \\\"red\\\"\"\\\n" \

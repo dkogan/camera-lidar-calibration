@@ -1061,7 +1061,7 @@ bool align_point_clouds(// out
         // visualization of the segmentation, and we can look at the first
         // point, which should match what we get here. For instance:
         //
-        //     $ ./lidar-segmentation-test.py \
+        //     $ ./lidar-segmentation.py \
         //         /vl_points_0 \
         //         lidar-34.bag
         //

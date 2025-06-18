@@ -313,7 +313,7 @@ for test in tests + tests_private:
         after = ''
     vizcmd = fr'''
   x0y0x1y1=(-{max_range} -{max_range} {max_range} {max_range});
-  ./lidar-segmentation-test.py --dump \
+  ./lidar-segmentation.py --dump \
     {after} \
     {topic} \
     {bag} \
