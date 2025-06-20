@@ -27,7 +27,7 @@ cameras (=Ncameras= may be 0) and some number of rigidly mounted LIDAR units
 with some number of these sensors.
 
 It is assumed that the camera intrinsics have already been calibrated (with a
-tool such as [[https://mrcal.secretsauce.net][=mrcal=]]), and that the LIDAR angular spacings are known. With those
+tool such as [[https://mrcal.secretsauce.net][mrcal]]), and that the LIDAR angular spacings are known. With those
 assumptions, the only parameters this calibration problem needs to estimate are
 the poses of all of the sensors.
 
@@ -87,16 +87,19 @@ These routines are available standalone in
 ** Solve
 Once we have sets of observation snapshots, we can attempt the solve. We are
 trying to find a set of geomeric transformations $\left\{ T_\mathrm{ref,lidar_i}
-\right\}$ and $\left\{ T_\mathrm{ref,camera_j} \right\}$ that best explain our
-observations. For any hypothesis set of $\left\{ T_\mathrm{ref,lidar_i}
-\right\}$ and $\left\{ T_\mathrm{ref,camera_j} \right\}$ I can compute where
-those hypothetical LIDARs and cameras would have observed the board, I can
-compute an error function $E$, and I move the LIDARs and cameras and boards in
-order to minimize $E$.
+\right\}$ and $\left\{ T_\mathrm{ref,camera_j} \right\}$ and $\left\{
+T_\mathrm{ref,board_k} \right\}$ that best explain our observations. The full
+set of transformations is parametrized as [[mrcal =rt= transforms][mrcal =rt= transforms]] in a /state
+vector/ $\vec b$. For any hypothesis $\vec b$ I can compute where those
+hypothetical LIDARs and cameras would have observed the hypothetical board. The
+difference between these hypothetical observations and the actual observations
+is encoded in the /measurement vector/ $\vec x$. I then compute an error
+function $E \equiv \left \Vert \vec x \left(\vec b\right)\right \Vert ^2$, and I
+move the LIDARs and cameras and boards in order to minimize $E$.
 
 Arbitrarily, CLC uses the frame of the first LIDAR (called the =lidar0= frame
 from now on) as the reference frame: it is the $\mathrm{ref}$ in the
-transformations $T$ above.
+transformations $T$ above, and its pose does /not/ appear in $\vec b$.
 
 *** Seed
 We're solving a nonlinear least-squares optimization problem. We employ a
@@ -105,7 +108,7 @@ estimate of the solution (a /seed/) is essential to ensure convergence of the
 solve. We compute the seed using a non-iterative global method, solving a
 simplified version of our full optimization problem. The simplifications are
 required for the global method to work. This is implemented in =fit_seed()=. The
-approach is very similar to what [[https://mrcal.secretsauce.net][=mrcal=]] does:
+approach is very similar to what [[https://mrcal.secretsauce.net][mrcal]] does:
 
 1. We traverse a graph of sensors with overlapping observations. We start with
    those with the most overlapping observations, and eventually we cover /all/
@@ -121,12 +124,22 @@ approach is very similar to what [[https://mrcal.secretsauce.net][=mrcal=]] does
    with arbitrary origin point and yaw (because the LIDARs only see a plane, and
    don't have a sense of the rotation of the board, or where its edges are).
 
-*** Solve
+*** Cost function
 We now have the input data and an initial estimate of the solution. We can feed
-the solver. As with [[https://mrcal.secretsauce.net][=mrcal=]], [[https://github.com/dkogan/libdogleg][=libdogleg=]] is used to solve the least-squares
-problem. Two different ways to define the cost function are implemented:
+the solver. As with [[https://mrcal.secretsauce.net][mrcal]], [[https://github.com/dkogan/libdogleg][libdogleg]] is used to solve the least-squares problem.
 
-**** Perpendicular distance off the plane
+We are minimizing $E \equiv \left \Vert \vec x \left(\vec b\right)\right \Vert
+^2$. The measurement vector $\vec x$ contains
+
+- $\vec x_\mathrm{lidar}$: discrepancies between the hypothetical LIDAR
+  observations from our hypothetical poses and the actual observations
+- $\vec x_\mathrm{camera}$: discrepancies between the hypothetical chessboard
+  corner observation and the actual ones observed by our cameras
+- $\vec x_\mathrm{regularization}$: small regularization terms
+
+Two different ways to define the LIDAR errors are implemented:
+
+**** LIDAR errors: perpendicular distance off the plane
 This is a simplified cost function. I observed that it converges better than the
 full cost function below, so I use this as another pre-solve.
 
@@ -166,7 +179,7 @@ where v = R_lidar0_lidar p + t_lidar0_lidar. So
 Elements of the measurement vector $\vec x$ in the least-squares problem are the
 individual =err= quantities above.
 
-**** LIDAR range error
+**** LIDAR errors: range difference
 The previous derivation is aphysical. I want my optimization to produce a
 maximum-likelihood estimate of the solution. This requires the errors in the
 measurement vector $\vec x$ to be independent and homoscedactic. With enough
@@ -212,12 +225,71 @@ R_lidar0_board pb + t_lidar0_board = pl0
                      = -d1 (the same d1 as in the crude solve above)
 #+end_example
 
-*** Regularization terms
+**** Camera errors
+The camera discrepancies are done exacly in the same way as with [[https://mrcal.secretsauce.net][mrcal]]: each
+observed chessboard corner produces two values in $\vec x$: an error in the $x$
+and $y$ pixel coordinates.
+
+**** Regularization terms
 For snapshots observed only by LIDARs, the above error expression is ambiguous.
 Since we're considering an infinite plane, the board pose representation
 =rt_lidar0_board= is free to translate and yaw within the plane. We resolve this
 ambiguity with regularization terms, extra terms in the measurement vector $\vec
 x$ that *lightly* pull every element of =rt_lidar0_board= towards zero.
+
+**** Scaling
+As with [[https://mrcal.secretsauce.net][mrcal]], we're solving a least squares problem, and we want to produce a
+maximum-likelihood estimate of the optimal solution $\vec b$. For that to
+happen, the noise on the measurements should be
+
+- normally distributed
+- independent
+- mean-0
+- homoscedactic (the noise on /every/ measurement should have the same variance)
+
+All of those requirements are reasonable, but we have to do a bit of work to get
+homoscedasticity. If we had just one type of measurement in $\vec x$ (only LIDAR
+data, say) then we'd have consistent noise in all of those measurements, and the
+homoscedasticity condition would be met. However, we have LIDAR /and/ camera
+data here, and we must balance them against each other. At this time, clc is
+given the expected noise levels for LIDAR and camera data, and it scales the
+measurement errors to produce unitless quantities in $\vec x$ with consistent
+noise in each element: $\sigma = 1$. Oh a high level, =clc.c= has this:
+
+#+begin_src c
+#define SCALE_MEASUREMENT_PX 0.15   /* expected noise levels */
+#define SCALE_MEASUREMENT_M  0.03   /* expected noise levels */
+
+static void cost(...)
+{
+    for(...)
+    {
+        ...
+        // LIDAR error
+        x[iMeasurement] =
+          (dlidar_observed - dlidar) / SCALE_MEASUREMENT_M;
+        ...
+        // camera error
+        x[iMeasurement] =
+          (q_observed.xy[k] - q.xy[k]) / SCALE_MEASUREMENT_PX;
+        ...
+    }
+}
+#+end_src
+
+This works /if/ we have a good estimate of =SCALE_MEASUREMENT_PX= /and/
+=SCALE_MEASUREMENT_M= a priori. In advance we can only estimate them. However,
+since the optimization residuals approach the input noise levels with enough
+data, we can
+
+1. Roughly estimate the scalings
+2. Solve
+3. Look at the residuals the get the true scaling
+4. Re-solve with the corrected scalings
+
+Today clc does not do this, and just uses the hard-coded-at-compile-time
+scalings in =clc.c=. This creates a bias in the solution, but likely not
+big-enough to care about. We can improve this later.
 
 *** Outliers
 Currently no outlier rejection is implemented. This should be done, it just
@@ -236,7 +308,7 @@ Currently several interfaces are provided:
   code. These are written in Python, and utilize the Python API
 
 ** C API
-The CLC core is implemented in C, using =mrcal= for the core geometric types and
+The CLC core is implemented in C, using mrcal for the core geometric types and
 camera models. The API is defined in =clc.h=.
 
 The input data is provided as a set of synchronized /snapshots/ in one of these
@@ -449,7 +521,6 @@ SYNOPSIS
       clc.c(2727) plot_residuals(): Wrote '/tmp/residuals-histogram-lidar.gp'
       clc.c(3020) plot_geometry(): Wrote '/tmp/geometry.gp'
       clc.c(3020) plot_geometry(): Wrote '/tmp/geometry-onlyaxes.gp'
-      lidars=(/lidar/ouster_{0..3}/points/cloud);
 
       [ The tool chugs for a bit, and in the end produces diagnostics and the aligned ]
       [ models                                                                        ]
@@ -1000,29 +1071,118 @@ OPTIONS
 
 
 * Interpretation of the results
+As [[https://mrcal.secretsauce.net][mrcal]], clc tries hard to provide deep feedback to the user to enable them to
+clearly see if the calibration results are correct and reliable. The techniques
+are similar as with mrcal:
 
+1. Various visualizations are available to check for errors in the data and to
+   check the final fit
+2. The uncertainty in the input observations is propagated to the output
+   transforms to see how much and where in space we have confidence in our
+   solution
 
-uncertainty
-sector stuff
-auxillary tools
-generated scriplets to see residuals and geometry and such
+** Visualization of the solution
+A nominal run of clc looks like this:
 
+#+begin_example
+$ lidars=(/lidar/vl_points_0)
+$ cameras=(/front/multisense/{{left,right}/image_mono_throttle,aux/image_color_throttle})
+$ sensors=($lidars $cameras)
 
+$ ./fit.py \
+    --topics ${(j:,:)sensors} \
+    --bag 'camera-lidar-*.bag'      \
+    intrinsics/{left,right,aux}_camera/camera-0-OPENCV8.cameramodel
 
+....
 clc.c(3362) fit(): Finished full solve
 clc.c(3387) fit(): RMS fit error: 0.43 normalized units
+clc.c(3404) fit(): RMS fit error (camera): 0.71 pixels
 clc.c(3410) fit(): RMS fit error (lidar): 0.013 m
 clc.c(3415) fit(): norm2(error_regularization)/norm2(error): 0.00
 clc.c(2695) plot_residuals(): Wrote '/tmp/residuals.gp'
 clc.c(2727) plot_residuals(): Wrote '/tmp/residuals-histogram-lidar.gp'
 clc.c(3020) plot_geometry(): Wrote '/tmp/geometry.gp'
 clc.c(3020) plot_geometry(): Wrote '/tmp/geometry-onlyaxes.gp'
-lidars=(/lidar/ouster_{0..3}/points/cloud);
+#+end_example
 
-ipython3 --pdb -- ./fit.py \
-  --max-time-spread-s 0.1  \
-  --dump /tmp/context.pickle \
-  --topics ${(j:,:)lidars}   \
-  --decimation-period 1      \
-  --bag $BAG \
-  --verbose
+The sample tells us that:
+
+- The RMS of the full $\vec x$ vector is 0.43 normalized units (see [[*Scaling][above for
+  scaling notes]])
+- We have 0.71 pixels RMS of error in the camera data and 0.013m RMS error in
+  the LIDAR data
+- The regularization terms have a /very/ small contribution to the total cost
+  (as intended; these are for tie-breakers only)
+
+The =.gp= files are executable, and produce diagnostic plots.
+
+The =residuals= plots visualize the optimized measurement vector $\vec x$. This
+is an estimate of the input noise, so as noted [[*Scaling][above]], we want to see
+
+- Normally distributed noise. The histogram plot displays this
+- Independent noise. There should be no discernible patterns in the residuals.
+  If there are, there's something likely wrong in the data collection process
+- Mean-0 noise. This will bias the solution, but will not show up in any clear
+  way in the plots
+- Homoscedactic noise: the noise on /every/ measurement should have the same
+  variance. Since we [[*Scaling][rescaled]] the measurements, the observed variance of the
+  camera and lidar measurements should be 1.0. Disparate lidar/camera variances
+  will produce a suboptimal solve. Variances significantly off from 1.0 will
+  produce errors in the uncertainty reporting: that code currently assumes
+  variances of 1.0
+
+The =geometry= plots display a 3D view of the sensor layout in the solution,
+with or without the solved board geometry. The LIDAR xyz axes are front-left-up.
+The camera xyz axes are right-down-forward.
+
+** Uncertainty
+clc can propagate the uncertainty in the input noise the point transformations
+that use the calibrated geometry. This is important because this noise is
+/always/ present: it cannot be eliminated, so we make sure to be robust to it. A
+poor uncertainty generally means that we didn't gather enough of the right kind
+of data: we want a good distribution of positions and orientations of the
+chessboard. For instance, board tilt is important: if the board was only
+presented vertically, then the solver doesn't have enough information to compute
+the vertical LIDAR position. /Some/ position will still be reported, but it
+would be selected primarily based on the input noise, and the uncertainty
+reporting will tell us that the solve is unreliable.
+
+The computation is done in two steps:
+
+1. =fit()= reports a covariance of the solution in =Var_rt_lidar0_sensor=. This
+   is a large, symmetric matrix. If we're calibrating $N$ sensors, we're
+   computing $N-1$ poses (one sensor is the reference), and we have $6\left( N-1
+   \right)$ optimization variables, and the covariance matrix thus has
+   dimensions $\left( $6\left( N-1 \right)$, $6\left( N-1 \right) \right)$. This
+   covariance of the state vector is done [[https://mrcal.secretsauce.net/docs-2.4/uncertainty.html#org1461ff3][/exactly/ as in mrcal]], except we
+   [[*Scaling][rescaled our measurements]], and thus the noise in the inputs $\sigma$ is
+   assumed to be 1.0
+
+2. We propagate this covariance. For any function $\vec F \left(\vec b\right)$
+   we have $\mathrm{Var}\left( \vec F \right) = \frac{\partial \vec F}{\partial
+   \vec b} \mathrm{Var}\left( \vec b \right) \frac{\partial \vec F}{\partial
+   \vec b}^T$. We can thus take an arbitrary point \$vec p_\mathrm{i}$ in the
+   coordinate frame of sensor $\mathrm{i}$, transform it to the frame of sensor
+   $\mathrm{j}$. This computation is a function of the transformations in $\vec
+   b$. We can thus compute $\frac{\partial \vec p_\mathrm{j}}{\partial \vec b}$,
+   and compute $\Var\left( \vec p_\mathrm{j} \right)$ to see how relialbe that
+   transform is. We will discover that this reliability varies for different
+   sensor combinations and different locations in space, and we can use that as
+   a gauge of whether our calibration is good-enough.
+
+** Auxillary tools
+A number of commandline tools are available to visualize various things.
+
+*** =show-aligned-lidar-pointclouds.py=
+This tool displays point clouds from different LIDARs, transformed by the solved
+sensor geometry. It is a good check of how well we did, and should follow the
+uncertainty predictions.
+
+*** =show-bag.py=
+Used to determine which topics are available in the bag, and to visualize
+and/our export the data in various ways. Much of this can be done just as well
+with ROS tools (=rostopic=, =rviz=, etc), but clc does not use ROS.
+
+*** =show-transformation-uncertainty.py=
+Visualize the solved uncertainty.
