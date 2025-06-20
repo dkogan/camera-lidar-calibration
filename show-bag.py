@@ -250,7 +250,7 @@ if args.timeline is not None:
     messages = clc.bag_interface.messages(bag, topics,
                                       start = args.after,
                                       stop  = args.before,
-                                      ignore_unknown_message_types = True)
+                                      ignore_unknown_message_types = False)
 
     time_key = 'time_header_ns' if args.time_header_ns else 'time_ns'
 
