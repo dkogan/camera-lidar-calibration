@@ -1161,11 +1161,11 @@ thus the noise in the inputs $\sigma$ is assumed to be 1.0
 We propagate this covariance. For any function $\vec F \left(\vec b\right)$ we
 have $\mathrm{Var}\left( \vec F \right) = \frac{\partial \vec F}{\partial \vec
 b} \mathrm{Var}\left( \vec b \right) \frac{\partial \vec F}{\partial \vec b}^T$.
-We can thus take an arbitrary point \$vec p_\mathrm{i}$ in the coordinate frame
+We can thus take an arbitrary point $\vec p_\mathrm{i}$ in the coordinate frame
 of sensor $\mathrm{i}$, transform it to the frame of sensor $\mathrm{j}$. This
 computation is a function of the transformations in $\vec b$. We can thus
 compute $\frac{\partial \vec p_\mathrm{j}}{\partial \vec b}$, and compute
-$\Var\left( \vec p_\mathrm{j} \right)$ to see how relialbe that transform is. We
+$\mathrm{Var}\left( \vec p_\mathrm{j} \right)$ to see how relialbe that transform is. We
 will discover that this reliability varies for different sensor combinations and
 different locations in space, and we can use that as a gauge of whether our
 calibration is good-enough.
