@@ -273,112 +273,190 @@ def calibrate(*,
 
 SYNOPSIS
 
-    result = clc.calibrate(bags   = bags,
-                           topics = topics,
-                           ...)
+    result = clc.calibrate(bags                = BAGS,
+                           topics              = TOPICS,
+                           decimation_period_s = 2,
+                           max_time_spread_s   = 0.1)
 
-    with open('clc.dump', 'wb') as f:
-        f.write(result['inputs_dump'])
+    mrcal.show_geometry( nps.glue( mrcal.invert_rt(result['rt_lidar0_lidar']),
+                                   mrcal.invert_rt(result['rt_lidar0_camera']),
+                                   axis = -2 ),
+                         cameranames = TOPICS )
 
-    ....
+    # A plot pops up, showing the solved geometry
 
-    with open('clc.dump', "rb") as f:
-        dump = f.read()
+This function runs the full clc pipeline, including the LIDAR point
+segmentation, the chessboard detection in the camera images, and the joint
+solve.
 
-    result = clc.fit_from_inputs_dump(dump)
+The input comes from "rosbags", with the README describing the input data
+details:
 
-CLC has a lot of complexity, and it's very useful to be able to rerun previous
-computations to find and fix issues. Solve state can be dumped using the
-"buf_inputs_dump" argument in the C clc() function, or it can be obtained in the
-binary clc.calibrate(....)['inputs_dump'] in the Python API.
+  A rosbag may contain multiple data streams with a "topic" string identifying
+  each one. The data stream for any given topic is a series of messages of
+  identical data type. clc reads lidar scans (msgtype
+  'sensor_msgs/msg/PointCloud2') and images (msgtype 'sensor_msgs/msg/Image').
 
-The dump can be loaded and re-solved by calling clc_fit_from_inputs_dump() in
-the C API or clc.fit_from_inputs_dump() in the Python API.
+  We want to get a set of time-synchronized "snapshots" from the data, reporting
+  observations of a moving calibration object by a set of stationary sensors.
+  Each snapshot should report observations from a single instant in time.
 
-This dump/replay infrastructure exercises the solve only. The LIDAR point
-segmentation is NOT a part of this tooling: the dump contains already-segmented
-points.
+  There are two ways to capture such data:
 
-These functions load the previous solve state, and re-run the fit from it. Some
-small tweaks to the solve are available:
+  - Move the chessboard between stationary poses; capture a small rosbag from
+    each sensor at each stationary pose. Each bag provides one snapshot. This
+    works well, but takes more work from the people capturing the data.
+    Therefore, most people prefer the next method
 
-- The do_fit_seed argument allows the seed solve to be re-run, or the dumped
-  seed output to be used instead
+  - Move the chessboard; slowly. Continuously capture the data into a single
+    bag. Subdivide the bag into time periods of length =decimation_period_s=.
+    Each decimation period produces one snapshot. This method has risks of
+    motion blur and synchronization issues, so the motions need to be slow, and
+    the tooling needs to enforce tight timings, and it is highly desireable to
+    have an outlier rejection method.
 
-- The do_inject_noise argument allows noise to be added to the input. This is
-  useful for validation of the uncertainty-quantification routine
+  The tooling supports both methods. The functions and tools that accept a
+  "decimation period" will use the one-snapshot-per-bag scheme if the decimation
+  period is omitted, and the one-big-bag scheme if the decimation period is
+  given.
 
-These two arguments work together. The full logic:
-
-  if(!do_fit_seed && !do_inject_noise) {
-    fit from the previous fit_seed() result; do NOT fit_seed()
-    Useful to experiment with the fit() routine.
-  }
-
-  if(!do_fit_seed &&  do_inject_noise) {
-    fit from the previous fit() result; do NOT fit_seed()
-
-    Useful to test the uncertainty logic. Many noise samples will be taken, with
-    a separate fit() for each. Fitting from the dumped fit() result makes each
-    solve converge very quickly, since we will start very close to the optimum
-  }
-
-  if(do_fit_seed) {
-    fit_seed() && fit()
-    Useful to experiment with fit_seed() and the full fit pipeline
-  }
-
-The other arguments are described below
+We can more finely control what data we use by setting the start, stop and
+exclude_time_periods arguments (see the docstring for
+clc.bag_interface.first_message_from_each_topic_in_time_segments() for details).
 
 ARGUMENTS
 
-- inputs_dump: a Python "bytes" object, containing the binary dump of the solve
-  inputs. This comes from either a .pickle file from "fit.py --dump" or from the
-  buf_inputs_dump argument to the clc_...() C functions
+A number of the arguments control the gathering of the input data, and are
+specific to the clc Python API
 
-- isnapshot_exclude: optional iterable of integers. Each snapshot in this list
-  will NOT be a part of the solve
+- bags: an iterable of strings pointing to paths on disk of the bag(s) with the
+  input data. If all the input is in one bag (indicated by decimation_period_s
+  is None), then this should be a length-1 iterable
+
+- topics: an iterable of strings, for the sensors being calibrated. These topics
+  should contain LIDAR point clouds or camera images.
+
+- decimation_period_s: optional decimation period size. If omitted or None, we
+  use one bag per snapshot. If given, we subdivide the time in the ONE bag we're
+  given, to produce a snapshot from each period of the given size.
+
+- start, stop: optional timestamps indicating where we should start/stop reading
+  the bag. Given as s since the epoch, ns since the epoch or a string parsed by
+  dateutil.parser.parse(). By default, we start at the beginning of the bag, and
+  finish at the end.
+
+- max_time_spread_s: optional limit for the sync difference between all the
+  messages in a snapshot. We want all the data in a snapshot to have been
+  captured at one instant in time. This isn't possible, so we settle for the
+  time spread to be better than some limit, given here. By default, we don't
+  enforce this at all, and simply take the first set of messages in each
+  bag/decimation period
+
+- exclude_time_periods: optional iterable of time periods to exclude. Each
+  element of the iterable is a (t0,t1) time intervals. Where each of the
+  timestamps is given as s since the epoch, ns since the epoch or as a string
+  parsed by dateutil.parser.parse().
+
+The rest of the arguments control the operation of clc, and are directly passed
+to the CLC C API
+
+- models: an iterable of filenames pointing to the mrcal cameramodels
+  representing the cameras. Only the intrinsics are used. Exactly as many models
+  must be given as there are camera topics given. Omit if we have no cameras
+  (this is a LIDAR-only solve)
+
+- Nsectors
+- threshold_valid_lidar_range
+- threshold_valid_lidar_Npoints
+- uncertainty_quantification_range
+  Parameters for sector-based diagnostics. All are optional. See the README
+
+- seed: optional dict representing the solution used to initialize the solve.
+  Useful for difficult solves where the internal seeding algorithm is
+  insufficient. Normally this would be omitted, and clc will compute the seed by
+  itself. If given, must have keys ("rt_lidar0_lidar","rt_lidar0_camera") or
+  ("rt_vehicle_lidar","rt_vehicle_camera") to localize the geometry. The camera
+  geometry is optional if we have no cameras. The vehicle-referenced geometry
+  requires rt_vehicle_lidar0 to be given. The output of this function is a dict
+  that can be passed back into the seed
+
+- object_height_n
+- object_width_n
+- object_spacing
+  optional parameters describing the chessboard used for the camera calibration.
+  These are required if we have cameras
 
 - fit_seed_position_err_threshold
 - fit_seed_cos_angle_err_threshold
+  Optional validation parameters used by the internal seeding routine. If the
+  seed computes geometry whose translation or orientation errors are beyond
+  these bounds, that snapshot is discarded. Reasonable defaults are used if
+  omitted.
 
-  Optional values to customize the behavior of fit_seed()
+- rt_vehicle_lidar0: Optional transform: a numpy array of shape (6,). If given,
+  we use this to align the sensor suite to the vehicle. We then produce more
+  output using the vehicle frame. If omitted, we don't know where the vehicle
+  is, and we don't produce the extra diagnostics
 
-- do_inject_noise: optional boolean, defaulting to False. If True, we inject
-  some expected noise into the inputs. See above for details.
+- isnapshot_for_isvisible: optional integer identifying which snapshot to use
+  for visibility reporting. By default we use the first one
 
-- do_fit_seed: optional boolean, defaulting to False. If True, we re-run
-  fit_seed(). By default we use the dumped result of fit_seed() instead. See
-  above for details.
+- check_gradient: optional boolean, defaulting to False. If True, we run the
+  gradient checker instead of the full solve
+
+- check_gradient__use_distance_to_plane: optional boolean, defaulting to False.
+  If True, we run the gradient checker of the distance-to-plane LIDAR error
+  metric instead of the full solve
+
+- do_dump_inputs: optional boolean, defaulting to False. If True, we produce and
+  return a binary dump that can be used to replay this solve with
+  fit_from_inputs_dump(). Turning this on produces ADDITIONAL output, and does
+  not affect the other results
 
 - verbose: optional boolean, defaulting to False. If True, verbose output about
   the solve is produced on stdout
-
-- do_skip_plots: optional boolean, defaulting to True. If True, we do NOT
-  produce plots of the results
 
 RETURNED VALUE
 
 A dict describing the result. The items are:
 
-- rt_lidar0_lidar:      A (Nlidars,6) numpy array containing rt transforms
-                        mapping points in each lidar frame to the frame of
-                        lidar0
 
-- rt_lidar0_camera:     A (Ncameras,6) numpy array containing rt transforms
-                        mapping points in each camera frame to the frame of
-                        lidar0
+- rt_lidar0_lidar: A (Nlidars,6) numpy array containing rt transforms mapping
+  points in each lidar frame to the frame of lidar0
+
+- rt_lidar0_camera: A (Ncameras,6) numpy array containing rt transforms mapping
+  points in each camera frame to the frame of lidar0
 
 - Var_rt_lidar0_sensor: A (Nsensors_optimized, 6, Nsensors_optimized, 6)
-                        symmetric numpy array representing the 1-sigma
-                        uncertainty of the solution due to the expected noise in
-                        the inputs. Nsensors_optimized counts the number of
-                        sensors in the optimization problem: Nsensors_optimized
-                        = Nlidars + Ncameras - 1. Lidar0 is always at the
-                        reference frame, and thus is not a part of the
-                        optimization.
+  symmetric numpy array representing the 1-sigma uncertainty of the solution due
+  to the expected noise in the inputs. Nsensors_optimized counts the number of
+  sensors in the optimization problem: Nsensors_optimized = Nlidars + Ncameras -
+  1. Lidar0 is always at the reference frame, and thus is not a part of the
+  optimization.
 
-'''
+- rt_vehicle_lidar
+- rt_vehicle_camera
+  Similar to rt_lidar0_lidar,rt_lidar0_camera, but referenced to the vehicle.
+  Reported only if rt_vehicle_lidar0 is given
+
+- observations_per_sector
+- isvisible_per_sensor_per_sector
+- stdev_worst_per_sector
+- isensors_pair_stdev_worst
+- isector_of_last_snapshot
+  Sector-based diagnostics. See the README
+
+- inputs_dump: if do_dump_inputs: this is "bytes" that can by used to re-run
+  this solve with fit_from_inputs_dump()
+
+- Nsectors
+- threshold_valid_lidar_range
+- threshold_valid_lidar_Npoints
+- uncertainty_quantification_range
+  Parameters used in the computation. If given to calibrate(), these are exactly
+  what was passed in. If omitted, these are the defaults
+
+    '''
 
     return _clc.calibrate( _sorted_sensor_snapshots(bags, topics,
                                                     decimation_period_s  = decimation_period_s,
