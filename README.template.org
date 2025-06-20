@@ -581,3 +581,47 @@ with ROS tools (=rostopic=, =rviz=, etc), but clc does not use ROS.
 
 *** =show-transformation-uncertainty.py=
 Visualize the solved uncertainty.
+
+** Sector-based feedback
+=clc()= produces some extra feedback to support the common case of
+ground-vehicles and horizontally-oriented sensors. The ground plane is
+subdivided into =Nsectors= slices, with some diagnostic reporting for each
+slice. The vehicle frame is defined by =rt_vehicle_lidar0= and the sector count
+by =Nsectors=, both arguments to =clc()=.
+
+The reported feedback is all returned in arguments to =clc()=:
+
+- =observations_per_sector=: reports how well-covered a given sector is, to find
+  cases where the chessboard wasn't placed in all the necessary locations. This
+  isn't needed because the uncertainty reporting will tell you if the data
+  coverage is insufficient
+
+- =isvisible_per_sensor_per_sector=: reports which areas are invisible to the
+  sensors, due to the sensors arrangement or occlusions. This is somewhat
+  poorly-defined (because the observable area is a 3D region, not a 2D pie
+  slice), but could be useful.
+
+- =stdev_worst_per_sector=: the uncertainty report for each sector. Meant to
+  give the user a quick sense of the quality of the solve, and to identify areas
+  with issues. We look through every pair of sensors, and report the uncertainty
+  of the worst pair
+
+- =isensors_pair_stdev_worst=: which pair of sensors produced the uncertainty in
+  =stdev_worst_per_sector=.
+
+- =isector_of_last_snapshot=: which sector contained the most-recent chessboard
+  observation
+
+These diagnostics are controlled by a few parameters, also arguments to =clc()=:
+
+- =threshold_valid_lidar_range=, =threshold_valid_lidar_Npoints=: used for
+  =isvisible_per_sensor_per_sector=. For a sector to be deemed "visible" by a
+  LIDAR, we need to have seen at least this many points beyond a given range.
+  When mounted to a vehicle, the vehicle body will occlude some of the LIDAR
+  view, and we need to ask for a distance beyond those occlusions
+
+- =uncertainty_quantification_range=: used for the visibility and uncertainty
+  reporting. For each sector, we actually evaluate a single point on the ground
+  ($z=0$), this far away
+
+
