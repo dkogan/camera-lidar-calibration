@@ -1,0 +1,1028 @@
+This is a LIDAR-camera calibration toolkit using sets of stationary chessboard
+observations to calibrate the two sets of sensors together.
+
+* Build
+The bulk of this is C code. To build you need to
+
+#+begin_src sh
+sudo apt install \
+  libmrgingham-dev \
+  libdogleg-dev \
+  libopencv-dev \
+  libpython3-dev \
+  libmrcal-dev \
+  python3-mrcal
+#+end_src
+
+Note that you need bleeding-edge mrcal packages. The v2.5 series is
+recent-enough.
+
+Once the deependencies are installed, a plain =make= will build clc. To run the
+tool from logged data, run =./fit.py ...=
+
+* Overview
+CLC is a geometric calibration algorithm to align some number of rigidly-mounted
+cameras (=Ncameras= may be 0) and some number of rigidly mounted LIDAR units
+(=Nlidars= must be at least 1). A common use case is a ground vehicle equipped
+with some number of these sensors.
+
+It is assumed that the camera intrinsics have already been calibrated (with a
+tool such as [[https://mrcal.secretsauce.net][=mrcal=]]), and that the LIDAR angular spacings are known. With those
+assumptions, the only parameters this calibration problem needs to estimate are
+the poses of all of the sensors.
+
+Arbitrarily, CLC computes all the geometry in the coordinate system of the first
+LIDAR unit (=lidar0=). Thus it needs to solve for =Nlidars-1 + Ncameras=
+transformations, which is an optimization problem of =6*(Nlidars-1 + Ncameras)=
+variables. As with all optimization problems, detecting issues and quantifying
+the quality of the result is a crucial part of the computation, and CLC provides
+this feedback by quantifying the solve uncertainty: the sensitivity of
+transforming a 3D point from one sensor's frame to another in respect to
+existing noise in the calibration inputs. This is inspired by, and is very
+similar to the logic in [[https://mrcal.secretsauce.net][mrcal]], for quantifying the uncertainty of camera
+calibrations. The resulting algorithm is good at identifying issues in the
+calibration data, and will tell you where the result is or is not reliable.
+
+* Calibration process
+In order to compute a calibration, it is assumed that the set of sensors is
+mounted rigidly, and does not move. A user moves a /calibration object/ over the
+field of view of the sensors to capture the calibration input data. The sensors
+capture a set of /snapshots/: synchronized observations of the object by the
+sensors. In order to be useful, each snapshot must be observed by all the
+sensors. It is /not/ required for /every/ snapshot to contain observations from
+/all/ the sensors, but the full set of sensors /must/ be transitively connected.
+For instance, if snapshot 0 has observations from LIDAR 0 and LIDAR 1, and
+snapshot 1 has observations from LIDAR 1 and LIDAR 2, this is sufficient to
+compute a solution for LIDARs 0, 1 and 2.
+
+The calibration object must be observable by all the sensors, so we use a big
+chessboard target, the same one used to calibrate cameras. The cameras see the
+chessboard grid. The LIDAR units cannot see the chessboard grid, but they do see
+a flat object. Thus all the sensors /can/ observe this object, and we can feed
+those observations to the CLC solver.
+
+** Camera observations
+The cameras observe the chessboard grid, and we employ the same chessboard
+detector used by the camera calibration routine ([[https://github.com/dkogan/mrgingham][=mrgingham=]]). The chessboard
+corner pixel coordinates are input to the solver.
+
+This routine is available standalone in =clc_camera_chessboard_detection()=
+
+** LIDAR segmentation
+Each LIDAR contains a set of lasers that are rigidly mounted on a spindle
+rotating around the LIDAR z axis. Each laser has a full 360deg view all around
+it. The chessboard is located somewhere in space, in an location unknown prior
+to running the solve. So in order to input the LIDAR observations to the solver,
+we must find the chessboard in the point cloud. We look for a flat object of
+roughly the known size at a reasonable distance away from the sensor. These
+conditions aren't very discrimintating, so this /LIDAR segmentation/ routine is
+challenging to get right. There /are/ extra conditions we're not yet employing,
+like throwing out stationary objects over time, and this will likely be done at
+some point.
+
+These routines are available standalone in
+- =clc_lidar_segmentation_unsorted()=
+- =clc_lidar_segmentation_sorted()=
+
+** Solve
+Once we have sets of observation snapshots, we can attempt the solve. We are
+trying to find a set of geomeric transformations $\left\{ T_\mathrm{ref,lidar_i}
+\right\}$ and $\left\{ T_\mathrm{ref,camera_j} \right\}$ that best explain our
+observations. For any hypothesis set of $\left\{ T_\mathrm{ref,lidar_i}
+\right\}$ and $\left\{ T_\mathrm{ref,camera_j} \right\}$ I can compute where
+those hypothetical LIDARs and cameras would have observed the board, I can
+compute an error function $E$, and I move the LIDARs and cameras and boards in
+order to minimize $E$.
+
+Arbitrarily, CLC uses the frame of the first LIDAR (called the =lidar0= frame
+from now on) as the reference frame: it is the $\mathrm{ref}$ in the
+transformations $T$ above.
+
+*** Seed
+We're solving a nonlinear least-squares optimization problem. We employ a
+traditional iterative method, so starting the search from a good initial
+estimate of the solution (a /seed/) is essential to ensure convergence of the
+solve. We compute the seed using a non-iterative global method, solving a
+simplified version of our full optimization problem. The simplifications are
+required for the global method to work. This is implemented in =fit_seed()=. The
+approach is very similar to what [[https://mrcal.secretsauce.net][=mrcal=]] does:
+
+1. We traverse a graph of sensors with overlapping observations. We start with
+   those with the most overlapping observations, and eventually we cover /all/
+   the sensors. For each pair of sensors visited, we can use a simple [[https://mrcal.secretsauce.net/mrcal-python-api-reference.html#-align_procrustes_points_Rt01][Procrustes
+   fit]] to compute a transformation relating that pair of sensors. And we can
+   then use one path through the graph to estimate the transform between each
+   sensor and =lidar0=.
+
+2. We now have an estimate of the pose of each sensor, and we can use this to
+   estimate the pose of the chessboard for each snapshot. If any cameras observe
+   the chessboard, I use a PnP solve from one of those cameras to estimate the
+   board pose. Otherwise I use the LIDAR points to reconstruct the board pose
+   with arbitrary origin point and yaw (because the LIDARs only see a plane, and
+   don't have a sense of the rotation of the board, or where its edges are).
+
+*** Solve
+We now have the input data and an initial estimate of the solution. We can feed
+the solver. As with [[https://mrcal.secretsauce.net][=mrcal=]], [[https://github.com/dkogan/libdogleg][=libdogleg=]] is used to solve the least-squares
+problem. Two different ways to define the cost function are implemented:
+
+**** Perpendicular distance off the plane
+This is a simplified cost function. I observed that it converges better than the
+full cost function below, so I use this as another pre-solve.
+
+The pose of the board is Rt_lidar0_board. The board is at z=0 in board coords so
+the normal to the plane is nlidar0 = R_lidar0_board[:,2] = R_lidar0_board [0 0
+1]t. I define the board as an infinite plane:
+
+#+begin_example
+  all x where inner(nlidar0,xlidar0) = d
+#+end_example
+
+So the normal distance from the sensor to the board plane at
+Rt_lidar0_board is
+
+#+begin_example
+  d1 = inner(nlidar0, R_lidar0_board xboard0 + t_lidar0_board) =
+     = [0 0 1] R_lidar0_board_t R_lidar0_board xboard0 + [0 0 1] R_lidar0_board_t t_lidar0_board)
+     = inner(nlidar0, t_lidar0_board)
+#+end_example
+
+For any lidar-observed point p I can compute its perpendicular
+distance to the board plane:
+
+#+begin_example
+  d2 = inner(nlidar0, Rt_lidar0_lidar p)
+     = inner(nlidar0, R_lidar0_lidar p + t_lidar0_lidar)
+     = inner(nlidar0, v)
+#+end_example
+
+where v = R_lidar0_lidar p + t_lidar0_lidar. So
+
+#+begin_example
+  err = d1 - d2 =
+      = inner(nlidar0, t_lidar0_board - v)
+#+end_example
+
+Elements of the measurement vector $\vec x$ in the least-squares problem are the
+individual =err= quantities above.
+
+**** LIDAR range error
+The previous derivation is aphysical. I want my optimization to produce a
+maximum-likelihood estimate of the solution. This requires the errors in the
+measurement vector $\vec x$ to be independent and homoscedactic. With enough
+data, the measurement vector will track the noise in the input observations,
+which /are/ independent, and can be scaled to be homoscedactic. Thus I want the
+measurement vector $\vec x$ to contain discrepancies in the input observations:
+
+- LIDAR ranges
+- Pixel coordinates from the chessboard corners
+
+#+begin_example
+A plane is zboard = 0
+A lidar point plidar = vlidar dlidar
+
+pboard = Rbl plidar + tbl
+       = T_b_l0 T_l0_l plidar
+0 = zboard = pboard[2] = inner(Rbl[2,:],plidar) + tbl[2]
+-> inner(Rbl[2,:],vlidar)*dlidar = -tbl[2]
+-> dlidar = -tbl[2] / inner(Rbl[2,:],vlidar)
+          = -tbl[2] / (inner(Rbl[2,:],plidar) / mag(plidar))
+          = -tbl[2] mag(plidar) / inner(Rbl[2,:],plidar)
+
+And the error is
+
+  err = dlidar_observed - dlidar
+      = mag(plidar) - dlidar
+      = mag(plidar) + tbl[2] mag(plidar) / inner(Rbl[2,:],plidar)
+      = mag(plidar) * (1 + tbl[2] / inner(Rbl[2,:],plidar) )
+
+Rbl[2,:] = Rlb[:,2] = R_lidar_board z = R_lidar_lidar0 nlidar0
+
+tbl[2]   = (R_board_lidar0 t_lidar0_lidar + t_board_lidar0)[2]
+         = R_board_lidar0[2,:] t_lidar0_lidar + t_board_lidar0[2]
+         = R_lidar0_board[:,2] t_lidar0_lidar + t_board_lidar0[2]
+         = inner(nlidar0,t_lidar0_lidar) + t_board_lidar0[2]
+
+R_lidar0_board pb + t_lidar0_board = pl0
+-> pb = R_board_lidar0 pl0 - R_board_lidar0 t_lidar0_board
+-> t_board_lidar0 = - R_board_lidar0 t_lidar0_board
+-> t_board_lidar0[2] = - R_board_lidar0[2,:] t_lidar0_board
+                     = - R_lidar0_board[:,2] t_lidar0_board
+                     = - inner(nlidar0, t_lidar0_board)
+                     = -d1 (the same d1 as in the crude solve above)
+#+end_example
+
+*** Regularization terms
+For snapshots observed only by LIDARs, the above error expression is ambiguous.
+Since we're considering an infinite plane, the board pose representation
+=rt_lidar0_board= is free to translate and yaw within the plane. We resolve this
+ambiguity with regularization terms, extra terms in the measurement vector $\vec
+x$ that *lightly* pull every element of =rt_lidar0_board= towards zero.
+
+*** Outliers
+Currently no outlier rejection is implemented. This should be done, it just
+isn't implemented /yet/. Today the residuals can be visualized, and a human can
+visually evaluate whether outliers are a problem or not. This should be
+automated.
+
+* Usage details
+Currently several interfaces are provided:
+
+- A C API to access all the core functionality, as a /library/
+
+- A Python API to access the core functions provided by the C API
+
+- Commandline tools to run the sensor calibration routines without writing any
+  code. These are written in Python, and utilize the Python API
+
+** C API
+The CLC core is implemented in C, using =mrcal= for the core geometric types and
+camera models. The API is defined in =clc.h=.
+
+The input data is provided as a set of synchronized /snapshots/ in one of these
+structures:
+
+- =clc_sensor_snapshot_unsorted_t=: the LIDAR data is not assumed to be ordered
+  in any way, and may contain invalid points (0,0,0). The images are given as
+  images
+- =clc_sensor_snapshot_segmented_t=: the LIDAR point clouds have been segmented
+  by =clc_lidar_segmentation_unsorted()= or =clc_lidar_segmentation_sorted()=.
+  The segmented points are stored as indices into the original =points= array.
+  The images are still given as images
+- =clc_sensor_snapshot_sorted_t=: the LIDAR data has been process by
+  =clc_lidar_preprocess()=: the points have been sorted by ring and azimuth, and
+  invalid entries have been removed. The images were processed with a chessboard
+  detector, and the chessboard corners are stored instead of the source images
+- =clc_sensor_snapshot_segmented_dense_t=. The LIDAR point clouds have been
+  segmented. The =points= array contains /only/ the segmented points. The images
+  were processed with a chessboard detector, and the chessboard corners are
+  stored instead of the source images
+
+The available functions are:
+
+*** =clc_lidar_preprocess()=
+Sort the input LIDAR points by ring and azimuth, and remove the invalid entries.
+Usually there's no reason to call this explicitly:
+=fit(sensor_snapshots_unsorted)= does this for you. If calling this function
+ourselves, we can call =fit(sensor_snapshots_sorted)= instead.
+
+*** =clc_lidar_segmentation_default_context()=
+Several functions in the C API invoke the LIDAR segmentation routine. This
+routine has a number of parameters that affect its operation, given in the
+=const clc_lidar_segmentation_context_t* ctx= argument. Most often, we would set
+the default parameters, make small adjustments, and then invoke clc:
+
+#+begin_src c
+clc_lidar_segmentation_context_t ctx;
+clc_lidar_segmentation_default_context(&ctx);
+ctx.threshold_max_plane_size = ...; // segmentation parameter tweaks here
+...;
+clc(..., &ctx, ...);
+#+end_src
+
+The available parameters, a description of their operation and their default
+values are given in =clc.h= in the =CLC_LIDAR_SEGMENTATION_LIST_CONTEXT= macro.
+
+*** =clc_lidar_segmentation_unsorted()=, =clc_lidar_segmentation_sorted()=
+Invoke the LIDAR segmentation routine in isolation. Usually there's no reason to
+call this explicitly: =fit(sensor_snapshots_unsorted)= and
+=fit(sensor_snapshots_sorted)= does this for us. If calling this function /and/
+=clc_camera_chessboard_detection()= ourselves, we can call
+=fit(sensor_snapshots_segmented)= or =fit(sensor_snapshots_segmented_dense)=
+instead.
+
+*** =clc_camera_chessboard_detection()=
+Invoke the chessboard detector in isolation, to find the chessboard in images
+from the camera. Usually there's no reason to call this explicitly:
+=fit(sensor_snapshots_unsorted)= and =fit(sensor_snapshots_sorted)= does this
+for us. If calling this function /and/ =clc_lidar_segmentation_...()= ourselves,
+we can call =fit(sensor_snapshots_segmented)= or
+=fit(sensor_snapshots_segmented_dense)= instead.
+
+*** =clc()=
+Invoke the full calibration routine. As with the other functions, each argument
+is documented in =clc.h=. The outputs are given first, and most can be =NULL= if
+we aren't interested in those specific outputs. To run uncertainty computations,
+the covariance output is needed, so set =Var_rt_lidar0_sensor= to non-=NULL=.
+
+It's often helpful to be able to to re-run a solve for testing different
+configurations. The =buf_inputs_dump= argument can be used to store a solve
+dump, which can then be replayed by calling =clc_fit_from_inputs_dump()=
+
+*** =clc_fit_from_inputs_dump()=
+It's often helpful to be able to to re-run a solve for testing different
+configurations. The =buf_inputs_dump= argument to =fit()= can be used to store a
+solve dump, which can then be replayed by calling =clc_fit_from_inputs_dump()=
+
+** Python API
+The Python API provides Python access to all the core functionality provided by
+the C API. This Python access is then used by all the commandline tools, which
+are also written in Python. The public Python API lives in the =clc= module, and
+all the functions are documented thoroughly in their respective docstrings.
+
+A summary of all the available functions:
+
+- =lidar_segmentation()=
+Find the calibration plane in a LIDAR point cloud
+
+- =calibrate()=
+Invoke the full clc calibration routine
+
+- =clc.fit_from_inputs_dump()=
+Re-run a previously-dumped calibration
+
+- =clc.lidar_segmentation_parameters()=
+Reports the metadata for ALL of the lidar segmentation parameters
+
+- =clc.lidar_segmentation_default_context()=
+Reports the default values for ALL of the lidar segmentation parameters
+
+- =color_sequence_rgb()=
+Return the default color sequence for gnuplot objects. Useful for complex
+plotting
+
+- =plot()=
+Wrapper for gnuplotlib.plot(), reporting the hardcopy output to the console
+
+- =pointcloud_plot_tuples()=
+Helper function for visualizing LIDAR data in a common frame
+
+- =sensor_forward_vectors_plot_tuples()=
+Helper function for visualizing sensor poses in geometric plots
+
+*** Input data format
+The Python API (and thus the commandline tools) can read logged data. As of
+today, clc uses ROS bags as its input data storage format. clc does NOT actually
+use ROS, and it is NOT required to be installed; instead it uses the "rosbags"
+library to read the data.
+
+A rosbag may contain multiple data streams with a "topic" string identifying
+each one. The data stream for any given topic is a series of messages of
+identical data type. clc reads lidar scans (msgtype
+'sensor_msgs/msg/PointCloud2') and images (msgtype 'sensor_msgs/msg/Image').
+
+We want to get a set of time-synchronized "snapshots" from the data, reporting
+observations of a moving calibration object by a set of stationary sensors. Each
+snapshot should report observations from a single instant in time.
+
+There are two ways to capture such data:
+
+- Move the chessboard between stationary poses; capture a small rosbag from each
+  sensor at each stationary pose. Each bag provides one snapshot. This works
+  well, but takes more work from the people capturing the data. Therefore, most
+  people prefer the next method
+
+- Move the chessboard; slowly. Continuously capture the data into a single bag.
+  Subdivide the bag into time periods of length =decimation_period_s=. Each
+  decimation period produces one snapshot. This method has risks of motion blur
+  and synchronization issues, so the motions need to be slow, and the tooling
+  needs to enforce tight timings, and it is highly desireable to have an outlier
+  rejection method.
+
+The tooling supports both methods. The functions and tools that accept a
+"decimation period" will use the one-snapshot-per-bag scheme if the decimation
+period is omitted, and the one-big-bag scheme if the decimation period is given.
+
+The various utilities for reading the input data are in the =clc.bag_interface=
+module, with each function's docstring providing detailed documentation.
+
+** Commandline tools
+clc also provides a number of commandline tools, intended to make the most
+common applications of the tool available directly to the users, without
+requiring any code to be written. These are written in Python, using the Python
+API. The manpages for each available tool follow
+
+*** fit-from-inputs-dump.py
+#+begin_example
+NAME
+    fit-from-inputs-dump.py - Calibrate from a binary input dump
+
+SYNOPSIS
+      ./fit-from-inputs-dump.py xxx
+
+OPTIONS
+  POSITIONAL ARGUMENTS
+      context            .pickle file from fit.py --dump or buf_inputs_dump from
+                         the clc_...() C functions
+
+  OPTIONAL ARGUMENTS
+      -h, --help         show this help message and exit
+      --inject-noise     If given, we add expected noise to the observations. If
+                         --inject-noise and no --fit-seed then I will fit() from
+                         the previous fit() result, NOT from the previous
+                         fit_seed() result.
+      --fit-seed         If given, we fit_seed() and then fit(). By default (no
+                         --fit-seed), we only call fit(): from the previous
+                         fit_seed() result if no --inject-noise or from the
+                         previous fit() result if --inject-noise
+      --exclude EXCLUDE  Optional comma-separated list of integers >= 0. If given,
+                         exclude these snapshots
+      --verbose          Report details about the solve
+      --dump DUMP        Write solver diagnostics into the given .pickle file.
+                         Primarily to feed show-transformation-uncertainty.py
+
+#+end_example
+
+*** fit.py
+#+begin_example
+NAME
+    fit.py - Calibrate a set of cameras and LIDARs into a common coordinate
+    system
+
+SYNOPSIS
+      $ lidars=(/lidar/vl_points_0)
+      $ cameras=(/front/multisense/{{left,right}/image_mono_throttle,aux/image_color_throttle})
+      $ sensors=($lidars $cameras)
+
+      $ ./fit.py \
+          --topics ${(j:,:)sensors} \
+          --bag 'camera-lidar-*.bag'      \
+          intrinsics/{left,right,aux}_camera/camera-0-OPENCV8.cameramodel
+
+      ....
+      clc.c(3362) fit(): Finished full solve
+      clc.c(3387) fit(): RMS fit error: 0.43 normalized units
+      clc.c(3404) fit(): RMS fit error (camera): 0.71 pixels
+      clc.c(3410) fit(): RMS fit error (lidar): 0.013 m
+      clc.c(3415) fit(): norm2(error_regularization)/norm2(error): 0.00
+      clc.c(2695) plot_residuals(): Wrote '/tmp/residuals.gp'
+      clc.c(2727) plot_residuals(): Wrote '/tmp/residuals-histogram-lidar.gp'
+      clc.c(3020) plot_geometry(): Wrote '/tmp/geometry.gp'
+      clc.c(3020) plot_geometry(): Wrote '/tmp/geometry-onlyaxes.gp'
+      lidars=(/lidar/ouster_{0..3}/points/cloud);
+
+      [ The tool chugs for a bit, and in the end produces diagnostics and the aligned ]
+      [ models                                                                        ]
+
+DESCRIPTION
+    This tool computes a geometry-only calibration. It is assumed that the
+    camera intrinsics have already been computed. The results are computed
+    in the coordinate system of the first LIDAR. All the sensors must
+    overlap each other transitively: every sensor doesn't need to overlap
+    every other sensor, but there must be an overlapping path between each
+    pair of sensors.
+
+    The data comes from a set of ROS bags. Each bag is assumed to have
+    captured a single frame (one set of images, LIDAR revolutions) of a
+    stationary scene
+
+OPTIONS
+  POSITIONAL ARGUMENTS
+      models                Camera models for the optical calibration. Only the
+                            intrinsics are used. The number of models given must
+                            match the number of camera --topics arguments EXACTLY
+
+  OPTIONAL ARGUMENTS
+      -h, --help            show this help message and exit
+      --topics TOPICS       Which lidar(s) and camera(s) we're talking to. This is
+                            a comma-separated list of topics. Any Nlidars >= 1 and
+                            Ncameras >= 0 is supported
+      --bag BAG             Glob for the rosbag that contains the lidar and camera
+                            data. This can match multiple files
+      --exclude-bag EXCLUDE_BAG
+                            Bags to exclude from the processing. These are a regex
+                            match against the bag paths
+      --decimation-period DECIMATION_PERIOD
+                            If given, we expect ONE bag, and rather than taking
+                            the first message from each bag, we take all the
+                            messages from THIS bag, spaced out with a period given
+                            by this argument, in seconds
+      --after AFTER         If given, start reading the bags at this time. Could
+                            be an integer (s since epoch or ns since epoch), a
+                            float (s since the epoch) or a string, to be parsed
+                            with dateutil.parser.parse()
+      --before BEFORE       If given, stop reading the bags at this time. Could be
+                            an integer (s since epoch or ns since epoch), a float
+                            (s since the epoch) or a string, to be parsed with
+                            dateutil.parser.parse()
+      --exclude-time-period EXCLUDE_TIME_PERIOD
+                            If given, a comma-separated pair of time periods to be
+                            excluded from the data. Each could be an integer (s
+                            since epoch or ns since epoch), a float (s since the
+                            epoch) or a string, to be parsed with
+                            dateutil.parser.parse(). May be given multiple times
+      --dump DUMP           Write solver diagnostics into the given .pickle file
+      --Nsectors NSECTORS   Used in the uncertainty quantification. We report the
+                            uncertainty in radial sectors around the vehicle
+                            origin. If omitted, we use 36 sectors
+      --threshold-valid-lidar-range THRESHOLD_VALID_LIDAR_RANGE
+                            Used in the uncertainty quantification. Lidar returns
+                            closer than this are classified as "occluded". This is
+                            used to determine the lidar field-of-view in the
+                            uncertainty reporting. If omitted, we set this to 1.0m
+      --threshold-valid-lidar-Npoints THRESHOLD_VALID_LIDAR_NPOINTS
+                            Used in the uncertainty quantification. We require at
+                            least this many unoccluded lidar returns in a sector
+                            to classify it as "visible". If omitted, we require
+                            100 returns
+      --uncertainty-quantification-range UNCERTAINTY_QUANTIFICATION_RANGE
+                            Used in the uncertainty quantification. We report the
+                            uncertainty in radial sectors around the vehicle
+                            origin. In each sector we look at a point this
+                            distance away from the origin. If omitted, we look 10m
+                            ahead
+      --max-time-spread-s MAX_TIME_SPREAD_S
+                            The maximum time spread of observations in a snapshot.
+                            Any snapshot that contains sensor observations with a
+                            bigger time differences than this are thrown out; the
+                            WHOLE snapshot
+      --rt-vehicle-lidar0 RT_VEHICLE_LIDAR0
+                            Used in the uncertainty quantification. The vehicle-
+                            lidar0 transform. The solve is always done in lidar0
+                            coordinates, but we the uncertainty quantification
+                            operates in a different "vehicle" frame. This argument
+                            specifies the relationship between those frames. If
+                            omitted, we assume an identity transform: the vehicle
+                            frame is the lidar0 frame
+      --verbose             Report details about the solve
+      --debug-iring DEBUG_IRING
+                            stage1: report diagnostic information on stderr, ONLY
+                            for this ring
+      --debug-xmin DEBUG_XMIN
+                            report diagnostic information on stderr, ONLY for the
+                            region within the given xy bounds
+      --debug-xmax DEBUG_XMAX
+                            report diagnostic information on stderr, ONLY for the
+                            region within the given xy bounds
+      --debug-ymin DEBUG_YMIN
+                            report diagnostic information on stderr, ONLY for the
+                            region within the given xy bounds
+      --debug-ymax DEBUG_YMAX
+                            report diagnostic information on stderr, ONLY for the
+                            region within the given xy bounds
+      --threshold-min-Npoints-in-segment THRESHOLD_MIN_NPOINTS_IN_SEGMENT
+                            stage1: segments are accepted only if they contain at
+                            least this many points
+      --threshold-max-Npoints-invalid-segment THRESHOLD_MAX_NPOINTS_INVALID_SEGMENT
+                            stage1: segments are accepted only if they contain at
+                            most this many invalid points
+      --threshold-max-range THRESHOLD_MAX_RANGE
+                            stage2: discard all segment clusters that lie
+                            COMPLETELY past the given range
+      --threshold-distance-adjacent-points-cross-segment THRESHOLD_DISTANCE_ADJACENT_POINTS_CROSS_SEGMENT
+                            stage2: adjacent cross-segment points in the same ring
+                            must be at most this far apart
+      --threshold-min-cos-angle-error-same-direction-intra-ring THRESHOLD_MIN_COS_ANGLE_ERROR_SAME_DIRECTION_INTRA_RING
+                            stage2: cos threshold used to accumulate a segment to
+                            an adjacent one in the same ring
+      --threshold-max-plane-size THRESHOLD_MAX_PLANE_SIZE
+                            Post-processing: high limit on the linear size of the
+                            reported plane. In a square board this is roughly
+                            compared to the side length
+      --threshold-max-rms-fit-error THRESHOLD_MAX_RMS_FIT_ERROR
+                            Post-processing: high limit on the RMS plane fit
+                            residual. Lower values will demand flatter planes
+      --threshold-min-rms-point-cloud-2nd-dimension--multiple-max-plane-size THRESHOLD_MIN_RMS_POINT_CLOUD_2ND_DIMENSION__MULTIPLE_MAX_PLANE_SIZE
+                            Post-processing: low limit on the short length of the
+                            found plane. Too-skinny planes are rejected Given as a
+                            multiple of the max_plane_size
+      --Npoints-per-rotation NPOINTS_PER_ROTATION
+                            How many points are reported by the LIDAR in a
+                            rotation. This is hardware-dependent, and needs to be
+                            set each for LIDAR unit. Defaults to -1, in which case
+                            clc_lidar_preprocess() will try to estimate this
+      --Npoints-per-segment NPOINTS_PER_SEGMENT
+                            stage1: length of segments we're looking for
+      --threshold-max-Ngap THRESHOLD_MAX_NGAP
+                            The maximum number of consecutive missing points in a
+                            ring
+      --threshold-max-deviation-off-segment-line THRESHOLD_MAX_DEVIATION_OFF_SEGMENT_LINE
+                            stage1: maximum allowed deviation off a segment line
+                            fit. If any points violate this, the entire segment is
+                            rejected
+      --threshold-max-distance-across-rings THRESHOLD_MAX_DISTANCE_ACROSS_RINGS
+                            stage2: max ring-ring distance allowed to join two
+                            segments into a cluster
+      --threshold-max-cos-angle-error-normal THRESHOLD_MAX_COS_ANGLE_ERROR_NORMAL
+                            stage2: cos(v,n) threshold to accept a segment (and
+                            its direction v) into an existing cluster (and its
+                            normal n)
+      --threshold-min-cos-angle-error-same-direction-cross-ring THRESHOLD_MIN_COS_ANGLE_ERROR_SAME_DIRECTION_CROSS_RING
+                            stage2: cos threshold used to construct a cluster from
+                            two cross-ring segments. Non fitting pairs are not
+                            used to create a new cluster
+      --threshold-max-plane-point-error-stage2 THRESHOLD_MAX_PLANE_POINT_ERROR_STAGE2
+                            stage2: distance threshold to make sure each segment
+                            center lies in plane Non-fitting segments are not
+                            added to the cluster
+      --threshold-min-cos-plane-tilt-stage2 THRESHOLD_MIN_COS_PLANE_TILT_STAGE2
+                            stage2: the 'tilt' is the off-head-on orientation
+      --threshold-max-plane-point-error-stage3 THRESHOLD_MAX_PLANE_POINT_ERROR_STAGE3
+                            stage3: distance threshold to make sure each point
+                            lies in the plane Non-fitting points are culled from
+                            the reported plane
+      --threshold-min-plane-point-error-isolation THRESHOLD_MIN_PLANE_POINT_ERROR_ISOLATION
+                            stage3: points just off the edge of the detected board
+                            must fit AT LEAST this badly
+      --threshold-min-points-per-ring--multiple-Npoints-per-segment THRESHOLD_MIN_POINTS_PER_RING__MULTIPLE_NPOINTS_PER_SEGMENT
+                            stage3: minimum number of points in EACH ring in the
+                            cluster; a multiple of Npoints_per_segment
+      --threshold-max-Nsegments-in-cluster THRESHOLD_MAX_NSEGMENTS_IN_CLUSTER
+                            stage2: clusters with more than this many segments are
+                            rejected
+      --threshold-min-Nsegments-in-cluster THRESHOLD_MIN_NSEGMENTS_IN_CLUSTER
+                            stage2: clusters with fewer than this many segments
+                            are rejected
+      --threshold-min-Nrings-in-cluster THRESHOLD_MIN_NRINGS_IN_CLUSTER
+                            stage2: clusters with date from fewer than this many
+                            rings are rejected
+      --threshold-max-gap-Npoints THRESHOLD_MAX_GAP_NPOINTS
+                            stage3: moving from the center, we stop accumulating
+                            points when we encounter an angular gap at least this
+                            large
+
+#+end_example
+
+*** format-geometry-for-ros.py
+#+begin_example
+NAME
+    format-geometry-for-ros.py - Format the output calibration geometry for
+    ROS
+
+SYNOPSIS
+      $ lidars=(/lidar/velodyne_0/points \
+                /lidar/velodyne_1/points \
+                /lidar/velodyne_2/points);
+
+      $ ./fit.py                   \
+        --topics ${(j:,:)lidars}   \
+        --bag $BAG
+
+      ....
+      Wrote '/tmp/lidar0-mounted.cameramodel' and a symlink '/tmp/sensor0-mounted.cameramodel'
+      Wrote '/tmp/lidar1-mounted.cameramodel' and a symlink '/tmp/sensor1-mounted.cameramodel'
+      Wrote '/tmp/lidar2-mounted.cameramodel' and a symlink '/tmp/sensor2-mounted.cameramodel'
+
+      $ ./format-geometry-for-ros.py \
+        --topics ${(j:,:)lidars}     \
+        $BAG
+
+      stamp:
+          nsec: 1749145667549590272
+      transforms:
+          velodyne_0:
+              parent_frame: base_link
+              translation:
+                  x:  ...
+                  y:  ...
+                  z:  ...
+              rotation:
+                  x: ...
+                  y: ...
+                  z: ...
+                  w: ...
+          velodyne_1:
+      .....
+
+DESCRIPTION
+    The solve computes everything in the frame of lidar0. To communicate the
+    solution to ROS, I want to base everything off the "base_link" frame. I
+    read the "/tf_static" topic to get transform between the lidar0 and the
+    base_link. I then use this transform to shift the solution, and output
+    the solution in some yaml thing that's palatable to ROS.
+
+    There's some funkyness in that each sensor is identified both by its
+    "topic" and by its "name". The name is what appears in /tf_static and
+    that's what I use in the output. I can't find any consistent way to map
+    topics to/from names. So I assume that each topic is
+    "/xxx/xxx/xxx/NAME/xxx/xxx/xxx". I.e. there's lots of unknowable cruft,
+    with the sensor name in the middle somewhere. I use the names in
+    /tf_static to infer which topic component has the name, and I then use
+    that.
+
+OPTIONS
+  POSITIONAL ARGUMENTS
+      bag              The bag we read the /tf_static transform from
+
+  OPTIONAL ARGUMENTS
+      -h, --help       show this help message and exit
+      --topics TOPICS  Which lidar(s) and camera(s) we're talking to. This is a comma-separated list of topics. Any Nlidars >= 1 and Ncameras >=
+                       0 is supported
+
+#+end_example
+
+*** infer-lidar-spacing.py
+#+begin_example
+NAME
+    infer-lidar-spacing.py - Report the az and el layout present in a LIDAR
+    dataset
+
+SYNOPSIS
+      $ ./infer-lidar-spacing.py \
+          /points0 \
+          camera-lidar0.bag
+
+      Nrings=128
+      Npoints_per_rotation=512
+
+      ....
+
+DESCRIPTION
+    These parameters are used by the lidar segmentation routine
+
+OPTIONS
+  POSITIONAL ARGUMENTS
+      lidar-topic       The LIDAR topic we're looking at
+      bag               The rosbag that contain the lidar data.
+
+  OPTIONAL ARGUMENTS
+      -h, --help        show this help message and exit
+      --show-histogram  If given, we display the histogram of potential Npoints_per_rotation values. Hopefully we see a sharp peak at the "right"
+                        value and that it is a power of 2
+
+#+end_example
+
+*** lidar-segmentation.py
+#+begin_example
+NAME
+    lidar-segmentation.py - Find the board in a point cloud
+
+SYNOPSIS
+      $ ./lidar-segmentation.py     \
+          /lidar/vl_points_1     \
+          'camera-lidar*.bag'
+
+DESCRIPTION
+    This tool is primarily for developing and debugging C code that
+    interacts with the LIDAR data. This tool makes various assumptions. Read
+    the code before blindly using this
+
+OPTIONS
+  POSITIONAL ARGUMENTS
+      lidar-topic           The LIDAR topic we're looking at
+      bag                   The rosbag that contain the lidar data.
+
+  OPTIONAL ARGUMENTS
+      -h, --help            show this help message and exit
+      --debug DEBUG DEBUG DEBUG DEBUG DEBUG
+                            If given, overrides --debug-iring, --debug-xmin, --debug-ymin, --debug-xmax, --debug-ymax
+      --after AFTER         If given, start reading the bag at this time. Could be an integer (s since epoch or ns since epoch), a float (s since
+                            the epoch) or a string, to be parsed with dateutil.parser.parse()
+      --dump                if true, diagnostic detector data meant for plotting is output on stdout. The intended use is ./lidar-segmentation-
+                            test.py --dump TOPIC BAG | | feedgnuplot \ --style label 'with labels' \ --style ACCEPTED "with points pt 2 ps 2 lw 2
+                            lc \"red\""\ --tuplesize label 4 \ --style all 'with points pt 7 ps 0.5' \ --style stage1-segment "with vectors lc
+                            \"green\""\ --style plane-normal "with vectors lc \"black\""\ --tuplesize stage1-segment,plane-normal 6\ --3d \
+                            --domain \ --dataid \ --square \ --points \ --tuplesizeall 3 \ --autolegend \ --xlabel x \ --ylabel y \ --zlabel z\
+      --debug-iring DEBUG_IRING
+                            stage1: report diagnostic information on stderr, ONLY for this ring
+      --debug-xmin DEBUG_XMIN
+                            report diagnostic information on stderr, ONLY for the region within the given xy bounds
+      --debug-xmax DEBUG_XMAX
+                            report diagnostic information on stderr, ONLY for the region within the given xy bounds
+      --debug-ymin DEBUG_YMIN
+                            report diagnostic information on stderr, ONLY for the region within the given xy bounds
+      --debug-ymax DEBUG_YMAX
+                            report diagnostic information on stderr, ONLY for the region within the given xy bounds
+      --threshold-min-Npoints-in-segment THRESHOLD_MIN_NPOINTS_IN_SEGMENT
+                            stage1: segments are accepted only if they contain at least this many points
+      --threshold-max-Npoints-invalid-segment THRESHOLD_MAX_NPOINTS_INVALID_SEGMENT
+                            stage1: segments are accepted only if they contain at most this many invalid points
+      --threshold-max-range THRESHOLD_MAX_RANGE
+                            stage2: discard all segment clusters that lie COMPLETELY past the given range
+      --threshold-distance-adjacent-points-cross-segment THRESHOLD_DISTANCE_ADJACENT_POINTS_CROSS_SEGMENT
+                            stage2: adjacent cross-segment points in the same ring must be at most this far apart
+      --threshold-min-cos-angle-error-same-direction-intra-ring THRESHOLD_MIN_COS_ANGLE_ERROR_SAME_DIRECTION_INTRA_RING
+                            stage2: cos threshold used to accumulate a segment to an adjacent one in the same ring
+      --threshold-max-plane-size THRESHOLD_MAX_PLANE_SIZE
+                            Post-processing: high limit on the linear size of the reported plane. In a square board this is roughly compared to
+                            the side length
+      --threshold-max-rms-fit-error THRESHOLD_MAX_RMS_FIT_ERROR
+                            Post-processing: high limit on the RMS plane fit residual. Lower values will demand flatter planes
+      --threshold-min-rms-point-cloud-2nd-dimension--multiple-max-plane-size THRESHOLD_MIN_RMS_POINT_CLOUD_2ND_DIMENSION__MULTIPLE_MAX_PLANE_SIZE
+                            Post-processing: low limit on the short length of the found plane. Too-skinny planes are rejected Given as a multiple
+                            of the max_plane_size
+      --Npoints-per-rotation NPOINTS_PER_ROTATION
+                            How many points are reported by the LIDAR in a rotation. This is hardware-dependent, and needs to be set each for
+                            LIDAR unit. Defaults to -1, in which case clc_lidar_preprocess() will try to estimate this
+      --Npoints-per-segment NPOINTS_PER_SEGMENT
+                            stage1: length of segments we're looking for
+      --threshold-max-Ngap THRESHOLD_MAX_NGAP
+                            The maximum number of consecutive missing points in a ring
+      --threshold-max-deviation-off-segment-line THRESHOLD_MAX_DEVIATION_OFF_SEGMENT_LINE
+                            stage1: maximum allowed deviation off a segment line fit. If any points violate this, the entire segment is rejected
+      --threshold-max-distance-across-rings THRESHOLD_MAX_DISTANCE_ACROSS_RINGS
+                            stage2: max ring-ring distance allowed to join two segments into a cluster
+      --threshold-max-cos-angle-error-normal THRESHOLD_MAX_COS_ANGLE_ERROR_NORMAL
+                            stage2: cos(v,n) threshold to accept a segment (and its direction v) into an existing cluster (and its normal n)
+      --threshold-min-cos-angle-error-same-direction-cross-ring THRESHOLD_MIN_COS_ANGLE_ERROR_SAME_DIRECTION_CROSS_RING
+                            stage2: cos threshold used to construct a cluster from two cross-ring segments. Non fitting pairs are not used to
+                            create a new cluster
+      --threshold-max-plane-point-error-stage2 THRESHOLD_MAX_PLANE_POINT_ERROR_STAGE2
+                            stage2: distance threshold to make sure each segment center lies in plane Non-fitting segments are not added to the
+                            cluster
+      --threshold-min-cos-plane-tilt-stage2 THRESHOLD_MIN_COS_PLANE_TILT_STAGE2
+                            stage2: the 'tilt' is the off-head-on orientation
+      --threshold-max-plane-point-error-stage3 THRESHOLD_MAX_PLANE_POINT_ERROR_STAGE3
+                            stage3: distance threshold to make sure each point lies in the plane Non-fitting points are culled from the reported
+                            plane
+      --threshold-min-plane-point-error-isolation THRESHOLD_MIN_PLANE_POINT_ERROR_ISOLATION
+                            stage3: points just off the edge of the detected board must fit AT LEAST this badly
+      --threshold-min-points-per-ring--multiple-Npoints-per-segment THRESHOLD_MIN_POINTS_PER_RING__MULTIPLE_NPOINTS_PER_SEGMENT
+                            stage3: minimum number of points in EACH ring in the cluster; a multiple of Npoints_per_segment
+      --threshold-max-Nsegments-in-cluster THRESHOLD_MAX_NSEGMENTS_IN_CLUSTER
+                            stage2: clusters with more than this many segments are rejected
+      --threshold-min-Nsegments-in-cluster THRESHOLD_MIN_NSEGMENTS_IN_CLUSTER
+                            stage2: clusters with fewer than this many segments are rejected
+      --threshold-min-Nrings-in-cluster THRESHOLD_MIN_NRINGS_IN_CLUSTER
+                            stage2: clusters with date from fewer than this many rings are rejected
+      --threshold-max-gap-Npoints THRESHOLD_MAX_GAP_NPOINTS
+                            stage3: moving from the center, we stop accumulating points when we encounter an angular gap at least this large
+
+#+end_example
+
+*** show-aligned-lidar-pointclouds.py
+#+begin_example
+NAME
+    show-aligned-lidar-pointclouds.py - Display a set of LIDAR point clouds
+    in the aligned coordinate system
+
+SYNOPSIS
+      $ ./show-aligned-lidar-pointclouds.py                   \
+          --bag camera-lidar.bag                              \
+          --topic /lidar/vl_points_0,/lidar/vl_points_1 \
+          /tmp/lidar[01]-mounted.cameramodel
+        [plot pops up to show the aligned points]
+
+DESCRIPTION
+    Displays the point clouds in the lidar0 coord system
+
+OPTIONS
+  POSITIONAL ARGUMENTS
+      lidar-models          The .cameramodel for the lidars in question. Must correspond to the set in --topic.
+
+  OPTIONAL ARGUMENTS
+      -h, --help            show this help message and exit
+      --topics TOPICS       The LIDAR topics to visualize. This is a comma-separated list of topics
+      --bag BAG             The one bag we're visualizing
+      --after AFTER         If given, start reading the bags at this time. Could be an integer (s since epoch or ns since epoch), a float (s
+                            since the epoch) or a string, to be parsed with dateutil.parser.parse()
+      --threshold-range THRESHOLD_RANGE
+                            Max distance where we cut the plot
+      --title TITLE         Title string for the plot. Overrides the default title
+      --hardcopy HARDCOPY   Write the output to disk, instead of an interactive plot
+      --terminal TERMINAL   gnuplotlib terminal. The default is good almost always, so most people don't need this option
+      --set SET             Extra 'set' directives to gnuplotlib. Can be given multiple times
+      --unset UNSET         Extra 'unset' directives to gnuplotlib. Can be given multiple times
+
+#+end_example
+
+*** show-bag.py
+#+begin_example
+NAME
+    show-bag.py - Display the LIDAR scans from a rosbag
+
+SYNOPSIS
+      $ ./show-bag.py             \
+          'camera-lidar*.bag'
+
+      Bag 'camera-lidar-0.bag':
+        /points0
+        /points1
+      Bag 'camera-lidar-1.bag':
+        /points0
+        /points1
+        /image0
+      ....
+
+      $ ./show-bag.py             \
+          --period 2              \
+          --set "view 60,30,2"    \
+          --set "xrange [-20:20]" \
+          --set "yrange [-20:20]" \
+          --set "zrange [-2:2]"   \
+          --topic /points0 \
+          'camera-lidar*.bag'
+
+        [A plot pops up showing the LIDAR scans from the bags, updating every 2 sec]
+
+      $ ./show-bag.py     \
+          --topic /image0 \
+          'camera-lidar*.bag'
+
+        [A plot pops up showing the images in the bags. Updated with the next bag
+        when the user closes the plot]
+
+DESCRIPTION
+    This is a display tool to show the contents of a ros bag. This is
+    roughly similar to the "rosbag" and "ros2 bag" and "rviz" tools, but
+    uses the "rosbags" Python package, and does NOT require ROS to be
+    installed
+
+OPTIONS
+  POSITIONAL ARGUMENTS
+      bags                  Glob(s) for the rosbags that contain the lidar data. Each of these will be sorted alphanumerically
+
+  OPTIONAL ARGUMENTS
+      -h, --help            show this help message and exit
+      --maxrange MAXRANGE   Applies to LIDAR data. If given, cut off the points at this range
+      --with WITH           Applies to LIDAR data. If given, uses the requested style to plot the lidar points. The default is "dots". If there
+                            aren't many points to show, this can be illegible, and "points" works better
+      --no-intensity        Applies to LIDAR data. By default we color-code each point by intensity. With --no-intensity, we plot all the points
+                            with the same color. Improves legibility in some cases
+      --ring RING           Applies to LIDAR data. If given, show ONLY data from this ring. Otherwise, display all of them
+      --xy                  Applies to LIDAR data. If given, I make a 2D plot, ignoring the z axis
+      --extract-images      Applies to camera data. If given, I write the images to the directory given in this argument. Exactly one bag and one
+                            topic is expected. I write to the directory in --outdir ('/tmp' by default) and I write at most --extract-images-
+                            count (all images by default)
+      --extract-images-count EXTRACT_IMAGES_COUNT
+                            If --extract-images is given I write this many images at most. By default, I write ALL the images
+      --outdir OUTDIR       The directory --extract-.... will write to. The default is "/tmp/"
+      --period PERIOD       How much time to wait between moving to the next bag; if <= 0 (the default), we wait until each window is manually
+                            closed
+      --hardcopy HARDCOPY   Write the output to disk, instead of an interactive plot
+      --terminal TERMINAL   gnuplotlib terminal. The default is good almost always, so most people don't need this option
+      --set SET             Extra 'set' directives to gnuplotlib. Can be given multiple times
+      --unset UNSET         Extra 'unset' directives to gnuplotlib. Can be given multiple times
+      --topic TOPIC         The topic we're visualizing. Can select LIDAR or camera data. If omitted, we report the topics present in the bag,
+                            and we exit. If --timeline, this is a ,-separated list of topics to visualize
+      --decimation-period DECIMATION_PERIOD
+                            If given, we expect ONE bag, and rather than taking the first message from each bag, we take all the messages from
+                            THIS bag, spaced out with a period given by this argument, in seconds
+      --after AFTER         If given, start reading the bags at this time. Could be an integer (s since epoch or ns since epoch), a float (s
+                            since the epoch) or a string, to be parsed with dateutil.parser.parse()
+      --before BEFORE       If given, stop reading the bags at this time. Could be an integer (s since epoch or ns since epoch), a float (s since
+                            the epoch) or a string, to be parsed with dateutil.parser.parse()
+      --timeline TIMELINE   If given, we plot time message timeline from the ONE give bag. Multiple bags not allowed. If no --topic, we report
+                            ALL the topics. Takes one argument: the duration (in seconds) of the requested plot. If <= 0, we plot the whole bag
+      --time-header-ns      If given, we use the time_header_ns for --timeline. This is the time the data was SENT, not the time it was recorded.
+                            All the log replay code uses time_ns
+
+#+end_example
+
+*** show-transformation-uncertainty.py
+#+begin_example
+NAME
+    show-transformation-uncertainty.py - Visualize transformation
+    uncertainty between a pair of sensors
+
+SYNOPSIS
+      $ ./fit.py ... --dump /tmp/clc-context.pickle
+
+      $ ./show-transformation-uncertainty.py                  \
+          --bag camera-lidar.bag                              \
+          --topic /lidar/vl_points_0,/lidar/vl_points_1       \
+          --context /tmp/clc-context.pickle
+        [plots pop up to show the uncertainty]
+
+DESCRIPTION
+    Displays uncertainties of transformations between pairs of sensors
+
+OPTIONS
+  OPTIONAL ARGUMENTS
+      -h, --help            show this help message and exit
+      --gridn GRIDN         How densely we should sample the space. We use a
+                            square grid with gridn cells on each side. By default
+                            gridn=25
+      --radius RADIUS       How far we should sample the space. We use a square
+                            grid, 2*radius m per side. By default radius=20
+      --ellipsoids          By default we plot the transformation uncertainty,
+                            which is derived from uncertainty ellipsoids. It is
+                            sometimes useful to see the ellipsoids themselves,
+                            usually for debugging. Pass --ellipsoids to do that
+      --topics TOPICS       The topics to visualize. This is a comma-separated
+                            list of topics
+      --bag BAG             The one bag we're visualizing. Required if
+                            --ellipsoids
+      --after AFTER         If given, start reading the bags at this time. Could
+                            be an integer (s since epoch or ns since epoch), a
+                            float (s since the epoch) or a string, to be parsed
+                            with dateutil.parser.parse()
+      --context CONTEXT     .pickle file from fit.py
+      --threshold THRESHOLD
+                            Max distance where we cut the plot
+      --cbmax CBMAX         If given, we use this cbmax in the uncertainty plots
+      --hardcopy HARDCOPY   If given, plot to this file instead of making an
+                            interactive plot. If no --ellipsoids, we make multiple
+                            plots, one per topic. The sanitized topic name will be
+                            appended to the end of this given filename
+
+#+end_example
+
+
+* Interpretation of the results
+
+
+uncertainty
+sector stuff
+auxillary tools
+generated scriplets to see residuals and geometry and such
+
+
+
+clc.c(3362) fit(): Finished full solve
+clc.c(3387) fit(): RMS fit error: 0.43 normalized units
+clc.c(3410) fit(): RMS fit error (lidar): 0.013 m
+clc.c(3415) fit(): norm2(error_regularization)/norm2(error): 0.00
+clc.c(2695) plot_residuals(): Wrote '/tmp/residuals.gp'
+clc.c(2727) plot_residuals(): Wrote '/tmp/residuals-histogram-lidar.gp'
+clc.c(3020) plot_geometry(): Wrote '/tmp/geometry.gp'
+clc.c(3020) plot_geometry(): Wrote '/tmp/geometry-onlyaxes.gp'
+lidars=(/lidar/ouster_{0..3}/points/cloud);
+
+ipython3 --pdb -- ./fit.py \
+  --max-time-spread-s 0.1  \
+  --dump /tmp/context.pickle \
+  --topics ${(j:,:)lidars}   \
+  --decimation-period 1      \
+  --bag $BAG \
+  --verbose
