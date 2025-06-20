@@ -1154,7 +1154,7 @@ The computation is done in two steps:
    is a large, symmetric matrix. If we're calibrating $N$ sensors, we're
    computing $N-1$ poses (one sensor is the reference), and we have $6\left( N-1
    \right)$ optimization variables, and the covariance matrix thus has
-   dimensions $\left( $6\left( N-1 \right)$, $6\left( N-1 \right) \right)$. This
+   dimensions $\left( 6\left( N-1 \right)$ 6\left( N-1 \right) \right)$. This
    covariance of the state vector is done [[https://mrcal.secretsauce.net/docs-2.4/uncertainty.html#org1461ff3][/exactly/ as in mrcal]], except we
    [[*Scaling][rescaled our measurements]], and thus the noise in the inputs $\sigma$ is
    assumed to be 1.0
