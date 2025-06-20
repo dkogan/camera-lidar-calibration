@@ -13,6 +13,17 @@ SYNOPSIS
       --bag 'camera-lidar-*.bag'      \
       intrinsics/{left,right,aux}_camera/camera-0-OPENCV8.cameramodel
 
+  ....
+  clc.c(3362) fit(): Finished full solve
+  clc.c(3387) fit(): RMS fit error: 0.43 normalized units
+  clc.c(3404) fit(): RMS fit error (camera): 0.71 pixels
+  clc.c(3410) fit(): RMS fit error (lidar): 0.013 m
+  clc.c(3415) fit(): norm2(error_regularization)/norm2(error): 0.00
+  clc.c(2695) plot_residuals(): Wrote '/tmp/residuals.gp'
+  clc.c(2727) plot_residuals(): Wrote '/tmp/residuals-histogram-lidar.gp'
+  clc.c(3020) plot_geometry(): Wrote '/tmp/geometry.gp'
+  clc.c(3020) plot_geometry(): Wrote '/tmp/geometry-onlyaxes.gp'
+
   [ The tool chugs for a bit, and in the end produces diagnostics and the aligned ]
   [ models                                                                        ]
 
