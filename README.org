@@ -1150,26 +1150,25 @@ reporting will tell us that the solve is unreliable.
 
 The computation is done in two steps:
 
-1. =fit()= reports a covariance of the solution in =Var_rt_lidar0_sensor=. This
-   is a large, symmetric matrix. If we're calibrating $N$ sensors, we're
-   computing $N-1$ poses (one sensor is the reference), and we have $6\left( N-1
-   \right)$ optimization variables, and the covariance matrix thus has
-   dimensions $\left( 6\left( N-1 \right), 6\left( N-1 \right) \right)$. This
-   covariance of the state vector is done [[https://mrcal.secretsauce.net/docs-2.4/uncertainty.html#org1461ff3][/exactly/ as in mrcal]], except we
-   [[*Scaling][rescaled our measurements]], and thus the noise in the inputs $\sigma$ is
-   assumed to be 1.0
+=fit()= reports a covariance of the solution in =Var_rt_lidar0_sensor=. This is
+a large, symmetric matrix. If we're calibrating $N$ sensors, we're computing
+$N-1$ poses (one sensor is the reference), and we have $6\left( N-1 \right)$
+optimization variables, and the covariance matrix thus has dimensions $\left(
+6\left( N-1 \right), 6\left( N-1 \right) \right)$. This covariance of the state
+vector is done [[https://mrcal.secretsauce.net/docs-2.4/uncertainty.html#org1461ff3][/exactly/ as in mrcal]], except we rescaled our measurements]], and
+thus the noise in the inputs $\sigma$ is assumed to be 1.0
 
-2. We propagate this covariance. For any function $\vec F \left(\vec b\right)$
-   we have $\mathrm{Var}\left( \vec F \right) = \frac{\partial \vec F}{\partial
-   \vec b} \mathrm{Var}\left( \vec b \right) \frac{\partial \vec F}{\partial
-   \vec b}^T$. We can thus take an arbitrary point \$vec p_\mathrm{i}$ in the
-   coordinate frame of sensor $\mathrm{i}$, transform it to the frame of sensor
-   $\mathrm{j}$. This computation is a function of the transformations in $\vec
-   b$. We can thus compute $\frac{\partial \vec p_\mathrm{j}}{\partial \vec b}$,
-   and compute $\Var\left( \vec p_\mathrm{j} \right)$ to see how relialbe that
-   transform is. We will discover that this reliability varies for different
-   sensor combinations and different locations in space, and we can use that as
-   a gauge of whether our calibration is good-enough.
+We propagate this covariance. For any function $\vec F \left(\vec b\right)$ we
+have $\mathrm{Var}\left( \vec F \right) = \frac{\partial \vec F}{\partial \vec
+b} \mathrm{Var}\left( \vec b \right) \frac{\partial \vec F}{\partial \vec b}^T$.
+We can thus take an arbitrary point \$vec p_\mathrm{i}$ in the coordinate frame
+of sensor $\mathrm{i}$, transform it to the frame of sensor $\mathrm{j}$. This
+computation is a function of the transformations in $\vec b$. We can thus
+compute $\frac{\partial \vec p_\mathrm{j}}{\partial \vec b}$, and compute
+$\Var\left( \vec p_\mathrm{j} \right)$ to see how relialbe that transform is. We
+will discover that this reliability varies for different sensor combinations and
+different locations in space, and we can use that as a gauge of whether our
+calibration is good-enough.
 
 ** Auxillary tools
 A number of commandline tools are available to visualize various things.
