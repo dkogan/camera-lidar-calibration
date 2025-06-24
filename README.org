@@ -1069,7 +1069,6 @@ OPTIONS
 
 #+end_example
 
-
 * Interpretation of the results
 As [[https://mrcal.secretsauce.net][mrcal]], clc tries hard to provide deep feedback to the user to enable them to
 clearly see if the calibration results are correct and reliable. The techniques
@@ -1228,4 +1227,12 @@ These diagnostics are controlled by a few parameters, also arguments to =clc()=:
   reporting. For each sector, we actually evaluate a single point on the ground
   ($z=0$), this far away
 
+* LICENSE AND COPYRIGHT
 
+Copyright (c) 2023-2025 California Institute of Technology ("Caltech"). U.S.
+Government sponsorship acknowledged. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
