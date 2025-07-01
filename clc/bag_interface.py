@@ -348,14 +348,21 @@ An iterator, producing a dict for each message.
 
                 if msg.encoding == 'mono8':
                     if not ( len(shape) == 1 and \
-                             shape[0] == msg.width*msg.height and \
+                             shape[0] == msg.step*msg.height and \
                              data.dtype == np.uint8 and \
                              msg.width == msg.step ):
                         raise Exception("rosbags.usertypes.sensor_msgs__msg__Image data should contain a flattened, dense byte array")
                     data = data.reshape(msg.height,msg.width)
+                elif msg.encoding == 'mono16':
+                    if not ( len(shape) == 1 and \
+                             shape[0] == msg.step*msg.height and \
+                             data.dtype == np.uint8 and \
+                             msg.width*2 == msg.step ):
+                        raise Exception("rosbags.usertypes.sensor_msgs__msg__Image data should contain a flattened, dense byte array")
+                    data = data.view(np.uint16).reshape(msg.height,msg.width)
                 elif msg.encoding == 'bgr8':
                     if not ( len(shape) == 1 and \
-                             shape[0] == msg.width*msg.height*3 and \
+                             shape[0] == msg.step*msg.height and \
                              data.dtype == np.uint8 and \
                              msg.width*3 == msg.step ):
                         raise Exception("rosbags.usertypes.sensor_msgs__msg__Image data should contain a flattened, dense byte array")
