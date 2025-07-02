@@ -365,10 +365,18 @@ An iterator, producing a dict for each message.
                 if msg.format == 'rgb8; jpeg compressed bgr8':
                     import cv2
                     data = cv2.imdecode(msg.data, cv2.IMREAD_COLOR)
+                elif msg.format == 'mono8; png compressed ':
+                    import cv2
+                    data = cv2.imdecode(msg.data,
+                                        cv2.IMREAD_GRAYSCALE + cv2.IMREAD_ANYDEPTH)
                 elif msg.format == 'mono16; png compressed ':
                     import cv2
                     data = cv2.imdecode(msg.data,
                                         cv2.IMREAD_GRAYSCALE + cv2.IMREAD_ANYDEPTH)
+                elif msg.format == 'bgr8; png compressed bgr8':
+                    import cv2
+                    data = cv2.imdecode(msg.data,
+                                        cv2.IMREAD_COLOR)
                 else:
                     raise Exception(f"Have {type(msg)=}; don't know how to interpret {msg.format=}")
             else:
