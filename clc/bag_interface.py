@@ -252,16 +252,6 @@ An iterator, producing a dict for each message.
 
         return dtype
 
-    def connection_from_topic(connections, topic):
-        connections = [ c for c in connections \
-                        if c.topic == topic ]
-
-        if len(connections) == 0:
-            return None
-        if len(connections) > 1:
-            raise Exception(f"Multiple connections for topic '{topic}' found in '{bag}'; I expect exactly one")
-        return connections[0]
-
     messages.re_report_message = None
 
     # High-level structure from the "rosbag2" sample:
@@ -269,8 +259,10 @@ An iterator, producing a dict for each message.
     with rosbags.highlevel.anyreader.AnyReader( (pathlib.Path(bag),) ) as reader:
 
         # I expect exactly one matching connection for each topic given
-        connections = [ connection_from_topic(reader.connections, topic) \
-                        for topic in topics ]
+        connections = [ c \
+                        for topic in topics \
+                        for c in reader.connections \
+                        if c.topic == topic ]
         connections = [ c for c in connections if c is not None ]
 
         if len(connections) == 0: return
