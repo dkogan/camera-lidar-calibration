@@ -384,7 +384,7 @@ An iterator, producing a dict for each message.
                         topic          = connection.topic,
                         msgtype        = connection.msgtype,
                         array          = data,
-                        rawdata        = rawdata,
+                        msg            = msg,
                         qos            = qos )
 
 
