@@ -12,6 +12,8 @@
 
 #include <signal.h>
 
+#include <mrcam/mrcam.h> // for mrcam_equalize_fieldscale()
+
 #define IS_NULL(x) ((x) == NULL || (PyObject*)(x) == Py_None)
 
 #define BARF(fmt, ...) PyErr_Format(PyExc_RuntimeError, "%s:%d %s(): "fmt, __FILE__, __LINE__, __func__, ## __VA_ARGS__)
@@ -222,6 +224,7 @@ static bool ingest_camera_snapshot(// out
                                    clc_sensor_snapshot_unsorted_t* snapshot,
                                    int* Ncameras,
                                    clc_is_bgr_mask_t* is_bgr_mask,
+                                   PyObject* py_images_allocated, // new images buffers are stored here; caller must free
                                    // in
                                    const PyObject* py_snapshot)
 {
@@ -277,27 +280,80 @@ static bool ingest_camera_snapshot(// out
             continue;
         }
 
-        if(!(PyArray_TYPE(py_image) == NPY_UINT8 &&
-             PyArray_STRIDES(py_image)[PyArray_NDIM(py_image) - 1] == sizeof(uint8_t)))
-        {
-            PyErr_SetString(PyExc_RuntimeError, "'py_image' must be an array containing 8-bit uint, each pixel stored densely");
-            return false;
-        }
-
         if(PyArray_NDIM(py_image) == 2)
         {
-            // mono8
-            (snapshot->images[i].uint8) =
-                (mrcal_image_uint8_t){.width  = PyArray_DIM   (py_image,1),
-                                      .height = PyArray_DIM   (py_image,0),
-                                      .stride = PyArray_STRIDE(py_image,0),
-                                      .data   = PyArray_DATA  (py_image) };
+            if(PyArray_TYPE(py_image) == NPY_UINT8)
+            {
+                // mono8
+                if(PyArray_STRIDES(py_image)[PyArray_NDIM(py_image) - 1] != sizeof(uint8_t))
+                {
+                    PyErr_SetString(PyExc_RuntimeError, "'py_image' is an array containing 8-bit uint, but each pixel isn't stored densely");
+                    return false;
+                }
 
+                (snapshot->images[i].uint8) =
+                    (mrcal_image_uint8_t){.width  = PyArray_DIM   (py_image,1),
+                                          .height = PyArray_DIM   (py_image,0),
+                                          .stride = PyArray_STRIDE(py_image,0),
+                                          .data   = PyArray_DATA  (py_image) };
+            }
+            else if(PyArray_TYPE(py_image) == NPY_UINT16)
+            {
+                // mono16
+                if(PyArray_STRIDES(py_image)[PyArray_NDIM(py_image) - 1] != sizeof(uint16_t))
+                {
+                    PyErr_SetString(PyExc_RuntimeError, "'py_image' is an array containing 16-bit uint, but each pixel isn't stored densely");
+                    return false;
+                }
+
+                mrcal_image_uint16_t image_uint16 =
+                    {.width  = PyArray_DIM   (py_image,1),
+                     .height = PyArray_DIM   (py_image,0),
+                     .stride = PyArray_STRIDE(py_image,0),
+                     .data   = PyArray_DATA  (py_image) };
+
+                PyArrayObject* py_image_uint8 = (PyArrayObject*)PyArray_SimpleNew(2, PyArray_DIMS(py_image), NPY_UINT8);
+                if(py_image_uint8 == NULL)
+                {
+                    BARF("Couldn't allocate equalized image");
+                    return false;
+                }
+                if(0 != PyList_Append(py_images_allocated, (PyObject*)py_image_uint8))
+                {
+                    // error already set
+                    Py_DECREF(py_image_uint8);
+                    return false;
+                }
+
+                Py_DECREF(py_image_uint8); // py_images_allocated has the reference, so I don't need this one
+
+                (snapshot->images[i].uint8) =
+                    (mrcal_image_uint8_t){.width  = PyArray_DIM   (py_image_uint8,1),
+                                          .height = PyArray_DIM   (py_image_uint8,0),
+                                          .stride = PyArray_STRIDE(py_image_uint8,0),
+                                          .data   = PyArray_DATA  (py_image_uint8) };
+
+                if(!mrcam_equalize_fieldscale(// out
+                                              &snapshot->images[i].uint8,
+                                              // in
+                                              &image_uint16))
+                {
+                    BARF("Couldn't mrcam_equalize_fieldscale()");
+                    return false;
+                }
+            }
+            else
+            {
+                PyErr_SetString(PyExc_RuntimeError, "The given 'py_image' is grayscale; I know about mono8 and mono16, but this has a different type");
+                return false;
+            }
         }
         else if(PyArray_NDIM(py_image) == 3)
         {
             // bgr8
-            if(!(PyArray_STRIDES(py_image)[PyArray_NDIM(py_image) - 2] == sizeof(uint8_t)*3 &&
+            if(!(PyArray_TYPE(py_image) == NPY_UINT8 &&
+                 PyArray_STRIDES(py_image)[PyArray_NDIM(py_image) - 1] == sizeof(uint8_t) &&
+                 PyArray_STRIDES(py_image)[PyArray_NDIM(py_image) - 2] == sizeof(uint8_t)*3 &&
                  PyArray_DIMS   (py_image)[PyArray_NDIM(py_image) - 1] == 3))
             {
                 PyErr_SetString(PyExc_RuntimeError, "'py_image' looks like a color array, but those MUST have shape (H,W,3) with dense bgr tuples");
@@ -314,7 +370,7 @@ static bool ingest_camera_snapshot(// out
         }
         else
         {
-            PyErr_SetString(PyExc_RuntimeError, "The given 'py_image' is neither a known mono8 or bgr8 format: must have len(shape)==2 or 3");
+            PyErr_SetString(PyExc_RuntimeError, "The given 'py_image' is neither a known mono8 or mono16 or bgr8 format: must have len(shape)==2 or 3");
             return false;
         }
     }
@@ -469,6 +525,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     PyArrayObject* stdev_worst_per_sector          = NULL;
     PyArrayObject* isensors_pair_stdev_worst       = NULL;
     int            isector_of_last_snapshot        = -1;
+    PyObject*      py_images_allocated             = NULL;
 
     // used if(do_dump_inputs)
     char*  buf_inputs_dump  = NULL;
@@ -680,6 +737,13 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     }
     clc_is_bgr_mask_t is_bgr_mask = 0;
 
+    py_images_allocated = PyList_New(0);
+    if(py_images_allocated == NULL)
+    {
+        BARF("Couldn't allocate py_images_allocated");
+        goto done;
+    }
+
     {
         clc_sensor_snapshot_unsorted_t sensor_snapshots[Nsensor_snapshots];
 
@@ -707,6 +771,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
                 goto done;
             }
             if(!ingest_camera_snapshot(snapshot, &Ncameras, &is_bgr_mask,
+                                       py_images_allocated,
                                        py_snapshot))
             {
                 // the error is already set
@@ -1014,6 +1079,7 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
     Py_XDECREF(isvisible_per_sensor_per_sector);
     Py_XDECREF(stdev_worst_per_sector);
     Py_XDECREF(isensors_pair_stdev_worst);
+    Py_XDECREF(py_images_allocated); // deallocate the list and all its contents
     RESET_SIGINT();
 
     return result;

@@ -24,11 +24,13 @@ CFLAGS += -I/usr/include/suitesparse
 
 LIB_SOURCES += lidar-segmentation.c clc.c mrgingham-c-bridge.cc opencv-c-bridge.cc
 
+PY_LDLIBS := -lmrcam
+
 clc-pywrap.o: CFLAGS += $(PY_MRBUILD_CFLAGS)
 clc-pywrap.o: $(addsuffix .h,$(wildcard *.docstring))
 
 clc/_clc$(PY_EXT_SUFFIX): clc-pywrap.o libclc.so
-	$(PY_MRBUILD_LINKER) $(PY_MRBUILD_LDFLAGS) $(LDFLAGS) $^ -o $@
+	$(PY_MRBUILD_LINKER) $(PY_MRBUILD_LDFLAGS) $(LDFLAGS)  $^ $(PY_LDLIBS) -o $@
 
 mrgingham-c-bridge.o: CXXFLAGS += -I/usr/include/mrgingham -I/usr/include/opencv4/
 opencv-c-bridge.o:    CXXFLAGS += -I/usr/include/opencv4/
