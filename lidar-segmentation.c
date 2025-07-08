@@ -2236,11 +2236,11 @@ static bool stage3_refine_cluster(// out
             ipoint_set_n_prev = points_and_plane->n;
         }
 
-        const int threshold = ctx->threshold_min_points_per_ring__multiple_Npoints_per_segment * ctx->Npoints_per_segment;
-        if(!DEBUG_ON_TRUE_SEGMENT(Npoints_thisring > threshold,
-                                  iring,isegment_mid,
-                                  "Ring contains too few points N=%d <= threshold=%d; giving up on the whole cluster",
-                                  Npoints_thisring, threshold))
+        const int threshold_min_points = ctx->threshold_min_points_per_ring__multiple_Npoints_per_segment * ctx->Npoints_per_segment;
+        if(DEBUG_ON_TRUE_SEGMENT(Npoints_thisring < threshold_min_points,
+                                 iring,isegment_mid,
+                                 "Ring contains too few points N=%d <= threshold=%d; giving up on the whole cluster",
+                                 Npoints_thisring, threshold_min_points))
             return false;
 
     }
