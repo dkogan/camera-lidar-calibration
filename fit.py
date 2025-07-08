@@ -180,11 +180,20 @@ def parse_args():
     args.bag = args.bag.rstrip('/') # to not confuse os.path.splitext()
     bags = sorted(glob.glob(args.bag))
 
+    if len(bags) == 0:
+        print(f"No bags matched the glob '{args.bag}'",
+              file=sys.stderr)
+        sys.exit(1)
+
     if args.exclude_bag is not None:
         for ex in args.exclude_bag:
             bags = [b for b in bags if not re.search(ex, b)]
 
     args.bag = bags
+    if len(bags) == 0:
+        print(f"After applying --exclude-bag, no bags matched the glob '{args.bag}'",
+              file=sys.stderr)
+        sys.exit(1)
 
     args.topics = args.topics.split(',')
 
