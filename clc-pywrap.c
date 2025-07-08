@@ -157,7 +157,7 @@ static PyObject* py_lidar_segmentation(PyObject* NPY_UNUSED(self),
                                      points,
                                      rings))
     {
-        BARF("lidar_scan_from_points_rings() failed");
+        // the error is already set
         goto done;
     }
 
@@ -410,6 +410,7 @@ static bool ingest_lidar_scans(// out
                                          points,
                                          rings))
         {
+            // the error is already set
             return false;
         }
 
@@ -702,13 +703,13 @@ static PyObject* py_calibrate(PyObject* NPY_UNUSED(self),
             if(!ingest_lidar_snapshot (snapshot, &Nlidars, &lidar_packet_stride,
                                        py_snapshot))
             {
-                BARF("ingest_lidar_snapshot() failed");
+                // the error is already set
                 goto done;
             }
             if(!ingest_camera_snapshot(snapshot, &Ncameras, &is_bgr_mask,
                                        py_snapshot))
             {
-                BARF("ingest_camera_snapshot() failed");
+                // the error is already set
                 goto done;
             }
         }
