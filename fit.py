@@ -233,43 +233,6 @@ if args.rt_vehicle_lidar0 is not None:
 
 
 
-if args.models:
-
-    def open_model(f):
-        try: return mrcal.cameramodel(f)
-        except:
-            print(f"Couldn't open '{f}' as a camera model",
-                  file=sys.stderr)
-            sys.exit(1)
-    models = [open_model(f) for f in args.models]
-
-    # I assume each model used the same calibration object
-    # shape (Ncameras, Nh,Nw,3)
-    p_board_local__all = \
-        [mrcal.ref_calibration_object(optimization_inputs =
-                                      m.optimization_inputs()) \
-         for m in models]
-    def is_different(x,y):
-        try:    return nps.norm2((x-y).ravel()) > 1e-12
-        except: return True
-    if any(is_different(p_board_local__all[0][...,:2],
-                        p_board_local__all[i][...,:2]) \
-           for i in range(1,len(models))):
-        print("Each model should have been made with the same chessboard, but some are different. I use this calibration-time chessboard for the camera-lidar calibration",
-              file = sys.stderr)
-        sys.exit(1)
-
-    # shape (Nh,Nw,3)
-    p_board_local = p_board_local__all[0]
-    p_board_local[...,2] = 0 # assume flat. calobject_warp may differ between samples
-
-else:
-    p_board_local = None
-
-
-
-
-
 if len(args.models) > 0:
     m = mrcal.cameramodel(args.models[0])
     o = m.optimization_inputs()
@@ -326,12 +289,20 @@ for ilidar in range(len(rt_ref_lidar)):
     print(f"Wrote '{path}' and a symlink '{symlink}'")
 
 for imodel in range(len(args.models)):
-    models[imodel].extrinsics_rt_toref(rt_ref_camera[imodel])
-    d,f = os.path.split(args.models[imodel])
+
+    try:
+        model = mrcal.cameramodel(args.models[imodel])
+    except:
+        print(f"Couldn't open '{args.models[imodel]}' as a camera model",
+              file=sys.stderr)
+        sys.exit(1)
+
+    model.extrinsics_rt_toref(rt_ref_camera[imodel])
+    d,f = os.path.split(args.model)
     r,e = os.path.splitext(f)
     filename = f"{r}-mounted{e}"
     path     = f"{D}/{filename}"
-    models[imodel].write(path)
+    model.write(path)
 
     symlink =  f"{D}/sensor{len(rt_ref_lidar) + imodel}-mounted.cameramodel"
     try:    os.unlink(symlink)
