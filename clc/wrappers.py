@@ -357,7 +357,12 @@ def _sorted_sensor_snapshots(bags, topics,
     itopics_lidar  = sorted(itopics_lidar)
     itopics_camera = sorted(itopics_camera)
 
-
+    if verbose:
+        Nlidars = len(itopics_lidar)
+        for i,itopic in enumerate(itopics_lidar):
+            print(f"LIDAR  {i} (sensor {i}): {topics[itopic]}")
+        for i,itopic in enumerate(itopics_camera):
+            print(f"camera {i} (sensor {i+Nlidars}): {topics[itopic]}")
 
     range_mode = \
         [ lidar_scene_range_mode(bags,
