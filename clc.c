@@ -2927,24 +2927,21 @@ _plot_geometry(FILE* fp,
         {
             LOOP_SNAPSHOT_HEADER(,const);
 
-            char curveid[Nlidars][32];
-            for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
-            {
-                if( (int)sizeof(curveid[0]) <= snprintf(curveid[ilidar], sizeof(curveid[0]),
-                                                        "isnapshot=%d_ilidar=%d",
-                                                        isnapshot,ilidar) )
-                {
-                    MSG("sizeof(curveidxs]) exceeded. Giving up making the plot");
-                    return false;
-                }
-            }
-
             for(unsigned int ilidar=0; ilidar<Nlidars; ilidar++)
             {
                 const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
 
                 if(lidar_scan->points == NULL)
                     continue;
+
+                char curveid[32];
+                if( (int)sizeof(curveid) <= snprintf(curveid, sizeof(curveid),
+                                                     "isnapshot=%d_ilidar=%d",
+                                                     isnapshot,ilidar) )
+                {
+                    MSG("sizeof(curveid) exceeded. Giving up making the plot");
+                    return false;
+                }
 
                 const double* Rt_lidar0_sensor = NULL;
                 if(ilidar > 0)
@@ -2964,7 +2961,7 @@ _plot_geometry(FILE* fp,
                                                  Rt_lidar0_sensor, p.xyz);
 
                     fprintf(fp, "%f %f %s %f\n",
-                            p.x, p.y, curveid[ilidar], p.z);
+                            p.x, p.y, curveid, p.z);
                 }
             }
 
@@ -2976,6 +2973,15 @@ _plot_geometry(FILE* fp,
                 if(snapshot->chessboard_corners[icamera] == NULL)
                     continue;
 
+                char curveid[32];
+                if( (int)sizeof(curveid) <= snprintf(curveid, sizeof(curveid),
+                                                     "isnapshot=%d_icamera=%d",
+                                                     isnapshot,icamera) )
+                {
+                    MSG("sizeof(curveid) exceeded. Giving up making the plot");
+                    return false;
+                }
+
                 for(int i=0; i<object_height_n; i++)
                     for(int j=0; j<object_width_n; j++)
                     {
@@ -2985,13 +2991,9 @@ _plot_geometry(FILE* fp,
                         mrcal_point3_t p;
                         mrcal_transform_point_Rt(p.xyz, NULL, NULL,
                                                  &Rt_lidar0_board[4*3*isnapshot], pref.xyz);
-                        fprintf(fp, "%f %f boards-ref %f\n",
-                                p.x, p.y, p.z);
+                        fprintf(fp, "%f %f %s %f\n",
+                                p.x, p.y, curveid, p.z);
                     }
-                // break the line
-                fprintf(fp, "nan nan boards-ref nan\n");
-
-                break;
             }
         }
     }
@@ -3045,7 +3047,6 @@ plot_geometry(const char* filename,
         "--autolegend "
         "--style axes \"with vectors\"  --tuplesize axes   6 "
         "--style labels \"with labels\" --tuplesize labels 4 "
-        "--style boards-ref \"with lines\"  --tuplesize boards 3 "
         "--maxcurves 300 "
         "--with points --tuplesizeall 3 ");
 
