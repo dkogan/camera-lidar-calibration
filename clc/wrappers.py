@@ -18,6 +18,7 @@ def lidar_segmentation(*,
                        # if float:   s since epoch
                        # if str:     try to parse as an integer or float OR with dateutil.parser.parse()
                        start  = None,
+                       bag_context = None,
                        **lidar_segmentation_parameters):
 
     r'''Find the calibration plane in a LIDAR point cloud
@@ -91,6 +92,11 @@ ARGUMENTS
   If a string: we parse it as an integer or float OR as a freeform string using
   dateutil.parser.parse().
 
+- bag_context: optional iterable of bag paths. The rosbags that contain lidar
+  data for OTHER snapshots in this data collection session. Used to detect
+  static objects in the scene, and to throw them away before segmenting the
+  board
+
 - **lidar_segmentation_parameters: optional parameters controlling the operation
   of the segmentation routine. Any parameters that are omitted will take their
   default values. The available parameters, a description of their operation and
@@ -124,8 +130,18 @@ exception will be raised.
         array = next(clc.bag_interface.messages(bag, (lidar_topic,),
                                                 start = start))['array']
 
-        points = array['xyz']
+        if bag_context is not None:
+            range_mode = \
+                lidar_scene_range_mode(bag_context,
+                                       start       = start,
+                                       lidar_topic = lidar_topic)
+        else:
+            range_mode = None
+
+        points = mask_out_static_scene(array['xyz'], array['ring'],
+                                       range_mode = range_mode)
         rings  = array['ring']
+
 
     ipoint, plane_pn = \
         _clc.lidar_segmentation(points = points,
@@ -139,11 +155,99 @@ exception will be raised.
               plane_n = plane_pn[:,3:] )
 
 
-def _lidar_points(msg):
+
+
+
+
+static_mask_quantum = .2
+
+def iaz_from_point(points, Npoints_per_rotation):
+    iaz = \
+        np.round( (np.pi + np.arctan2(points[:,1],
+                                      points[:,0])) / (2.*np.pi) * Npoints_per_rotation ).astype(int)
+    iaz[ iaz < 0                     ] = 0
+    iaz[ iaz >= Npoints_per_rotation ] = 0
+    return iaz
+
+
+def lidar_scene_range_mode(bags,
+                           start,
+                           lidar_topic):
+
+    if start is not None:
+        raise Exception("This only works with one-snapshot-per-bag for now")
+
+    # Hard-coded here for now. Computed for real in clc_lidar_preprocess()
+    Npoints_per_rotation = 2048
+    Nrings               = 128 # upper bound
+    Nsnapshots           = len(bags)
+
+    ranges = np.zeros( (Nrings,Npoints_per_rotation,  Nsnapshots),
+                       dtype = np.float32 )
+
+    for isnapshot,bag in enumerate(bags):
+        array = next(clc.bag_interface.messages(bag, (lidar_topic,),
+                                                start = start))['array']
+
+        points = array['xyz']
+        rings  = array['ring']
+
+        r      = nps.mag(points)
+        ivalid = r > 0
+
+        points = points[ivalid]
+        rings  = rings [ivalid]
+        r      = r     [ivalid]
+
+        iaz = iaz_from_point(points, Npoints_per_rotation)
+
+        # reshape and reindex an array of shape (Nrings*Npoints_per_rotation)
+        ranges[array['ring'],iaz,isnapshot] = r
+
+    # I now have ranges. I compute the non-zero mode range per pixel. Any
+    # uncertain mode is reported as 0
+    # shape (Nrings,Npoints_per_rotation)
+    return \
+        _clc._mode_over_lastdim_ignoring0(ranges,
+                                          quantum                  = static_mask_quantum,
+                                          report_mode_if_N_atleast = Nsnapshots//2)
+
+
+def mask_out_static_scene(# shape (Npoints,3)
+                          points,
+                          # shape (Npoints,)
+                          rings,
+                          *,
+                          # shape (Nrings,Npoints_per_rotation)
+                          range_mode = None):
+    if range_mode is None:
+        return points
+
+    # Areas with uncertain range_mode are given as 0. We treat this as valid
+    # anyway: at worst we'll ignore points very close to the lidar. That is ok
+    Npoints_per_rotation = range_mode.shape[-1]
+
+    # shape (Npoints,)
+    iaz = iaz_from_point(points, Npoints_per_rotation)
+    r   = nps.mag(points)
+
+    range_err = r - range_mode.ravel()[ rings*Npoints_per_rotation + iaz]
+
+    istatic = np.abs(range_err) < static_mask_quantum*2
+
+    points[istatic] *= 0
+    return points
+
+
+
+def _lidar_points(msg,
+                  *,
+                  range_mode = None):
     if msg is None: return None
     array = msg['array']
     return \
-        (array['xyz' ],
+        (mask_out_static_scene(array['xyz' ], array['ring'],
+                               range_mode = range_mode),
          array['ring'])
 def _images(msg):
     if msg is None: return None
@@ -253,8 +357,17 @@ def _sorted_sensor_snapshots(bags, topics,
     itopics_lidar  = sorted(itopics_lidar)
     itopics_camera = sorted(itopics_camera)
 
+
+
+    range_mode = \
+        [ lidar_scene_range_mode(bags,
+                                 start       = start,
+                                 lidar_topic = topics[itopic_lidar]) \
+          for itopic_lidar in itopics_lidar ]
+
+
     return \
-        tuple( ( tuple(_lidar_points(messages[i]) for i in itopics_lidar),
+        tuple( ( tuple(_lidar_points(messages[i], range_mode = range_mode[ilidar]) for ilidar,i in enumerate(itopics_lidar)),
                  tuple(_images      (messages[i]) for i in itopics_camera) ) \
                for messages in messages_bags )
 

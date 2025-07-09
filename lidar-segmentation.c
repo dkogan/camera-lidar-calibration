@@ -2790,3 +2790,157 @@ void clc_lidar_preprocess(// out
                                         Nrings);
     }
 }
+
+static int compar_uint32(const void* _a, const void* _b)
+{
+    const uint32_t a = *(uint32_t*)_a;
+    const uint32_t b = *(uint32_t*)_b;
+    if(a < b) return -1;
+    if(a > b) return  1;
+    return 0;
+}
+
+static float mode_over_lastdim_ignoring0__oneslice(// in
+                                                   // shape (Ndatasets,Nsamples)
+                                                   const float* x,
+                                                   const int Nsamples,
+                                                   const float quantum,
+                                                   const int report_mode_if_N_atleast)
+
+{
+    uint32_t xint[Nsamples];
+    int i1=0;
+    for(int i0=0; i0<Nsamples; i0++)
+    {
+        if(x[i0] == 0)
+            continue;
+        xint[i1] = (uint32_t)(x[i0] / quantum);
+        i1++;
+    }
+    if(i1 == 0)
+        return 0.;
+
+    const int Nsamples1 = i1;
+
+    if(Nsamples1 < report_mode_if_N_atleast)
+        // Too few nonzero returns. No valid mode to return
+        return 0.;
+
+    qsort(xint, Nsamples1, sizeof(xint[0]), &compar_uint32);
+
+    uint32_t dxint[Nsamples1-1];
+    for(int i=1; i<Nsamples1; i++)
+        dxint[i-1] = xint[i]-xint[i-1];
+
+    // I want to find the biggest adjacent histogram bins. So I look for the
+    // longest sequence of [0,0,0,...,0,1,0,0,0...,0] in dxint[]
+    const int Nmax_block0 = 256;
+    uint32_t block0_start[Nmax_block0];
+    uint32_t block0_size [Nmax_block0];
+    const int Nwords_bitarray_block0_follows_block0_single1 = bitarray64_nwords(Nmax_block0);
+    uint64_t bitarray_block0_follows_block0_single1[Nwords_bitarray_block0_follows_block0_single1];
+    bitarray64_clear_all(bitarray_block0_follows_block0_single1, Nwords_bitarray_block0_follows_block0_single1);
+
+    uint32_t Nblocks0 = 0;
+    bool in_block0 = false;
+    for(int i=0;
+        i<Nsamples1; // including 1-past-the-end
+        i++)
+    {
+        if(!in_block0)
+        {
+            // not looking at a block of 0s
+            if(i >= Nsamples1-1)
+                break; // we're at the end
+
+            if(dxint[i] != 0)
+                continue;
+
+            // starting a new block of 0s
+            if(Nblocks0 >= Nmax_block0)
+            {
+                MSG("WARNING: Exceeded expected Nmax_block0. Ignoring all ranges past this one. Maybe bump up Nmax_block0");
+                break;
+            }
+            block0_start[Nblocks0] = i;
+            in_block0 = true;
+
+            if(Nblocks0 > 0 &&
+               block0_start[Nblocks0-1]+block0_size[Nblocks0-1] + 1 == i &&
+               dxint[i-1] == 1)
+                bitarray64_set(bitarray_block0_follows_block0_single1, Nblocks0);
+        }
+        else
+        {
+            // currently looking at a block of 0s
+            if(i < Nsamples1-1 && dxint[i] == 0)
+                continue;
+
+            // finishing block of 0s
+            block0_size[Nblocks0] = i - block0_start[Nblocks0];
+            in_block0 = false;
+            // accept only blocks of 0 longer than a certain size. I COULD use
+            // report_mode_if_N_atleast as the threshold, but I want to find
+            // 000010000 sequences because the true mode might be on the
+            // boundary of my bins. So I use a smaller threshold here. Throwing
+            // away the REALLY tiny blocks reduces accuracy a bit, but it's
+            // close enough
+            if(block0_size[Nblocks0] > 2)
+                Nblocks0++;
+        }
+    }
+
+    int j0max = -1; // the start of the biggest range
+    int Nmax = 0;
+
+    // I now look through all the candidates, and find the longest one. The
+    // candidates are either blocksof0 or two blocksof0 separated by exactly
+    // one 1
+    for(int j=0; j<Nblocks0; j++)
+    {
+        int N  = block0_size[j];
+        if(j+1 < Nblocks0 &&
+           bitarray64_check(bitarray_block0_follows_block0_single1, j+1))
+        {
+            // I have 0001000
+            N += 1 + block0_size[j+1];
+        }
+
+        if(N > Nmax)
+        {
+            Nmax = N;
+            j0max = block0_start[j];
+        }
+    }
+
+    // The longest sequence of dxint is Nmax. This measures intervals, so
+    // the sequence of xint is one longer
+    Nmax++;
+
+    if(Nmax < report_mode_if_N_atleast)
+        return 0;
+
+    if(j0max < 0)
+        // shouldn't happen, but just in case
+        return 0;
+
+    return (0.5f + (float)(xint[j0max + Nmax/2])) * quantum;
+}
+
+void _clc_mode_over_lastdim_ignoring0(// out
+                                      // shape (Ndatasets)
+                                      float* mode,
+                                      // in
+                                      // shape (Ndatasets,Nsamples)
+                                      const float* x,
+                                      const int Nsamples,
+                                      const int Ndatasets,
+                                      const float quantum,
+                                      const int report_mode_if_N_atleast)
+{
+    for(int i=0; i<Ndatasets; i++)
+         mode[i] = mode_over_lastdim_ignoring0__oneslice(&x[i*Nsamples],
+                                                        Nsamples,
+                                                        quantum,
+                                                        report_mode_if_N_atleast);
+}

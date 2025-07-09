@@ -46,6 +46,14 @@ def parse_args():
     parser.add_argument('bag',
                         type=str,
                         help = '''The rosbag that contain the lidar data.''')
+    parser.add_argument('bag-context',
+                        type=str,
+                        nargs='*',
+                        help = '''The rosbags that contain lidar data for OTHER
+                        snapshots in this data collection session. Used to
+                        detect static objects in the scene, and to throw them
+                        away before segmenting the board. This is optional. The
+                        BAG may be included in BAG-CONTEXT''')
 
     for param,metadata in lidar_segmentation_parameters.items():
         if metadata['pyparse'] == 'p':
@@ -60,6 +68,8 @@ def parse_args():
                                 help = metadata['doc'])
 
     args = parser.parse_args()
+
+    args.bag_context = getattr(args, 'bag-context')
     return args
 
 
@@ -86,6 +96,7 @@ segmentation = \
     clc.lidar_segmentation(bag         = args.bag,
                            lidar_topic = getattr(args, 'lidar-topic'),
                            start       = args.after,
+                           bag_context = args.bag_context,
                            **ctx)
 if args.dump or \
    args.debug_xmin <  1e10 or \

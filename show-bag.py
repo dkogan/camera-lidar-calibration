@@ -128,6 +128,12 @@ def parse_args():
                         taking the first message from each bag, we take all the
                         messages from THIS bag, spaced out with a period given
                         by this argument, in seconds''')
+    parser.add_argument('--scene-context',
+                        action='store_true',
+                        help = '''If given, and we're visualizing a lidar point
+                        cloud, display the FIRST snapshot given, and use the
+                        full set as a context to find the static parts of the
+                        scene''')
     parser.add_argument('--after',
                         type=str,
                         help = '''If given, start reading the bags at this time.
@@ -291,7 +297,8 @@ if args.timeline is not None:
 
 def show_lidar(bag, p,
                _with = 'dots',
-               no_intensity = False):
+               no_intensity = False,
+               range_mode   = None):
     kwargs = dict( _set     = args.set,
                    _unset   = args.unset,
                    terminal = args.terminal,
@@ -299,9 +306,22 @@ def show_lidar(bag, p,
 
     xyz       = p['xyz']
     intensity = p['intensity']
+    ring      = p['ring']
+
+    if range_mode is not None:
+        xyz = \
+            clc.mask_out_static_scene(xyz, ring,
+                                      range_mode = range_mode)
+
+    i = nps.norm2(xyz) > 0
+    xyz       = xyz[i]
+    intensity = intensity[i]
+    ring      = ring[i]
+
+
 
     if args.ring is not None:
-        i = p['ring'] == args.ring
+        i = ring == args.ring
         xyz       = xyz[i]
         intensity = intensity[i]
 
@@ -385,6 +405,19 @@ Nimages_written = 0
 # we have just one topic
 topic = args.topic
 
+
+
+if args.scene_context:
+    ###### assumes we're looking at a lidar
+    range_mode = \
+        clc.lidar_scene_range_mode(args.bags,
+                                   start       = args.after,
+                                   lidar_topic = topic)
+    args.bags = (args.bags[0],)
+else:
+    range_mode = None
+
+
 for bag in bags():
 
     if args.decimation_period is not None:
@@ -439,7 +472,8 @@ for bag in bags():
         if has_xyz(p):
             show_lidar(bag, p,
                        _with = getattr(args, "with"),
-                       no_intensity = args.no_intensity)
+                       no_intensity = args.no_intensity,
+                       range_mode   = range_mode)
         elif is_image(p):
             show_image(bag, p)
         else:

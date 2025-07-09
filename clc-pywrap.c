@@ -1215,6 +1215,91 @@ static PyObject* py_fit_from_inputs_dump(PyObject* NPY_UNUSED(self),
     return result;
 }
 
+
+static PyObject* py_mode_over_lastdim_ignoring0(PyObject* NPY_UNUSED(self),
+                                             PyObject* args,
+                                             PyObject* kwargs)
+{
+    PyObject*      result                   = NULL;
+
+    PyArrayObject* py_x                     = NULL;
+    float          quantum                  = -1.0f;
+    int            report_mode_if_N_atleast = -1;
+
+    PyArrayObject*  py_mode = NULL;
+    const npy_intp* dims    = NULL;
+
+
+    SET_SIGINT();
+
+    char* keywords[] = { "x",
+                         "quantum",
+                         "report_mode_if_N_atleast",
+                         NULL };
+    if(!PyArg_ParseTupleAndKeywords( args, kwargs,
+                                     "O" "|$" "fi",
+                                     keywords,
+                                     &py_x,
+                                     &quantum,
+                                     &report_mode_if_N_atleast,
+                                     NULL))
+        goto done;
+
+    if(quantum <= 0)
+    {
+        BARF("quantum must be given > 0");
+        goto done;
+    }
+    if(report_mode_if_N_atleast <= 0)
+    {
+        BARF("report_mode_if_N_atleast must be given > 0");
+        goto done;
+    }
+    if(!( PyArray_Check(py_x) &&
+          PyArray_IS_C_CONTIGUOUS(py_x) &&
+          PyArray_NDIM(py_x) >= 1 &&
+          PyArray_TYPE(py_x) == NPY_FLOAT32) )
+
+
+    {
+        BARF("x should be a C-contiguous numpy array of 32-bit floats and at least one dimension");
+        goto done;
+    }
+
+    dims = PyArray_DIMS(py_x);
+
+    // If x has shape (...,Nsnapshots) then the mode has shape (...)
+    py_mode = (PyArrayObject*)PyArray_SimpleNew(PyArray_NDIM(py_x)-1,
+                                                dims,
+                                                NPY_FLOAT32);
+    if(py_mode == NULL)
+    {
+        BARF("Couldn't allocate the mode");
+        goto done;
+    }
+
+    int Ndatasets = 1;
+    for(int i=0; i<PyArray_NDIM(py_x)-1; i++)
+        Ndatasets *= dims[i];
+
+    _clc_mode_over_lastdim_ignoring0(// out
+                                  PyArray_DATA(py_mode),
+                                  // in
+                                  PyArray_DATA(py_x),
+                                  dims[PyArray_NDIM(py_x)-1],
+                                  Ndatasets,
+                                  quantum,
+                                  report_mode_if_N_atleast);
+    result = (PyObject*)py_mode;
+
+ done:
+    if(result == NULL)
+        Py_XDECREF(py_mode);
+    RESET_SIGINT();
+
+    return result;
+}
+
 static PyObject* py_lidar_segmentation_default_context(PyObject* NPY_UNUSED(self),
                                     PyObject* NPY_UNUSED(args))
 {
@@ -1266,6 +1351,9 @@ static const char lidar_segmentation_default_context_docstring[] =
 static const char lidar_segmentation_parameters_docstring[] =
 #include "lidar_segmentation_parameters.docstring.h"
     ;
+static const char _mode_over_lastdim_ignoring0_docstring[] =
+#include "_mode_over_lastdim_ignoring0.docstring.h"
+    ;
 
 static PyMethodDef methods[] =
     {
@@ -1274,6 +1362,7 @@ static PyMethodDef methods[] =
      PYMETHODDEF_ENTRY(lidar_segmentation,          py_lidar_segmentation,           METH_VARARGS | METH_KEYWORDS),
      PYMETHODDEF_ENTRY(lidar_segmentation_default_context, py_lidar_segmentation_default_context, METH_NOARGS),
      PYMETHODDEF_ENTRY(lidar_segmentation_parameters, py_lidar_segmentation_parameters, METH_NOARGS),
+     PYMETHODDEF_ENTRY(_mode_over_lastdim_ignoring0,   py_mode_over_lastdim_ignoring0,     METH_VARARGS | METH_KEYWORDS),
      {}
     };
 

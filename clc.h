@@ -461,3 +461,14 @@ bool clc_fit_from_inputs_dump(// out
                               bool do_inject_noise,
                               bool do_skip_plots,
                               bool verbose);
+
+void _clc_mode_over_lastdim_ignoring0(// out
+                                      // shape (Ndatasets)
+                                      float* mode,
+                                      // in
+                                      // shape (Ndatasets,Nsamples)
+                                      const float* x,
+                                      const int Nsamples,
+                                      const int Ndatasets,
+                                      const float quantum,
+                                      const int report_mode_if_N_atleast);

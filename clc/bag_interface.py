@@ -289,7 +289,15 @@ An iterator, producing a dict for each message.
 
             if re.search(r'\bsensor_msgs__msg__PointCloud2\b', str(type(msg))):
                 dtype = dtype_from_msg(msg, connection.msgtype)
-                data  = np.frombuffer(msg.data, dtype = dtype)
+
+
+                ######### making a copy. This is necessary to make the array
+                ######### writeable, which is needed for
+                ######### mask_out_static_scene(). I can make a copy in
+                ######### mask_out_static_scene() instead, but this causes
+                ######### issues downstream, where the stride of points and
+                ######### rings must be exactly the same
+                data  = np.array( np.frombuffer(msg.data, dtype = dtype) )
 
                 # 2023-11-01 dataset contains data that is almost completely
                 # comprised of duplicated points. The only difference in these
