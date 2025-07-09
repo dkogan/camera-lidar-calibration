@@ -5506,7 +5506,9 @@ int ingest_sensor_snapshots(// out
                                                     image,
                                                     is_bgr_mask & (1U << icamera),
                                                     object_height_n,
-                                                    object_width_n))
+                                                    object_width_n,
+                                                    // nothing is upside-down
+                                                    false))
                 {
                     snapshots[isnapshot].chessboard_corners[icamera] = NULL;
                     continue;

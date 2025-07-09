@@ -4,8 +4,10 @@
 #include <assert.h>
 #include <opencv2/imgproc/imgproc.hpp>
 
+extern "C" {
 #include <mrcal/mrcal-image.h>
 #include <mrcal/basic-geometry.h>
+}
 
 #include "util.h"
 
@@ -56,7 +58,9 @@ clc_camera_chessboard_detection(// out
                                const mrcal_image_uint8_t* image, // might be color
                                const bool is_image_bgr,
                                const int object_height_n,
-                               const int object_width_n)
+                               const int object_width_n,
+                               const bool upside_down // if true, reverse the corner order
+                                )
 {
     if(object_height_n != object_width_n)
     {
@@ -119,8 +123,58 @@ clc_camera_chessboard_detection(// out
         return false;
 
     static_assert(sizeof(chessboard_corners[0]) == sizeof(mrgingham::PointDouble));
-    memcpy((char*)chessboard_corners,
-           (char*)&points_out[0],
-           object_height_n*object_width_n*sizeof(chessboard_corners[0]));
+
+    if(!upside_down)
+        memcpy((char*)chessboard_corners,
+               (char*)&points_out[0],
+               object_height_n*object_width_n*sizeof(chessboard_corners[0]));
+    else
+    {
+        for(int i=0; i<object_height_n*object_width_n; i++)
+            chessboard_corners[i] = *(mrcal_point2_t*)&points_out[object_height_n*object_width_n-1 - i];
+    }
+
+
+#if 0
+    static bool done = false;
+    if(!done)
+    {
+        done = true;
+        FILE* fp;
+
+        const char* filename_image = "/tmp/image.png";
+        mrcal_image_uint8_save(filename_image, image);
+        MSG("Wrote '%s'", filename_image);
+
+        const char* filename_corners = "/tmp/corners.vnl";
+        fp = fopen(filename_corners, "w");
+        if(fp == NULL)
+        {
+            MSG("error");
+            exit(1);
+        }
+        fprintf(fp, "# x y\n");
+        for(int i=0; i<object_height_n*object_width_n; i++)
+            fprintf(fp, "%f %f\n",
+                    chessboard_corners[i].x,
+                    chessboard_corners[i].y);
+        fclose(fp);
+        MSG("Wrote '%s'", filename_corners);
+
+        const char* filename_script = "/tmp/show-corners.sh";
+        fp = fopen(filename_script, "w");
+        if(fp == NULL)
+        {
+            MSG("error");
+            exit(1);
+        }
+        fprintf(fp, "#!/bin/zsh\n");
+        fprintf(fp, "< %s feedgnuplot --square --domain --with 'linespoints lw 2 ps 3' --image %s\n",
+                filename_corners, filename_image);
+        fclose(fp);
+        MSG("Wrote '%s'", filename_script);
+    }
+#endif
+
     return true;
 }
