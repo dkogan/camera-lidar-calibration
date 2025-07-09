@@ -147,6 +147,23 @@ def parse_args():
                         This argument specifies the relationship between those
                         frames. If omitted, we assume an identity transform: the
                         vehicle frame is the lidar0 frame''')
+    parser.add_argument('--object-width-n',
+                        type=int,
+                        help='''Used if any cameras are present. How many
+                        points the calibration board has per horizontal side. If
+                        omitted, we try to use the calibration-time board in the
+                        models''')
+    parser.add_argument('--object-height-n',
+                        type=int,
+                        help='''Used if any cameras are present. How many
+                        points the calibration board has per vertical side. If
+                        omitted, we try to use the calibration-time board in the
+                        models''')
+    parser.add_argument('--object-spacing',
+                        type=float,
+                        help='''Used if any cameras are present. Width of each
+                        square in the calibration board, in meters. If omitted,
+                        we try to use the calibration-time board in the models''')
     parser.add_argument('--verbose',
                         action = 'store_true',
                         help='''Report details about the solve''')
@@ -243,12 +260,58 @@ if args.rt_vehicle_lidar0 is not None:
 
 
 if len(args.models) > 0:
-    m = mrcal.cameramodel(args.models[0])
-    o = m.optimization_inputs()
-    H,W = o['observations_board'].shape[-3:-1]
-    ctx['object_spacing']  = o['calibration_object_spacing']
-    ctx['object_width_n']  = W
-    ctx['object_height_n'] = H
+    def open_model(f):
+        try: return mrcal.cameramodel(f)
+        except:
+            print(f"Couldn't open '{f}' as a camera model",
+                  file=sys.stderr)
+            sys.exit(1)
+    models = [open_model(f) for f in args.models]
+
+
+
+    if all( x is not None for x in (args.object_width_n,
+                                    args.object_height_n,
+                                    args.object_spacing)):
+        # The user gave us the board parameters
+        ctx['object_width_n']  = args.object_width_n
+        ctx['object_height_n'] = args.object_height_n
+        ctx['object_spacing']  = args.object_spacing
+
+    else:
+        # The user did NOT give us the board parameters. Get them from the
+        # calibration-time board. They all must match
+
+        def hw_from_model(m):
+            return m.optimization_inputs()['observations_board'].shape[1:3]
+
+        ctx['object_height_n'],ctx['object_width_n']  = hw_from_model(models[0])
+        ctx['object_spacing']  = models[0].optimization_inputs()['calibration_object_spacing']
+
+        for m in models[1:]:
+            hw = hw_from_model(m)
+            if ctx['object_height_n'] != hw[0] or \
+               ctx['object_width_n']  != hw[1] or \
+               ctx['object_spacing']  != m.optimization_inputs()['calibration_object_spacing']:
+                print("The calibration-time boards used for the cameras do NOT match: pass --object-width-n and --object-height-n and --object-spacing",
+                  file = sys.stderr)
+                sys.exit(1)
+
+        if args.object_width_n  is not None and ctx['object_width_n']  != args.object_width_n:
+            print("--object_width_n given, but others aren't, and the calibration-time board doesn't match. Pass --object-width-n AND --object-height-n AND --object-spacing",
+                  file=sys.stderr)
+            sys.exit(1)
+        if args.object_height_n is not None and ctx['object_height_n'] != args.object_height_n:
+            print("--object_height_n given, but others aren't, and the calibration-time board doesn't match. Pass --object-width-n AND --object-height-n AND --object-spacing",
+                  file=sys.stderr)
+            sys.exit(1)
+        if args.object_spacing  is not None and ctx['object_spacing']  != args.object_spacing:
+            print("--object_spacing given, but others aren't, and the calibration-time board doesn't match. Pass --object-width-n AND --object-height-n AND --object-spacing",
+                  file=sys.stderr)
+            sys.exit(1)
+
+
+
 
 kwargs_calibrate = dict(bags                               = args.bag,
                         topics                             = args.topics,
@@ -299,19 +362,12 @@ for ilidar in range(len(rt_ref_lidar)):
 
 for imodel in range(len(args.models)):
 
-    try:
-        model = mrcal.cameramodel(args.models[imodel])
-    except:
-        print(f"Couldn't open '{args.models[imodel]}' as a camera model",
-              file=sys.stderr)
-        sys.exit(1)
-
-    model.extrinsics_rt_toref(rt_ref_camera[imodel])
-    d,f = os.path.split(args.model)
+    models[imodel].extrinsics_rt_toref(rt_ref_camera[imodel])
+    d,f = os.path.split(args.models[imodel])
     r,e = os.path.splitext(f)
     filename = f"{r}-mounted{e}"
     path     = f"{D}/{filename}"
-    model.write(path)
+    models[imodel].write(path)
 
     symlink =  f"{D}/sensor{len(rt_ref_lidar) + imodel}-mounted.cameramodel"
     try:    os.unlink(symlink)
