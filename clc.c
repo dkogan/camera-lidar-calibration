@@ -1582,7 +1582,7 @@ fit_seed(// in/out
 
                     if(validation_failed_here)
                     {
-                        MSG("FAILED: isnapshot=%d icamera=%d i=%d j=%d reprojection error too high: %.1f pixels",
+                        MSG("FAILED double-checking seed: isnapshot=%d icamera=%d i=%d j=%d reprojection error too high: %.1f pixels",
                             isnapshot, icamera, i,j, sqrt(errsq));
 
                         // move on to the next camera
