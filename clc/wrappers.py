@@ -127,8 +127,11 @@ exception will be raised.
         if not os.path.exists(bag):
             raise Exception(f"Bag path '{bag}' does not exist")
 
-        array = next(clc.bag_interface.messages(bag, (lidar_topic,),
-                                                start = start))['array']
+        try:
+            array = next(clc.bag_interface.messages(bag, (lidar_topic,),
+                                                    start = start))['array']
+        except StopIteration:
+            raise Exception(f"{bag=} does not contain {lidar_topic=} past {start=}")
 
         if bag_context is not None:
             range_mode = \
