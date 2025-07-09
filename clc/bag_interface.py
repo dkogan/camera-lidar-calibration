@@ -318,7 +318,7 @@ An iterator, producing a dict for each message.
                     except: pass
                     return bool(v)
 
-                # Deegan
+                # D
                 if env_true('CLC_CULL_FLOOR_CEILING_1'):
                     import mrcal
                     rt_world_lidar = np.array(( 0,.225,0,
@@ -328,7 +328,7 @@ An iterator, producing a dict for each message.
                     p = mrcal.transform_point_rt(rt_world_lidar, p.astype(float))
                     i = (p[...,2] > -0.3) * (p[...,2] < 2)
                     data = data[i]
-                # Casey Majhor
+                # C
                 elif env_true('CLC_CULL_FLOOR_CEILING_2'):
                     import mrcal
                     rt_world_lidar = np.array(( 0,-.11,0,
