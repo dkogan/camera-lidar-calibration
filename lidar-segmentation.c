@@ -1428,6 +1428,18 @@ static void stage2_cluster_segments(// out
                                     const int*       ipoint0_in_ring,
                                     const clc_lidar_segmentation_context_t* ctx)
 {
+#define DEBUG_ON_TRUE_STAGE2(what, fmt, ...)          \
+    ({  if(debug && (what))                                             \
+        {                                                               \
+            MSG("icluster=%d (seed segment %d-%d): " #what ": " fmt,    \
+                icluster, cluster->irings[0], cluster->isegments[0][0], \
+                ##__VA_ARGS__);                                         \
+        }                                                               \
+        what;                                                           \
+    })
+
+
+
     *Nclusters = 0;
 
     for(int iring0 = 0; iring0 < clc_Nrings_max-1; iring0++)
@@ -1464,16 +1476,18 @@ static void stage2_cluster_segments(// out
             const bool debug =
                 ctx->debug_xmin < segment0->p.x && segment0->p.x < ctx->debug_xmax &&
                 ctx->debug_ymin < segment0->p.y && segment0->p.y < ctx->debug_ymax;
-            if(DEBUG_ON_TRUE_SEGMENT(!stage2_plane_from_segment_segment(&cluster->plane_unnormalized,
-                                                                        segment0,segment1,
-                                                                        ctx,
-                                                                        // for diagnostics only
-                                                                        iring1, isegment),
-                                     iring0,isegment,
-                                     "icluster=%d: segment isn't plane-consistent with %d-%d",
-                                     icluster,
-                                     iring1,isegment))
+
+            DEBUG_ON_TRUE_STAGE2(true, "maybe starting with candidate 2nd segment %d-%d",
+                                 iring1, isegment);
+            if(DEBUG_ON_TRUE_STAGE2(!stage2_plane_from_segment_segment(&cluster->plane_unnormalized,
+                                                                       segment0,segment1,
+                                                                       ctx,
+                                                                       // for diagnostics only
+                                                                       iring1, isegment),
+                                     "abandoning; %d-%d isn't plane-consistent",
+                                     iring1, isegment))
                 continue;
+            DEBUG_ON_TRUE_STAGE2(true, "continuing");
 
             segment0->visited = true;
 
@@ -1490,10 +1504,8 @@ static void stage2_cluster_segments(// out
 
             const int Nsegments_in_cluster = count_segments_in_cluster(cluster, ctx);
 
-            if(DEBUG_ON_TRUE_SEGMENT(Nsegments_in_cluster == 2,
-                                     iring0,isegment,
-                                     "icluster=%d only contains the seed segments",
-                                     icluster))
+            if(DEBUG_ON_TRUE_STAGE2(Nsegments_in_cluster == 2,
+                                    "abandoning; only contains the seed segments"))
             {
                 // This hypothetical ring-ring component is too small. The
                 // next-ring segment might still be valid in another component,
@@ -1502,19 +1514,15 @@ static void stage2_cluster_segments(// out
                 continue;
             }
 
-            if(DEBUG_ON_TRUE_SEGMENT(Nsegments_in_cluster < ctx->threshold_min_Nsegments_in_cluster,
-                                     iring0,isegment,
-                                     "icluster=%d too small: %d < %d",
-                                     icluster,
-                                     Nsegments_in_cluster, ctx->threshold_min_Nsegments_in_cluster))
+            if(DEBUG_ON_TRUE_STAGE2(Nsegments_in_cluster < ctx->threshold_min_Nsegments_in_cluster,
+                                    "abandoning; too small: %d < %d",
+                                    Nsegments_in_cluster, ctx->threshold_min_Nsegments_in_cluster))
             {
                 continue;
             }
 
-            if(DEBUG_ON_TRUE_SEGMENT(Nsegments_in_cluster > ctx->threshold_max_Nsegments_in_cluster,
-                                     iring0,isegment,
-                                     "icluster=%d too big: %d > %d",
-                                     icluster,
+            if(DEBUG_ON_TRUE_STAGE2(Nsegments_in_cluster > ctx->threshold_max_Nsegments_in_cluster,
+                                     "abandoning; too big: %d > %d",
                                      Nsegments_in_cluster, ctx->threshold_max_Nsegments_in_cluster))
             {
                 continue;
@@ -1523,10 +1531,8 @@ static void stage2_cluster_segments(// out
             {
                 const int iring0 = cluster->irings[0];
                 const int iring1 = cluster->irings[1];
-                if(DEBUG_ON_TRUE_SEGMENT(iring1-iring0+1 < ctx->threshold_min_Nrings_in_cluster,
-                                         iring0,isegment,
-                                         "icluster=%d contains too-few rings: %d < %d",
-                                         icluster,
+                if(DEBUG_ON_TRUE_STAGE2(iring1-iring0+1 < ctx->threshold_min_Nrings_in_cluster,
+                                         "abandoning; too-few rings: %d < %d",
                                          iring1-iring0+1, ctx->threshold_min_Nrings_in_cluster))
                     continue;
             }
@@ -1559,15 +1565,14 @@ static void stage2_cluster_segments(// out
                 }
                 if(keep) break;
             }
-            if(DEBUG_ON_TRUE_SEGMENT(!keep,
-                                     iring0,isegment,
-                                     "icluster=%d is completely past the threshold_max_range=%f",
-                                     icluster, ctx->threshold_max_range))
+            if(DEBUG_ON_TRUE_STAGE2(!keep,
+                                    "abandoning; completely past the threshold_max_range=%f",
+                                    ctx->threshold_max_range))
                 continue;
 
 
             // Cluster looks mostly good. I refine the plane...
-            if(!fit_plane_into_cluster(// out
+            if(DEBUG_ON_TRUE_STAGE2(!fit_plane_into_cluster(// out
                                        &cluster->plane_unnormalized,
                                        // in
                                        cluster,
@@ -1575,18 +1580,22 @@ static void stage2_cluster_segments(// out
                                        segments,
                                        points,
                                        ipoint0_in_ring,
-                                       ctx))
+                                       ctx),
+                                    "abandoning"))
                 continue;
 
             const int iring_mid = (cluster->irings[0] + cluster->irings[1])/2;
-            if(!stage2_plane_not_too_tilted(&cluster->plane_unnormalized.p, &cluster->plane_unnormalized.n_unnormalized,
-                                            debug, ctx,
-                                            iring_mid,
-                                            isegment_center_from_range(cluster->isegments[iring_mid][0], cluster->isegments[iring_mid][0], ctx)))
+            if(DEBUG_ON_TRUE_STAGE2(
+                 !stage2_plane_not_too_tilted(&cluster->plane_unnormalized.p, &cluster->plane_unnormalized.n_unnormalized,
+                                              debug, ctx,
+                                              iring_mid,
+                                              isegment_center_from_range(cluster->isegments[iring_mid][0], cluster->isegments[iring_mid][0], ctx)),
+                 "abandoning"))
                 continue;
 
 
             // WE'RE ACCEPTING THIS CLUSTER
+            DEBUG_ON_TRUE_STAGE2(true, "accepting!");
 
             // To prepare for the next stage I normalize the normal vector
             const float magn = mag(cluster->plane_unnormalized.n_unnormalized);
