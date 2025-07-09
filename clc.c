@@ -5080,7 +5080,8 @@ static bool check_sufficient_observations(const sensor_snapshot_segmented_t* sna
                                           const int                          Nsnapshots,
                                           const uint64_t*                    bitarray_snapshots_selected,
                                           const int                          Ncameras,
-                                          const int                          Nlidars)
+                                          const int                          Nlidars,
+                                          const bool verbose)
 {
     int NlidarObservations [Nlidars ];
     int NcameraObservations[Ncameras];
@@ -5102,6 +5103,15 @@ static bool check_sufficient_observations(const sensor_snapshot_segmented_t* sna
                 NcameraObservations[icamera]++;
 
     }
+
+    if(verbose)
+    {
+        for(unsigned int i=0; i<Nlidars; i++)
+            MSG("LIDAR %d has %d observations", i, NlidarObservations[i]);
+        for(unsigned int i=0; i<Ncameras; i++)
+            MSG("Camera %d has %d observations", i, NcameraObservations[i]);
+    }
+
     for(unsigned int i=0; i<Ncameras; i++)
     {
         const int NcameraObservations_this = NcameraObservations[i];
@@ -5589,7 +5599,8 @@ bool fit_high_level(// in/out
                                       Nsnapshots,
                                       bitarray_snapshots_selected,
                                       Ncameras,
-                                      Nlidars))
+                                      Nlidars,
+                                      verbose))
         return false;
 
     double Rt_camera_board_cache[Nsnapshots*Ncameras * 4*3];
@@ -5741,7 +5752,8 @@ bool fit_high_level(// in/out
                                       Nsnapshots,
                                       bitarray_snapshots_selected,
                                       Ncameras,
-                                      Nlidars))
+                                      Nlidars,
+                                      verbose))
         return false;
 
 
