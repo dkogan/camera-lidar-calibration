@@ -780,8 +780,8 @@ static bool stage2_plane_not_too_tilted(const clc_point3f_t* p,
         !DEBUG_ON_TRUE_SEGMENT(inner_p_n*inner_p_n < ctx->threshold_min_cos_plane_tilt_stage2*ctx->threshold_min_cos_plane_tilt_stage2*norm2n*norm2p,
                                iring,isegment,
                                "cross-ring segments implies a too-tilted plane; have th=%fdeg > threshold=%fdeg",
-                               acos(fabs(inner_p_n/sqrt(norm2p*norm2n))),
-                               acos(ctx->threshold_min_cos_plane_tilt_stage2));
+                               180./M_PI*acos(fabs(inner_p_n/sqrt(norm2p*norm2n))),
+                               180./M_PI*acos(ctx->threshold_min_cos_plane_tilt_stage2));
 }
 
 static bool stage2_plane_from_segment_segment(// out
@@ -801,10 +801,12 @@ static bool stage2_plane_from_segment_segment(// out
         ctx->debug_xmin < s1->p.x && s1->p.x < ctx->debug_xmax &&
         ctx->debug_ymin < s1->p.y && s1->p.y < ctx->debug_ymax;
 
-    if(!segment_segment_across_rings_close_enough(&dp,
-                                                  debug,
-                                                  ctx,
-                                                  iring1,isegment))
+    if(DEBUG_ON_TRUE_SEGMENT(!segment_segment_across_rings_close_enough(&dp,
+                                                                        debug,
+                                                                        ctx,
+                                                                        iring1,isegment),
+                             iring1,isegment,
+                             ""))
         return false;
 
 
@@ -812,7 +814,7 @@ static bool stage2_plane_from_segment_segment(// out
     clc_point3f_t n0 = cross(dp,s0->v);
     clc_point3f_t n1 = cross(dp,s1->v);
 
-    if(!DEBUG_ON_TRUE_SEGMENT(is_same_direction(n0,n1,ctx),
+    if(DEBUG_ON_TRUE_SEGMENT(!is_same_direction(n0,n1,ctx),
                               iring1,isegment,
                               "cross-ring segments have unaligned normals") )
         return false;
@@ -820,8 +822,10 @@ static bool stage2_plane_from_segment_segment(// out
     plane_unnormalized->n_unnormalized = mean(n0,n1);
     plane_unnormalized->p              = mean(s0->p, s1->p);
 
-    if(!stage2_plane_not_too_tilted(&plane_unnormalized->p, &plane_unnormalized->n_unnormalized,
-                                    debug, ctx, iring1, isegment))
+    if(DEBUG_ON_TRUE_SEGMENT(!stage2_plane_not_too_tilted(&plane_unnormalized->p, &plane_unnormalized->n_unnormalized,
+                                                          debug, ctx, iring1, isegment),
+                             iring1,isegment,
+                             ""))
         return false;
 
     return true;
