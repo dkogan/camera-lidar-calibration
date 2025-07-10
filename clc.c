@@ -1697,29 +1697,9 @@ static int num_states(const callback_context_t* ctx)
 }
 
 
-static int measurement_index_lidar(const unsigned int _isnapshot,
-                                   const unsigned int _ilidar,
-                                   const callback_context_t* ctx)
+static int measurement_index_lidar00(const callback_context_t* ctx)
 {
-    int imeasurement = 0;
-
-    LOOP_SNAPSHOT(ctx->)
-    {
-        LOOP_SNAPSHOT_HEADER(ctx->,const);
-        for(unsigned int ilidar=0; ilidar<ctx->Nlidars; ilidar++)
-        {
-            if(_isnapshot <= isnapshot && _ilidar == ilidar)
-                return imeasurement;
-
-            const points_and_plane_full_t* lidar_scan = &snapshot->lidar_scans[ilidar];
-
-            if(lidar_scan->points == NULL)
-                continue;
-
-            imeasurement += lidar_scan->n;
-        }
-    }
-    return -1;
+    return 0;
 }
 
 static int num_measurements_lidars(const callback_context_t* ctx)
@@ -1741,33 +1721,10 @@ static int num_measurements_lidars(const callback_context_t* ctx)
     }
     return Nmeasurements;
 }
-static int measurement_index_camera(const unsigned int _isnapshot,
-                                    const unsigned int icamera,
-                                    const callback_context_t* ctx)
+static int measurement_index_camera00(const callback_context_t* ctx)
 {
-    int imeasurement = 0;
-
-    LOOP_SNAPSHOT(ctx->)
-    {
-        LOOP_SNAPSHOT_HEADER(ctx->,const);
-        for(int _icamera=0; _icamera<(int)ctx->Ncameras; _icamera++)
-        {
-            const mrcal_point2_t* chessboard_corners =
-                snapshot->chessboard_corners[_icamera];
-            if(chessboard_corners == NULL) continue;
-
-            if(_isnapshot <= isnapshot && (int)icamera == _icamera)
-                return
-                    num_measurements_lidars(ctx) +
-                    imeasurement;
-
-            imeasurement +=
-                ctx->object_width_n *
-                ctx->object_height_n *
-                2;
-        }
-    }
-
+    if(ctx->Ncameras > 0)
+        return num_measurements_lidars(ctx);
     return -1;
 }
 static int num_measurements_cameras(const callback_context_t* ctx)
@@ -2629,9 +2586,9 @@ plot_residuals(const char* filename_base,
                const callback_context_t* ctx,
                bool verbose)
 {
-    const int imeas_lidar_0                = measurement_index_lidar(0,0, ctx);
+    const int imeas_lidar_0                = measurement_index_lidar00(ctx);
     const int Nmeas_lidar_observation_all  = num_measurements_lidars(ctx);
-    const int imeas_camera_0               = measurement_index_camera(0,0, ctx);
+    const int imeas_camera_0               = measurement_index_camera00(ctx);
     const int Nmeas_camera_observation_all = num_measurements_cameras(ctx);
     const int imeas_regularization_0       = measurement_index_regularization(ctx);
     const int Nmeas_regularization         = num_measurements_regularization(ctx);
@@ -3392,9 +3349,9 @@ fit(// out
     MSG_IF_VERBOSE("RMS fit error: %.2f normalized units",
                    sqrt(norm2x / (double)Nmeasurements));
 
-    const int imeas_lidar_0                = measurement_index_lidar(0,0, &ctx);
+    const int imeas_lidar_0                = measurement_index_lidar00(&ctx);
     const int Nmeas_lidar_observation_all  = num_measurements_lidars(&ctx);
-    const int imeas_camera_0               = measurement_index_camera(0,0, &ctx);
+    const int imeas_camera_0               = measurement_index_camera00(&ctx);
     const int Nmeas_camera_observation_all = num_measurements_cameras(&ctx);
     const int imeas_regularization_0       = measurement_index_regularization(&ctx);
     const int Nmeas_regularization         = num_measurements_regularization(&ctx);
