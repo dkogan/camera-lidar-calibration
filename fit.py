@@ -369,12 +369,10 @@ for ilidar in range(len(rt_ref_lidar)):
     print(f"Wrote '{path}' and a symlink '{symlink}'")
 
 for imodel in range(len(args.models)):
-
     models[imodel].extrinsics_rt_toref(rt_ref_camera[imodel])
-    d,f = os.path.split(args.models[imodel])
-    r,e = os.path.splitext(f)
-    filename = f"{r}-mounted{e}"
-    path     = f"{D}/{filename}"
+
+    filename = f"camera{imodel}-mounted.cameramodel"
+    path = f"{D}/{filename}"
     models[imodel].write(path)
 
     symlink =  f"{D}/sensor{len(rt_ref_lidar) + imodel}-mounted.cameramodel"
