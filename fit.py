@@ -329,9 +329,17 @@ kwargs_calibrate = dict(bags                               = args.bag,
                         uncertainty_quantification_range   = args.uncertainty_quantification_range,
                         rt_vehicle_lidar0                  = args.rt_vehicle_lidar0,
                         **ctx)
-
 result = clc.calibrate(do_dump_inputs = args.dump is not None,
                        **kwargs_calibrate)
+
+# Reorder the topics by lidar and then camera. This is the sensor order in the
+# solve. The downstream tools (show-transformation-uncertainty.py for instance)
+# can then use the topic list directly
+args.topics = [args.topics[i] for i in \
+               result['itopics_lidar'] + result['itopics_camera']]
+del result['itopics_lidar']
+del result['itopics_camera']
+kwargs_calibrate['topics'] = args.topics
 
 if 'rt_vehicle_lidar' in result:
     rt_ref_lidar  = result['rt_vehicle_lidar']

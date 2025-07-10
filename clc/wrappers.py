@@ -375,9 +375,12 @@ def _sorted_sensor_snapshots(bags, topics,
 
 
     return \
-        tuple( ( tuple(_lidar_points(messages[i], range_mode = range_mode[ilidar]) for ilidar,i in enumerate(itopics_lidar)),
-                 tuple(_images      (messages[i]) for i in itopics_camera) ) \
-               for messages in messages_bags )
+        ( tuple( ( tuple(_lidar_points(messages[i], range_mode = range_mode[ilidar]) for ilidar,i in enumerate(itopics_lidar)),
+                   tuple(_images      (messages[i]) for i in itopics_camera) ) \
+                 for messages in messages_bags ),
+          itopics_lidar,
+          itopics_camera )
+
 
 
 def calibrate(*,
@@ -579,17 +582,20 @@ A dict describing the result. The items are:
 
     '''
 
-    return _clc.calibrate( _sorted_sensor_snapshots(bags, topics,
-                                                    decimation_period_s  = decimation_period_s,
-                                                    start                = start,
-                                                    stop                 = stop,
-                                                    max_time_spread_s    = max_time_spread_s,
-                                                    exclude_time_periods = exclude_time_periods,
-                                                    verbose              = verbose),
-                           verbose = verbose,
-                           **kwargs)
-
-
+    (snapshots, itopics_lidar, itopics_camera) = \
+        _sorted_sensor_snapshots(bags, topics,
+                                 decimation_period_s  = decimation_period_s,
+                                 start                = start,
+                                 stop                 = stop,
+                                 max_time_spread_s    = max_time_spread_s,
+                                 exclude_time_periods = exclude_time_periods,
+                                 verbose              = verbose)
+    result = _clc.calibrate( snapshots,
+                             verbose = verbose,
+                             **kwargs)
+    result['itopics_lidar']  = itopics_lidar
+    result['itopics_camera'] = itopics_camera
+    return result
 
 
 def color_sequence_rgb():
