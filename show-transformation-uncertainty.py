@@ -265,6 +265,10 @@ if args.ellipsoids:
 
 
 
+if all( isensor_solve_from_isensor_requested[isensor_requested] == 0 \
+        for topic_requested in args.topics ):
+    print("All the given topics are at the reference. Nothing to do")
+    sys.exit(0)
 
 for isensor_requested,topic_requested in enumerate(args.topics):
     isensor_solve = isensor_solve_from_isensor_requested[isensor_requested]
