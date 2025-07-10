@@ -590,6 +590,16 @@ A dict describing the result. The items are:
                                  max_time_spread_s    = max_time_spread_s,
                                  exclude_time_periods = exclude_time_periods,
                                  verbose              = verbose)
+
+    Ncameras_models = len(kwargs['models'])
+    Ncameras_topics = len(itopics_camera)
+    if Ncameras_models != Ncameras_topics:
+        raise Exception(f"I havee {Ncameras_topics=} != {Ncameras_models=}")
+
+    if len(itopics_lidar) == 0:
+        raise Exception("No lidar topics given")
+
+
     result = _clc.calibrate( snapshots,
                              verbose = verbose,
                              **kwargs)
