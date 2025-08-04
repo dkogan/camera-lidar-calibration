@@ -464,6 +464,7 @@ bool clc_fit_from_inputs_dump(// out
                               bool do_skip_plots,
                               bool verbose);
 
+// Meant to be for internal use only
 void _clc_mode_over_lastdim_ignoring0(// out
                                       // shape (Ndatasets)
                                       float* mode,
