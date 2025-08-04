@@ -8,3 +8,10 @@ cscope.*
 *.i
 *.s
 __pycache__
+# coverage stuff
+*.gcda
+*.gcno
+*.gcov
+
+*.patch
+*.backup
