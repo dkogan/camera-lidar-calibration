@@ -17,13 +17,7 @@ Build-Depends:
  python3-all-dev:any,
  libpython3-all-dev,
  python3-numpy-dev,
- mrbuild,
-# Shouldn't be needed for the build in general, but currently is required. Sort this out later
- python3-rosbags,
- python3-numpy,
- python3-numpysane,
- python3-gnuplotlib,
- python3-mrcal
+ mrbuild
 Maintainer: Dima Kogan <dkogan@debian.org>
 Standards-Version: 4.6.0
 Homepage: http://github.com/dkogan/camera-lidar-calibration
