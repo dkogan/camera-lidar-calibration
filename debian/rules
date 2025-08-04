@@ -32,3 +32,7 @@ override_dh_python3:
 # no tests yet
 override_dh_auto_test:
 	true
+
+# .py.1 does NOT mean we're using a language called "py"
+override_dh_installman:
+	dh_installman --language=C
