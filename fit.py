@@ -45,9 +45,6 @@ import clc.argparse_helpers
 import re
 import os
 
-import clc
-lidar_segmentation_parameters = clc.lidar_segmentation_parameters()
-
 
 def parse_args():
 
@@ -174,22 +171,6 @@ def parse_args():
                         the intrinsics are used. The number of models given must
                         match the number of camera --topics arguments EXACTLY''')
 
-    for param,metadata in lidar_segmentation_parameters.items():
-        # Here I have a --dump that's different from the 'dump' in the
-        # segmentation parameters. I ignore the latter for now
-        if param == 'dump': continue
-
-        if metadata['pyparse'] == 'p':
-            # special case for boolean
-            parser.add_argument(f'--{param.replace("_","-")}',
-                                action  = 'store_true',
-                                help = metadata['doc'])
-        else:
-            parser.add_argument(f'--{param.replace("_","-")}',
-                                type    = type(metadata['default']),
-                                default = metadata['default'],
-                                help = metadata['doc'])
-
     args = parser.parse_args()
 
     import glob
@@ -244,6 +225,9 @@ import gnuplotlib as gp
 import io
 import pickle
 import mrcal
+
+import clc
+lidar_segmentation_parameters = clc.lidar_segmentation_parameters()
 
 # ingest the lidar segmentation parameters from the arguments
 ctx = dict()

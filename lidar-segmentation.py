@@ -20,9 +20,6 @@ import argparse
 import re
 import os
 
-import clc
-lidar_segmentation_parameters = clc.lidar_segmentation_parameters()
-
 def parse_args():
 
     parser = \
@@ -55,18 +52,6 @@ def parse_args():
                         away before segmenting the board. This is optional. The
                         BAG may be included in BAG-CONTEXT''')
 
-    for param,metadata in lidar_segmentation_parameters.items():
-        if metadata['pyparse'] == 'p':
-            # special case for boolean
-            parser.add_argument(f'--{param.replace("_","-")}',
-                                action  = 'store_true',
-                                help = metadata['doc'])
-        else:
-            parser.add_argument(f'--{param.replace("_","-")}',
-                                type    = type(metadata['default']),
-                                default = metadata['default'],
-                                help = metadata['doc'])
-
     args = parser.parse_args()
 
     args.bag_context = getattr(args, 'bag-context')
@@ -79,6 +64,9 @@ args = parse_args()
 
 import numpy as np
 import numpysane as nps
+
+import clc
+lidar_segmentation_parameters = clc.lidar_segmentation_parameters()
 
 # ingest the lidar segmentation parameters from the arguments
 ctx = dict()
