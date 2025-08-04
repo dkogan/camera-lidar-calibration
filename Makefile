@@ -84,7 +84,6 @@ endef
 
 README.org: README.template.org $(PODS)
 	< $(filter README%,$^) perl -E '$(MAKE_README)' $(filter-out README%,$^) > $@.tmp && mv $@.tmp $@
-all: README.org
 
 
 # rules to build the tests. The tests are conducted via test.sh
