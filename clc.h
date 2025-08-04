@@ -310,7 +310,9 @@ clc_camera_chessboard_detection(// out
                                const mrcal_image_uint8_t* image, // might be color
                                const bool is_image_bgr,
                                const int object_height_n,
-                               const int object_width_n);
+                               const int object_width_n,
+                               const bool upside_down // if true, reverse the corner order
+                                );
 
 
 
