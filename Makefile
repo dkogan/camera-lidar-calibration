@@ -52,8 +52,8 @@ DIST_BIN :=					\
   show-aligned-lidar-pointclouds.py		\
   show-bag.py					\
   show-transformation-uncertainty.py
-DIST_MAN := $(patsubst %.py,%.1,$(DIST_BIN))
-PODS     := $(patsubst %.py,%.pod,$(DIST_BIN))
+DIST_MAN := $(patsubst %.py,%.py.1,$(DIST_BIN))
+PODS     := $(patsubst %.py,%.py.pod,$(DIST_BIN))
 $(DIST_MAN): %.1: %.pod
 	pod2man --center="clc: camera-lidar alignment toolkit" --name=CLC --release="clc $(VERSION)" --section=1 $< $@
 
@@ -63,7 +63,7 @@ $(DIST_MAN): %.1: %.pod
 # stuff. This isn't actually used for --help, but that doesn't matter. So for
 # now I add the extra dependency. Ideally argparse_helpers and --help should not
 # need anything to be built
-%.pod: %.py libclc.so.$(ABI_VERSION) clc/_clc$(PY_EXT_SUFFIX)
+%.py.pod: %.py libclc.so.$(ABI_VERSION) clc/_clc$(PY_EXT_SUFFIX)
 	$(MRBUILD_BIN)/make-pod-from-help $< > $@.tmp && cat footer.pod >> $@.tmp && mv $@.tmp $@
 EXTRA_CLEAN += $(DIST_MAN) $(PODS)
 
@@ -74,7 +74,7 @@ while(<STDIN>)								\
   else {								\
     for $$pod (@ARGV)							\
     {									\
-      $$cmd = $$pod =~ s/pod$$/py/r;					\
+      $$cmd = $$pod =~ s/\.pod$$//r;					\
       say("*** $$cmd");							\
       say("#+begin_example");						\
       system(qq{pod2text $$pod | mawk "/REPOSITORY/{exit} {print}"});	\
