@@ -1,0 +1,11 @@
+libclc.so.0 libcamera-lidar-calibration0 #MINVER#
+* Build-Depends-Package: libcamera-lidar-calibration-dev
+ _clc_mode_over_lastdim_ignoring0@libclc.so.0 0.1
+ clc@libclc.so.0 0.1
+ clc_camera_chessboard_detection@libclc.so.0 0.1
+ clc_fit_from_inputs_dump@libclc.so.0 0.1
+ clc_lidar_preprocess@libclc.so.0 0.1
+ clc_lidar_segmentation_default_context@libclc.so.0 0.1
+ clc_lidar_segmentation_sorted@libclc.so.0 0.1
+ clc_lidar_segmentation_unsorted@libclc.so.0 0.1
+ libclc.so.0@libclc.so.0 0.1

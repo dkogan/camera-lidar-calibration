@@ -1,0 +1,34 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+export VERSION_USE_LATEST_TAG  = 1
+
+%:
+	dh $@ --with python3
+
+# I build the python libraries for all the available python versions. The
+# non-Python stuff shouldn't be rebuilt because Make should see that it's
+# up-to-date
+override_dh_auto_build:
+	for v in `py3versions -s | sed s/python//g`; do		\
+	  rm -f *pywrap*.o;					\
+	  PYTHON_VERSION_FOR_EXTENSIONS=$$v dh_auto_build;	\
+	done
+
+# Similarly, I install everything, looping through all the available python
+# versions, which could be more than just the default. All the non-python stuff
+# will be installed multiple times, but it's the same files going to the same
+# paths, so it hurts nothing
+override_dh_auto_install:
+	for v in `py3versions -s | sed s/python//g`; do		\
+	  PYTHON_VERSION_FOR_EXTENSIONS=$$v dh_auto_install;	\
+	done
+
+override_dh_python3:
+	dh_numpy3
+	dh_python3
+
+# no tests yet
+override_dh_auto_test:
+	true

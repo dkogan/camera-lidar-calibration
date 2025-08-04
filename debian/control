@@ -1,0 +1,79 @@
+Source: camera-lidar-calibration
+Priority: optional
+Section: devel
+Build-Depends:
+# Please do not "fix" to use debhelper-compat. I want this to remain compatible
+# with older debian-based distros
+ debhelper (>= 11),
+ dh-python,
+# for "make install" to work. See
+#   https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1080677
+ python3-setuptools,
+ libmrcal-dev,
+ libdogleg-dev,
+ libmrgingham-dev,
+ libopencv-dev,
+ python3-all-dev:any,
+ libpython3-all-dev,
+ python3-numpy-dev,
+ mrbuild,
+# Shouldn't be needed for the build in general, but currently is required. Sort this out later
+ python3-rosbags,
+ python3-numpy,
+ python3-numpysane,
+ python3-gnuplotlib,
+ python3-mrcal
+Maintainer: Dima Kogan <dkogan@debian.org>
+Standards-Version: 4.6.0
+Homepage: http://github.com/dkogan/camera-lidar-calibration
+Vcs-Git: http://github.com/dkogan/camera-lidar-calibration.git
+Vcs-Browser: https://salsa.debian.org/science-team/camera-lidar-calibration.git
+Testsuite: autopkgtest-pkg-python
+
+Package: libcamera-lidar-calibration0
+Section: libs
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: LIDAR-camera calibration routines
+ Compute the geometry within a rigid set of LIDAR and camera units
+ .
+ This package provides the runtime C libraries
+
+Package: camera-lidar-calibration
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libcamera-lidar-calibration0 (= ${binary:Version}),
+         python3-camera-lidar-calibration (= ${binary:Version}),
+         python3
+Description: LIDAR-camera calibration routines
+ Compute the geometry within a rigid set of LIDAR and camera units
+ .
+ This package provides the user-facing tools
+
+Package: libcamera-lidar-calibration-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends: ${misc:Depends}, libcamera-lidar-calibration0 (= ${binary:Version}),
+         libmrcal-dev
+Description: LIDAR-camera calibration routines
+ Compute the geometry within a rigid set of LIDAR and camera units
+ .
+ This package provides the development C libraries
+
+Package: python3-camera-lidar-calibration
+Section: python
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}, libcamera-lidar-calibration0 (= ${binary:Version}),
+         ${python3:Depends},
+         python3-rosbags,
+         python3-numpy,
+         python3-numpysane,
+         python3-gnuplotlib,
+         python3-mrcal
+Provides: ${python3:Provides}
+Description: LIDAR-camera calibration routines
+ Compute the geometry within a rigid set of LIDAR and camera units
+ .
+ This package provides the Python interfaces
