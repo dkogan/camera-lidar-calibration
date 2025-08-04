@@ -12,6 +12,7 @@ Build-Depends:
  libmrcal-dev,
  libdogleg-dev,
  libmrgingham-dev,
+ libmrcam-dev,
  libopencv-dev,
  python3-all-dev:any,
  libpython3-all-dev,
