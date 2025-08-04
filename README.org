@@ -605,6 +605,18 @@ OPTIONS
                             specifies the relationship between those frames. If
                             omitted, we assume an identity transform: the vehicle
                             frame is the lidar0 frame
+      --object-width-n OBJECT_WIDTH_N
+                            Used if any cameras are present. How many points the
+                            calibration board has per horizontal side. If omitted,
+                            we try to use the calibration-time board in the models
+      --object-height-n OBJECT_HEIGHT_N
+                            Used if any cameras are present. How many points the
+                            calibration board has per vertical side. If omitted,
+                            we try to use the calibration-time board in the models
+      --object-spacing OBJECT_SPACING
+                            Used if any cameras are present. Width of each square
+                            in the calibration board, in meters. If omitted, we
+                            try to use the calibration-time board in the models
       --verbose             Report details about the solve
       --debug-iring DEBUG_IRING
                             stage1: report diagnostic information on stderr, ONLY
@@ -767,8 +779,9 @@ OPTIONS
 
   OPTIONAL ARGUMENTS
       -h, --help       show this help message and exit
-      --topics TOPICS  Which lidar(s) and camera(s) we're talking to. This is a comma-separated list of topics. Any Nlidars >= 1 and Ncameras >=
-                       0 is supported
+      --topics TOPICS  Which lidar(s) and camera(s) we're talking to. This is a
+                       comma-separated list of topics. Any Nlidars >= 1 and
+                       Ncameras >= 0 is supported
 
 #+end_example
 
@@ -798,8 +811,9 @@ OPTIONS
 
   OPTIONAL ARGUMENTS
       -h, --help        show this help message and exit
-      --show-histogram  If given, we display the histogram of potential Npoints_per_rotation values. Hopefully we see a sharp peak at the "right"
-                        value and that it is a power of 2
+      --show-histogram  If given, we display the histogram of potential
+                        Npoints_per_rotation values. Hopefully we see a sharp peak
+                        at the "right" value and that it is a power of 2
 
 #+end_example
 
@@ -822,82 +836,127 @@ OPTIONS
   POSITIONAL ARGUMENTS
       lidar-topic           The LIDAR topic we're looking at
       bag                   The rosbag that contain the lidar data.
+      bag-context           The rosbags that contain lidar data for OTHER
+                            snapshots in this data collection session. Used to
+                            detect static objects in the scene, and to throw them
+                            away before segmenting the board. This is optional.
+                            The BAG may be included in BAG-CONTEXT
 
   OPTIONAL ARGUMENTS
       -h, --help            show this help message and exit
       --debug DEBUG DEBUG DEBUG DEBUG DEBUG
-                            If given, overrides --debug-iring, --debug-xmin, --debug-ymin, --debug-xmax, --debug-ymax
-      --after AFTER         If given, start reading the bag at this time. Could be an integer (s since epoch or ns since epoch), a float (s since
-                            the epoch) or a string, to be parsed with dateutil.parser.parse()
-      --dump                if true, diagnostic detector data meant for plotting is output on stdout. The intended use is ./lidar-segmentation-
-                            test.py --dump TOPIC BAG | | feedgnuplot \ --style label 'with labels' \ --style ACCEPTED "with points pt 2 ps 2 lw 2
-                            lc \"red\""\ --tuplesize label 4 \ --style all 'with points pt 7 ps 0.5' \ --style stage1-segment "with vectors lc
-                            \"green\""\ --style plane-normal "with vectors lc \"black\""\ --tuplesize stage1-segment,plane-normal 6\ --3d \
-                            --domain \ --dataid \ --square \ --points \ --tuplesizeall 3 \ --autolegend \ --xlabel x \ --ylabel y \ --zlabel z\
+                            If given, overrides --debug-iring, --debug-xmin,
+                            --debug-ymin, --debug-xmax, --debug-ymax
+      --after AFTER         If given, start reading the bag at this time. Could be
+                            an integer (s since epoch or ns since epoch), a float
+                            (s since the epoch) or a string, to be parsed with
+                            dateutil.parser.parse()
+      --dump                if true, diagnostic detector data meant for plotting
+                            is output on stdout. The intended use is ./lidar-
+                            segmentation.py --dump TOPIC BAG | | feedgnuplot \
+                            --style label 'with labels' \ --style ACCEPTED "with
+                            points pt 2 ps 2 lw 2 lc \"red\""\ --tuplesize label 4
+                            \ --style all 'with points pt 7 ps 0.5' \ --style
+                            stage1-segment "with vectors lc \"green\""\ --style
+                            plane-normal "with vectors lc \"black\""\ --tuplesize
+                            stage1-segment,plane-normal 6\ --3d \ --domain \
+                            --dataid \ --square \ --points \ --tuplesizeall 3 \
+                            --autolegend \ --xlabel x \ --ylabel y \ --zlabel z\
       --debug-iring DEBUG_IRING
-                            stage1: report diagnostic information on stderr, ONLY for this ring
+                            stage1: report diagnostic information on stderr, ONLY
+                            for this ring
       --debug-xmin DEBUG_XMIN
-                            report diagnostic information on stderr, ONLY for the region within the given xy bounds
+                            report diagnostic information on stderr, ONLY for the
+                            region within the given xy bounds
       --debug-xmax DEBUG_XMAX
-                            report diagnostic information on stderr, ONLY for the region within the given xy bounds
+                            report diagnostic information on stderr, ONLY for the
+                            region within the given xy bounds
       --debug-ymin DEBUG_YMIN
-                            report diagnostic information on stderr, ONLY for the region within the given xy bounds
+                            report diagnostic information on stderr, ONLY for the
+                            region within the given xy bounds
       --debug-ymax DEBUG_YMAX
-                            report diagnostic information on stderr, ONLY for the region within the given xy bounds
+                            report diagnostic information on stderr, ONLY for the
+                            region within the given xy bounds
       --threshold-min-Npoints-in-segment THRESHOLD_MIN_NPOINTS_IN_SEGMENT
-                            stage1: segments are accepted only if they contain at least this many points
+                            stage1: segments are accepted only if they contain at
+                            least this many points
       --threshold-max-Npoints-invalid-segment THRESHOLD_MAX_NPOINTS_INVALID_SEGMENT
-                            stage1: segments are accepted only if they contain at most this many invalid points
+                            stage1: segments are accepted only if they contain at
+                            most this many invalid points
       --threshold-max-range THRESHOLD_MAX_RANGE
-                            stage2: discard all segment clusters that lie COMPLETELY past the given range
+                            stage2: discard all segment clusters that lie
+                            COMPLETELY past the given range
       --threshold-distance-adjacent-points-cross-segment THRESHOLD_DISTANCE_ADJACENT_POINTS_CROSS_SEGMENT
-                            stage2: adjacent cross-segment points in the same ring must be at most this far apart
+                            stage2: adjacent cross-segment points in the same ring
+                            must be at most this far apart
       --threshold-min-cos-angle-error-same-direction-intra-ring THRESHOLD_MIN_COS_ANGLE_ERROR_SAME_DIRECTION_INTRA_RING
-                            stage2: cos threshold used to accumulate a segment to an adjacent one in the same ring
+                            stage2: cos threshold used to accumulate a segment to
+                            an adjacent one in the same ring
       --threshold-max-plane-size THRESHOLD_MAX_PLANE_SIZE
-                            Post-processing: high limit on the linear size of the reported plane. In a square board this is roughly compared to
-                            the side length
+                            Post-processing: high limit on the linear size of the
+                            reported plane. In a square board this is roughly
+                            compared to the side length
       --threshold-max-rms-fit-error THRESHOLD_MAX_RMS_FIT_ERROR
-                            Post-processing: high limit on the RMS plane fit residual. Lower values will demand flatter planes
+                            Post-processing: high limit on the RMS plane fit
+                            residual. Lower values will demand flatter planes
       --threshold-min-rms-point-cloud-2nd-dimension--multiple-max-plane-size THRESHOLD_MIN_RMS_POINT_CLOUD_2ND_DIMENSION__MULTIPLE_MAX_PLANE_SIZE
-                            Post-processing: low limit on the short length of the found plane. Too-skinny planes are rejected Given as a multiple
-                            of the max_plane_size
+                            Post-processing: low limit on the short length of the
+                            found plane. Too-skinny planes are rejected Given as a
+                            multiple of the max_plane_size
       --Npoints-per-rotation NPOINTS_PER_ROTATION
-                            How many points are reported by the LIDAR in a rotation. This is hardware-dependent, and needs to be set each for
-                            LIDAR unit. Defaults to -1, in which case clc_lidar_preprocess() will try to estimate this
+                            How many points are reported by the LIDAR in a
+                            rotation. This is hardware-dependent, and needs to be
+                            set each for LIDAR unit. Defaults to -1, in which case
+                            clc_lidar_preprocess() will try to estimate this
       --Npoints-per-segment NPOINTS_PER_SEGMENT
                             stage1: length of segments we're looking for
       --threshold-max-Ngap THRESHOLD_MAX_NGAP
-                            The maximum number of consecutive missing points in a ring
+                            The maximum number of consecutive missing points in a
+                            ring
       --threshold-max-deviation-off-segment-line THRESHOLD_MAX_DEVIATION_OFF_SEGMENT_LINE
-                            stage1: maximum allowed deviation off a segment line fit. If any points violate this, the entire segment is rejected
+                            stage1: maximum allowed deviation off a segment line
+                            fit. If any points violate this, the entire segment is
+                            rejected
       --threshold-max-distance-across-rings THRESHOLD_MAX_DISTANCE_ACROSS_RINGS
-                            stage2: max ring-ring distance allowed to join two segments into a cluster
+                            stage2: max ring-ring distance allowed to join two
+                            segments into a cluster
       --threshold-max-cos-angle-error-normal THRESHOLD_MAX_COS_ANGLE_ERROR_NORMAL
-                            stage2: cos(v,n) threshold to accept a segment (and its direction v) into an existing cluster (and its normal n)
+                            stage2: cos(v,n) threshold to accept a segment (and
+                            its direction v) into an existing cluster (and its
+                            normal n)
       --threshold-min-cos-angle-error-same-direction-cross-ring THRESHOLD_MIN_COS_ANGLE_ERROR_SAME_DIRECTION_CROSS_RING
-                            stage2: cos threshold used to construct a cluster from two cross-ring segments. Non fitting pairs are not used to
-                            create a new cluster
+                            stage2: cos threshold used to construct a cluster from
+                            two cross-ring segments. Non fitting pairs are not
+                            used to create a new cluster
       --threshold-max-plane-point-error-stage2 THRESHOLD_MAX_PLANE_POINT_ERROR_STAGE2
-                            stage2: distance threshold to make sure each segment center lies in plane Non-fitting segments are not added to the
-                            cluster
+                            stage2: distance threshold to make sure each segment
+                            center lies in plane Non-fitting segments are not
+                            added to the cluster
       --threshold-min-cos-plane-tilt-stage2 THRESHOLD_MIN_COS_PLANE_TILT_STAGE2
                             stage2: the 'tilt' is the off-head-on orientation
       --threshold-max-plane-point-error-stage3 THRESHOLD_MAX_PLANE_POINT_ERROR_STAGE3
-                            stage3: distance threshold to make sure each point lies in the plane Non-fitting points are culled from the reported
-                            plane
+                            stage3: distance threshold to make sure each point
+                            lies in the plane Non-fitting points are culled from
+                            the reported plane
       --threshold-min-plane-point-error-isolation THRESHOLD_MIN_PLANE_POINT_ERROR_ISOLATION
-                            stage3: points just off the edge of the detected board must fit AT LEAST this badly
+                            stage3: points just off the edge of the detected board
+                            must fit AT LEAST this badly
       --threshold-min-points-per-ring--multiple-Npoints-per-segment THRESHOLD_MIN_POINTS_PER_RING__MULTIPLE_NPOINTS_PER_SEGMENT
-                            stage3: minimum number of points in EACH ring in the cluster; a multiple of Npoints_per_segment
+                            stage3: minimum number of points in EACH ring in the
+                            cluster; a multiple of Npoints_per_segment
       --threshold-max-Nsegments-in-cluster THRESHOLD_MAX_NSEGMENTS_IN_CLUSTER
-                            stage2: clusters with more than this many segments are rejected
+                            stage2: clusters with more than this many segments are
+                            rejected
       --threshold-min-Nsegments-in-cluster THRESHOLD_MIN_NSEGMENTS_IN_CLUSTER
-                            stage2: clusters with fewer than this many segments are rejected
+                            stage2: clusters with fewer than this many segments
+                            are rejected
       --threshold-min-Nrings-in-cluster THRESHOLD_MIN_NRINGS_IN_CLUSTER
-                            stage2: clusters with date from fewer than this many rings are rejected
+                            stage2: clusters with date from fewer than this many
+                            rings are rejected
       --threshold-max-gap-Npoints THRESHOLD_MAX_GAP_NPOINTS
-                            stage3: moving from the center, we stop accumulating points when we encounter an angular gap at least this large
+                            stage3: moving from the center, we stop accumulating
+                            points when we encounter an angular gap at least this
+                            large
 
 #+end_example
 
@@ -919,21 +978,29 @@ DESCRIPTION
 
 OPTIONS
   POSITIONAL ARGUMENTS
-      lidar-models          The .cameramodel for the lidars in question. Must correspond to the set in --topic.
+      lidar-models          The .cameramodel for the lidars in question. Must
+                            correspond to the set in --topic.
 
   OPTIONAL ARGUMENTS
       -h, --help            show this help message and exit
-      --topics TOPICS       The LIDAR topics to visualize. This is a comma-separated list of topics
+      --topics TOPICS       The LIDAR topics to visualize. This is a comma-
+                            separated list of topics
       --bag BAG             The one bag we're visualizing
-      --after AFTER         If given, start reading the bags at this time. Could be an integer (s since epoch or ns since epoch), a float (s
-                            since the epoch) or a string, to be parsed with dateutil.parser.parse()
+      --after AFTER         If given, start reading the bags at this time. Could
+                            be an integer (s since epoch or ns since epoch), a
+                            float (s since the epoch) or a string, to be parsed
+                            with dateutil.parser.parse()
       --threshold-range THRESHOLD_RANGE
                             Max distance where we cut the plot
       --title TITLE         Title string for the plot. Overrides the default title
-      --hardcopy HARDCOPY   Write the output to disk, instead of an interactive plot
-      --terminal TERMINAL   gnuplotlib terminal. The default is good almost always, so most people don't need this option
-      --set SET             Extra 'set' directives to gnuplotlib. Can be given multiple times
-      --unset UNSET         Extra 'unset' directives to gnuplotlib. Can be given multiple times
+      --hardcopy HARDCOPY   Write the output to disk, instead of an interactive
+                            plot
+      --terminal TERMINAL   gnuplotlib terminal. The default is good almost
+                            always, so most people don't need this option
+      --set SET             Extra 'set' directives to gnuplotlib. Can be given
+                            multiple times
+      --unset UNSET         Extra 'unset' directives to gnuplotlib. Can be given
+                            multiple times
 
 #+end_example
 
@@ -981,42 +1048,74 @@ DESCRIPTION
 
 OPTIONS
   POSITIONAL ARGUMENTS
-      bags                  Glob(s) for the rosbags that contain the lidar data. Each of these will be sorted alphanumerically
+      bags                  Glob(s) for the rosbags that contain the lidar data.
+                            Each of these will be sorted alphanumerically
 
   OPTIONAL ARGUMENTS
       -h, --help            show this help message and exit
-      --maxrange MAXRANGE   Applies to LIDAR data. If given, cut off the points at this range
-      --with WITH           Applies to LIDAR data. If given, uses the requested style to plot the lidar points. The default is "dots". If there
-                            aren't many points to show, this can be illegible, and "points" works better
-      --no-intensity        Applies to LIDAR data. By default we color-code each point by intensity. With --no-intensity, we plot all the points
-                            with the same color. Improves legibility in some cases
-      --ring RING           Applies to LIDAR data. If given, show ONLY data from this ring. Otherwise, display all of them
-      --xy                  Applies to LIDAR data. If given, I make a 2D plot, ignoring the z axis
-      --extract-images      Applies to camera data. If given, I write the images to the directory given in this argument. Exactly one bag and one
-                            topic is expected. I write to the directory in --outdir ('/tmp' by default) and I write at most --extract-images-
-                            count (all images by default)
+      --maxrange MAXRANGE   Applies to LIDAR data. If given, cut off the points at
+                            this range
+      --with WITH           Applies to LIDAR data. If given, uses the requested
+                            style to plot the lidar points. The default is "dots".
+                            If there aren't many points to show, this can be
+                            illegible, and "points" works better
+      --no-intensity        Applies to LIDAR data. By default we color-code each
+                            point by intensity. With --no-intensity, we plot all
+                            the points with the same color. Improves legibility in
+                            some cases
+      --ring RING           Applies to LIDAR data. If given, show ONLY data from
+                            this ring. Otherwise, display all of them
+      --xy                  Applies to LIDAR data. If given, I make a 2D plot,
+                            ignoring the z axis
+      --extract-images      Applies to camera data. If given, I write the images
+                            to the directory given in this argument. Exactly one
+                            bag and one topic is expected. I write to the
+                            directory in --outdir ('/tmp' by default) and I write
+                            at most --extract-images-count (all images by default)
       --extract-images-count EXTRACT_IMAGES_COUNT
-                            If --extract-images is given I write this many images at most. By default, I write ALL the images
-      --outdir OUTDIR       The directory --extract-.... will write to. The default is "/tmp/"
-      --period PERIOD       How much time to wait between moving to the next bag; if <= 0 (the default), we wait until each window is manually
-                            closed
-      --hardcopy HARDCOPY   Write the output to disk, instead of an interactive plot
-      --terminal TERMINAL   gnuplotlib terminal. The default is good almost always, so most people don't need this option
-      --set SET             Extra 'set' directives to gnuplotlib. Can be given multiple times
-      --unset UNSET         Extra 'unset' directives to gnuplotlib. Can be given multiple times
-      --topic TOPIC         The topic we're visualizing. Can select LIDAR or camera data. If omitted, we report the topics present in the bag,
-                            and we exit. If --timeline, this is a ,-separated list of topics to visualize
+                            If --extract-images is given I write this many images
+                            at most. By default, I write ALL the images
+      --outdir OUTDIR       The directory --extract-.... will write to. The
+                            default is "/tmp/"
+      --period PERIOD       How much time to wait between moving to the next bag;
+                            if <= 0 (the default), we wait until each window is
+                            manually closed
+      --hardcopy HARDCOPY   Write the output to disk, instead of an interactive
+                            plot
+      --terminal TERMINAL   gnuplotlib terminal. The default is good almost
+                            always, so most people don't need this option
+      --set SET             Extra 'set' directives to gnuplotlib. Can be given
+                            multiple times
+      --unset UNSET         Extra 'unset' directives to gnuplotlib. Can be given
+                            multiple times
+      --topic TOPIC         The topic we're visualizing. Can select LIDAR or
+                            camera data. If omitted, we report the topics present
+                            in the bag, and we exit. If --timeline, this is a
+                            ,-separated list of topics to visualize
       --decimation-period DECIMATION_PERIOD
-                            If given, we expect ONE bag, and rather than taking the first message from each bag, we take all the messages from
-                            THIS bag, spaced out with a period given by this argument, in seconds
-      --after AFTER         If given, start reading the bags at this time. Could be an integer (s since epoch or ns since epoch), a float (s
-                            since the epoch) or a string, to be parsed with dateutil.parser.parse()
-      --before BEFORE       If given, stop reading the bags at this time. Could be an integer (s since epoch or ns since epoch), a float (s since
-                            the epoch) or a string, to be parsed with dateutil.parser.parse()
-      --timeline TIMELINE   If given, we plot time message timeline from the ONE give bag. Multiple bags not allowed. If no --topic, we report
-                            ALL the topics. Takes one argument: the duration (in seconds) of the requested plot. If <= 0, we plot the whole bag
-      --time-header-ns      If given, we use the time_header_ns for --timeline. This is the time the data was SENT, not the time it was recorded.
-                            All the log replay code uses time_ns
+                            If given, we expect ONE bag, and rather than taking
+                            the first message from each bag, we take all the
+                            messages from THIS bag, spaced out with a period given
+                            by this argument, in seconds
+      --scene-context       If given, and we're visualizing a lidar point cloud,
+                            display the FIRST snapshot given, and use the full set
+                            as a context to find the static parts of the scene
+      --after AFTER         If given, start reading the bags at this time. Could
+                            be an integer (s since epoch or ns since epoch), a
+                            float (s since the epoch) or a string, to be parsed
+                            with dateutil.parser.parse()
+      --before BEFORE       If given, stop reading the bags at this time. Could be
+                            an integer (s since epoch or ns since epoch), a float
+                            (s since the epoch) or a string, to be parsed with
+                            dateutil.parser.parse()
+      --timeline TIMELINE   If given, we plot time message timeline from the ONE
+                            give bag. Multiple bags not allowed. If no --topic, we
+                            report ALL the topics. Takes one argument: the
+                            duration (in seconds) of the requested plot. If <= 0,
+                            we plot the whole bag
+      --time-header-ns      If given, we use the time_header_ns for --timeline.
+                            This is the time the data was SENT, not the time it
+                            was recorded. All the log replay code uses time_ns
 
 #+end_example
 
@@ -1068,6 +1167,7 @@ OPTIONS
                             appended to the end of this given filename
 
 #+end_example
+
 
 * Interpretation of the results
 As [[https://mrcal.secretsauce.net][mrcal]], clc tries hard to provide deep feedback to the user to enable them to
@@ -1227,12 +1327,21 @@ These diagnostics are controlled by a few parameters, also arguments to =clc()=:
   reporting. For each sector, we actually evaluate a single point on the ground
   ($z=0$), this far away
 
+
+* REPOSITORY
+
+[[https://www.github.com/dkogan/camera-lidar-calibration]]
+
+* AUTHOR
+
+Dima Kogan <[[mailto:dima@secretsauce.net][dima@secretsauce.net]]>
+
 * LICENSE AND COPYRIGHT
 
-Copyright (c) 2023-2025 California Institute of Technology ("Caltech"). U.S.
+Copyright (c) 2024-2025 California Institute of Technology ("Caltech"). U.S.
 Government sponsorship acknowledged. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+[[http://www.apache.org/licenses/LICENSE-2.0]]
