@@ -625,3 +625,20 @@ These diagnostics are controlled by a few parameters, also arguments to =clc()=:
   ($z=0$), this far away
 
 
+* REPOSITORY
+
+[[https://www.github.com/dkogan/camera-lidar-calibration]]
+
+* AUTHOR
+
+Dima Kogan <[[mailto:dima@secretsauce.net][dima@secretsauce.net]]>
+
+* LICENSE AND COPYRIGHT
+
+Copyright (c) 2024-2025 California Institute of Technology ("Caltech"). U.S.
+Government sponsorship acknowledged. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+You may obtain a copy of the License at
+
+[[http://www.apache.org/licenses/LICENSE-2.0]]
