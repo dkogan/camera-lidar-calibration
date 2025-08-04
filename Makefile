@@ -57,13 +57,7 @@ PODS     := $(patsubst %.py,%.py.pod,$(DIST_BIN))
 $(DIST_MAN): %.1: %.pod
 	pod2man --center="clc: camera-lidar alignment toolkit" --name=CLC --release="clc $(VERSION)" --section=1 $< $@
 
-# %.pod should NOT depend on the binary clc stuff at all: I should be able to
-# run whatever --help without building anything. But currently some tools
-# 'import clc.argparse_helpers', which runs clc/__init__.py, which loads more
-# stuff. This isn't actually used for --help, but that doesn't matter. So for
-# now I add the extra dependency. Ideally argparse_helpers and --help should not
-# need anything to be built
-%.py.pod: %.py libclc.so.$(ABI_VERSION) clc/_clc$(PY_EXT_SUFFIX)
+%.py.pod: %.py
 	$(MRBUILD_BIN)/make-pod-from-help $< > $@.tmp && cat footer.pod >> $@.tmp && mv $@.tmp $@
 EXTRA_CLEAN += $(DIST_MAN) $(PODS)
 
