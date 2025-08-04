@@ -35,6 +35,9 @@ clc/_clc$(PY_EXT_SUFFIX): clc-pywrap.o libclc.so
 mrgingham-c-bridge.o: CXXFLAGS += -I/usr/include/mrgingham -I/usr/include/opencv4/
 opencv-c-bridge.o:    CXXFLAGS += -I/usr/include/opencv4/
 
+DIST_INCLUDE := clc.h
+
+
 DIST_PY3_MODULES := clc
 
 all: clc/_clc$(PY_EXT_SUFFIX)
