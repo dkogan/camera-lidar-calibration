@@ -1,5 +1,5 @@
-camera-lidar-calibration (0.1-1) experimental; urgency=medium
+camera-lidar-calibration (0.2-1) experimental; urgency=medium
 
   * New upstream release
 
- -- Dima Kogan <dkogan@debian.org>  Mon, 04 Aug 2025 11:25:02 -0700
+ -- Dima Kogan <dkogan@debian.org>  Mon, 04 Aug 2025 14:16:01 -0700
