@@ -205,12 +205,12 @@ def bags():
             yield(bag)
 
 
-import clc.bag_interface
+import rosdata_tools
 
 if args.timeline is None and args.topic is None:
     for bag in bags():
 
-        d = clc.bag_interface.info(bag)
+        d = rosdata_tools.info(bag)
         t0 = d['t0']
         t1 = d['t1']
 
@@ -235,7 +235,7 @@ if args.timeline is not None:
     bag = args.bags[0]
 
     if args.topic is None:
-        topics = clc.bag_interface.topics(bag)
+        topics = rosdata_tools.topics(bag)
     else:
         topics = args.topic.split(',')
 
@@ -253,7 +253,7 @@ if args.timeline is not None:
 
     t0       = None
     duration = args.timeline
-    messages = clc.bag_interface.messages(bag, topics,
+    messages = rosdata_tools.messages(bag, topics,
                                       start = args.after,
                                       stop  = args.before,
                                       ignore_unknown_message_types = False)
@@ -279,7 +279,7 @@ if args.timeline is not None:
 
     ytics = ','.join( [ f'"{t}" {i}' for i,t in enumerate(topics)])
     timestamps = np.array(timestamps)
-    t0 = clc.bag_interface.info(bag)['t0']/1e9
+    t0 = rosdata_tools.info(bag)['t0']/1e9
     timestamps[:,0] -= t0
     gp.plot( timestamps,
              tuplesize = -2,
@@ -305,6 +305,39 @@ def show_lidar(bag, p,
                    hardcopy = args.hardcopy)
 
     xyz       = p['xyz']
+
+    # # for Deegan's data
+    # import mrcal
+    # rt_world_lidar = np.array(( 0,.225,0,
+    #                             0,0,0,),
+    #                           dtype=float)
+    # xyz = mrcal.transform_point_rt(rt_world_lidar, xyz.astype(float))
+    # kwargs['_set'] = 'view 90,0'
+    # gp.plot(xyz[...,0], xyz[...,2], _with='points', square=1, wait=1)
+    # sys.exit()
+
+    # # for Casey Majhor's data
+    # import mrcal
+    # rt_world_lidar = np.array(( 0,-.11,0,
+    #                             0,0,0,),
+    #                           dtype=float)
+    # xyz = mrcal.transform_point_rt(rt_world_lidar, xyz.astype(float))
+    # kwargs['_set'] = 'view 90,180'
+    # gp.plot(xyz[...,0], xyz[...,2], _with='points', square=1, wait=1)
+    # # gp.plot(xyz, tuplesize=-3, _3d=1, _with='points', square=1, wait=1)
+    # sys.exit()
+
+    # # for Casey Majhor's 2025-05-27 data
+    # import mrcal
+    # rt_world_lidar = np.array(( 0,-.11,0,
+    #                             0,0,0,),
+    #                           dtype=float)
+    # xyz = mrcal.transform_point_rt(rt_world_lidar, xyz.astype(float))
+    # kwargs['_set'] = 'view 90,0'
+    # gp.plot(xyz[...,0], xyz[...,2], _with='points', square=1, wait=1)
+    # sys.exit()
+
+
     intensity = p['intensity']
     ring      = p['ring']
 
@@ -409,6 +442,9 @@ topic = args.topic
 
 if args.scene_context:
     ###### assumes we're looking at a lidar
+
+    ###### should limit the display to just one topic. Ideally I would specify
+    ###### which bags are the context and which ones I'm showing
     range_mode = \
         clc.lidar_scene_range_mode(args.bags,
                                    start       = args.after,
@@ -421,13 +457,13 @@ else:
 for bag in bags():
 
     if args.decimation_period is not None:
-        msg_iterator = clc.bag_interface. \
+        msg_iterator = rosdata_tools. \
             first_message_from_each_topic_in_time_segments(bag, (topic,),
                                                            period_s = args.decimation_period,
                                                            start = args.after,
                                                            stop  = args.before)
     else:
-        msg_iterator = ( clc.bag_interface. \
+        msg_iterator = ( rosdata_tools. \
                          first_message_from_each_topic(bag, (topic,),
                                                        start = args.after,
                                                        stop  = args.before), )
@@ -437,6 +473,15 @@ for bag in bags():
 
         itopic = 0 # we have just one topic
         p = msg[itopic]['array']
+
+        # try:
+        #     msg = next(msg_iterator)
+        #     p = msg['array']
+        # except StopIteration:
+        #     print(f"No messages with {topic=} in {bag=} in the requested time span. Continuing to next bag, if any",
+        #           file = sys.stderr)
+        #     continue
+
 
         def has_xyz(p):
             try:
