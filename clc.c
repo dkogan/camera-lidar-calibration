@@ -1579,7 +1579,8 @@ fit_seed(// in/out
                         mrcal_point2_norm2( mrcal_point2_sub(q,
                                                              snapshot->chessboard_corners[icamera][i*object_width_n + j]));
 #warning "unhardcode"
-                    bool validation_failed_here = errsq > 10.*10.;
+                    const double max_err = 10.;
+                    bool validation_failed_here = errsq > max_err*max_err;
 
                     if(validation_failed_here)
                     {
