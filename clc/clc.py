@@ -189,8 +189,11 @@ def lidar_scene_range_mode(bags,
                        dtype = np.float32 )
 
     for isnapshot,bag in enumerate(bags):
-        array = next(rosdata_tools.messages(bag, (lidar_topic,),
-                                            start = start))['array']
+        try:
+            array = next(rosdata_tools.messages(bag, (lidar_topic,),
+                                                start = start))['array']
+        except StopIteration:
+            continue
 
         points = array['xyz']
         rings  = array['ring']
@@ -205,7 +208,7 @@ def lidar_scene_range_mode(bags,
         iaz = iaz_from_point(points, Npoints_per_rotation)
 
         # reshape and reindex an array of shape (Nrings*Npoints_per_rotation)
-        ranges[array['ring'],iaz,isnapshot] = r
+        ranges[rings,iaz,isnapshot] = r
 
     # I now have ranges. I compute the non-zero mode range per pixel. Any
     # uncertain mode is reported as 0
