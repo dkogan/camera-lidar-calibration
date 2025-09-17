@@ -7,7 +7,7 @@ import os
 
 import clc._clc as _clc
 import mrcal
-import clc.bag_interface
+import rosdata_tools
 
 def lidar_segmentation(*,
                        bag, lidar_topic,
@@ -128,8 +128,8 @@ exception will be raised.
             raise Exception(f"Bag path '{bag}' does not exist")
 
         try:
-            array = next(clc.bag_interface.messages(bag, (lidar_topic,),
-                                                    start = start))['array']
+            array = next(rosdata_tools.messages(bag, (lidar_topic,),
+                                                start = start))['array']
         except StopIteration:
             raise Exception(f"{bag=} does not contain {lidar_topic=} past {start=}")
 
@@ -189,8 +189,8 @@ def lidar_scene_range_mode(bags,
                        dtype = np.float32 )
 
     for isnapshot,bag in enumerate(bags):
-        array = next(clc.bag_interface.messages(bag, (lidar_topic,),
-                                                start = start))['array']
+        array = next(rosdata_tools.messages(bag, (lidar_topic,),
+                                            start = start))['array']
 
         points = array['xyz']
         rings  = array['ring']
@@ -288,11 +288,11 @@ def _sorted_sensor_snapshots(bags, topics,
         # Each bag is a snapshot in time. We take the first set of messages (one
         # per topic) from each bag
         messages_bags = \
-            [clc.bag_interface.first_message_from_each_topic(bag, topics,
-                                                             start = start,
-                                                             stop  = stop,
-                                                             max_time_spread_s = max_time_spread_s,
-                                                             verbose = verbose) \
+            [rosdata_tools.first_message_from_each_topic(bag, topics,
+                                                         start = start,
+                                                         stop  = stop,
+                                                         max_time_spread_s = max_time_spread_s,
+                                                         verbose = verbose) \
              for bag in bags]
 
         # each snapshot in messages_bags maybe None (if no usable data in a bag
@@ -322,7 +322,7 @@ def _sorted_sensor_snapshots(bags, topics,
         # slurp an iterator into a list. This wastes memory, but saves me some
         # coding time today
         messages_bags = \
-            list( clc.bag_interface. \
+            list( rosdata_tools. \
                   first_message_from_each_topic_in_time_segments(bag, topics,
                                                                  start    = start,
                                                                  stop     = stop,
@@ -446,7 +446,7 @@ details:
 
 We can more finely control what data we use by setting the start, stop and
 exclude_time_periods arguments (see the docstring for
-clc.bag_interface.first_message_from_each_topic_in_time_segments() for details).
+rosdata_tools.first_message_from_each_topic_in_time_segments() for details).
 
 ARGUMENTS
 
@@ -759,8 +759,8 @@ Plot tuples passable to gnuplotlib.plot() as in the SYNOPSIS above.
     '''
     try:
         pointcloud_msgs = \
-            [ next(clc.bag_interface.messages(bag, (topic,),
-                                              start = start)) \
+            [ next(rosdata_tools.messages(bag, (topic,),
+                                          start = start)) \
               for topic in lidar_topics ]
     except:
         raise Exception(f"Bag '{bag}' doesn't have at least one message for each of {lidar_topics} in the requested time span")

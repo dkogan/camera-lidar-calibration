@@ -455,9 +455,6 @@ The tooling supports both methods. The functions and tools that accept a
 "decimation period" will use the one-snapshot-per-bag scheme if the decimation
 period is omitted, and the one-big-bag scheme if the decimation period is given.
 
-The various utilities for reading the input data are in the =clc.bag_interface=
-module, with each function's docstring providing detailed documentation.
-
 ** Commandline tools
 clc also provides a number of commandline tools, intended to make the most
 common applications of the tool available directly to the users, without

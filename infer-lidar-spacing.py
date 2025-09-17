@@ -55,14 +55,14 @@ args = parse_args()
 
 
 
-import clc.bag_interface
+import rosdata_tools
 import numpy as np
 import numpysane as nps
 
 
 msg_iter = \
-    clc.bag_interface.messages(args.bag, (args.topic,),
-                               ignore_unknown_message_types = True)
+    rosdata_tools.messages(args.bag, (args.topic,),
+                           ignore_unknown_message_types = True)
 
 msg = next(msg_iter)
 
