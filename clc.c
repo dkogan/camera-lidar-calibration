@@ -1381,7 +1381,8 @@ fit_seed(// in/out
         // fail. And I ask for a few more for redundancy. I ignore links by
         // setting them to 0; mrcal_traverse_sensor_links() will not try to use
         // those connections at all then, and opt for multi-hopping
-        const int Nlinks_min = 4;
+#warning "this should be tighter"
+        const int Nlinks_min = 3;
         for(int i=0; i<Nshared_observation_counts; i++)
             if(shared_observation_counts[i] < Nlinks_min)
                 shared_observation_counts[i] = 0;

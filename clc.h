@@ -177,7 +177,7 @@ typedef struct
       "report diagnostic information on stderr, ONLY for the region within the given xy bounds" ) \
   _(float, debug_ymax,                                   -FLT_MAX,          "f","f", \
       "report diagnostic information on stderr, ONLY for the region within the given xy bounds" ) \
-  _(int,   threshold_min_Npoints_in_segment,             6,                "i","i", \
+  _(int,   threshold_min_Npoints_in_segment,             5,                "i","i", \
       "stage1: segments are accepted only if they contain at least this many points" ) \
   _(int,   threshold_max_Npoints_invalid_segment,        5,                 "i","i", \
       "stage1: segments are accepted only if they contain at most this many invalid points" ) \
@@ -185,13 +185,13 @@ typedef struct
       "stage2: discard all segment clusters that lie COMPLETELY past the given range" ) \
   _(float, threshold_distance_adjacent_points_cross_segment,                          .1f,               "f","f", \
       "stage2: adjacent cross-segment points in the same ring must be at most this far apart" ) \
-  /* cos(10deg) */                                                       \
-  _(float, threshold_min_cos_angle_error_same_direction_intra_ring,                          0.984807753012f,               "f","f", \
+  /* cos(20deg) */                                                       \
+  _(float, threshold_min_cos_angle_error_same_direction_intra_ring,                          0.939692620786f,               "f","f", \
       "stage2: cos threshold used to accumulate a segment to an adjacent one in the same ring" ) \
                                                                         \
   /* This is unnaturally high. I'm comparing it to p-mean(p), but if the points aren't */ \
   /* distributed evenly, mean(p) won't be at the center */              \
-  _(float, threshold_max_plane_size,                     2.5f,              "f","f", \
+  _(float, threshold_max_plane_size,                     1.8f,              "f","f", \
       "Post-processing: high limit on the linear size of the reported plane.\n" \
       "In a square board this is roughly compared to the side length") \
   _(float, threshold_max_rms_fit_error,                  0.02f,            "f","f", \
@@ -215,26 +215,27 @@ typedef struct
   /* should be a factor of threshold_max_plane_size */                  \
   _(float, threshold_max_distance_across_rings,          0.4f,              "f","f", \
       "stage2: max ring-ring distance allowed to join two segments into a cluster" ) \
-  /* cos(90-5deg) */                                                    \
-  _(float, threshold_max_cos_angle_error_normal,         0.15,   "f","f", \
+  /* cos(90-25deg) */                                                    \
+  _(float, threshold_max_cos_angle_error_normal,         0.422618261741f,   "f","f", \
       "stage2: cos(v,n) threshold to accept a segment (and its direction v) into an existing cluster (and its normal n)" ) \
-  /* cos(5deg) */                                                       \
-  _(float, threshold_min_cos_angle_error_same_direction_cross_ring, 0.996194698092f,   "f","f", \
+  /* cos(15deg) */                                                       \
+  _(float, threshold_min_cos_angle_error_same_direction_cross_ring, 0.965925826289f,   "f","f", \
       "stage2: cos threshold used to construct a cluster from two cross-ring segments.\n" \
       "Non fitting pairs are not used to create a new cluster" ) \
   _(float, threshold_max_plane_point_error_stage2,       0.05,               "f","f", \
       "stage2: distance threshold to make sure each segment center lies in plane\n" \
       "Non-fitting segments are not added to the cluster") \
-  _(float, threshold_min_cos_plane_tilt_stage2,     0.707106781185  /* 45deg */,               "f","f", \
+  /* cos(60deg) */                                                      \
+  _(float, threshold_min_cos_plane_tilt_stage2,     0.5,                 "f","f", \
       "stage2: the 'tilt' is the off-head-on orientation") \
   _(float, threshold_max_plane_point_error_stage3,       0.05,              "f","f", \
       "stage3: distance threshold to make sure each point lies in the plane\n" \
       "Non-fitting points are culled from the reported plane") \
   _(float, threshold_min_plane_point_error_isolation,    0.3,               "f","f", \
       "stage3: points just off the edge of the detected board must fit AT LEAST this badly" ) \
-  _(int,   threshold_min_points_per_ring__multiple_Npoints_per_segment, 2, "i","i", \
+  _(int,   threshold_min_points_per_ring__multiple_Npoints_per_segment, 1, "i","i", \
       "stage3: minimum number of points in EACH ring in the cluster; a multiple of Npoints_per_segment" ) \
-  _(int,   threshold_max_Nsegments_in_cluster,           150,               "i","i", \
+  _(int,   threshold_max_Nsegments_in_cluster,           250,               "i","i", \
       "stage2: clusters with more than this many segments are rejected" ) \
   _(int,   threshold_min_Nsegments_in_cluster,           4,                 "i","i", \
       "stage2: clusters with fewer than this many segments are rejected" ) \
