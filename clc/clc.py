@@ -889,10 +889,3 @@ The gnuplotlib tuples, passable to gnuplotlib.plot()
             dict(_with = with_labels,
                  tuplesize = 3)),
          )
-
-
-
-
-lidar_segmentation_default_context = _clc.lidar_segmentation_default_context
-lidar_segmentation_parameters      = _clc.lidar_segmentation_parameters
-fit_from_inputs_dump               = _clc.fit_from_inputs_dump
