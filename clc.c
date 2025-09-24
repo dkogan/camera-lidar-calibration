@@ -2726,6 +2726,7 @@ plot_residuals(const char* filename_base,
 static void
 write_axes(FILE* fp,
            const char* curveid,
+           const char* what,
            const double* Rt_ref_sensor,
            const double scale)
 {
@@ -2734,7 +2735,7 @@ write_axes(FILE* fp,
         fprintf(fp, "%f %f %s %f %f %f %f\n",
                 Rt_ref_sensor[3*3 + 0],
                 Rt_ref_sensor[3*3 + 1],
-                "axes",
+                what,
                 Rt_ref_sensor[3*3 + 2],
                 Rt_ref_sensor[0*3 + 0] * scale,
                 Rt_ref_sensor[1*3 + 0] * scale,
@@ -2742,7 +2743,7 @@ write_axes(FILE* fp,
         fprintf(fp, "%f %f %s %f %f %f %f\n",
                 Rt_ref_sensor[3*3 + 0],
                 Rt_ref_sensor[3*3 + 1],
-                "axes",
+                what,
                 Rt_ref_sensor[3*3 + 2],
                 Rt_ref_sensor[0*3 + 1] * scale,
                 Rt_ref_sensor[1*3 + 1] * scale,
@@ -2750,7 +2751,7 @@ write_axes(FILE* fp,
         fprintf(fp, "%f %f %s %f %f %f %f\n",
                 Rt_ref_sensor[3*3 + 0],
                 Rt_ref_sensor[3*3 + 1],
-                "axes",
+                what,
                 Rt_ref_sensor[3*3 + 2],
                 Rt_ref_sensor[0*3 + 2] * scale * 2.,// "forward": longer axis
                 Rt_ref_sensor[1*3 + 2] * scale * 2.,// "forward": longer axis
@@ -2787,17 +2788,17 @@ write_axes(FILE* fp,
         // No explicit Rt_ref_sensor. Use the identity
         fprintf(fp, "%f %f %s %f %f %f %f\n",
                 0., 0.,
-                "axes",
+                what,
                 0.,
                 scale,0.,0.);
         fprintf(fp, "%f %f %s %f %f %f %f\n",
                 0., 0.,
-                "axes",
+                what,
                 0.,
                 0.,scale,0.);
         fprintf(fp, "%f %f %s %f %f %f %f\n",
                 0., 0.,
-                "axes",
+                what,
                 0.,
                 0.,0.,scale*2 // "forward": longer axis
                 );
@@ -2845,7 +2846,7 @@ _plot_geometry(FILE* fp,
     for(unsigned int i=0; i<Nlidars; i++)
     {
         if(i == 0)
-            write_axes(fp, "lidar0", NULL, axis_scale);
+            write_axes(fp, "lidar0", "axes-lidar", NULL, axis_scale);
         else
         {
             const double* Rt_lidar0_sensor = &Rt_lidar0_lidar[4*3*(i-1)];
@@ -2859,7 +2860,7 @@ _plot_geometry(FILE* fp,
                 return false;
             }
 
-            write_axes(fp, curveid, Rt_lidar0_sensor, axis_scale);
+            write_axes(fp, curveid, "axes-lidar", Rt_lidar0_sensor, axis_scale);
 
         }
     }
@@ -2877,7 +2878,7 @@ _plot_geometry(FILE* fp,
             return false;
         }
 
-        write_axes(fp, curveid, Rt_lidar0_sensor, axis_scale);
+        write_axes(fp, curveid, "axes-camera", Rt_lidar0_sensor, axis_scale);
     }
 
     if(!only_axes)
@@ -3004,7 +3005,8 @@ plot_geometry(const char* filename,
         "--zlabel z "
         "--title \"Camera geometry\" "
         "--autolegend "
-        "--style axes \"with vectors\"  --tuplesize axes   6 "
+        "--style axes-lidar  \"with vectors lc \\\"blue\\\"\" --tuplesize axes-lidar   6 "
+        "--style axes-camera \"with vectors lc \\\"red\\\"\"  --tuplesize axes-camera  6 "
         "--style labels \"with labels\" --tuplesize labels 4 "
         "--maxcurves 300 "
         "--with points --tuplesizeall 3 ");
