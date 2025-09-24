@@ -1579,7 +1579,8 @@ fit_seed(// in/out
                         mrcal_point2_norm2( mrcal_point2_sub(q,
                                                              snapshot->chessboard_corners[icamera][i*object_width_n + j]));
 #warning "unhardcode"
-                    const double max_err = 10.;
+                    // a high threshold was needed to process the 2025-09-23 data
+                    const double max_err = 50.;
                     bool validation_failed_here = errsq > max_err*max_err;
 
                     if(validation_failed_here)
