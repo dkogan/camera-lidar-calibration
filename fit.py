@@ -464,3 +464,42 @@ clc.plot( (th,                # angle
          hardcopy = filename,
         )
 
+
+
+
+
+def report_sensor_position_uncertainty(isensor, rt_lidar0_sensor):
+
+    # the position of this sensor in the lidar0 frame
+    p0_lidar0 = rt_lidar0_sensor[3:]
+
+    p1 = mrcal.transform_point_rt(rt_lidar0_sensor, p0_lidar0, inverted=True)
+
+    # shape (3,6)
+    _,dp0__drt_lidar0_sensor,_ = \
+        mrcal.transform_point_rt(rt_lidar0_sensor, p1,
+                                 get_gradients = True)
+
+    # shape (6,6)
+    Var_rt_lidar0_sensor = result['Var_rt_lidar0_sensor'][isensor-1,:,
+                                                          isensor-1,:]
+
+    # shape (3,3)
+    Var_p0 = nps.matmult(dp0__drt_lidar0_sensor,
+                         Var_rt_lidar0_sensor,
+                         nps.transpose(dp0__drt_lidar0_sensor))
+
+    # shape (...,3) and (...,3,3)
+    l,v = mrcal.sorted_eig(Var_p0)
+
+    print(f"Worst-case 1-sigma uncertainty in the position of {isensor=} ({args.topics[isensor]}): {np.sqrt(l[-1]):.2f}m in the direction {v[:,-1]}")
+
+
+Nlidar  = len(result['rt_lidar0_lidar'])
+Ncamera = len(result['rt_lidar0_camera'])
+for ilidar in range(1,Nlidar):
+    report_sensor_position_uncertainty(isensor          = ilidar,
+                                       rt_lidar0_sensor = result['rt_lidar0_lidar'][ilidar])
+for icamera in range(Ncamera):
+    report_sensor_position_uncertainty(isensor          = icamera + Nlidar,
+                                       rt_lidar0_sensor = result['rt_lidar0_camera'][icamera])
